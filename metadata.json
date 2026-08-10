@@ -1,0 +1,6 @@
+{
+  "name": "Semovix 语义工作台 · 表语义理解",
+  "description": "Semovix AI 驱动的数据表语义理解工作台 - 业务含义、记录模型、数据粒度与 Agent 使用上下文理解",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
