@@ -18,11 +18,14 @@ import { BatchConfirmModal } from './components/BatchConfirmModal';
 import { LineageModal } from './components/LineageModal';
 import { ObjectModelingModal } from './components/ObjectModelingModal';
 import { EnterpriseLauncher } from './components/EnterpriseLauncher';
+import { PersonalCenterPanel } from './components/PersonalCenterPanel';
+import { XinoHomeWorkspace } from './components/XinoHomeWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance'>('home');
   const [viewTab, setViewTab] = useState<'field' | 'table'>('table');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('close_time');
@@ -32,6 +35,7 @@ export default function App() {
   const [isLineageModalOpen, setIsLineageModalOpen] = useState<boolean>(false);
   const [isModelingModalOpen, setIsModelingModalOpen] = useState<boolean>(false);
   const [isLauncherOpen, setIsLauncherOpen] = useState<boolean>(false);
+  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
   const [currentModule, setCurrentModule] = useState<string>('xino_partner');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isReanalyzing, setIsReanalyzing] = useState<boolean>(false);
@@ -48,10 +52,15 @@ export default function App() {
 
   const handleSelectModule = (moduleKey: string, moduleName: string) => {
     setCurrentModule(moduleKey);
-    if (moduleKey === 'data_governance') {
+    if (moduleKey === 'xino_partner') {
+      setCurrentNav('home');
+      addToast('success', '已切换至 Xino 智能伙伴', '已进入 AI 智能协同工作台');
+    } else if (moduleKey === 'data_governance') {
+      setCurrentNav('governance');
       setViewTab('table');
       addToast('success', '已切换至 数据治理', '已载入 pop_service_hotline 表语义理解与治理工作台');
     } else if (moduleKey === 'business_semantics') {
+      setCurrentNav('governance');
       setViewTab('field');
       addToast('success', '已切换至 业务语义', '已载入字段语义理解与实体映射视图');
     } else {
@@ -358,79 +367,96 @@ export default function App() {
         onViewLineage={() => setIsLineageModalOpen(true)}
         onEnterModeling={() => setIsModelingModalOpen(true)}
         onOpenLauncher={() => setIsLauncherOpen(true)}
+        onOpenProfile={() => setIsProfileOpen((prev) => !prev)}
+        isProfileOpen={isProfileOpen}
+        currentNav={currentNav}
+        onSelectNav={setCurrentNav}
         batchCount={batchCount}
       />
 
-      {/* Breadcrumb & Workflow Stage Status Bar */}
-      <StageHeader
-        tableName="pop_service_hotline"
-        activeTab={viewTab}
-        setActiveTab={setViewTab}
-        onBatchConfirm={() => setIsBatchModalOpen(true)}
-      />
-
-      {/* Main Content Area */}
-      {viewTab === 'table' ? (
-        <>
-          {/* Table Understanding Three Columns Workspace */}
-          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-            {/* Left Column: Table Context (280px) */}
-            <LeftTableContextPanel
-              tableName="pop_service_hotline"
-              businessName="公共服务热线工单记录表"
-            />
-
-            {/* Middle Column: AI Workspace (~820px / flex-1) */}
-            <MiddleTableWorkspace
-              onOpenBatchConfirm={() => setIsBatchModalOpen(true)}
-              onOpenModeling={() => setIsModelingModalOpen(true)}
-              onOpenLineage={() => setIsLineageModalOpen(true)}
-            />
-
-            {/* Right Column: Table Semantic Profile (400px) */}
-            <RightTableProfilePanel
-              onConfirmTable={handleConfirmTable}
-              onAdjustTable={handleAdjustTable}
-              onReanalyzeTable={handleReanalyzeTable}
-              isCollapsed={isRightPanelCollapsed}
-              setIsCollapsed={setIsRightPanelCollapsed}
-            />
-          </div>
-
-          {/* Bottom Area: Analysis Structure & Agent Context (220px) */}
-          <BottomTableContextPanel />
-        </>
+      {/* Main Content View Switch */}
+      {currentNav === 'home' ? (
+        <XinoHomeWorkspace
+          onNavigateToGovernance={() => {
+            setCurrentNav('governance');
+            setViewTab('table');
+          }}
+          onOpenLauncher={() => setIsLauncherOpen(true)}
+        />
       ) : (
         <>
-          {/* Field Understanding Workspace */}
-          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-            <LeftTaskQueue
-              fields={fields}
-              selectedFieldId={selectedFieldId}
-              onSelectField={handleSelectField}
-              onBatchConfirm={() => setIsBatchModalOpen(true)}
-            />
-            <MiddleWorkspace
-              data={currentGovernanceData}
-              onSelectCandidate={handleAdoptCandidate}
-              onViewHistory={() => {
-                setIsRightPanelCollapsed(false);
-                setActiveRightTab('history');
-              }}
-              onMarkReview={handleMarkReview}
-            />
-            <RightAssetPanel
-              data={currentGovernanceData}
-              activeRightTab={activeRightTab}
-              setActiveRightTab={setActiveRightTab}
-              onConfirmNext={handleConfirmNext}
-              onSaveDraft={handleSaveDraft}
-              onMarkReview={handleMarkReview}
-              isCollapsed={isRightPanelCollapsed}
-              setIsCollapsed={setIsRightPanelCollapsed}
-            />
-          </div>
-          <BottomImpactAnalysis impact={currentGovernanceData.downstreamImpact} />
+          {/* Breadcrumb & Workflow Stage Status Bar */}
+          <StageHeader
+            tableName="pop_service_hotline"
+            activeTab={viewTab}
+            setActiveTab={setViewTab}
+            onBatchConfirm={() => setIsBatchModalOpen(true)}
+          />
+
+          {/* Main Governance Content Area */}
+          {viewTab === 'table' ? (
+            <>
+              {/* Table Understanding Three Columns Workspace */}
+              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+                {/* Left Column: Table Context (280px) */}
+                <LeftTableContextPanel
+                  tableName="pop_service_hotline"
+                  businessName="公共服务热线工单记录表"
+                />
+
+                {/* Middle Column: AI Workspace (~820px / flex-1) */}
+                <MiddleTableWorkspace
+                  onOpenBatchConfirm={() => setIsBatchModalOpen(true)}
+                  onOpenModeling={() => setIsModelingModalOpen(true)}
+                  onOpenLineage={() => setIsLineageModalOpen(true)}
+                />
+
+                {/* Right Column: Table Semantic Profile (400px) */}
+                <RightTableProfilePanel
+                  onConfirmTable={handleConfirmTable}
+                  onAdjustTable={handleAdjustTable}
+                  onReanalyzeTable={handleReanalyzeTable}
+                  isCollapsed={isRightPanelCollapsed}
+                  setIsCollapsed={setIsRightPanelCollapsed}
+                />
+              </div>
+
+              {/* Bottom Area: Analysis Structure & Agent Context (220px) */}
+              <BottomTableContextPanel />
+            </>
+          ) : (
+            <>
+              {/* Field Understanding Workspace */}
+              <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+                <LeftTaskQueue
+                  fields={fields}
+                  selectedFieldId={selectedFieldId}
+                  onSelectField={handleSelectField}
+                  onBatchConfirm={() => setIsBatchModalOpen(true)}
+                />
+                <MiddleWorkspace
+                  data={currentGovernanceData}
+                  onSelectCandidate={handleAdoptCandidate}
+                  onViewHistory={() => {
+                    setIsRightPanelCollapsed(false);
+                    setActiveRightTab('history');
+                  }}
+                  onMarkReview={handleMarkReview}
+                />
+                <RightAssetPanel
+                  data={currentGovernanceData}
+                  activeRightTab={activeRightTab}
+                  setActiveRightTab={setActiveRightTab}
+                  onConfirmNext={handleConfirmNext}
+                  onSaveDraft={handleSaveDraft}
+                  onMarkReview={handleMarkReview}
+                  isCollapsed={isRightPanelCollapsed}
+                  setIsCollapsed={setIsRightPanelCollapsed}
+                />
+              </div>
+              <BottomImpactAnalysis impact={currentGovernanceData.downstreamImpact} />
+            </>
+          )}
         </>
       )}
 
@@ -460,6 +486,23 @@ export default function App() {
         onClose={() => setIsLauncherOpen(false)}
         onSelectModule={handleSelectModule}
         currentModule={currentModule}
+      />
+
+      {/* Personal Center Overlay Panel */}
+      <PersonalCenterPanel
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        userName="Admin User"
+        userAccount="13800138000"
+        roleName="平台超级管理员"
+        onNavigateSettings={() => {
+          setIsProfileOpen(false);
+          addToast('info', '个人中心与设置', '已载入用户账号偏好与安全设置中心');
+        }}
+        onLogout={() => {
+          setIsProfileOpen(false);
+          addToast('info', '退出登录', '已安全退出系统会话');
+        }}
       />
 
       {/* Toast Feedback */}
