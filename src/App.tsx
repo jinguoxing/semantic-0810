@@ -17,12 +17,13 @@ import { BottomTableContextPanel } from './components/BottomTableContextPanel';
 import { BatchConfirmModal } from './components/BatchConfirmModal';
 import { LineageModal } from './components/LineageModal';
 import { ObjectModelingModal } from './components/ObjectModelingModal';
+import { EnterpriseLauncher } from './components/EnterpriseLauncher';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'relation'>('table');
+  const [viewTab, setViewTab] = useState<'field' | 'table'>('table');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('close_time');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -30,6 +31,8 @@ export default function App() {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
   const [isLineageModalOpen, setIsLineageModalOpen] = useState<boolean>(false);
   const [isModelingModalOpen, setIsModelingModalOpen] = useState<boolean>(false);
+  const [isLauncherOpen, setIsLauncherOpen] = useState<boolean>(false);
+  const [currentModule, setCurrentModule] = useState<string>('xino_partner');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isReanalyzing, setIsReanalyzing] = useState<boolean>(false);
 
@@ -41,6 +44,19 @@ export default function App() {
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const handleSelectModule = (moduleKey: string, moduleName: string) => {
+    setCurrentModule(moduleKey);
+    if (moduleKey === 'data_governance') {
+      setViewTab('table');
+      addToast('success', '已切换至 数据治理', '已载入 pop_service_hotline 表语义理解与治理工作台');
+    } else if (moduleKey === 'business_semantics') {
+      setViewTab('field');
+      addToast('success', '已切换至 业务语义', '已载入字段语义理解与实体映射视图');
+    } else {
+      addToast('info', `已选择【${moduleName}】`, `即将为你路由至 ${moduleName} 工作空间`);
+    }
   };
 
   // Get current governance data for the selected field
@@ -324,7 +340,7 @@ export default function App() {
 
   const handleReanalyzeTable = () => {
     setIsReanalyzing(true);
-    addToast('info', 'Xino AI 引擎重新分析', '正在重新扫描表 Schema 约束、采样粒度与时间分布...');
+    addToast('info', 'AI 引擎重新分析', '正在重新扫描表 Schema 约束、采样粒度与时间分布...');
     setTimeout(() => {
       setIsReanalyzing(false);
       addToast('success', '重新推导完成', '系统已更新证据链与置信度打分 (置信度: 91%)');
@@ -341,6 +357,7 @@ export default function App() {
         onPreviewPublish={handlePreviewPublish}
         onViewLineage={() => setIsLineageModalOpen(true)}
         onEnterModeling={() => setIsModelingModalOpen(true)}
+        onOpenLauncher={() => setIsLauncherOpen(true)}
         batchCount={batchCount}
       />
 
@@ -391,6 +408,7 @@ export default function App() {
               fields={fields}
               selectedFieldId={selectedFieldId}
               onSelectField={handleSelectField}
+              onBatchConfirm={() => setIsBatchModalOpen(true)}
             />
             <MiddleWorkspace
               data={currentGovernanceData}
@@ -434,6 +452,14 @@ export default function App() {
         isOpen={isModelingModalOpen}
         onClose={() => setIsModelingModalOpen(false)}
         tableName="pop_service_hotline"
+      />
+
+      {/* Enterprise AI Launcher Panel */}
+      <EnterpriseLauncher
+        isOpen={isLauncherOpen}
+        onClose={() => setIsLauncherOpen(false)}
+        onSelectModule={handleSelectModule}
+        currentModule={currentModule}
       />
 
       {/* Toast Feedback */}

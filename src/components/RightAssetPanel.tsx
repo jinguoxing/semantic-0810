@@ -373,7 +373,7 @@ export const RightAssetPanel: React.FC<RightAssetPanelProps> = ({
                 </div>
                 <div className="text-[10px] text-[#64748B] flex items-center justify-between pt-1 border-t border-[#E2E8F0]">
                   <span>来源: AI推荐</span>
-                  <span>操作人: Xino AI 引擎</span>
+                  <span>操作人: AI 引擎</span>
                 </div>
               </div>
 

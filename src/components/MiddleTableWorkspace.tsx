@@ -82,7 +82,7 @@ export const MiddleTableWorkspace: React.FC<MiddleTableWorkspaceProps> = ({
             <div className="w-2.5 h-2.5 rounded-full bg-[#4F46E5]" />
             <h2 className="text-xs font-bold text-[#1E293B]">AI 理解结果</h2>
             <span className="text-[10px] text-[#64748B] bg-[#EEF2FF] px-2 py-0.5 rounded border border-[#4F46E5]/20 font-medium">
-              Xino ｜ 犀诺 智能理解
+              AI 智能理解
             </span>
           </div>
 

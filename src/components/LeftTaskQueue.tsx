@@ -6,12 +6,14 @@ interface LeftTaskQueueProps {
   fields: FieldItem[];
   selectedFieldId: string;
   onSelectField: (id: string) => void;
+  onBatchConfirm?: () => void;
 }
 
 export const LeftTaskQueue: React.FC<LeftTaskQueueProps> = ({
   fields,
   selectedFieldId,
   onSelectField,
+  onBatchConfirm,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -115,9 +117,21 @@ export const LeftTaskQueue: React.FC<LeftTaskQueueProps> = ({
             <Database className="w-4 h-4 text-[#4F46E5]" />
             <h2 className="text-xs font-bold text-[#1E293B] tracking-tight">字段理解队列</h2>
           </div>
-          <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-[#EEF2FF] text-[#4F46E5] rounded border border-[#4F46E5]/20">
-            {stats.total} 字段
-          </span>
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-[#EEF2FF] text-[#4F46E5] rounded border border-[#4F46E5]/20">
+              {stats.total} 字段
+            </span>
+            {onBatchConfirm && (
+              <button
+                onClick={onBatchConfirm}
+                className="px-2 py-0.5 text-[11px] font-semibold text-white bg-[#4F46E5] hover:bg-[#4338CA] rounded transition-colors flex items-center space-x-1 shadow-2xs shrink-0 cursor-pointer"
+                title="高置信度字段一键批量确认"
+              >
+                <CheckCircle2 className="w-3 h-3 text-white" />
+                <span>批量确认</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Total Stats Summary Grid */}
@@ -310,11 +324,21 @@ export const LeftTaskQueue: React.FC<LeftTaskQueueProps> = ({
             style={{ width: `${(stats.confirmed / stats.total) * 100}%` }}
           />
         </div>
-        <div className="text-[11px] text-[#64748B] truncate pt-0.5 flex items-center space-x-1">
-          <span className="text-[#94A3B8]">正在处理:</span>
-          <span className="font-mono font-bold text-[#4F46E5]">
-            {selectedField ? selectedField.name : 'close_time'}
-          </span>
+        <div className="flex items-center justify-between text-[11px] text-[#64748B] truncate pt-0.5">
+          <div className="flex items-center space-x-1 truncate">
+            <span className="text-[#94A3B8]">当前:</span>
+            <span className="font-mono font-bold text-[#4F46E5] truncate">
+              {selectedField ? selectedField.name : 'close_time'}
+            </span>
+          </div>
+          {onBatchConfirm && (
+            <button
+              onClick={onBatchConfirm}
+              className="text-[#4F46E5] hover:underline font-semibold text-[11px] shrink-0 ml-1 cursor-pointer"
+            >
+              一键批量确认 &rarr;
+            </button>
+          )}
         </div>
       </div>
     </div>

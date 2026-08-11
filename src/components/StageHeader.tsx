@@ -4,8 +4,8 @@ import { ChevronRight, Database, Sparkles } from 'lucide-react';
 interface StageHeaderProps {
   tableName: string;
   onBatchConfirm?: () => void;
-  activeTab?: 'field' | 'table' | 'relation';
-  setActiveTab?: (tab: 'field' | 'table' | 'relation') => void;
+  activeTab?: 'field' | 'table';
+  setActiveTab?: (tab: 'field' | 'table') => void;
 }
 
 export const StageHeader: React.FC<StageHeaderProps> = ({ 
@@ -14,10 +14,10 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
   activeTab = 'table',
   setActiveTab
 }) => {
-  const [internalTab, setInternalTab] = useState<'field' | 'table' | 'relation'>('table');
+  const [internalTab, setInternalTab] = useState<'field' | 'table'>('table');
   const currentTab = activeTab ?? internalTab;
 
-  const handleTabClick = (tab: 'field' | 'table' | 'relation') => {
+  const handleTabClick = (tab: 'field' | 'table') => {
     if (setActiveTab) {
       setActiveTab(tab);
     } else {
@@ -71,16 +71,6 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
             }`}
           >
             表理解
-          </button>
-          <button
-            onClick={() => handleTabClick('relation')}
-            className={`px-3 py-1 rounded-md font-semibold transition-all ${
-              currentTab === 'relation'
-                ? 'bg-[#EEF2FF] text-[#4F46E5] font-bold border border-[#4F46E5]/30'
-                : 'text-[#64748B] hover:text-[#1E293B] hover:bg-[#F1F5F9]'
-            }`}
-          >
-            关系理解
           </button>
         </div>
       </div>

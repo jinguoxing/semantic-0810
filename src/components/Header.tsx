@@ -7,7 +7,8 @@ import {
   Eye, 
   User, 
   Layers,
-  Bot
+  Bot,
+  Grid
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -17,6 +18,7 @@ interface HeaderProps {
   onPreviewPublish?: () => void;
   onViewLineage?: () => void;
   onEnterModeling?: () => void;
+  onOpenLauncher?: () => void;
   batchCount?: number;
 }
 
@@ -27,12 +29,23 @@ export const Header: React.FC<HeaderProps> = ({
   onPreviewPublish,
   onViewLineage,
   onEnterModeling,
+  onOpenLauncher,
   batchCount = 0,
 }) => {
   return (
     <header className="h-[64px] bg-white border-b border-[#E2E8F0] px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs shrink-0">
       {/* Left Branding & App Name */}
-      <div className="flex items-center space-x-6">
+      <div className="flex items-center space-x-4">
+        {/* 九宫格 应用中心 / Enterprise AI Launcher Toggle Button */}
+        <button
+          onClick={onOpenLauncher}
+          className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-indigo-50 hover:text-[#4F46E5] text-slate-700 border border-slate-200/90 hover:border-indigo-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs group relative"
+          title="应用中心 / 企业 AI 入口 (Cmd + K)"
+        >
+          <Grid className="w-5 h-5 text-slate-700 group-hover:text-[#4F46E5] transition-transform group-hover:scale-105" />
+          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#4F46E5] ring-2 ring-white animate-pulse" />
+        </button>
+
         <div className="flex items-center space-x-3">
           <div className="w-9 h-9 rounded-lg bg-[#4F46E5] flex items-center justify-center text-white font-bold shadow-xs">
             <span className="text-lg font-mono tracking-tighter">S</span>
@@ -42,11 +55,11 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="font-bold text-lg text-[#1E293B] tracking-tight">Semovix</span>
             </div>
             <div className="text-[11px] text-[#64748B] flex items-center space-x-1.5 font-medium">
-              <span>数据语义治理平台</span>
+              <span>企业 AI 原生语义智能平台</span>
               <span className="text-[#CBD5E1]">|</span>
               <span className="inline-flex items-center space-x-1 text-[#4F46E5]">
                 <Bot className="w-3 h-3" />
-                <span>Xino｜犀诺</span>
+                <span>AI 智能引擎</span>
               </span>
             </div>
           </div>
