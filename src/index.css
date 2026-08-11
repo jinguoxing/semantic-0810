@@ -21,6 +21,15 @@
   transform: scale(1.015);
 }
 
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Custom subtle scrollbar for enterprise dense layout */
 ::-webkit-scrollbar {
   width: 6px;
