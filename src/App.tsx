@@ -30,14 +30,14 @@ export default function App() {
   const [currentNav, setCurrentNav] = useState<'home' | 'governance'>('governance');
   const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling'>('modeling');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
-  const [selectedFieldId, setSelectedFieldId] = useState<string>('close_time');
+  const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState<boolean>(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
   const [isLineageModalOpen, setIsLineageModalOpen] = useState<boolean>(false);
   const [isModelingModalOpen, setIsModelingModalOpen] = useState<boolean>(false);
   const [isLauncherOpen, setIsLauncherOpen] = useState<boolean>(false);
-  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(true);
+  const [isProfileOpen, setIsProfileOpen] = useState<boolean>(false);
   const [currentModule, setCurrentModule] = useState<string>('xino_partner');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isReanalyzing, setIsReanalyzing] = useState<boolean>(false);

@@ -45,7 +45,7 @@ export const PersonalCenterPanel: React.FC<PersonalCenterPanelProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 pointer-events-none flex justify-end p-4 md:p-6">
+        <div className="fixed inset-0 z-[100] pointer-events-none flex justify-end p-4 md:p-6">
           {/* Subtle Dim Backdrop for click-away */}
           <motion.div
             initial={{ opacity: 0 }}

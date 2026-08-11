@@ -15,12 +15,12 @@ export const BatchConfirmModal: React.FC<BatchConfirmModalProps> = ({
   fields,
   onConfirmBatch,
 }) => {
-  if (!isOpen) return null;
-
   const batchableFields = fields.filter((f) => f.confidenceScore >= 80 || f.isBatchEligible);
   const [selectedIds, setSelectedIds] = useState<string[]>(
     batchableFields.map((f) => f.id)
   );
+
+  if (!isOpen) return null;
 
   const toggleSelect = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -44,7 +44,7 @@ export const BatchConfirmModal: React.FC<BatchConfirmModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-[#E2E8F0] bg-[#F8FAFC] flex items-center justify-between">

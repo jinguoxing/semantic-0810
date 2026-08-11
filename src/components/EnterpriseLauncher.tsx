@@ -56,7 +56,7 @@ export const EnterpriseLauncher: React.FC<EnterpriseLauncherProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-start p-4 md:p-6 lg:p-8 overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-start justify-start p-4 md:p-6 lg:p-8 overflow-y-auto">
           {/* Blur & Dark Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}

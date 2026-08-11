@@ -246,24 +246,24 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
               CORE COMPONENT: WORK COMPOSER (White Surface #FFFFFF)
           ========================================================= */}
           <div 
-            className={`relative rounded-2xl p-[1.5px] transition-all duration-300 ${
-              promptInput.trim().length > 0 || isInputFocused
+            className={`relative rounded-2xl p-[1px] transition-all duration-300 ${
+              promptInput.trim().length > 0 || isInputFocused || isModePopoverOpen
                 ? 'shadow-md ring-1 ring-black/5'
                 : 'shadow-2xs'
             }`}
           >
-            {/* Background & Border Layer (Clips spinning gradient to 1.5px border) */}
+            {/* Background & Border Layer (Clips spinning gradient to 1px thin border) */}
             <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none z-0">
-              {(promptInput.trim().length > 0 || isInputFocused) ? (
+              {(promptInput.trim().length > 0 || isInputFocused || isModePopoverOpen) ? (
                 <div className="absolute -inset-[150%] animate-google-spin opacity-100 bg-[conic-gradient(from_0deg,#4285F4_0deg,#EA4335_90deg,#FBBC05_180deg,#34A853_270deg,#4285F4_360deg)]" />
               ) : (
                 <div className="absolute inset-0 border border-[#E2E8F0] rounded-2xl" />
               )}
-              {/* Inner White Surface cutout */}
-              <div className="absolute inset-[1.5px] bg-white rounded-[14.5px]" />
+              {/* Inner White Surface cutout (1px inset) */}
+              <div className="absolute inset-[1px] bg-white rounded-[15px]" />
             </div>
 
-            {/* Inner Interactive Surface (No overflow-hidden, so popover floats cleanly on top) */}
+            {/* Inner Interactive Surface (No middle line inside dialog) */}
             <div className="relative z-10 p-4 text-left space-y-2">
               <textarea
                 value={promptInput}
@@ -281,6 +281,7 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
                 {/* 1. Attachment Icon */}
                 <button
                   type="button"
+                  onClick={() => setIsInputFocused(true)}
                   className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#334155] hover:bg-[#F8FAFC] transition-colors cursor-pointer"
                   title="添加附件"
                 >
@@ -291,7 +292,10 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
                 <div ref={popoverRef} className="relative inline-block">
                   <button
                     type="button"
-                    onClick={() => setIsModePopoverOpen((prev) => !prev)}
+                    onClick={() => {
+                      setIsModePopoverOpen((prev) => !prev);
+                      setIsInputFocused(true);
+                    }}
                     className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-all border ${
                       isModePopoverOpen
                         ? 'bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]'
@@ -302,7 +306,7 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
                     <ChevronDown className={`w-3 h-3 transition-transform ${isModePopoverOpen ? 'rotate-180 text-[#2563EB]' : 'text-[#94A3B8]'}`} />
                   </button>
 
-                  {/* Mode Selector Popover (320-360px) */}
+                  {/* Mode Selector Popover (320-360px, Clean without area borders) */}
                   <AnimatePresence>
                     {isModePopoverOpen && (
                       <motion.div
@@ -312,7 +316,7 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
                         transition={{ duration: 0.15 }}
                         className="absolute top-full left-0 mt-2 z-50 w-[340px] bg-white rounded-2xl border border-[#E2E8F0] shadow-xl p-3.5 space-y-2 text-left"
                       >
-                        <div className="text-xs font-bold text-[#0F172A] pb-1 border-b border-[#F1F5F9]">
+                        <div className="text-xs font-bold text-[#0F172A] pb-1">
                           处理方式
                         </div>
 

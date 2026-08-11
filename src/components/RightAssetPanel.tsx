@@ -66,6 +66,9 @@ export const RightAssetPanel: React.FC<RightAssetPanelProps> = ({
     { title: '其他通用语义', items: ['日期字段', '审计时间', '时序坐标'] },
   ];
 
+  // State for decision
+  const [userDecision, setUserDecision] = useState<'confirm' | 'candidate' | 'manual' | 'review'>('confirm');
+
   if (collapsed) {
     return (
       <div className="w-11 lg:w-12 bg-white border-l border-[#E2E8F0] flex flex-col items-center justify-between py-3 shrink-0 shadow-2xs transition-all duration-200 select-none">
@@ -117,150 +120,211 @@ export const RightAssetPanel: React.FC<RightAssetPanelProps> = ({
   }
 
   return (
-    <div className="w-full lg:w-[420px] bg-white border-l border-[#E2E8F0] flex flex-col h-full shrink-0 shadow-2xs transition-all duration-200">
+    <div className="w-full lg:w-[380px] xl:w-[400px] bg-white border-l border-[#E2E8F0] flex flex-col h-full shrink-0 shadow-2xs transition-all duration-200 select-none">
       {/* Panel Header */}
-      <div className="p-3 border-b border-[#E2E8F0] bg-[#F8FAFC] space-y-2">
+      <div className="p-3.5 border-b border-[#E2E8F0] bg-white space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <ShieldCheck className="w-4 h-4 text-[#4F46E5]" />
-            <h2 className="text-xs font-bold text-[#1E293B]">当前语义资产 (Column Semantic Profile)</h2>
+          <div>
+            <div className="text-[10px] text-[#94A3B8] font-mono uppercase tracking-wide">Column Semantic Profile</div>
+            <h2 className="text-sm font-bold text-[#0F172A]">字段语义画像</h2>
           </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#ECFDF5] text-[#059669] border border-[#059669]/20 font-semibold">
-              已确认
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[11px] font-medium text-[#D97706]">
+              AI 推导完成 · 待确认
             </span>
-            <button
-              onClick={() => toggleCollapse(true)}
-              className="p-1 rounded text-[#64748B] hover:text-[#1E293B] hover:bg-[#E2E8F0] transition-colors"
-              title="收起面板"
-            >
-              <PanelRightClose className="w-4 h-4" />
-            </button>
+            {setIsCollapsed && (
+              <button
+                onClick={() => toggleCollapse(true)}
+                className="p-1 rounded text-[#64748B] hover:text-[#1E293B] hover:bg-[#E2E8F0] transition-colors"
+                title="收起面板"
+              >
+                <PanelRightClose className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="grid grid-cols-3 gap-1 bg-[#F1F5F9] p-1 rounded text-xs font-semibold">
+        {/* Underline Tabs */}
+        <div className="flex items-center space-x-6 border-b border-[#E2E8F0] text-xs font-medium">
           <button
             onClick={() => setActiveRightTab('result')}
-            className={`py-1.5 rounded transition-all duration-150 text-center flex items-center justify-center space-x-1 ${
+            className={`pb-2 transition-all duration-150 cursor-pointer ${
               activeRightTab === 'result'
-                ? 'bg-white text-[#4F46E5] shadow-2xs font-bold'
-                : 'text-[#64748B] hover:text-[#1E293B]'
+                ? 'border-b-2 border-[#2563EB] text-[#2563EB] font-bold'
+                : 'text-[#64748B] hover:text-[#0F172A]'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
             <span>当前结果</span>
           </button>
           <button
             onClick={() => setActiveRightTab('adjust')}
-            className={`py-1.5 rounded transition-all duration-150 text-center flex items-center justify-center space-x-1 ${
+            className={`pb-2 transition-all duration-150 cursor-pointer ${
               activeRightTab === 'adjust'
-                ? 'bg-white text-[#4F46E5] shadow-2xs font-bold'
-                : 'text-[#64748B] hover:text-[#1E293B]'
+                ? 'border-b-2 border-[#2563EB] text-[#2563EB] font-bold'
+                : 'text-[#64748B] hover:text-[#0F172A]'
             }`}
           >
-            <Sliders className="w-3.5 h-3.5" />
-            <span>调整推荐</span>
+            <span>调整建议</span>
           </button>
           <button
             onClick={() => setActiveRightTab('history')}
-            className={`py-1.5 rounded transition-all duration-150 text-center flex items-center justify-center space-x-1 ${
+            className={`pb-2 transition-all duration-150 cursor-pointer ${
               activeRightTab === 'history'
-                ? 'bg-white text-[#4F46E5] shadow-2xs font-bold'
-                : 'text-[#64748B] hover:text-[#1E293B]'
+                ? 'border-b-2 border-[#2563EB] text-[#2563EB] font-bold'
+                : 'text-[#64748B] hover:text-[#0F172A]'
             }`}
           >
-            <History className="w-3.5 h-3.5" />
             <span>历史版本</span>
           </button>
         </div>
       </div>
 
       {/* Tab Body */}
-      <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
+      <div className="flex-1 overflow-y-auto no-scrollbar p-3.5 space-y-4">
         {/* Tab 1: 当前结果 */}
         {activeRightTab === 'result' && (
-          <div className="space-y-3 text-xs">
-            {/* Readonly Asset Card */}
-            <div className="bg-[#F8FAFC] border border-[#E2E8F0] p-3.5 rounded-md space-y-2.5">
-              <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
-                <span className="text-[#64748B]">物理字段名</span>
-                <span className="font-mono font-bold text-[#1E293B] text-sm">
-                  {currentAsset.field}
-                </span>
+          <div className="space-y-4 text-xs">
+            {/* Key-Value Profile List (Clean list without horizontal border lines) */}
+            <div className="space-y-2 text-xs">
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">物理字段名:</span>
+                <span className="font-mono font-medium text-[#0F172A] text-right">{currentAsset.field}</span>
               </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <span className="text-[#94A3B8]">物理类型:</span>
-                  <div className="font-mono font-semibold text-[#1E293B] mt-0.5">
-                    {currentAsset.dataType}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-[#94A3B8]">语义类型:</span>
-                  <div className="font-bold text-[#4F46E5] mt-0.5">
-                    {selectedSemantic || currentAsset.semanticType}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-[#94A3B8]">字段角色:</span>
-                  <div className="font-semibold text-[#312E81] mt-0.5">
-                    {selectedRole || currentAsset.fieldRole}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-[#94A3B8]">业务标准名称:</span>
-                  <div className="font-bold text-[#059669] mt-0.5">
-                    {customBusinessName || currentAsset.businessName}
-                  </div>
-                </div>
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">物理类型:</span>
+                <span className="font-mono text-[#334155] text-right">{currentAsset.dataType}</span>
               </div>
-
-              <div className="border-t border-[#E2E8F0] pt-2 space-y-1">
-                <span className="text-[#94A3B8] text-[11px]">业务定义描述:</span>
-                <p className="text-[#334155] leading-relaxed bg-white p-2.5 rounded border border-[#E2E8F0]">
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">语义类型:</span>
+                <span className="font-medium text-[#0F172A] text-right">{selectedSemantic || currentAsset.semanticType}</span>
+              </div>
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">业务名称:</span>
+                <span className="font-medium text-[#0F172A] text-right">{customBusinessName || currentAsset.businessName}</span>
+              </div>
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">字段角色:</span>
+                <span className="text-[#334155] text-right">{selectedRole || currentAsset.fieldRole}</span>
+              </div>
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">业务定义:</span>
+                <span className="text-[#334155] text-right leading-relaxed pl-2">
                   {customDefinition || currentAsset.businessDefinition}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-[#E2E8F0]">
-                <div>
-                  <span className="text-[#94A3B8]">业务关联对象:</span>
-                  <div className="font-bold text-[#1E293B] mt-0.5">工单对象</div>
-                </div>
-                <div>
-                  <span className="text-[#94A3B8]">支持分析维度:</span>
-                  <div className="font-medium text-[#4F46E5] mt-0.5">生命周期 / 趋势分析</div>
-                </div>
-              </div>
-
-              {/* Badges */}
-              <div className="pt-2 flex flex-wrap gap-1.5 border-t border-[#E2E8F0]">
-                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#ECFDF5] text-[#059669] border border-[#059669]/20">
-                  <CheckCircle2 className="w-3 h-3 text-[#059669]" />
-                  <span>语义已确认</span>
                 </span>
-                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#EEF2FF] text-[#4F46E5] border border-[#4F46E5]/20">
-                  <CheckCircle2 className="w-3 h-3 text-[#4F46E5]" />
-                  <span>企业标准已匹配</span>
-                </span>
-                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F1F5F9] text-[#334155] border border-[#CBD5E1]">
-                  <span>可下游消费</span>
+              </div>
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">业务关联对象:</span>
+                <span className="text-[#0F172A] text-right">工单对象</span>
+              </div>
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">关联主体:</span>
+                <span className="text-[#0F172A] text-right">自然人</span>
+              </div>
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">支持分析维度:</span>
+                <span className="text-[#334155] text-right">主体分析、生命周期分析、人群分析</span>
+              </div>
+              <div className="flex items-start justify-between text-[11px] py-0.5">
+                <span className="text-[#64748B] w-24 shrink-0">治理状态:</span>
+                <span className="font-medium text-[#D97706] text-right">
+                  待人工确认
                 </span>
               </div>
             </div>
 
-            {/* Quick Status Box */}
-            <div className="bg-[#EEF2FF] border border-[#4F46E5]/20 p-3 rounded-md text-xs space-y-1 text-[#312E81]">
-              <div className="font-bold flex items-center space-x-1">
-                <Tag className="w-3.5 h-3.5 text-[#4F46E5]" />
-                <span>语义确定性说明</span>
+            {/* Decision Section (No background box per option) */}
+            <div className="pt-2 space-y-2">
+              <div className="font-bold text-[#0F172A] text-xs">
+                你的决策
               </div>
-              <p className="text-[11px] text-[#475569] leading-relaxed">
-                该字段已通过《政务数据语义治理规范》一致性校验，可直接用于指标计算与知识网络消费。
-              </p>
+
+              <div className="space-y-2 text-xs">
+                <label
+                  onClick={() => setUserDecision('confirm')}
+                  className="flex items-start space-x-2.5 py-1 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="radio"
+                    name="decision"
+                    checked={userDecision === 'confirm'}
+                    onChange={() => setUserDecision('confirm')}
+                    className="mt-0.5 text-[#2563EB] focus:ring-[#2563EB] accent-[#2563EB]"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-[#0F172A]">确认 AI 推荐</div>
+                    <div className="text-[11px] text-[#64748B]">
+                      采用“{customBusinessName || '申请人标识'}”作为当前字段语义。
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => {
+                    setUserDecision('candidate');
+                    setActiveRightTab('adjust');
+                  }}
+                  className="flex items-start space-x-2.5 py-1 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="radio"
+                    name="decision"
+                    checked={userDecision === 'candidate'}
+                    onChange={() => {
+                      setUserDecision('candidate');
+                      setActiveRightTab('adjust');
+                    }}
+                    className="mt-0.5 text-[#2563EB] focus:ring-[#2563EB] accent-[#2563EB]"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-[#0F172A]">采纳其他候选</div>
+                    <div className="text-[11px] text-[#64748B]">从候选列表中选择其他解释。</div>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => {
+                    setUserDecision('manual');
+                    setActiveRightTab('adjust');
+                  }}
+                  className="flex items-start space-x-2.5 py-1 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="radio"
+                    name="decision"
+                    checked={userDecision === 'manual'}
+                    onChange={() => {
+                      setUserDecision('manual');
+                      setActiveRightTab('adjust');
+                    }}
+                    className="mt-0.5 text-[#2563EB] focus:ring-[#2563EB] accent-[#2563EB]"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-[#0F172A]">手工调整</div>
+                    <div className="text-[11px] text-[#64748B]">
+                      手工修正语义类型、业务名称或字段角色。
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setUserDecision('review')}
+                  className="flex items-start space-x-2.5 py-1 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="radio"
+                    name="decision"
+                    checked={userDecision === 'review'}
+                    onChange={() => setUserDecision('review')}
+                    className="mt-0.5 text-[#2563EB] focus:ring-[#2563EB] accent-[#2563EB]"
+                  />
+                  <div className="space-y-0.5">
+                    <div className="font-bold text-[#0F172A]">标记待复核</div>
+                    <div className="text-[11px] text-[#64748B]">
+                      当前证据不足，先保留待复核状态。
+                    </div>
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
         )}
@@ -409,33 +473,28 @@ export const RightAssetPanel: React.FC<RightAssetPanelProps> = ({
         )}
       </div>
 
-      {/* Bottom Sticky Actions */}
-      <div className="p-3 border-t border-[#E2E8F0] bg-[#F8FAFC] space-y-2">
+      {/* Bottom Sticky Actions (All buttons on a single horizontal row) */}
+      <div className="p-3 border-t border-[#E2E8F0] bg-white flex items-center justify-between gap-2">
         <button
           onClick={onConfirmNext}
-          className="w-full py-2.5 px-3 bg-[#4F46E5] hover:bg-[#4338CA] text-white rounded text-xs font-semibold shadow-2xs transition-colors flex items-center justify-center space-x-2"
+          className="flex-1 py-2 px-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold shadow-2xs transition-colors text-center cursor-pointer whitespace-nowrap"
         >
-          <CheckCircle2 className="w-4 h-4" />
-          <span>确认并进入下一个字段</span>
-          <ArrowRight className="w-3.5 h-3.5" />
+          保存并进入下一个字段
         </button>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={onSaveDraft}
-            className="py-1.5 px-2 bg-white hover:bg-[#F1F5F9] text-[#1E293B] border border-[#E2E8F0] rounded text-xs font-medium transition-colors flex items-center justify-center space-x-1"
-          >
-            <Save className="w-3.5 h-3.5 text-[#64748B]" />
-            <span>保存草稿</span>
-          </button>
-          <button
-            onClick={onMarkReview}
-            className="py-1.5 px-2 bg-[#FFFBEB] hover:bg-[#FEF3C7] text-[#D97706] border border-[#D97706]/30 rounded text-xs font-medium transition-colors flex items-center justify-center space-x-1"
-          >
-            <Flag className="w-3.5 h-3.5" />
-            <span>标记待复核</span>
-          </button>
-        </div>
+        <button
+          onClick={onSaveDraft}
+          className="py-2 px-2.5 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#E2E8F0] rounded-md text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shadow-2xs"
+        >
+          保存草稿
+        </button>
+
+        <button
+          onClick={onMarkReview}
+          className="text-[#2563EB] hover:underline text-xs font-medium cursor-pointer transition-colors whitespace-nowrap px-1"
+        >
+          标记待复核
+        </button>
       </div>
     </div>
   );
