@@ -20,13 +20,15 @@ import { ObjectModelingModal } from './components/ObjectModelingModal';
 import { EnterpriseLauncher } from './components/EnterpriseLauncher';
 import { PersonalCenterPanel } from './components/PersonalCenterPanel';
 import { XinoHomeWorkspace } from './components/XinoHomeWorkspace';
+import { BusinessObjectDiscoveryWorkspace } from './components/BusinessObjectDiscoveryWorkspace';
+import { BusinessObjectModelingWorkspace } from './components/BusinessObjectModelingWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance'>('home');
-  const [viewTab, setViewTab] = useState<'field' | 'table'>('table');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance'>('governance');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling'>('modeling');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('close_time');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -379,7 +381,7 @@ export default function App() {
         <XinoHomeWorkspace
           onNavigateToGovernance={() => {
             setCurrentNav('governance');
-            setViewTab('table');
+            setViewTab('discovery');
           }}
           onOpenLauncher={() => setIsLauncherOpen(true)}
         />
@@ -394,7 +396,22 @@ export default function App() {
           />
 
           {/* Main Governance Content Area */}
-          {viewTab === 'table' ? (
+          {viewTab === 'modeling' ? (
+            <BusinessObjectModelingWorkspace
+              onBackToDiscovery={() => setViewTab('discovery')}
+              onProceedToAssets={() => {
+                addToast('success', '建模草稿已确认', '系统已为您自动推导语义资产并进入阶段 ④ 语义资产完善');
+                setViewTab('discovery');
+              }}
+            />
+          ) : viewTab === 'discovery' ? (
+            <BusinessObjectDiscoveryWorkspace
+              onBackToSemantic={() => setViewTab('table')}
+              onEnterModeling={() => setViewTab('modeling')}
+              onViewLineage={() => setIsLineageModalOpen(true)}
+              onReanalyze={handleReanalyzeTable}
+            />
+          ) : viewTab === 'table' ? (
             <>
               {/* Table Understanding Three Columns Workspace */}
               <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">

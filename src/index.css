@@ -40,3 +40,16 @@
   background: #94A3B8;
 }
 
+@keyframes google-border-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-google-spin {
+  animation: google-border-spin 3s linear infinite;
+}
+
