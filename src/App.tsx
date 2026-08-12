@@ -22,13 +22,15 @@ import { PersonalCenterPanel } from './components/PersonalCenterPanel';
 import { XinoHomeWorkspace } from './components/XinoHomeWorkspace';
 import { BusinessObjectDiscoveryWorkspace } from './components/BusinessObjectDiscoveryWorkspace';
 import { BusinessObjectModelingWorkspace } from './components/BusinessObjectModelingWorkspace';
+import { DataAssetsCatalogWorkspace } from './components/DataAssetsCatalogWorkspace';
+import { DataSemanticsQueueWorkspace } from './components/DataSemanticsQueueWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance'>('governance');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling'>('modeling');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics'>('semantics');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics'>('semantics');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -377,7 +379,36 @@ export default function App() {
       />
 
       {/* Main Content View Switch */}
-      {currentNav === 'home' ? (
+      {currentNav === 'semantics' || viewTab === 'semantics' ? (
+        <DataSemanticsQueueWorkspace
+          onNavigateToTableUnderstanding={(tableName) => {
+            setCurrentNav('governance');
+            setViewTab('table');
+            addToast('info', '切换工作台', `已跳转至 ${tableName} 表语义理解与治理`);
+          }}
+          onNavigateToCatalog={() => {
+            setCurrentNav('assets');
+            setViewTab('assets');
+            addToast('info', '切换工作台', '已跳转至数据资产目录');
+          }}
+          addToast={addToast}
+        />
+      ) : currentNav === 'assets' || viewTab === 'assets' ? (
+        <DataAssetsCatalogWorkspace
+          onNavigateToTableUnderstanding={() => {
+            setCurrentNav('governance');
+            setViewTab('table');
+            addToast('info', '切换工作台', '已跳转至 pop_service_hotline 表语义理解');
+          }}
+          onNavigateToDiscovery={() => {
+            setCurrentNav('governance');
+            setViewTab('discovery');
+            addToast('info', '切换工作台', '已跳转至业务对象发现');
+          }}
+          onViewLineage={() => setIsLineageModalOpen(true)}
+          addToast={addToast}
+        />
+      ) : currentNav === 'home' ? (
         <XinoHomeWorkspace
           onNavigateToGovernance={() => {
             setCurrentNav('governance');

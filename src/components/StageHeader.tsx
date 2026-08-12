@@ -4,8 +4,8 @@ import { ChevronRight, RotateCw, FileText, ArrowLeft, Check } from 'lucide-react
 interface StageHeaderProps {
   tableName: string;
   onBatchConfirm?: () => void;
-  activeTab?: 'field' | 'table' | 'discovery' | 'modeling';
-  setActiveTab?: (tab: 'field' | 'table' | 'discovery' | 'modeling') => void;
+  activeTab?: 'field' | 'table' | 'discovery' | 'modeling' | 'assets';
+  setActiveTab?: (tab: 'field' | 'table' | 'discovery' | 'modeling' | 'assets') => void;
   onBackToSemantic?: () => void;
   onReanalyze?: () => void;
 }
@@ -17,10 +17,10 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
   onBackToSemantic,
   onReanalyze
 }) => {
-  const [internalTab, setInternalTab] = useState<'field' | 'table' | 'discovery' | 'modeling'>('discovery');
+  const [internalTab, setInternalTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets'>('discovery');
   const currentTab = activeTab ?? internalTab;
 
-  const handleTabClick = (tab: 'field' | 'table' | 'discovery' | 'modeling') => {
+  const handleTabClick = (tab: 'field' | 'table' | 'discovery' | 'modeling' | 'assets') => {
     if (setActiveTab) {
       setActiveTab(tab);
     } else {
@@ -155,13 +155,24 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
           <div className="w-8 md:w-12 h-px bg-[#E2E8F0]" />
 
           {/* Step 4: 语义资产 */}
-          <div className="flex items-center space-x-2">
-            <div className="w-5 h-5 rounded-full border-2 border-[#E2E8F0] text-[#94A3B8] flex items-center justify-center font-bold text-[10px]">
+          <div
+            onClick={() => handleTabClick('assets')}
+            className="flex items-center space-x-2 cursor-pointer group"
+          >
+            <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${
+              currentTab === 'assets'
+                ? 'bg-[#2563EB] text-white shadow-2xs'
+                : 'border-2 border-[#CBD5E1] text-[#64748B]'
+            }`}>
               4
             </div>
             <div>
-              <div className="font-medium text-[#94A3B8]">语义资产</div>
-              <div className="text-[10px] text-[#CBD5E1]">等待中</div>
+              <div className={`font-medium ${currentTab === 'assets' ? 'text-[#2563EB] font-bold' : 'text-[#64748B] group-hover:text-[#1E293B]'}`}>
+                语义资产
+              </div>
+              <div className={`text-[10px] ${currentTab === 'assets' ? 'text-[#2563EB] font-medium' : 'text-[#94A3B8]'}`}>
+                {currentTab === 'assets' ? '目录浏览' : '可查看'}
+              </div>
             </div>
           </div>
 

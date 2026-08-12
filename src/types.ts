@@ -125,3 +125,78 @@ export interface CompleteFieldGovernanceData {
   historyVersions: HistoryVersion[];
   downstreamImpact: DownstreamImpact;
 }
+
+export type AssetType = 'Table' | 'View' | 'Dataset' | 'Structured File';
+
+export interface GovernanceContextSummary {
+  profileStatus: 'profiled' | 'unprofiled'; // 已探查 / 未探查
+  qualityStatus: 'normal' | 'attention' | 'critical' | 'untested'; // 质量正常 / 质量关注 / 存在问题 / 未检测
+  semanticStatus: 'confirmed' | 'pending' | 'understanding' | 'ununderstood'; // 语义已确认 / 语义待确认 / AI理解中 / 未理解
+  lineageStatus: 'available' | 'unavailable'; // 血缘可用 / 血缘未采集
+  qualityIssueCount?: number;
+  lastProfiledTime?: string;
+  semanticConfirmedTime?: string;
+}
+
+export interface DataSemanticsQueueItem {
+  id: string;
+  name: string; // Business/Display Name e.g. "公共服务热线工单记录表"
+  technicalName: string; // e.g. "pop_service_hotline"
+  qualifiedName: string; // e.g. "hotline_db.service.pop_service_hotline"
+  businessDomain: string; // e.g. "公共服务"
+  assetType: 'Table' | 'View' | 'Dataset';
+  queueCategory: 'pending_review' | 'ai_understanding' | 'draft_pending' | 'confirmed';
+  currentSemantics: {
+    tableStatus: string; // e.g. "表语义已确认", "AI草稿已生成", "当前无新的有效草稿", "尚未开始语义理解"
+    fieldStatus: string; // e.g. "核心字段已确认", "表语义待确认", "AI正在理解表与字段语义"
+    detailNote?: string; // e.g. "4项非核心字段待完善", "12项核心字段待确认", "2个新增字段正在重新理解"
+  };
+  issuesToHandle: {
+    title: string; // e.g. "办结时间语义冲突", "对象身份待确认", "—"
+    type?: 'conflict' | 'grain' | 'identity' | 'field_pending' | 'none';
+  };
+  semanticAssociation: {
+    terms?: string[]; // e.g. ["服务热线工单", "办结"]
+    boundObject?: string; // e.g. "服务工单"
+    objectSuggestions?: string[]; // e.g. ["对象建议 2"]
+  };
+  lastUpdate: {
+    time: string; // e.g. "今天 17:16"
+    action: string; // e.g. "语义确认", "AI完成理解", "AI理解中"
+  };
+  actionButton: {
+    label: string; // e.g. "处理问题", "确认语义", "查看进度", "开始理解", "查看语义"
+    variant: 'danger' | 'warning' | 'indigo' | 'primary' | 'secondary';
+  };
+  matchContext?: string; // e.g. "匹配字段语义：办结时间 · close_time"
+}
+
+export interface DataAssetItem {
+  id: string;
+  name: string; // Business or display name e.g. "公共服务热线工单记录表"
+  technicalName: string;
+  qualifiedName: string;
+  assetType: AssetType;
+  dataSourceName: string;
+  dataSourceEngine: 'MySQL' | 'PostgreSQL' | 'Oracle' | 'ClickHouse' | 'Hive' | 'Greenplum' | 'StarRocks';
+  database: string;
+  schema: string;
+  businessDomain: string;
+  subDomain?: string;
+  description: string;
+  owner: string;
+  lastScannedTime: string;
+  lastScannedStatus: 'success' | 'failed';
+  schemaChanged?: boolean;
+  schemaChangeNote?: string;
+  matchContext?: string;
+  businessObject?: string;
+  governanceContext: GovernanceContextSummary;
+  fieldCount: number;
+  rowCount: string;
+  size: string;
+  updatedAt: string;
+}
+
+
+
