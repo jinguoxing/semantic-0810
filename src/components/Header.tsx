@@ -18,8 +18,8 @@ interface HeaderProps {
   onOpenLauncher?: () => void;
   onOpenProfile?: () => void;
   isProfileOpen?: boolean;
-  currentNav?: 'home' | 'governance' | 'assets' | 'semantics';
-  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics') => void;
+  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail';
+  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail') => void;
   batchCount?: number;
 }
 
@@ -98,6 +98,16 @@ export const Header: React.FC<HeaderProps> = ({
             数据语义
           </button>
           <button
+            onClick={() => onSelectNav && onSelectNav('asset_detail')}
+            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+              currentNav === 'asset_detail'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
+                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+            }`}
+          >
+            资产详情
+          </button>
+          <button
             onClick={() => onSelectNav && onSelectNav('assets')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
               currentNav === 'assets'
@@ -105,7 +115,7 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
           >
-            数据资产
+            资产目录
           </button>
           <button
             onClick={() => alert('管理中心：显示组织机构、权限审批与数据连接配置')}

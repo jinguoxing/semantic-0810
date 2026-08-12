@@ -24,13 +24,14 @@ import { BusinessObjectDiscoveryWorkspace } from './components/BusinessObjectDis
 import { BusinessObjectModelingWorkspace } from './components/BusinessObjectModelingWorkspace';
 import { DataAssetsCatalogWorkspace } from './components/DataAssetsCatalogWorkspace';
 import { DataSemanticsQueueWorkspace } from './components/DataSemanticsQueueWorkspace';
+import { DataAssetDetailWorkspace } from './components/DataAssetDetailWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics'>('semantics');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics'>('semantics');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail'>('asset_detail');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail'>('asset_detail');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -379,7 +380,24 @@ export default function App() {
       />
 
       {/* Main Content View Switch */}
-      {currentNav === 'semantics' || viewTab === 'semantics' ? (
+      {currentNav === 'asset_detail' || viewTab === 'asset_detail' ? (
+        <DataAssetDetailWorkspace
+          onBackToCatalog={() => {
+            setCurrentNav('assets');
+            setViewTab('assets');
+            addToast('info', '返回资产目录', '已返回 Semovix 数据资产目录');
+          }}
+          onNavigateToSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已跳转至数据语义队列工作台');
+          }}
+          onNavigateToMarketplace={() => {
+            addToast('info', '数据服务超市', '已跳转至该资产在数据服务超市的消费视角');
+          }}
+          addToast={addToast}
+        />
+      ) : currentNav === 'semantics' || viewTab === 'semantics' ? (
         <DataSemanticsQueueWorkspace
           onNavigateToTableUnderstanding={(tableName) => {
             setCurrentNav('governance');
