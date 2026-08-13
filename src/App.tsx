@@ -27,13 +27,16 @@ import { DataSemanticsQueueWorkspace } from './components/DataSemanticsQueueWork
 import { DataAssetDetailWorkspace } from './components/DataAssetDetailWorkspace';
 import { TableSemanticWorkspace } from './components/TableSemanticWorkspace';
 import { FieldSemanticWorkspace } from './components/FieldSemanticWorkspace';
+import { DataStandardsWorkspace } from './components/DataStandardsWorkspace';
+import { CreateDataElementStandardWorkspace } from './components/CreateDataElementStandardWorkspace';
+import { CreateValueDomainStandardWorkspace } from './components/CreateValueDomainStandardWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace'>('field_workspace');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace'>('field_workspace');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard'>('create_value_domain_standard');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard'>('create_value_domain_standard');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -377,12 +380,60 @@ export default function App() {
         onOpenProfile={() => setIsProfileOpen((prev) => !prev)}
         isProfileOpen={isProfileOpen}
         currentNav={currentNav}
-        onSelectNav={setCurrentNav}
+        onSelectNav={(nav) => {
+          setCurrentNav(nav);
+          setViewTab(nav);
+        }}
         batchCount={batchCount}
       />
 
       {/* Main Content View Switch */}
-      {currentNav === 'asset_detail' || viewTab === 'asset_detail' ? (
+      {currentNav === 'create_value_domain_standard' || viewTab === 'create_value_domain_standard' ? (
+        <CreateValueDomainStandardWorkspace
+          addToast={addToast}
+          onBackToCatalog={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+            addToast('info', '返回标准库', '已重定向至数据标准列表目录');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+        />
+      ) : currentNav === 'create_data_element_standard' || viewTab === 'create_data_element_standard' ? (
+        <CreateDataElementStandardWorkspace
+          addToast={addToast}
+          onBackToCatalog={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+            addToast('info', '返回标准库', '已重定向至数据标准列表目录');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+        />
+      ) : currentNav === 'data_standards' || viewTab === 'data_standards' ? (
+        <DataStandardsWorkspace
+          addToast={addToast}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+          onNavigateToCreateDataElementStandard={() => {
+            setCurrentNav('create_data_element_standard');
+            setViewTab('create_data_element_standard');
+          }}
+          onNavigateToCreateValueDomainStandard={() => {
+            setCurrentNav('create_value_domain_standard');
+            setViewTab('create_value_domain_standard');
+          }}
+        />
+      ) : currentNav === 'asset_detail' || viewTab === 'asset_detail' ? (
         <DataAssetDetailWorkspace
           onBackToCatalog={() => {
             setCurrentNav('assets');
