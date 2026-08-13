@@ -352,13 +352,13 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
         {/* ========================================================= */}
         {/* MIDDLE COLUMN: Semantic Decision Workspace (~52% Width)    */}
         {/* ========================================================= */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F8FAFC]">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white">
           {selectedFieldId === 'close_time' ? (
             <>
-              {/* Top Tech Fact Bar */}
-              <div className="bg-white border border-[#E2E8F0] p-4 rounded-xl shadow-2xs flex items-center justify-between">
+              {/* Top Tech Fact Bar (Clean Header, No Outer Card Box) */}
+              <div className="pb-4 border-b border-[#E2E8F0] flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB] font-mono font-bold text-xs">
+                  <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] text-[#2563EB] font-mono font-bold text-xs flex items-center justify-center">
                     T
                   </div>
                   <div>
@@ -366,17 +366,17 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                       <h2 className="text-base font-bold font-mono text-[#0F172A]">
                         close_time
                       </h2>
-                      <span className="text-xs font-mono text-[#475569] bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0]">
+                      <span className="text-xs font-mono text-[#475569] bg-[#F1F5F9] px-2 py-0.5 rounded font-medium">
                         DATETIME · Nullable
                       </span>
                     </div>
-                    <p className="text-xs text-[#64748B]">
+                    <p className="text-xs text-[#64748B] pt-0.5">
                       所属资产：公共服务热线工单记录表 · Current Technical Fact
                     </p>
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div>
                   <span className="text-[11px] font-bold text-[#D97706] bg-[#FFFBEB] px-2.5 py-1 rounded-full border border-[#FDE68A] flex items-center space-x-1">
                     <AlertCircle className="w-3.5 h-3.5" />
                     <span>1 项关键业务含义待确认</span>
@@ -384,9 +384,9 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                 </div>
               </div>
 
-              {/* SECTION 1: AI 当前建议 (AI Candidate) */}
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 space-y-4 shadow-2xs">
-                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
+              {/* SECTION 1: AI 当前建议 (AI Candidate - Clean Grid, No Nested Card Borders) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Sparkles className="w-4 h-4 text-[#4F46E5]" />
                     <h2 className="text-sm font-bold text-[#0F172A]">AI 当前建议</h2>
@@ -396,12 +396,12 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {/* AI Recommended Name */}
-                  <div className="p-3.5 bg-[#EEF2FF]/60 border border-[#C7D2FE] rounded-lg space-y-1.5">
+                  <div className="p-3.5 bg-[#EEF2FF]/70 rounded-xl space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-[#4338CA] font-medium">AI 推荐业务名称</span>
-                      <span className="text-[10px] font-bold text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded border border-[#C7D2FE]">
+                      <span className="text-xs text-[#4338CA] font-semibold">AI 推荐业务名称</span>
+                      <span className="text-[10px] font-bold text-[#4F46E5] bg-white px-2 py-0.5 rounded">
                         {isAdopted ? '已确认' : 'AI推荐'}
                       </span>
                     </div>
@@ -414,9 +414,9 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                   </div>
 
                   {/* Candidate Time Semantics */}
-                  <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1.5">
+                  <div className="p-3.5 bg-[#F8FAFC] rounded-xl space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-[#64748B] font-medium">建议时间语义</span>
+                      <span className="text-xs text-[#64748B] font-semibold">建议时间语义</span>
                       <span className="text-[10px] font-medium text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded">
                         {isAdopted ? '已生效' : '候选'}
                       </span>
@@ -430,10 +430,10 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                   </div>
 
                   {/* Candidate Business Term */}
-                  <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
+                  <div className="p-3.5 bg-[#F8FAFC] rounded-xl space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-[#64748B] font-medium">候选业务术语</span>
-                      <span className="text-[10px] text-[#D97706] bg-[#FFFBEB] px-2 py-0.5 rounded">
+                      <span className="text-xs text-[#64748B] font-semibold">候选业务术语</span>
+                      <span className="text-[10px] text-[#D97706] bg-[#FFFBEB] px-2 py-0.5 rounded font-medium">
                         候选匹配
                       </span>
                     </div>
@@ -443,10 +443,10 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                   </div>
 
                   {/* Candidate Data Element */}
-                  <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
+                  <div className="p-3.5 bg-[#F8FAFC] rounded-xl space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-[#64748B] font-medium">候选标准数据元</span>
-                      <span className="text-[10px] text-[#D97706] bg-[#FFFBEB] px-2 py-0.5 rounded">
+                      <span className="text-xs text-[#64748B] font-semibold">候选标准数据元</span>
+                      <span className="text-[10px] text-[#D97706] bg-[#FFFBEB] px-2 py-0.5 rounded font-medium">
                         候选匹配
                       </span>
                     </div>
@@ -460,15 +460,15 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                 </div>
               </div>
 
-              {/* SECTION 2: 需要你决定 (Pending Decision - Visual Focus Area) */}
-              <div className="bg-white border-2 border-[#2563EB] rounded-xl p-5 space-y-5 shadow-md">
-                <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+              {/* SECTION 2: 需要你决定 (Pending Decision - Clean Surface, No Heavy Blue Outer Border) */}
+              <div className="pt-2 space-y-4">
+                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
                   <div className="flex items-center space-x-2">
-                    <AlertTriangle className="w-5 h-5 text-[#2563EB]" />
+                    <AlertTriangle className="w-4 h-4 text-[#2563EB]" />
                     <h2 className="text-base font-bold text-[#0F172A]">需要你决定</h2>
                   </div>
-                  <span className="text-xs font-bold text-[#2563EB] bg-[#EFF6FF] px-2.5 py-1 rounded-full border border-[#BFDBFE]">
-                    Pending Decision 01
+                  <span className="text-xs font-bold text-[#2563EB] bg-[#EFF6FF] px-2.5 py-0.5 rounded-full">
+                    Pending Decision
                   </span>
                 </div>
 
@@ -476,15 +476,15 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                   技术字段名 <code className="font-mono bg-[#F1F5F9] px-1.5 py-0.5 rounded text-[#0F172A]">close_time</code> 对“关闭时间”有一定支持，但结合当前表的业务过程、企业术语和状态值语义，AI 更推荐理解为“办结时间”。请确认最准确的业务含义。
                 </p>
 
-                {/* Candidate Decision Cards */}
+                {/* Candidate Decision Cards (Clean Option Cards) */}
                 <div className="space-y-3">
                   {/* Candidate 1: 办结时间 */}
                   <div
                     onClick={() => setSelectedOption('banjie')}
-                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer space-y-2.5 ${
+                    className={`p-4 rounded-xl transition-all cursor-pointer space-y-2.5 ${
                       selectedOption === 'banjie'
-                        ? 'bg-[#EFF6FF]/80 border-[#2563EB] ring-1 ring-[#2563EB]'
-                        : 'bg-white border-[#E2E8F0] hover:border-[#CBD5E1]'
+                        ? 'bg-[#EFF6FF]/90 border border-[#2563EB] shadow-2xs'
+                        : 'bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -500,7 +500,7 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                           办结时间
                         </span>
                       </div>
-                      <span className="text-xs font-bold text-[#2563EB] bg-[#EFF6FF] px-2.5 py-0.5 rounded-full border border-[#BFDBFE]">
+                      <span className="text-xs font-bold text-[#2563EB] bg-white px-2.5 py-0.5 rounded-full border border-[#BFDBFE]">
                         推荐
                       </span>
                     </div>
@@ -523,10 +523,10 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                   {/* Candidate 2: 关闭时间 */}
                   <div
                     onClick={() => setSelectedOption('guanbi')}
-                    className={`p-4 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
+                    className={`p-4 rounded-xl transition-all cursor-pointer space-y-2.5 ${
                       selectedOption === 'guanbi'
-                        ? 'bg-[#EFF6FF]/80 border-[#2563EB] ring-1 ring-[#2563EB]'
-                        : 'bg-white border-[#E2E8F0] hover:border-[#CBD5E1]'
+                        ? 'bg-[#EFF6FF]/90 border border-[#2563EB] shadow-2xs'
+                        : 'bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -561,10 +561,10 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                   {/* Candidate 3: 其他理解 */}
                   <div
                     onClick={() => setSelectedOption('custom')}
-                    className={`p-4 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
+                    className={`p-4 rounded-xl transition-all cursor-pointer space-y-2.5 ${
                       selectedOption === 'custom'
-                        ? 'bg-[#EFF6FF]/80 border-[#2563EB] ring-1 ring-[#2563EB]'
-                        : 'bg-white border-[#E2E8F0] hover:border-[#CBD5E1]'
+                        ? 'bg-[#EFF6FF]/90 border border-[#2563EB] shadow-2xs'
+                        : 'bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC]'
                     }`}
                   >
                     <div className="flex items-center space-x-2.5">
@@ -600,8 +600,8 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                   </div>
                 </div>
 
-                {/* Impact Banner */}
-                <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg flex items-center justify-between text-xs">
+                {/* Impact Banner (Clean Border-Left Accent) */}
+                <div className="p-3 bg-[#F8FAFC] border-l-2 border-l-[#2563EB] rounded-r-lg flex items-center justify-between text-xs">
                   <div className="flex items-center space-x-2 text-[#334155]">
                     <Zap className="w-4 h-4 text-[#2563EB]" />
                     <span className="font-medium">
@@ -650,8 +650,8 @@ export const FieldSemanticWorkspace: React.FC<FieldSemanticWorkspaceProps> = ({
                 </div>
               </div>
 
-              {/* SECTION 3: Bottom Next Field Prompt */}
-              <div className="bg-white border border-[#E2E8F0] p-4 rounded-xl flex items-center justify-between shadow-2xs">
+              {/* SECTION 3: Bottom Next Field Prompt (Clean Border-Top Divider) */}
+              <div className="pt-4 border-t border-[#E2E8F0] flex items-center justify-between">
                 <div className="flex items-center space-x-2 text-xs">
                   <span className="font-bold text-[#0F172A]">还有 1 个字段需要处理:</span>
                   <span className="font-mono text-[#2563EB] font-bold">work_duration</span>
