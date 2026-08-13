@@ -40,6 +40,7 @@ import {
   RefreshCw,
   Cpu
 } from 'lucide-react';
+import { TableSemanticWorkspace } from './TableSemanticWorkspace';
 
 interface DataAssetDetailWorkspaceProps {
   assetId?: string;
@@ -2668,61 +2669,13 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
             )}
           </div>
         ) : activeTab === 'semantics' ? (
-          /* TAB 5: DATA SEMANTICS (数据语义) - Rich Interactive View */
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="max-w-7xl mx-auto space-y-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h1 className="text-xl font-bold text-[#0F172A] flex items-center space-x-2">
-                    <span>数据语义</span>
-                    <span className="text-xs font-normal text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#CBD5E1]">
-                      Data Semantics
-                    </span>
-                  </h1>
-                  <p className="text-xs text-[#64748B] pt-0.5">
-                    展示当前资产已生效应答的标准业务语义词条、业务对象映射与 AI 确认历史。
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => {
-                    if (onNavigateToSemantics) onNavigateToSemantics();
-                  }}
-                  className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center space-x-1.5 shadow-2xs"
-                >
-                  <span>进入语义理解工作台</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Semantics Summary Card */}
-              <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 shadow-2xs space-y-4">
-                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-3">
-                  <div className="flex items-center space-x-2">
-                    <Sparkles className="w-4 h-4 text-[#4F46E5]" />
-                    <span className="text-xs font-bold text-[#0F172A]">表级别业务语义映射</span>
-                  </div>
-                  <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0] text-xs font-bold rounded">
-                    核心语义已确认 (32 / 36)
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                  <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
-                    <div className="text-[11px] text-[#64748B]">映射业务实体</div>
-                    <div className="font-bold text-sm text-[#0F172A]">12345市民热线工单 (HotlineTicket)</div>
-                  </div>
-                  <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
-                    <div className="text-[11px] text-[#64748B]">归属业务域</div>
-                    <div className="font-bold text-sm text-[#0F172A]">公共服务 / 市民热线管理</div>
-                  </div>
-                  <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
-                    <div className="text-[11px] text-[#64748B]">Xino AI 推荐平均置信度</div>
-                    <div className="font-mono font-bold text-sm text-[#059669]">98.2% (极高)</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          /* TAB 5: DATA SEMANTICS (数据语义 · 表语义理解工作空间) */
+          <div className="flex-1 h-full w-full overflow-hidden flex flex-col">
+            <TableSemanticWorkspace
+              addToast={addToast}
+              onNavigateToFields={() => setActiveTab('fields')}
+              onNavigateToAssetDetail={() => setActiveTab('overview')}
+            />
           </div>
         ) : (
           /* TAB 6: DATA LINEAGE (血缘) - Complete Enterprise High-Fidelity Implementation */

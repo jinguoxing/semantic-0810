@@ -25,13 +25,15 @@ import { BusinessObjectModelingWorkspace } from './components/BusinessObjectMode
 import { DataAssetsCatalogWorkspace } from './components/DataAssetsCatalogWorkspace';
 import { DataSemanticsQueueWorkspace } from './components/DataSemanticsQueueWorkspace';
 import { DataAssetDetailWorkspace } from './components/DataAssetDetailWorkspace';
+import { TableSemanticWorkspace } from './components/TableSemanticWorkspace';
+import { FieldSemanticWorkspace } from './components/FieldSemanticWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail'>('asset_detail');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail'>('asset_detail');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace'>('field_workspace');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace'>('field_workspace');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -397,19 +399,44 @@ export default function App() {
           }}
           addToast={addToast}
         />
-      ) : currentNav === 'semantics' || viewTab === 'semantics' ? (
+      ) : currentNav === 'semantics' && viewTab !== 'table_workspace' ? (
         <DataSemanticsQueueWorkspace
           onNavigateToTableUnderstanding={(tableName) => {
-            setCurrentNav('governance');
-            setViewTab('table');
-            addToast('info', '切换工作台', `已跳转至 ${tableName} 表语义理解与治理`);
+            setViewTab('table_workspace');
+            addToast('info', '切换工作台', `已载入 ${tableName} 表语义理解与决策工作空间`);
           }}
-          onNavigateToCatalog={() => {
-            setCurrentNav('assets');
-            setViewTab('assets');
-            addToast('info', '切换工作台', '已跳转至数据资产目录');
+          onNavigateToAssetDetail={() => {
+            setCurrentNav('asset_detail');
+            setViewTab('asset_detail');
+            addToast('info', '查看 资产详情', '已载入数据资产元数据与依赖视图');
           }}
           addToast={addToast}
+        />
+      ) : viewTab === 'field_workspace' || viewTab === 'field' ? (
+        <FieldSemanticWorkspace
+          addToast={addToast}
+          onNavigateToTableWorkspace={() => {
+            setViewTab('table_workspace');
+            addToast('info', '切换至 表语义', '已载入表语义理解与关系架构视图');
+          }}
+          onNavigateToAssetDetail={() => {
+            setCurrentNav('asset_detail');
+            setViewTab('asset_detail');
+            addToast('info', '查看 资产详情', '已载入数据资产元数据与依赖视图');
+          }}
+        />
+      ) : viewTab === 'table_workspace' ? (
+        <TableSemanticWorkspace
+          addToast={addToast}
+          onNavigateToFields={() => {
+            setViewTab('field_workspace');
+            addToast('info', '切换至 字段语义', '已载入字段语义理解与实体映射视图');
+          }}
+          onNavigateToAssetDetail={() => {
+            setCurrentNav('asset_detail');
+            setViewTab('asset_detail');
+            addToast('info', '返回 资产详情', '已载入公共服务热线工单记录表元数据与依赖视图');
+          }}
         />
       ) : currentNav === 'assets' || viewTab === 'assets' ? (
         <DataAssetsCatalogWorkspace
