@@ -256,6 +256,8 @@ interface DataStandardsWorkspaceProps {
   onNavigateToDataSemantics?: () => void;
   onNavigateToCreateDataElementStandard?: () => void;
   onNavigateToCreateValueDomainStandard?: () => void;
+  onNavigateToImportStandards?: () => void;
+  onNavigateToMappingConflictReview?: () => void;
 }
 
 export const DataStandardsWorkspace: React.FC<DataStandardsWorkspaceProps> = ({
@@ -263,6 +265,8 @@ export const DataStandardsWorkspace: React.FC<DataStandardsWorkspaceProps> = ({
   onNavigateToDataSemantics,
   onNavigateToCreateDataElementStandard,
   onNavigateToCreateValueDomainStandard,
+  onNavigateToImportStandards,
+  onNavigateToMappingConflictReview,
 }) => {
   // Navigation & Tabs
   const [activeTab, setActiveTab] = useState<'catalog' | 'matching' | 'inspection'>('catalog');
@@ -496,7 +500,13 @@ export const DataStandardsWorkspace: React.FC<DataStandardsWorkspaceProps> = ({
             {/* Right Action Buttons */}
             <div className="flex items-center space-x-3 relative">
               <button
-                onClick={() => setIsImportModalOpen(true)}
+                onClick={() => {
+                  if (onNavigateToImportStandards) {
+                    onNavigateToImportStandards();
+                  } else {
+                    setIsImportModalOpen(true);
+                  }
+                }}
                 className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
               >
                 <Upload className="w-3.5 h-3.5" />
@@ -565,7 +575,13 @@ export const DataStandardsWorkspace: React.FC<DataStandardsWorkspaceProps> = ({
               标准库
             </button>
             <button
-              onClick={() => handleTabClick('matching')}
+              onClick={() => {
+                if (onNavigateToMappingConflictReview) {
+                  onNavigateToMappingConflictReview();
+                } else {
+                  setActiveTab('matching');
+                }
+              }}
               className={`pb-3 border-b-2 transition-all cursor-pointer ${
                 activeTab === 'matching'
                   ? 'border-[#2563EB] text-[#2563EB]'

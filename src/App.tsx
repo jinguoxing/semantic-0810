@@ -30,13 +30,15 @@ import { FieldSemanticWorkspace } from './components/FieldSemanticWorkspace';
 import { DataStandardsWorkspace } from './components/DataStandardsWorkspace';
 import { CreateDataElementStandardWorkspace } from './components/CreateDataElementStandardWorkspace';
 import { CreateValueDomainStandardWorkspace } from './components/CreateValueDomainStandardWorkspace';
+import { ImportStandardsWorkspace } from './components/ImportStandardsWorkspace';
+import { MappingConflictReviewWorkspace } from './components/MappingConflictReviewWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard'>('create_value_domain_standard');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard'>('create_value_domain_standard');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('mapping_conflict_review');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('mapping_conflict_review');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -388,7 +390,35 @@ export default function App() {
       />
 
       {/* Main Content View Switch */}
-      {currentNav === 'create_value_domain_standard' || viewTab === 'create_value_domain_standard' ? (
+      {currentNav === 'mapping_conflict_review' || viewTab === 'mapping_conflict_review' ? (
+        <MappingConflictReviewWorkspace
+          addToast={addToast}
+          onBackToStandards={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+            addToast('info', '返回标准列表', '已重定向至数据标准匹配中心');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+        />
+      ) : currentNav === 'import_standards' || viewTab === 'import_standards' ? (
+        <ImportStandardsWorkspace
+          addToast={addToast}
+          onBackToCatalog={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+            addToast('info', '返回标准库', '已重定向至数据标准列表目录');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+        />
+      ) : currentNav === 'create_value_domain_standard' || viewTab === 'create_value_domain_standard' ? (
         <CreateValueDomainStandardWorkspace
           addToast={addToast}
           onBackToCatalog={() => {
@@ -431,6 +461,14 @@ export default function App() {
           onNavigateToCreateValueDomainStandard={() => {
             setCurrentNav('create_value_domain_standard');
             setViewTab('create_value_domain_standard');
+          }}
+          onNavigateToImportStandards={() => {
+            setCurrentNav('import_standards');
+            setViewTab('import_standards');
+          }}
+          onNavigateToMappingConflictReview={() => {
+            setCurrentNav('mapping_conflict_review');
+            setViewTab('mapping_conflict_review');
           }}
         />
       ) : currentNav === 'asset_detail' || viewTab === 'asset_detail' ? (

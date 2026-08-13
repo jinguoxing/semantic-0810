@@ -18,8 +18,8 @@ interface HeaderProps {
   onOpenLauncher?: () => void;
   onOpenProfile?: () => void;
   isProfileOpen?: boolean;
-  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard';
-  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard') => void;
+  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review';
+  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review') => void;
   batchCount?: number;
 }
 
@@ -90,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={() => onSelectNav && onSelectNav('data_standards')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-              currentNav === 'data_standards' || currentNav === 'create_data_element_standard' || currentNav === 'create_value_domain_standard'
+              currentNav === 'data_standards' || currentNav === 'create_data_element_standard' || currentNav === 'create_value_domain_standard' || currentNav === 'import_standards' || currentNav === 'mapping_conflict_review' || currentNav === 'standard_proposal_review'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
                 : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}

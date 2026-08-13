@@ -41,9 +41,11 @@ import {
   Cpu
 } from 'lucide-react';
 import { TableSemanticWorkspace } from './TableSemanticWorkspace';
+import { DataSemanticsDetailView } from './DataSemanticsDetailView';
 
 interface DataAssetDetailWorkspaceProps {
   assetId?: string;
+  initialTab?: 'overview' | 'fields' | 'profile' | 'quality' | 'semantics' | 'lineage';
   onBackToCatalog?: () => void;
   onNavigateToSemantics?: () => void;
   onNavigateToMarketplace?: () => void;
@@ -141,13 +143,15 @@ export interface QualityRunHistory {
 }
 
 export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> = ({
+  initialTab,
   onBackToCatalog,
   onNavigateToSemantics,
   onNavigateToMarketplace,
   addToast,
 }) => {
   // Active Tab state: 'overview' | 'fields' | 'profile' | 'quality' | 'semantics' | 'lineage'
-  const [activeTab, setActiveTab] = useState<'overview' | 'fields' | 'profile' | 'quality' | 'semantics' | 'lineage'>('lineage');
+  const [activeTab, setActiveTab] = useState<'overview' | 'fields' | 'profile' | 'quality' | 'semantics' | 'lineage'>(initialTab || 'semantics');
+  const [semanticsViewMode, setSemanticsViewMode] = useState<'detail' | 'workspace'>('detail');
   const [isBookmarked, setIsBookmarked] = useState(true);
 
   // === DATA LINEAGE TAB STATE ===
@@ -1097,6 +1101,20 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
           </div>
 
           <div className="flex items-center space-x-2 shrink-0">
+            <button
+              onClick={() => {
+                if (onNavigateToMarketplace) {
+                  onNavigateToMarketplace();
+                } else if (addToast) {
+                  addToast('info', '跳转服务超市', '正在查看【公共服务热线工单记录表】服务超市卡片');
+                }
+              }}
+              className="px-3 py-1.5 bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-[#334155] font-medium text-xs rounded-lg transition-all cursor-pointer flex items-center space-x-1"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-[#64748B]" />
+              <span>在服务超市查看</span>
+            </button>
+
             <button
               onClick={() => {
                 setIsBookmarked(!isBookmarked);
@@ -2669,13 +2687,20 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
             )}
           </div>
         ) : activeTab === 'semantics' ? (
-          /* TAB 5: DATA SEMANTICS (数据语义 · 表语义理解工作空间) */
+          /* TAB 5: DATA SEMANTICS (数据语义 · 当前正式生效的数据语义结果页) */
           <div className="flex-1 h-full w-full overflow-hidden flex flex-col">
-            <TableSemanticWorkspace
-              addToast={addToast}
-              onNavigateToFields={() => setActiveTab('fields')}
-              onNavigateToAssetDetail={() => setActiveTab('overview')}
-            />
+            {semanticsViewMode === 'workspace' ? (
+              <TableSemanticWorkspace
+                addToast={addToast}
+                onNavigateToFields={() => setActiveTab('fields')}
+                onNavigateToAssetDetail={() => setSemanticsViewMode('detail')}
+              />
+            ) : (
+              <DataSemanticsDetailView
+                onStartCorrection={() => setSemanticsViewMode('workspace')}
+                addToast={addToast}
+              />
+            )}
           </div>
         ) : (
           /* TAB 6: DATA LINEAGE (血缘) - Complete Enterprise High-Fidelity Implementation */
