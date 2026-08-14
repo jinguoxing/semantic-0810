@@ -259,6 +259,7 @@ interface DataStandardsWorkspaceProps {
   onNavigateToCreateValueDomainStandard?: () => void;
   onNavigateToImportStandards?: () => void;
   onNavigateToMappingConflictReview?: () => void;
+  onNavigateToStandardDetail?: (standardId?: string) => void;
 }
 
 export const DataStandardsWorkspace: React.FC<DataStandardsWorkspaceProps> = ({
@@ -268,6 +269,7 @@ export const DataStandardsWorkspace: React.FC<DataStandardsWorkspaceProps> = ({
   onNavigateToCreateValueDomainStandard,
   onNavigateToImportStandards,
   onNavigateToMappingConflictReview,
+  onNavigateToStandardDetail,
 }) => {
   // Navigation & Tabs
   const [activeTab, setActiveTab] = useState<'catalog' | 'matching' | 'inspection'>('catalog');
@@ -1113,21 +1115,37 @@ export const DataStandardsWorkspace: React.FC<DataStandardsWorkspaceProps> = ({
 
             {/* Footer */}
             <div className="p-4 border-t border-[#E6EAF0] bg-[#F7F9FC] flex items-center justify-between">
-              <button
-                onClick={() => {
-                  setProposalTarget(selectedStandard);
-                  setIsProposalModalOpen(true);
-                  setSelectedStandard(null);
-                }}
-                className="px-4 py-2 bg-[#2563EB] text-white font-bold rounded-lg hover:bg-[#1D4ED8] transition-all cursor-pointer flex items-center space-x-1.5 text-xs"
-              >
-                <GitPullRequest className="w-3.5 h-3.5" />
-                <span>提出变更</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    setProposalTarget(selectedStandard);
+                    setIsProposalModalOpen(true);
+                    setSelectedStandard(null);
+                  }}
+                  className="px-3.5 py-2 bg-[#2563EB] text-white font-bold rounded-lg hover:bg-[#1D4ED8] transition-all cursor-pointer flex items-center space-x-1.5 text-xs"
+                >
+                  <GitPullRequest className="w-3.5 h-3.5" />
+                  <span>提出变更</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    const sid = selectedStandard?.id;
+                    setSelectedStandard(null);
+                    if (onNavigateToStandardDetail) {
+                      onNavigateToStandardDetail(sid);
+                    }
+                  }}
+                  className="px-3.5 py-2 bg-white border border-[#BFDBFE] text-[#2563EB] font-bold rounded-lg hover:bg-[#EFF6FF] transition-all cursor-pointer flex items-center space-x-1.5 text-xs"
+                >
+                  <span>查看标准详情页</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
 
               <button
                 onClick={() => setSelectedStandard(null)}
-                className="px-4 py-2 bg-white border border-[#E6EAF0] text-[#172033] font-bold rounded-lg hover:bg-[#F1F5F9] cursor-pointer text-xs"
+                className="px-3.5 py-2 bg-white border border-[#E6EAF0] text-[#172033] font-bold rounded-lg hover:bg-[#F1F5F9] cursor-pointer text-xs"
               >
                 关闭
               </button>

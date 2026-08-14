@@ -532,14 +532,14 @@ export const StandardCheckIssueDetailWorkspace: React.FC<StandardCheckIssueDetai
               </div>
 
               <span className="text-[11px] font-mono text-[#64748B] block">
-                资产表: {SAMPLE_ISSUE.actualData.dataAsset}
+                资产表: {SAMPLE_ISSUE.dataAsset}
               </span>
 
               {/* Data Feature Cards */}
               <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl text-xs space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-[#64748B]">非空列采样率：</span>
-                  <strong className="text-[#059669] font-mono font-bold">{SAMPLE_ISSUE.actualData.nonNonNullRate || '98.8%'}</strong>
+                  <strong className="text-[#059669] font-mono font-bold">{SAMPLE_ISSUE.actualData.nonNullRate || '98.8%'}</strong>
                 </div>
 
                 <div className="space-y-0.5">

@@ -36,13 +36,14 @@ import { StandardMatchingWorkspace } from './components/StandardMatchingWorkspac
 import { StandardProposalReviewWorkspace } from './components/StandardProposalReviewWorkspace';
 import { StandardCheckWorkspace } from './components/StandardCheckWorkspace';
 import { StandardCheckIssueDetailWorkspace } from './components/StandardCheckIssueDetailWorkspace';
+import { StandardDetailWorkspace } from './components/StandardDetailWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('standard_check_issue_detail');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('standard_check_issue_detail');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('standard_detail');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('standard_detail');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -536,6 +537,35 @@ export default function App() {
             setViewTab('standard_check_issue_detail');
           }}
         />
+      ) : currentNav === 'standard_detail' || viewTab === 'standard_detail' ? (
+        <StandardDetailWorkspace
+          addToast={addToast}
+          onNavigateBackToCatalog={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+          }}
+          onNavigateToMatchingTab={() => {
+            setCurrentNav('standard_matching');
+            setViewTab('standard_matching');
+          }}
+          onNavigateToCheckTab={() => {
+            setCurrentNav('standard_check');
+            setViewTab('standard_check');
+          }}
+          onNavigateToCheckIssueDetail={() => {
+            setCurrentNav('standard_check_issue_detail');
+            setViewTab('standard_check_issue_detail');
+          }}
+          onNavigateToProposalReview={() => {
+            setCurrentNav('standard_proposal_review');
+            setViewTab('standard_proposal_review');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+        />
       ) : currentNav === 'data_standards' || viewTab === 'data_standards' ? (
         <DataStandardsWorkspace
           addToast={addToast}
@@ -559,6 +589,10 @@ export default function App() {
           onNavigateToMappingConflictReview={() => {
             setCurrentNav('mapping_conflict_review');
             setViewTab('mapping_conflict_review');
+          }}
+          onNavigateToStandardDetail={() => {
+            setCurrentNav('standard_detail');
+            setViewTab('standard_detail');
           }}
         />
       ) : currentNav === 'asset_detail' || viewTab === 'asset_detail' ? (
