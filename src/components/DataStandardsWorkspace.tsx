@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { StandardMatchingWorkspace } from './StandardMatchingWorkspace';
 import {
   Search,
   Plus,
@@ -359,6 +360,18 @@ export const DataStandardsWorkspace: React.FC<DataStandardsWorkspaceProps> = ({
     setProposalReason('');
     setProposedChange('');
   };
+
+  if (activeTab === 'matching') {
+    return (
+      <StandardMatchingWorkspace
+        addToast={addToast}
+        onNavigateToCatalogTab={() => setActiveTab('catalog')}
+        onNavigateToCheckTab={() => setActiveTab('inspection')}
+        onNavigateToDataSemantics={onNavigateToDataSemantics}
+        onNavigateToMappingConflictReview={onNavigateToMappingConflictReview}
+      />
+    );
+  }
 
   return (
     <div className="flex w-full h-[calc(100vh-64px)] bg-[#F7F9FC] text-[#172033] overflow-hidden select-none">

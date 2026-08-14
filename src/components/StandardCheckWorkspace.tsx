@@ -5,7 +5,9 @@ import {
   Sparkles,
   Search,
   CheckCircle2,
-  AlertCircle,
+  AlertTriangle,
+  XCircle,
+  HelpCircle,
   ChevronRight,
   ChevronLeft,
   Layers,
@@ -13,192 +15,265 @@ import {
   ShieldCheck,
   FolderTree,
   X,
-  ExternalLink,
-  Info,
-  Check,
-  HelpCircle,
+  RefreshCw,
+  ChevronDown,
+  Filter,
   FileText,
   Building,
-  Clock,
-  Tag,
-  AlertTriangle,
-  RefreshCw,
-  Filter,
+  Table,
+  Check,
+  ArrowRight,
+  Eye,
+  Info,
   SlidersHorizontal,
-  XCircle,
-  HelpCircle as QuestionIcon,
-  ChevronDown
+  BarChart2,
+  PieChart
 } from 'lucide-react';
 
-export interface StandardCheckRow {
+export interface StandardCheckItem {
   id: string;
-  title: string;
-  code: string;
+  standardName: string;
+  standardCode: string;
   version: string;
-  domain: string;
-  usedFieldCount: number;
+  usedFieldsCount: number;
   compliantCount: number;
   nonCompliantCount: number;
-  undeterminedCount: number;
-  lastCheckTime: string;
-  status: 'PROBLEM' | 'COMPLIANT' | 'UNDETERMINED';
-  
-  // Right side details
-  specs: {
-    dataType: string;
-    format: string;
-    nullable: string;
-    timezone: string;
-  };
-  mainIssues: Array<{
-    issueType: string;
+  indeterminateCount: number;
+  lastCheckedTime: string;
+  status: 'HAS_ISSUES' | 'ALL_COMPLIANT';
+  statusLabel: string;
+  businessDomain: string;
+
+  // Right Side Standard Requirements
+  dataType: string;
+  format: string;
+  allowNull: string;
+  timeZone: string;
+
+  // Top Issues Breakdown
+  issues: Array<{
+    type: string;
     count: number;
     description: string;
   }>;
-  undeterminedReasons?: string[];
+  indeterminateReasons?: Array<{
+    reason: string;
+    count: number;
+  }>;
 }
 
-const CHECK_ROWS: StandardCheckRow[] = [
+const SAMPLE_CHECK_STANDARDS: StandardCheckItem[] = [
   {
     id: 'chk_001',
-    title: '业务办结时间',
-    code: 'DE_CASE_CLOSE_TIME',
+    standardName: '业务办结时间',
+    standardCode: 'DE_CASE_CLOSE_TIME',
     version: 'V3',
-    domain: '公共服务',
-    usedFieldCount: 126,
+    usedFieldsCount: 126,
     compliantCount: 115,
     nonCompliantCount: 7,
-    undeterminedCount: 4,
-    lastCheckTime: '今天 10:30',
-    status: 'PROBLEM',
-    specs: {
-      dataType: 'DATETIME',
-      format: 'yyyy-MM-dd HH:mm:ss',
-      nullable: '否',
-      timezone: 'Asia/Shanghai',
-    },
-    mainIssues: [
-      { issueType: '数据类型偏离', count: 4, description: '4 个物理字段的数据类型为 VARCHAR 而非 DATETIME' },
-      { issueType: '必填要求未满足', count: 2, description: '2 个字段在业务办结阶段存在 NULL 空值记录' },
-      { issueType: '格式不符合', count: 1, description: '1 个字段时间戳缺失秒级精确度格式' },
+    indeterminateCount: 4,
+    lastCheckedTime: '今天 10:30',
+    status: 'HAS_ISSUES',
+    statusLabel: '存在问题',
+    businessDomain: '公共服务',
+
+    dataType: 'DATETIME',
+    format: 'yyyy-MM-dd HH:mm:ss',
+    allowNull: '否',
+    timeZone: 'Asia/Shanghai',
+
+    issues: [
+      { type: '数据类型偏离', count: 4, description: '4 个物理字段从 DATETIME 被 DDL 修改为 VARCHAR' },
+      { type: '必填要求未满足', count: 2, description: '2 个字段在核心表中存在 1.2% 的 NULL 空值' },
+      { type: '格式不符合', count: 1, description: '1 个日志历史表中日期仅精确到 yyyy-MM-dd' },
     ],
-    undeterminedReasons: [
-      '2 个字段缺少最近 30 天探查 Profile',
-      '1 个字段所属数据库当前无样本读取权限',
-      '1 个值域绑定规则正在重新同步',
+    indeterminateReasons: [
+      { reason: '2 个字段缺少必要数据探查 Profile', count: 2 },
+      { reason: '1 个视图字段缺少物理元数据访问权限', count: 1 },
+      { reason: '1 个外部挂载数据表值域尚未同步完成', count: 1 },
     ],
   },
   {
     id: 'chk_002',
-    title: '公民身份号码',
-    code: 'DE_PERSON_ID',
+    standardName: '公民身份号码',
+    standardCode: 'DE_PERSON_ID',
     version: 'V5',
-    domain: '人口基础',
-    usedFieldCount: 84,
+    usedFieldsCount: 84,
     compliantCount: 79,
     nonCompliantCount: 3,
-    undeterminedCount: 2,
-    lastCheckTime: '今天 10:32',
-    status: 'PROBLEM',
-    specs: {
-      dataType: 'VARCHAR(18)',
-      format: 'GB 11643',
-      nullable: '否',
-      timezone: '—',
-    },
-    mainIssues: [
-      { issueType: '长度不符合', count: 2, description: '2 个历史库字段包含旧版 15 位数字身份标识' },
-      { issueType: '格式不符合', count: 1, description: '1 个测试环境字段存在尾部校验位字符非法' },
+    indeterminateCount: 2,
+    lastCheckedTime: '今天 10:31',
+    status: 'HAS_ISSUES',
+    statusLabel: '存在问题',
+    businessDomain: '人口基础',
+
+    dataType: 'VARCHAR(18)',
+    format: 'ISO/GB 11643',
+    allowNull: '否',
+    timeZone: 'N/A',
+
+    issues: [
+      { type: '长度不符合', count: 2, description: '2 个老旧离线字段定义为 VARCHAR(20)' },
+      { type: '值域不符合', count: 1, description: '1 个中间表中包含测试样例字符串 XXXXX' },
     ],
-    undeterminedReasons: ['2 个备份表字段由于数据量过大尚未完成深度正则校验'],
+    indeterminateReasons: [
+      { reason: '2 个加密字段触发了脱敏安全拦截', count: 2 },
+    ],
   },
   {
     id: 'chk_003',
-    title: '出生日期',
-    code: 'DE_BIRTH_DATE',
+    standardName: '出生日期',
+    standardCode: 'DE_BIRTH_DATE',
     version: 'V2',
-    domain: '人口基础',
-    usedFieldCount: 61,
+    usedFieldsCount: 61,
     compliantCount: 61,
     nonCompliantCount: 0,
-    undeterminedCount: 0,
-    lastCheckTime: '今天 09:15',
-    status: 'COMPLIANT',
-    specs: {
-      dataType: 'DATE',
-      format: 'yyyy-MM-dd',
-      nullable: '否',
-      timezone: '—',
-    },
-    mainIssues: [],
+    indeterminateCount: 0,
+    lastCheckedTime: '今天 10:25',
+    status: 'ALL_COMPLIANT',
+    statusLabel: '全部符合',
+    businessDomain: '人口基础',
+
+    dataType: 'DATE',
+    format: 'yyyy-MM-dd',
+    allowNull: '否',
+    timeZone: 'Asia/Shanghai',
+
+    issues: [],
   },
   {
     id: 'chk_004',
-    title: '性别代码',
-    code: 'GENDER_CODE',
+    standardName: '性别代码',
+    standardCode: 'GENDER_CODE',
     version: 'V2',
-    domain: '人口基础',
-    usedFieldCount: 82,
+    usedFieldsCount: 82,
     compliantCount: 80,
     nonCompliantCount: 1,
-    undeterminedCount: 1,
-    lastCheckTime: '今天 08:45',
-    status: 'PROBLEM',
-    specs: {
-      dataType: 'VARCHAR(2)',
-      format: 'GB/T 2261.1',
-      nullable: '否',
-      timezone: '—',
-    },
-    mainIssues: [
-      { issueType: '值域不符合', count: 1, description: '1 个接口传输字段包含未定义枚举值 "99"' },
+    indeterminateCount: 1,
+    lastCheckedTime: '今天 10:28',
+    status: 'HAS_ISSUES',
+    statusLabel: '存在问题',
+    businessDomain: '人口基础',
+
+    dataType: 'VARCHAR(2)',
+    format: 'GB/T 2261.1 码表',
+    allowNull: '否',
+    timeZone: 'N/A',
+
+    issues: [
+      { type: '值域不符合', count: 1, description: '1 个业务系统自定义使用了 "F/M" 代替国标 "1/2"' },
     ],
-    undeterminedReasons: ['1 个历史镜像表全表为空值无法判定编码关联'],
+    indeterminateReasons: [
+      { reason: '1 个实时流数据表样本数不足 100 条', count: 1 },
+    ],
+  },
+];
+
+// Sample Asset View Items
+const ASSET_VIEW_ITEMS = [
+  {
+    assetName: '人口基本信息表 (person_base_info)',
+    domain: '人口基础',
+    matchedStandardsCount: 32,
+    compliantCount: 27,
+    nonCompliantCount: 4,
+    indeterminateCount: 1,
+    status: 'HAS_ISSUES',
+    statusLabel: '存在问题',
+  },
+  {
+    assetName: '公共服务热线工单记录表 (public_service_ticket)',
+    domain: '公共服务',
+    matchedStandardsCount: 26,
+    compliantCount: 24,
+    nonCompliantCount: 2,
+    indeterminateCount: 0,
+    status: 'HAS_ISSUES',
+    statusLabel: '存在问题',
+  },
+  {
+    assetName: '居民婚姻登记历史表 (marital_status_history)',
+    domain: '人口基础',
+    matchedStandardsCount: 18,
+    compliantCount: 18,
+    nonCompliantCount: 0,
+    indeterminateCount: 0,
+    status: 'ALL_COMPLIANT',
+    statusLabel: '全部符合',
+  },
+];
+
+// Sample Domain View Items
+const DOMAIN_VIEW_ITEMS = [
+  {
+    domainName: '人口服务',
+    matchedFieldsCount: 2318,
+    compliantCount: 2156,
+    nonCompliantCount: 104,
+    indeterminateCount: 58,
+  },
+  {
+    domainName: '公共服务',
+    matchedFieldsCount: 1824,
+    compliantCount: 1751,
+    nonCompliantCount: 53,
+    indeterminateCount: 20,
+  },
+  {
+    domainName: '社会保障',
+    matchedFieldsCount: 1420,
+    compliantCount: 1390,
+    nonCompliantCount: 18,
+    indeterminateCount: 12,
   },
 ];
 
 interface StandardCheckWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
-  onNavigateToDataSemantics?: () => void;
   onNavigateToCatalogTab?: () => void;
   onNavigateToMatchingTab?: () => void;
+  onNavigateToDataSemantics?: () => void;
+  onNavigateToIssueDetail?: () => void;
 }
 
 export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
   addToast,
-  onNavigateToDataSemantics,
   onNavigateToCatalogTab,
   onNavigateToMatchingTab,
+  onNavigateToDataSemantics,
+  onNavigateToIssueDetail,
 }) => {
-  // Navigation & SubNav
   const [activeSubNav, setActiveSubNav] = useState<'standards' | 'connections' | 'probing' | 'quality' | 'views' | 'semantics'>('standards');
 
-  // Main View Mode: 'BY_STANDARD' | 'BY_ASSET' | 'BY_DOMAIN'
+  // Status Filter Tabs: 'NON_COMPLIANT' (327) | 'COMPLIANT' (7918) | 'INDETERMINATE' (181) | 'ALL'
+  const [statusFilter, setStatusFilter] = useState<'NON_COMPLIANT' | 'COMPLIANT' | 'INDETERMINATE' | 'ALL'>('NON_COMPLIANT');
+
+  // View Switcher: 'BY_STANDARD' | 'BY_ASSET' | 'BY_DOMAIN'
   const [viewMode, setViewMode] = useState<'BY_STANDARD' | 'BY_ASSET' | 'BY_DOMAIN'>('BY_STANDARD');
 
-  // Active Filter Status: 'ALL' | 'NON_COMPLIANT' | 'COMPLIANT' | 'UNDETERMINED'
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'NON_COMPLIANT' | 'COMPLIANT' | 'UNDETERMINED'>('NON_COMPLIANT');
+  // Selected row index for Right Side Context
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
-  // Selected row index in the table
-  const [selectedRowIndex, setSelectedRowIndex] = useState<number>(0);
-  const selectedRow = CHECK_ROWS[selectedRowIndex] || CHECK_ROWS[0];
+  // Search & Filter
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [domainFilter, setDomainFilter] = useState<string>('ALL');
 
-  // Re-check progress simulation state
-  const [isRechecking, setIsRechecking] = useState<boolean>(false);
-  const [recheckProgress, setRecheckProgress] = useState<number>(6832);
-
-  // Modals / Drawers
+  // Modals & Drawers
+  const [showScopeModal, setShowScopeModal] = useState<boolean>(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState<boolean>(false);
   const [showIssueDetailModal, setShowIssueDetailModal] = useState<boolean>(false);
-  const [showInsightAnalysisDrawer, setShowInsightAnalysisDrawer] = useState<boolean>(false);
+  const [showIndeterminateModal, setShowIndeterminateModal] = useState<boolean>(false);
+  const [isRechecking, setIsRechecking] = useState<boolean>(false);
 
-  const handleStartRecheck = () => {
+  const currentStandard = SAMPLE_CHECK_STANDARDS[selectedIndex] || SAMPLE_CHECK_STANDARDS[0];
+
+  const handleRecheck = () => {
     setIsRechecking(true);
-    addToast?.('info', '正在重新检查', '已启动人口服务 8,426 个已确认标准匹配字段的标准执行检查');
+    addToast?.('info', '启动标准检查', '正在持续检查人口服务 8,426 个已确认标准匹配字段…');
     setTimeout(() => {
-      setRecheckProgress(8426);
       setIsRechecking(false);
-      addToast?.('success', '检查完成', '标准检查任务已同步最新探查结果');
-    }, 2000);
+      addToast?.('success', '检查完毕', '已完成 8,426 个字段的标准执行情况排查，更新了 327 个偏差判定');
+    }, 1800);
   };
 
   return (
@@ -291,7 +366,6 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
             <span>数据语义</span>
           </button>
 
-          {/* Current Selected Menu Item */}
           <button
             onClick={() => setActiveSubNav('standards')}
             className="w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer bg-[#EFF6FF] text-[#2563EB] font-bold border-l-4 border-[#2563EB]"
@@ -308,15 +382,14 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
       </aside>
 
       {/* ========================================================= */}
-      {/* MAIN CONTAINER AREA                                       */}
+      {/* MAIN CONTAINER                                            */}
       {/* ========================================================= */}
       <main className="flex-1 flex flex-col overflow-hidden bg-[#F7F9FC]">
         
         {/* ========================================================= */}
-        {/* PAGE HEADER: Breadcrumb + Title + Top Workspace Tabs     */}
+        {/* PAGE HEADER: Breadcrumb + Title + Fixed Workspace Tabs   */}
         {/* ========================================================= */}
         <div className="bg-white border-b border-[#E6EAF0] px-8 pt-4 pb-0 shadow-2xs shrink-0">
-          {/* Breadcrumb */}
           <div className="flex items-center space-x-2 text-xs text-[#64748B] mb-1">
             <span>数据治理</span>
             <span>/</span>
@@ -352,7 +425,7 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
                 if (onNavigateToMatchingTab) {
                   onNavigateToMatchingTab();
                 } else {
-                  addToast?.('info', '标准匹配', '切换至标准自动映射与冲突处理工作台');
+                  addToast?.('info', '标准匹配', '切换至 AI 批量标准匹配工作台');
                 }
               }}
               className="pb-3 border-b-2 border-transparent text-[#64748B] hover:text-[#172033] transition-all cursor-pointer"
@@ -365,17 +438,17 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
               className="pb-3 border-b-2 border-[#2563EB] text-[#2563EB] transition-all cursor-pointer flex items-center space-x-1.5"
             >
               <span>标准检查</span>
-              <span className="px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] rounded text-[10px]">
-                327 问题
+              <span className="px-1.5 py-0.2 bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A] rounded text-[10px]">
+                327 不符合
               </span>
             </button>
           </div>
         </div>
 
         {/* ========================================================= */}
-        {/* SUBHEADER HINT & COMPACT SCOPE BAR                        */}
+        {/* SUBHEADER HINT, SCOPE BAR & LIGHT AI INSIGHT              */}
         {/* ========================================================= */}
-        <div className="px-8 pt-4 pb-2 space-y-3 shrink-0">
+        <div className="px-8 pt-3.5 pb-1 space-y-2.5 shrink-0">
           <p className="text-xs text-[#64748B]">
             持续检查真实数据是否符合已确认的企业标准，优先定位需要治理的标准偏差。
           </p>
@@ -385,7 +458,7 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
             <div className="flex items-center space-x-3">
               <span className="text-[#64748B] font-bold">当前检查范围：</span>
               <button
-                onClick={() => addToast?.('info', '切换检查范围', '支持按业务域、业务对象或最近资产进行范围筛选')}
+                onClick={() => setShowScopeModal(true)}
                 className="px-2.5 py-1 bg-[#F8FAFC] hover:bg-[#EFF6FF] border border-[#CBD5E1] hover:border-[#BFDBFE] font-bold text-[#172033] hover:text-[#2563EB] rounded-lg transition-all cursor-pointer flex items-center space-x-1.5"
               >
                 <span>人口服务 · 当前正式标准</span>
@@ -393,23 +466,17 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
               </button>
               <span className="text-[#94A3B8]">|</span>
               <span className="text-[#334155] font-medium">
-                涵盖 <strong className="text-[#172033] font-bold font-mono">8,426</strong> 个已确认标准匹配字段
+                覆盖 <strong className="text-[#172033] font-bold font-mono">8,426</strong> 个已确认标准匹配字段
               </span>
             </div>
 
             <div className="flex items-center space-x-3">
-              {isRechecking ? (
-                <span className="text-[#2563EB] font-bold font-mono animate-pulse">
-                  正在检查：{recheckProgress} / 8,426
-                </span>
-              ) : (
-                <span className="text-[#64748B] text-[11px]">
-                  最近检查：今天 10:32
-                </span>
-              )}
+              <span className="text-[#64748B] text-[11px]">
+                最近检查：今天 10:32
+              </span>
 
               <button
-                onClick={handleStartRecheck}
+                onClick={handleRecheck}
                 disabled={isRechecking}
                 className="px-3 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-[#93C5FD] text-white font-bold rounded-lg transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
               >
@@ -419,52 +486,26 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* AI Insight Light Banner */}
-          <div className="bg-[#EEF2FF] border border-[#C7D2FE] rounded-xl px-4 py-2.5 flex items-center justify-between text-xs">
-            <div className="flex items-center space-x-2 text-[#4F46E5]">
+          {/* Restrained Light AI Insight Bar */}
+          <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl px-3.5 py-2 flex items-center justify-between text-xs text-[#1E40AF]">
+            <div className="flex items-center space-x-2">
               <Sparkles className="w-4 h-4 text-[#2563EB] shrink-0" />
-              <span className="font-semibold">
-                Xino 发现 327 个不符合项，其中 42 个可能由标准匹配失效引起，而不是数据本身质量问题。
+              <span>
+                <strong>Xino 归纳：</strong>发现 327 个不符合项，其中 <strong>42 个</strong> 可能由标准匹配失效引起，而不是数据本身质量问题。
               </span>
             </div>
-
             <button
-              onClick={() => setShowInsightAnalysisDrawer(true)}
-              className="text-[#2563EB] hover:underline font-bold text-xs flex items-center space-x-0.5 cursor-pointer"
+              onClick={() => setShowAnalysisModal(true)}
+              className="text-[#2563EB] hover:underline font-bold cursor-pointer shrink-0 ml-2 text-[11px]"
             >
-              <span>查看分析</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              查看分析 →
             </button>
           </div>
 
-          {/* Core Status Summary Segment Controls */}
+          {/* Status Segmented Summary & View Switcher */}
           <div className="flex items-center justify-between pt-1">
+            {/* Status Segmented Summary Tabs */}
             <div className="flex items-center space-x-2 bg-[#F1F5F9] p-1 rounded-xl text-xs font-bold border border-[#E6EAF0]">
-              <button
-                onClick={() => setStatusFilter('ALL')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  statusFilter === 'ALL'
-                    ? 'bg-white text-[#172033] shadow-2xs'
-                    : 'text-[#64748B] hover:text-[#172033]'
-                }`}
-              >
-                全部标准
-              </button>
-
-              <button
-                onClick={() => setStatusFilter('NON_COMPLIANT')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 ${
-                  statusFilter === 'NON_COMPLIANT'
-                    ? 'bg-[#DC2626] text-white shadow-2xs'
-                    : 'text-[#DC2626] hover:bg-[#FEE2E2]'
-                }`}
-              >
-                <span>不符合标准</span>
-                <span className="px-1.5 py-0.2 bg-white/20 text-white rounded text-[10px] font-mono">
-                  327
-                </span>
-              </button>
-
               <button
                 onClick={() => setStatusFilter('COMPLIANT')}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 ${
@@ -480,9 +521,23 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
               </button>
 
               <button
-                onClick={() => setStatusFilter('UNDETERMINED')}
+                onClick={() => setStatusFilter('NON_COMPLIANT')}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 ${
-                  statusFilter === 'UNDETERMINED'
+                  statusFilter === 'NON_COMPLIANT'
+                    ? 'bg-[#D97706] text-white shadow-2xs'
+                    : 'text-[#D97706] hover:bg-[#FEF3C7]'
+                }`}
+              >
+                <span>不符合标准</span>
+                <span className="px-1.5 py-0.2 bg-white/20 text-white rounded text-[10px] font-mono">
+                  327
+                </span>
+              </button>
+
+              <button
+                onClick={() => setStatusFilter('INDETERMINATE')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  statusFilter === 'INDETERMINATE'
                     ? 'bg-[#64748B] text-white shadow-2xs'
                     : 'text-[#64748B] hover:bg-[#E2E8F0]'
                 }`}
@@ -492,44 +547,48 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
                   181
                 </span>
               </button>
+
+              <button
+                onClick={() => setStatusFilter('ALL')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  statusFilter === 'ALL'
+                    ? 'bg-white text-[#172033] shadow-2xs'
+                    : 'text-[#64748B] hover:text-[#172033]'
+                }`}
+              >
+                全部
+              </button>
             </div>
 
-            {/* Core View Switch: 按标准 | 按数据资产 | 按业务域 */}
-            <div className="flex items-center space-x-1 bg-white border border-[#E6EAF0] p-1 rounded-xl text-xs font-semibold">
+            {/* View Switcher Controls */}
+            <div className="flex items-center space-x-1 bg-white border border-[#E6EAF0] p-1 rounded-xl text-xs font-bold">
+              <span className="text-[#94A3B8] text-[11px] px-2">视角:</span>
               <button
                 onClick={() => setViewMode('BY_STANDARD')}
                 className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
                   viewMode === 'BY_STANDARD'
-                    ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                    : 'text-[#64748B] hover:text-[#172033]'
+                    ? 'bg-[#2563EB] text-white shadow-2xs'
+                    : 'text-[#64748B] hover:bg-[#F1F5F9]'
                 }`}
               >
                 按标准
               </button>
-
               <button
-                onClick={() => {
-                  setViewMode('BY_ASSET');
-                  addToast?.('info', '按数据资产视图', '已载入按数据表分类的标准检查视图');
-                }}
+                onClick={() => setViewMode('BY_ASSET')}
                 className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
                   viewMode === 'BY_ASSET'
-                    ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                    : 'text-[#64748B] hover:text-[#172033]'
+                    ? 'bg-[#2563EB] text-white shadow-2xs'
+                    : 'text-[#64748B] hover:bg-[#F1F5F9]'
                 }`}
               >
                 按数据资产
               </button>
-
               <button
-                onClick={() => {
-                  setViewMode('BY_DOMAIN');
-                  addToast?.('info', '按业务域视图', '已载入按业务主题域分类的标准检查视图');
-                }}
+                onClick={() => setViewMode('BY_DOMAIN')}
                 className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
                   viewMode === 'BY_DOMAIN'
-                    ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                    : 'text-[#64748B] hover:text-[#172033]'
+                    ? 'bg-[#2563EB] text-white shadow-2xs'
+                    : 'text-[#64748B] hover:bg-[#F1F5F9]'
                 }`}
               >
                 按业务域
@@ -539,22 +598,24 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
         </div>
 
         {/* ========================================================= */}
-        {/* MAIN WORKSPACE split: Left List (~70%) + Right Detail (~30%) */}
+        {/* MAIN WORKSPACE: Left Table (~70%) + Right Context (~30%)  */}
         {/* ========================================================= */}
-        <div className="flex-1 flex overflow-hidden px-8 pb-6 gap-5 mt-1">
+        <div className="flex-1 flex overflow-hidden px-8 pb-6 gap-5 mt-2">
           
           {/* ======================================================= */}
-          {/* COLUMN 1: LEFT MAIN TABLE (~70% Width)                   */}
+          {/* COLUMN 1: LEFT CHECK LIST TABLE (~70% Width)            */}
           {/* ======================================================= */}
           <div className="w-[70%] bg-white border border-[#E6EAF0] rounded-xl shadow-2xs flex flex-col overflow-hidden shrink-0">
             
-            {/* Table Toolbar Filters */}
+            {/* Table Toolbar */}
             <div className="p-3 border-b border-[#E6EAF0] flex items-center justify-between gap-3 bg-[#F8FAFC]">
               <div className="relative flex-1 max-w-sm">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#94A3B8]" />
                 <input
                   type="text"
                   placeholder="搜索标准、字段或数据资产…"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 bg-white border border-[#E6EAF0] rounded-lg text-xs font-medium text-[#172033] focus:outline-none focus:border-[#2563EB]"
                 />
               </div>
@@ -571,108 +632,117 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
                 </button>
 
                 <button className="px-2.5 py-1.5 bg-white border border-[#E6EAF0] rounded-lg text-[#334155] font-medium hover:bg-[#F1F5F9] cursor-pointer flex items-center space-x-1">
-                  <span>最近检查</span>
+                  <span>最近检查: 今天</span>
                   <ChevronDown className="w-3.5 h-3.5 text-[#64748B]" />
                 </button>
               </div>
             </div>
 
-            {/* Table Content */}
+            {/* Table Content Switcher based on viewMode */}
             <div className="flex-1 overflow-y-auto">
-              {viewMode === 'BY_STANDARD' ? (
+              
+              {/* VIEW MODE 1: 按标准 (DEFAULT) */}
+              {viewMode === 'BY_STANDARD' && (
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#64748B] font-bold sticky top-0 z-10">
-                      <th className="py-2.5 px-4">企业数据标准</th>
+                      <th className="py-2.5 px-4">企业标准与代码</th>
                       <th className="py-2.5 px-3">使用字段</th>
-                      <th className="py-2.5 px-3 text-[#059669]">符合</th>
-                      <th className="py-2.5 px-3 text-[#DC2626]">不符合</th>
-                      <th className="py-2.5 px-3 text-[#64748B]">无法判断</th>
+                      <th className="py-2.5 px-4">检查结果明细 (符合 / 不符合 / 无法判断)</th>
                       <th className="py-2.5 px-3">最近检查</th>
                       <th className="py-2.5 px-3">状态</th>
                       <th className="py-2.5 px-4 text-right">操作</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#E6EAF0]">
-                    {CHECK_ROWS.map((row, index) => {
-                      const isSelected = selectedRowIndex === index;
+                    {SAMPLE_CHECK_STANDARDS.map((row, index) => {
+                      const isSelected = selectedIndex === index;
+
                       return (
                         <tr
                           key={row.id}
-                          onClick={() => setSelectedRowIndex(index)}
+                          onClick={() => setSelectedIndex(index)}
                           className={`transition-all cursor-pointer hover:bg-[#F8FAFC] ${
                             isSelected ? 'bg-[#EFF6FF]/60 font-medium' : 'bg-white'
                           }`}
                         >
-                          {/* Standard Title & Code */}
+                          {/* Standard Name & Code */}
                           <td className="py-3 px-4">
-                            <div className="flex items-center space-x-2">
-                              <div>
-                                <div className="font-bold text-[#172033] flex items-center space-x-1.5">
-                                  <span>{row.title}</span>
-                                  <span className="text-[10px] font-mono text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] px-1.5 py-0.2 rounded font-bold">
-                                    {row.version}
-                                  </span>
-                                </div>
-                                <span className="text-[11px] font-mono text-[#64748B]">
-                                  {row.code}
+                            <div>
+                              <div className="font-bold text-[#172033] flex items-center space-x-1.5">
+                                <span className="text-sm">{row.standardName}</span>
+                                <span className="text-[10px] font-mono text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
+                                  {row.version}
                                 </span>
                               </div>
+                              <span className="text-[11px] font-mono text-[#64748B]">
+                                {row.standardCode}
+                              </span>
                             </div>
                           </td>
 
-                          {/* Used Field Count */}
+                          {/* Used Fields Count */}
                           <td className="py-3 px-3 font-mono font-bold text-[#172033]">
-                            {row.usedFieldCount}
+                            {row.usedFieldsCount}
                           </td>
 
-                          {/* Compliant */}
-                          <td className="py-3 px-3 font-mono font-bold text-[#059669]">
-                            {row.compliantCount}
-                          </td>
-
-                          {/* Non-Compliant */}
-                          <td className="py-3 px-3 font-mono font-bold text-[#DC2626]">
-                            {row.nonCompliantCount > 0 ? (
-                              <span className="px-1.5 py-0.5 bg-[#FEE2E2] rounded border border-[#FCA5A5]">
-                                {row.nonCompliantCount}
+                          {/* Compliance Breakdown Badges */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center space-x-2 text-[11px] font-mono">
+                              <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#059669] font-bold rounded border border-[#A7F3D0]">
+                                {row.compliantCount} 符合
                               </span>
-                            ) : (
-                              '0'
-                            )}
+
+                              {row.nonCompliantCount > 0 ? (
+                                <span className="px-2 py-0.5 bg-[#FEF3C7] text-[#D97706] font-bold rounded border border-[#FDE68A]">
+                                  {row.nonCompliantCount} 不符合
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-[#F1F5F9] text-[#94A3B8] rounded border border-[#E6EAF0]">
+                                  0 不符合
+                                </span>
+                              )}
+
+                              {row.indeterminateCount > 0 ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowIndeterminateModal(true);
+                                  }}
+                                  className="px-2 py-0.5 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#64748B] font-bold rounded border border-[#CBD5E1] cursor-pointer"
+                                >
+                                  {row.indeterminateCount} 无法判断
+                                </button>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-[#F1F5F9] text-[#94A3B8] rounded border border-[#E6EAF0]">
+                                  0 无法判断
+                                </span>
+                              )}
+                            </div>
                           </td>
 
-                          {/* Undetermined */}
-                          <td className="py-3 px-3 font-mono text-[#64748B]">
-                            {row.undeterminedCount}
-                          </td>
-
-                          {/* Last Check Time */}
+                          {/* Last Checked Time */}
                           <td className="py-3 px-3 text-[#64748B] text-[11px]">
-                            {row.lastCheckTime}
+                            {row.lastCheckedTime}
                           </td>
 
                           {/* Status Badge */}
                           <td className="py-3 px-3">
-                            {row.status === 'PROBLEM' ? (
-                              <span className="px-2 py-0.5 bg-[#FEE2E2] text-[#DC2626] border border-[#FCA5A5] text-[11px] font-bold rounded-full inline-flex items-center space-x-1">
-                                <AlertTriangle className="w-3 h-3" />
-                                <span>存在问题</span>
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 bg-[#D1FAE5] text-[#059669] border border-[#A7F3D0] text-[11px] font-bold rounded-full inline-flex items-center space-x-1">
-                                <CheckCircle2 className="w-3 h-3" />
-                                <span>全部符合</span>
-                              </span>
-                            )}
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                              row.status === 'HAS_ISSUES'
+                                ? 'bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]'
+                                : 'bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]'
+                            }`}>
+                              {row.statusLabel}
+                            </span>
                           </td>
 
-                          {/* Action Button */}
+                          {/* Actions */}
                           <td className="py-3 px-4 text-right">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedRowIndex(index);
+                                setSelectedIndex(index);
                                 setShowIssueDetailModal(true);
                               }}
                               className="px-2.5 py-1 bg-white hover:bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] font-bold rounded-lg transition-all cursor-pointer text-xs"
@@ -685,253 +755,232 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
                     })}
                   </tbody>
                 </table>
-              ) : viewMode === 'BY_ASSET' ? (
-                /* BY ASSET VIEW TABLE */
+              )}
+
+              {/* VIEW MODE 2: 按数据资产 */}
+              {viewMode === 'BY_ASSET' && (
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#64748B] font-bold sticky top-0 z-10">
-                      <th className="py-2.5 px-4">数据资产 (表名)</th>
-                      <th className="py-2.5 px-3">已匹配标准</th>
-                      <th className="py-2.5 px-3 text-[#059669]">符合</th>
-                      <th className="py-2.5 px-3 text-[#DC2626]">不符合</th>
-                      <th className="py-2.5 px-3 text-[#64748B]">无法判断</th>
+                      <th className="py-2.5 px-4">物理数据资产表名</th>
+                      <th className="py-2.5 px-3">所属业务域</th>
+                      <th className="py-2.5 px-3">已匹配标准数</th>
+                      <th className="py-2.5 px-4">结果分布 (符合 / 不符合 / 无法判断)</th>
                       <th className="py-2.5 px-3">状态</th>
                       <th className="py-2.5 px-4 text-right">操作</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E6EAF0] text-xs">
-                    <tr className="bg-white hover:bg-[#F8FAFC]">
-                      <td className="py-3 px-4 font-bold text-[#172033]">
-                        <div>人口基本信息表</div>
-                        <span className="text-[11px] font-mono text-[#64748B]">population_service.person_info</span>
-                      </td>
-                      <td className="py-3 px-3 font-mono font-bold">32</td>
-                      <td className="py-3 px-3 font-mono font-bold text-[#059669]">27</td>
-                      <td className="py-3 px-3 font-mono font-bold text-[#DC2626]">4</td>
-                      <td className="py-3 px-3 font-mono text-[#64748B]">1</td>
-                      <td className="py-3 px-3">
-                        <span className="px-2 py-0.5 bg-[#FEE2E2] text-[#DC2626] border border-[#FCA5A5] font-bold rounded-full text-[11px]">
-                          存在问题
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => setShowIssueDetailModal(true)}
-                          className="px-2.5 py-1 bg-white hover:bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] font-bold rounded-lg text-xs cursor-pointer"
-                        >
-                          查看问题
-                        </button>
-                      </td>
-                    </tr>
-
-                    <tr className="bg-white hover:bg-[#F8FAFC]">
-                      <td className="py-3 px-4 font-bold text-[#172033]">
-                        <div>公共服务热线工单记录表</div>
-                        <span className="text-[11px] font-mono text-[#64748B]">population_service.case_record</span>
-                      </td>
-                      <td className="py-3 px-3 font-mono font-bold">26</td>
-                      <td className="py-3 px-3 font-mono font-bold text-[#059669]">24</td>
-                      <td className="py-3 px-3 font-mono font-bold text-[#DC2626]">2</td>
-                      <td className="py-3 px-3 font-mono text-[#64748B]">0</td>
-                      <td className="py-3 px-3">
-                        <span className="px-2 py-0.5 bg-[#FEE2E2] text-[#DC2626] border border-[#FCA5A5] font-bold rounded-full text-[11px]">
-                          存在问题
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => setShowIssueDetailModal(true)}
-                          className="px-2.5 py-1 bg-white hover:bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] font-bold rounded-lg text-xs cursor-pointer"
-                        >
-                          查看问题
-                        </button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              ) : (
-                /* BY DOMAIN VIEW TABLE */
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#64748B] font-bold sticky top-0 z-10">
-                      <th className="py-2.5 px-4">业务域 (Domain)</th>
-                      <th className="py-2.5 px-3">已匹配字段</th>
-                      <th className="py-2.5 px-3 text-[#059669]">符合</th>
-                      <th className="py-2.5 px-3 text-[#DC2626]">不符合</th>
-                      <th className="py-2.5 px-3 text-[#64748B]">无法判断</th>
-                      <th className="py-2.5 px-4 text-right">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E6EAF0] text-xs">
-                    <tr className="bg-white hover:bg-[#F8FAFC]">
-                      <td className="py-3 px-4 font-bold text-[#172033]">人口服务</td>
-                      <td className="py-3 px-3 font-mono font-bold">2,318</td>
-                      <td className="py-3 px-3 font-mono font-bold text-[#059669]">2,156</td>
-                      <td className="py-3 px-3 font-mono font-bold text-[#DC2626]">104</td>
-                      <td className="py-3 px-3 font-mono text-[#64748B]">58</td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => setStatusFilter('NON_COMPLIANT')}
-                          className="px-2.5 py-1 bg-white hover:bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] font-bold rounded-lg text-xs cursor-pointer"
-                        >
-                          筛选问题
-                        </button>
-                      </td>
-                    </tr>
-
-                    <tr className="bg-white hover:bg-[#F8FAFC]">
-                      <td className="py-3 px-4 font-bold text-[#172033]">公共服务</td>
-                      <td className="py-3 px-3 font-mono font-bold">1,824</td>
-                      <td className="py-3 px-3 font-mono font-bold text-[#059669]">1,751</td>
-                      <td className="py-3 px-3 font-mono font-bold text-[#DC2626]">53</td>
-                      <td className="py-3 px-3 font-mono text-[#64748B]">20</td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => setStatusFilter('NON_COMPLIANT')}
-                          className="px-2.5 py-1 bg-white hover:bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] font-bold rounded-lg text-xs cursor-pointer"
-                        >
-                          筛选问题
-                        </button>
-                      </td>
-                    </tr>
+                  <tbody className="divide-y divide-[#E6EAF0]">
+                    {ASSET_VIEW_ITEMS.map((asset, i) => (
+                      <tr key={i} className="hover:bg-[#F8FAFC] transition-all cursor-pointer">
+                        <td className="py-3 px-4 font-bold text-[#172033]">{asset.assetName}</td>
+                        <td className="py-3 px-3 text-[#64748B]">{asset.domain}</td>
+                        <td className="py-3 px-3 font-mono font-bold text-[#2563EB]">{asset.matchedStandardsCount}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-2 text-[11px] font-mono">
+                            <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#059669] font-bold rounded border border-[#A7F3D0]">
+                              {asset.compliantCount} 符合
+                            </span>
+                            <span className="px-2 py-0.5 bg-[#FEF3C7] text-[#D97706] font-bold rounded border border-[#FDE68A]">
+                              {asset.nonCompliantCount} 不符合
+                            </span>
+                            <span className="px-2 py-0.5 bg-[#F1F5F9] text-[#64748B] rounded border border-[#CBD5E1]">
+                              {asset.indeterminateCount} 无法判断
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                            asset.status === 'HAS_ISSUES'
+                              ? 'bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]'
+                              : 'bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]'
+                          }`}>
+                            {asset.statusLabel}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => setShowIssueDetailModal(true)}
+                            className="px-2.5 py-1 bg-white hover:bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] font-bold rounded-lg cursor-pointer"
+                          >
+                            查看问题
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}
+
+              {/* VIEW MODE 3: 按业务域 */}
+              {viewMode === 'BY_DOMAIN' && (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#64748B] font-bold sticky top-0 z-10">
+                      <th className="py-2.5 px-4">业务域</th>
+                      <th className="py-2.5 px-3">已匹配标准字段总数</th>
+                      <th className="py-2.5 px-4">符合项</th>
+                      <th className="py-2.5 px-4">不符合项</th>
+                      <th className="py-2.5 px-4">无法判断项</th>
+                      <th className="py-2.5 px-4 text-right">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E6EAF0]">
+                    {DOMAIN_VIEW_ITEMS.map((dom, i) => (
+                      <tr key={i} className="hover:bg-[#F8FAFC] transition-all cursor-pointer">
+                        <td className="py-3 px-4 font-bold text-[#172033] text-sm">{dom.domainName}</td>
+                        <td className="py-3 px-3 font-mono font-bold text-[#172033] text-sm">{dom.matchedFieldsCount}</td>
+                        <td className="py-3 px-4 font-mono text-[#059669] font-bold">{dom.compliantCount} 符合</td>
+                        <td className="py-3 px-4 font-mono text-[#D97706] font-bold">{dom.nonCompliantCount} 不符合</td>
+                        <td className="py-3 px-4 font-mono text-[#64748B]">{dom.indeterminateCount} 无法判断</td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => setShowIssueDetailModal(true)}
+                            className="px-2.5 py-1 bg-white hover:bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] font-bold rounded-lg cursor-pointer"
+                          >
+                            查看域偏差
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
             </div>
 
           </div>
 
           {/* ======================================================= */}
-          {/* COLUMN 2: RIGHT SIDEBAR · SELECTED STANDARD SUMMARY (~30%) */}
+          {/* COLUMN 2: RIGHT SIDEBAR · STANDARD CONTEXT (~30% Width)  */}
           {/* ======================================================= */}
           <div className="w-[30%] bg-white border border-[#E6EAF0] rounded-xl shadow-2xs flex flex-col justify-between overflow-y-auto p-5 space-y-4 shrink-0">
             
             <div className="space-y-4">
               {/* Header */}
               <div className="border-b border-[#E6EAF0] pb-3">
-                <span className="text-[10px] font-bold text-[#2563EB] uppercase tracking-wider">
-                  Standard Check Context
+                <span className="text-[10px] font-bold text-[#2563EB] uppercase tracking-wider block">
+                  Standard Context & Requirements
                 </span>
                 <div className="flex items-center justify-between mt-0.5">
                   <h2 className="text-base font-bold text-[#172033] tracking-tight">
-                    {selectedRow.title}
+                    {currentStandard.standardName}
                   </h2>
-                  <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0] text-[10px] font-bold rounded">
+                  <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0] rounded font-bold text-[10px]">
                     生效中
                   </span>
                 </div>
-                <p className="text-xs font-mono text-[#64748B] mt-0.5">
-                  {selectedRow.code} · {selectedRow.version}
-                </p>
+                <span className="text-xs font-mono text-[#64748B] block mt-0.5">
+                  {currentStandard.standardCode} · {currentStandard.version}
+                </span>
               </div>
 
-              {/* Standard Technical Requirements */}
-              <div className="bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl p-3.5 space-y-2 text-xs">
-                <span className="font-bold text-[#172033] block border-b border-[#E6EAF0] pb-1.5">
-                  标准要求 (Specs)
+              {/* Standard Requirements Grid */}
+              <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-2">
+                <span className="text-[10px] font-bold text-[#64748B] uppercase block border-b border-[#E6EAF0] pb-1">
+                  生效数据标准要求
                 </span>
 
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div>
-                    <span className="text-[#64748B] block">数据类型</span>
-                    <strong className="font-mono text-[#172033]">{selectedRow.specs.dataType}</strong>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-white border border-[#E6EAF0] rounded-lg">
+                    <span className="text-[#64748B] text-[10px] block">数据类型</span>
+                    <strong className="text-[#172033] font-mono font-bold">{currentStandard.dataType}</strong>
                   </div>
-                  <div>
-                    <span className="text-[#64748B] block">规范格式</span>
-                    <strong className="font-mono text-[#172033]">{selectedRow.specs.format}</strong>
+
+                  <div className="p-2 bg-white border border-[#E6EAF0] rounded-lg">
+                    <span className="text-[#64748B] text-[10px] block">格式约束</span>
+                    <strong className="text-[#172033] font-mono font-bold text-[11px]">{currentStandard.format}</strong>
                   </div>
-                  <div>
-                    <span className="text-[#64748B] block">允许为空</span>
-                    <strong className="text-[#172033]">{selectedRow.specs.nullable}</strong>
+
+                  <div className="p-2 bg-white border border-[#E6EAF0] rounded-lg">
+                    <span className="text-[#64748B] text-[10px] block">允许为空</span>
+                    <strong className="text-[#172033] font-bold">{currentStandard.allowNull}</strong>
                   </div>
-                  <div>
-                    <span className="text-[#64748B] block">时区要求</span>
-                    <strong className="font-mono text-[#172033]">{selectedRow.specs.timezone}</strong>
+
+                  <div className="p-2 bg-white border border-[#E6EAF0] rounded-lg">
+                    <span className="text-[#64748B] text-[10px] block">时区约束</span>
+                    <strong className="text-[#172033] font-mono font-bold text-[11px]">{currentStandard.timeZone}</strong>
                   </div>
                 </div>
               </div>
 
               {/* Current Check Results Breakdown */}
-              <div className="bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl p-3.5 space-y-2 text-xs">
-                <div className="flex justify-between items-center border-b border-[#E6EAF0] pb-1.5">
-                  <span className="font-bold text-[#172033]">当前检查结果</span>
-                  <span className="text-[11px] font-bold text-[#2563EB] font-mono">
-                    {selectedRow.usedFieldCount} 个字段关联使用
-                  </span>
-                </div>
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-[#172033] block border-b border-[#E6EAF0] pb-1">
+                  当前检查结果 ({currentStandard.usedFieldsCount} 个字段正在使用)
+                </span>
 
-                <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
-                  <div className="p-2 bg-white rounded-lg border border-[#A7F3D0]">
-                    <span className="text-[#059669] block font-bold">符合</span>
-                    <strong className="text-[#059669] text-base font-mono">{selectedRow.compliantCount}</strong>
+                <div className="p-3 bg-white border border-[#E6EAF0] rounded-xl space-y-2 text-xs">
+                  <div className="flex justify-between items-center pb-1 border-b border-[#F1F5F9]">
+                    <span className="text-[#059669] font-bold flex items-center space-x-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>符合标准项</span>
+                    </span>
+                    <strong className="text-[#059669] font-mono font-bold">{currentStandard.compliantCount} 个</strong>
                   </div>
 
-                  <div className="p-2 bg-white rounded-lg border border-[#FCA5A5]">
-                    <span className="text-[#DC2626] block font-bold">不符合</span>
-                    <strong className="text-[#DC2626] text-base font-mono">{selectedRow.nonCompliantCount}</strong>
+                  <div className="flex justify-between items-center pb-1 border-b border-[#F1F5F9]">
+                    <span className="text-[#D97706] font-bold flex items-center space-x-1">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span>不符合标准项</span>
+                    </span>
+                    <strong className="text-[#D97706] font-mono font-bold">{currentStandard.nonCompliantCount} 个</strong>
                   </div>
 
-                  <div className="p-2 bg-white rounded-lg border border-[#CBD5E1]">
-                    <span className="text-[#64748B] block font-bold">无法判断</span>
-                    <strong className="text-[#64748B] text-base font-mono">{selectedRow.undeterminedCount}</strong>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[#64748B] font-bold flex items-center space-x-1">
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>无法判断项</span>
+                    </span>
+                    <strong className="text-[#64748B] font-mono font-bold">{currentStandard.indeterminateCount} 个</strong>
                   </div>
                 </div>
               </div>
 
               {/* Main Issues List */}
               <div className="space-y-2">
-                <span className="text-xs font-bold text-[#172033] block border-b border-[#E6EAF0] pb-1.5">
-                  主要偏离问题 (Main Issues)
+                <span className="text-xs font-bold text-[#172033] block border-b border-[#E6EAF0] pb-1">
+                  主要偏差类型 (Main Issues)
                 </span>
 
-                {selectedRow.mainIssues.length > 0 ? (
-                  <div className="space-y-2">
-                    {selectedRow.mainIssues.map((issue, i) => (
-                      <div key={i} className="p-2.5 bg-white border border-[#E6EAF0] rounded-xl space-y-1 text-xs">
+                {currentStandard.issues.length > 0 ? (
+                  <div className="space-y-2 text-xs">
+                    {currentStandard.issues.map((iss, i) => (
+                      <div key={i} className="p-2.5 bg-[#FEF3C7]/40 border border-[#FDE68A] rounded-xl space-y-1">
                         <div className="flex justify-between items-center">
-                          <span className="font-bold text-[#DC2626] flex items-center space-x-1">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            <span>{issue.issueType}</span>
-                          </span>
-                          <span className="px-2 py-0.2 bg-[#FEE2E2] text-[#DC2626] font-mono font-bold rounded text-[10px]">
-                            {issue.count} 个字段
+                          <span className="font-bold text-[#92400E]">{iss.type}</span>
+                          <span className="text-[10px] font-mono font-bold text-[#D97706] bg-[#FEF3C7] px-1.5 py-0.2 rounded border border-[#FDE68A]">
+                            {iss.count} 个字段
                           </span>
                         </div>
-                        <p className="text-[11px] text-[#475569] leading-relaxed">
-                          {issue.description}
+                        <p className="text-[11px] text-[#78350F] leading-snug">
+                          {iss.description}
                         </p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl text-xs text-[#059669] font-semibold flex items-center space-x-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>该标准下的所有关联字段均 100% 遵从规范。</span>
-                  </div>
+                  <p className="text-xs text-[#059669] bg-[#ECFDF5] border border-[#A7F3D0] p-2.5 rounded-xl font-medium text-center">
+                    ✓ 当前标准执行完美，所有挂接物理字段全部符合要求。
+                  </p>
                 )}
               </div>
-
-              {/* Undetermined Reasons (无法判断说明) */}
-              {selectedRow.undeterminedReasons && selectedRow.undeterminedReasons.length > 0 && (
-                <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1.5 text-xs">
-                  <span className="font-bold text-[#64748B] block text-[11px]">无法判断依据说明：</span>
-                  <ul className="space-y-1 text-[11px] text-[#475569] list-disc list-inside pl-1">
-                    {selectedRow.undeterminedReasons.map((r, i) => (
-                      <li key={i}>{r}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
 
-            {/* Bottom Primary Action Button */}
+            {/* Bottom Action Button */}
             <div className="pt-3 border-t border-[#E6EAF0]">
               <button
-                onClick={() => setShowIssueDetailModal(true)}
+                onClick={() => {
+                  if (onNavigateToIssueDetail) {
+                    onNavigateToIssueDetail();
+                  } else {
+                    setShowIssueDetailModal(true);
+                  }
+                }}
                 className="w-full py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5"
               >
-                <span>查看偏差问题明细</span>
-                <ChevronRight className="w-4 h-4" />
+                <span>查看偏差详情 (进入完整决策页)</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
 
@@ -942,22 +991,19 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
       </main>
 
       {/* ========================================================= */}
-      {/* MODAL: Issue Detail Diagnosis View                         */}
+      {/* MODAL: Issue Detail Drawer / Modal                        */}
       {/* ========================================================= */}
       {showIssueDetailModal && (
         <div className="fixed inset-0 bg-[#0F172A]/30 backdrop-blur-xs flex items-center justify-center z-50">
-          <div className="w-[680px] bg-white rounded-2xl shadow-2xl border border-[#E6EAF0] p-6 space-y-4">
+          <div className="w-[640px] bg-white rounded-2xl shadow-2xl border border-[#E6EAF0] p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
               <div>
-                <span className="text-[10px] font-mono text-[#64748B] uppercase">
-                  {selectedRow.code}
-                </span>
-                <h3 className="text-base font-bold text-[#172033] flex items-center space-x-2">
-                  <span>{selectedRow.title} · 偏离问题诊断</span>
-                  <span className="px-2 py-0.5 bg-[#FEE2E2] text-[#DC2626] border border-[#FCA5A5] text-xs font-bold rounded-full">
-                    {selectedRow.nonCompliantCount} 项偏离
-                  </span>
+                <h3 className="text-base font-bold text-[#172033]">
+                  标准执行偏差处理 (Standard Check Issue Detail)
                 </h3>
+                <span className="text-xs font-mono text-[#2563EB]">
+                  {currentStandard.standardName} ({currentStandard.standardCode} V3)
+                </span>
               </div>
               <button
                 onClick={() => setShowIssueDetailModal(false)}
@@ -967,39 +1013,33 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
               </button>
             </div>
 
-            <div className="space-y-3 text-xs max-h-[380px] overflow-y-auto pr-1">
-              <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-2">
-                <span className="font-bold text-[#172033]">偏离字段 01：population_service.case_record.close_time</span>
-                <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-2 rounded border border-[#E6EAF0]">
-                  <div>
-                    <span className="text-[#64748B] block">标准要求类型</span>
-                    <strong className="font-mono text-[#2563EB]">DATETIME</strong>
-                  </div>
-                  <div>
-                    <span className="text-[#64748B] block">实际物理数据类型</span>
-                    <strong className="font-mono text-[#DC2626]">VARCHAR(32)</strong>
-                  </div>
-                </div>
-                <p className="text-[11px] text-[#64748B]">
-                  Xino 诊断结论：该字段存放格式为 ISO 字符串格式，属于物理数据类型不符合，建议在逻辑视图转换层统一封装 DATETIME 转换规则。
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-[#FEF3C7] border border-[#FDE68A] rounded-xl text-[#92400E] space-y-1">
+                <span className="font-bold block">Xino 诊断分析：</span>
+                <p className="text-[11px] leading-relaxed">
+                  在 7 个“业务办结时间”不符合项中，4 个字段近期经历了数据表 DDL 修改（由 DATETIME 变更为了 VARCHAR），建议优先排查原标准匹配关系是否仍然适用。
                 </p>
               </div>
 
-              <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-2">
-                <span className="font-bold text-[#172033]">偏离字段 02：social_security.claim_item.finish_date</span>
-                <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-2 rounded border border-[#E6EAF0]">
-                  <div>
-                    <span className="text-[#64748B] block">标准必填约束</span>
-                    <strong className="text-[#2563EB]">NOT NULL</strong>
-                  </div>
-                  <div>
-                    <span className="text-[#64748B] block">探查空值率</span>
-                    <strong className="text-[#DC2626]">存在 1.2% NULL 记录</strong>
-                  </div>
+              <div className="space-y-2">
+                <span className="font-bold text-[#172033] block">偏差物理字段列表：</span>
+                <div className="space-y-1.5 font-mono text-[11px]">
+                  {[
+                    { col: 'population_service.case_record.close_time', issue: '数据类型偏离 (DATETIME → VARCHAR)', action: '建议重新进行标准匹配' },
+                    { col: 'service_case.history.finish_time', issue: '必填要求未满足 (包含 1.2% 空值)', action: '路由至数据质量工单库' },
+                    { col: 'hotline_db.workorder.completed_at', issue: '格式不符合 (yyyy-MM-dd 无时分秒)', action: '保留微小差异例外或要求修改 DDL' },
+                  ].map((row, i) => (
+                    <div key={i} className="p-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1">
+                      <div className="flex justify-between items-center">
+                        <strong className="text-[#172033]">{row.col}</strong>
+                        <span className="text-[10px] text-[#D97706] font-bold bg-[#FEF3C7] px-1.5 py-0.2 rounded border border-[#FDE68A]">
+                          {row.issue}
+                        </span>
+                      </div>
+                      <span className="text-[#64748B] text-[10px] block">建议下一步治理：{row.action}</span>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-[11px] text-[#64748B]">
-                  Xino 诊断结论：源头社保系统中部分撤销状态的单据未录入完成时间，建议引导源头数据质量校验或完善标准例外说明。
-                </p>
               </div>
             </div>
 
@@ -1008,16 +1048,20 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
                 onClick={() => setShowIssueDetailModal(false)}
                 className="px-4 py-2 bg-[#F1F5F9] text-[#334155] text-xs font-bold rounded-lg cursor-pointer"
               >
-                关闭视图
+                关闭
               </button>
               <button
                 onClick={() => {
                   setShowIssueDetailModal(false);
-                  addToast?.('info', '生成治理任务', '已将 2 项标准偏离问题加入治理协同任务队列');
+                  if (onNavigateToMatchingTab) {
+                    onNavigateToMatchingTab();
+                  } else {
+                    addToast?.('info', '跳转至标准匹配', '已导航至标准匹配工作台重新校验匹配映射');
+                  }
                 }}
-                className="px-4 py-2 bg-[#2563EB] text-white text-xs font-bold rounded-lg cursor-pointer shadow-2xs"
+                className="px-4 py-2 bg-[#2563EB] text-white text-xs font-bold rounded-lg shadow-2xs cursor-pointer"
               >
-                转入治理协同
+                进入标准匹配重新校验
               </button>
             </div>
           </div>
@@ -1025,51 +1069,166 @@ export const StandardCheckWorkspace: React.FC<StandardCheckWorkspaceProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* DRAWER: AI Insight Analysis                               */}
+      {/* MODAL: Indeterminate Reasons                              */}
       {/* ========================================================= */}
-      {showInsightAnalysisDrawer && (
-        <div className="fixed inset-0 bg-[#0F172A]/30 backdrop-blur-xs flex justify-end z-50">
-          <div className="w-[500px] bg-white h-full shadow-2xl flex flex-col justify-between p-6 space-y-4 animate-in slide-in-from-right duration-200">
-            <div className="space-y-4 overflow-y-auto pr-1">
-              <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="w-5 h-5 text-[#2563EB]" />
-                  <h3 className="text-base font-bold text-[#172033]">
-                    Xino 偏差根因分析报告
-                  </h3>
-                </div>
-                <button
-                  onClick={() => setShowInsightAnalysisDrawer(false)}
-                  className="p-1 text-[#94A3B8] hover:text-[#172033] cursor-pointer"
+      {showIndeterminateModal && (
+        <div className="fixed inset-0 bg-[#0F172A]/30 backdrop-blur-xs flex items-center justify-center z-50">
+          <div className="w-[500px] bg-white rounded-2xl shadow-2xl border border-[#E6EAF0] p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
+              <h3 className="text-base font-bold text-[#172033]">
+                无法判断原因排查 (Indeterminate Analysis)
+              </h3>
+              <button
+                onClick={() => setShowIndeterminateModal(false)}
+                className="p-1 text-[#94A3B8] hover:text-[#172033] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <p className="text-[#64748B]">“无法判断”表明系统缺乏足够的数据探查样本或物理权限，未归类为故障不合规：</p>
+
+              <div className="space-y-2 pt-2">
+                {currentStandard.indeterminateReasons?.map((r, i) => (
+                  <div key={i} className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl flex justify-between items-center">
+                    <span className="font-medium text-[#172033]">{r.reason}</span>
+                    <strong className="text-[#64748B] font-mono">{r.count} 项</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-[#E6EAF0] flex justify-end">
+              <button
+                onClick={() => setShowIndeterminateModal(false)}
+                className="px-4 py-2 bg-[#F1F5F9] text-[#334155] text-xs font-bold rounded-lg cursor-pointer"
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: Scope Bar Picker                                  */}
+      {/* ========================================================= */}
+      {showScopeModal && (
+        <div className="fixed inset-0 bg-[#0F172A]/30 backdrop-blur-xs flex items-center justify-center z-50">
+          <div className="w-[520px] bg-white rounded-2xl shadow-2xl border border-[#E6EAF0] p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
+              <h3 className="text-base font-bold text-[#172033]">
+                切换标准检查范围 (Scope Picker)
+              </h3>
+              <button
+                onClick={() => setShowScopeModal(false)}
+                className="p-1 text-[#94A3B8] hover:text-[#172033] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              {[
+                { label: '人口服务 · 当前正式标准', count: '8,426 字段' },
+                { label: '公共服务 · 核心数据资产', count: '5,120 字段' },
+                { label: '社会保障 · 全部正式标准', count: '3,840 字段' },
+                { label: '最近 30 天新增资产标准检查', count: '1,286 字段' },
+              ].map((scope, i) => (
+                <div
+                  key={i}
+                  onClick={() => {
+                    setShowScopeModal(false);
+                    addToast?.('success', '检查范围已切换', `已成功载入【${scope.label}】`);
+                  }}
+                  className="p-3 bg-white hover:bg-[#EFF6FF] border border-[#E6EAF0] hover:border-[#BFDBFE] rounded-xl cursor-pointer transition-all flex justify-between items-center"
                 >
-                  <X className="w-5 h-5" />
-                </button>
+                  <span className="font-bold text-[#172033]">{scope.label}</span>
+                  <span className="text-[10px] font-mono text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
+                    {scope.count}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-[#E6EAF0] flex justify-end">
+              <button
+                onClick={() => setShowScopeModal(false)}
+                className="px-4 py-2 bg-[#F1F5F9] text-[#334155] text-xs font-bold rounded-lg cursor-pointer"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: AI Analysis Panel                                  */}
+      {/* ========================================================= */}
+      {showAnalysisModal && (
+        <div className="fixed inset-0 bg-[#0F172A]/30 backdrop-blur-xs flex items-center justify-center z-50">
+          <div className="w-[560px] bg-white rounded-2xl shadow-2xl border border-[#E6EAF0] p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
+              <div className="flex items-center space-x-2 text-[#2563EB]">
+                <Sparkles className="w-5 h-5" />
+                <h3 className="text-base font-bold text-[#172033]">
+                  Xino 偏差归因深度分析 (Attribution Analysis)
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowAnalysisModal(false)}
+                className="p-1 text-[#94A3B8] hover:text-[#172033] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl text-[#1E40AF]">
+                在当前的 327 个不符合项中，Xino 通过对数据 DDL 变更记录与日志行为的关联推演，完成了偏差根因分流：
               </div>
 
-              <div className="space-y-3 text-xs">
-                <div className="p-3 bg-[#EEF2FF] border border-[#C7D2FE] rounded-xl space-y-1 text-[#334155]">
-                  <span className="font-bold text-[#4F46E5] block">42 个映射失效引发的虚假偏离</span>
-                  <p className="text-[11px] leading-relaxed">
-                    在 327 个不符合项中，42 个字段近期发生了物理表结构改版，原关联的标准映射已不匹配，建议优先进行重新匹配，而非误判为业务数据质量故障。
+              <div className="space-y-2">
+                <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1">
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-[#D97706]">1. 标准匹配失效 (42 项 / 12.8%)</span>
+                    <span className="font-mono text-[#2563EB]">推荐重推匹配</span>
+                  </div>
+                  <p className="text-[#64748B] text-[11px]">
+                    因源端表结构被重构或变更字段名，原匹配映射未及时同步，导致误判为数据违规。
                   </p>
                 </div>
 
                 <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1">
-                  <span className="font-bold text-[#172033] block">核心治理建议优先级</span>
-                  <ul className="space-y-1 text-[11px] text-[#475569] list-disc list-inside pl-1">
-                    <li>1. 优先对人口基础域 3 个身份校验字段重新绑定 GB 11643 V5 标准</li>
-                    <li>2. 在公共服务数据接入层增加字符串转 DATETIME 预处理节点</li>
-                  </ul>
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-[#BE123C]">2. 真实数据质量缺陷 (215 项 / 65.7%)</span>
+                    <span className="font-mono text-[#BE123C]">建议发起质量工单</span>
+                  </div>
+                  <p className="text-[#64748B] text-[11px]">
+                    源头系统录入不规范（如脏数据、空值、非法编码），需进入数据质量治理与源端修复流程。
+                  </p>
+                </div>
+
+                <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1">
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="text-[#64748B]">3. 标准规范本身需迭代 (70 项 / 21.4%)</span>
+                    <span className="font-mono text-[#4F46E5]">发起标准修改建议</span>
+                  </div>
+                  <p className="text-[#64748B] text-[11px]">
+                    业务逻辑发生改变后，既有正式标准的校验约束（如特定正则表达式）已不再适应当前新业务形态。
+                  </p>
                 </div>
               </div>
             </div>
 
-            <div className="pt-3 border-t border-[#E6EAF0]">
+            <div className="pt-3 border-t border-[#E6EAF0] flex justify-end">
               <button
-                onClick={() => setShowInsightAnalysisDrawer(false)}
-                className="w-full py-2 bg-[#F1F5F9] text-[#334155] text-xs font-bold rounded-lg cursor-pointer"
+                onClick={() => setShowAnalysisModal(false)}
+                className="px-4 py-2 bg-[#2563EB] text-white text-xs font-bold rounded-lg shadow-2xs cursor-pointer"
               >
-                关闭分析报告
+                关闭分析
               </button>
             </div>
           </div>

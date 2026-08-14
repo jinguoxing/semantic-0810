@@ -32,13 +32,17 @@ import { CreateDataElementStandardWorkspace } from './components/CreateDataEleme
 import { CreateValueDomainStandardWorkspace } from './components/CreateValueDomainStandardWorkspace';
 import { ImportStandardsWorkspace } from './components/ImportStandardsWorkspace';
 import { MappingConflictReviewWorkspace } from './components/MappingConflictReviewWorkspace';
+import { StandardMatchingWorkspace } from './components/StandardMatchingWorkspace';
+import { StandardProposalReviewWorkspace } from './components/StandardProposalReviewWorkspace';
+import { StandardCheckWorkspace } from './components/StandardCheckWorkspace';
+import { StandardCheckIssueDetailWorkspace } from './components/StandardCheckIssueDetailWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('mapping_conflict_review');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('mapping_conflict_review');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('standard_check_issue_detail');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review'>('standard_check_issue_detail');
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -432,6 +436,22 @@ export default function App() {
             addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
           }}
         />
+      ) : currentNav === 'standard_proposal_review' || viewTab === 'standard_proposal_review' ? (
+        <StandardProposalReviewWorkspace
+          addToast={addToast}
+          onNavigateBackToMatching={() => {
+            setCurrentNav('standard_matching');
+            setViewTab('standard_matching');
+          }}
+          onNavigateBackToStandards={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+          }}
+        />
       ) : currentNav === 'create_data_element_standard' || viewTab === 'create_data_element_standard' ? (
         <CreateDataElementStandardWorkspace
           addToast={addToast}
@@ -444,6 +464,76 @@ export default function App() {
             setCurrentNav('semantics');
             setViewTab('semantics');
             addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+        />
+      ) : currentNav === 'standard_matching' || viewTab === 'standard_matching' ? (
+        <StandardMatchingWorkspace
+          addToast={addToast}
+          onNavigateToStandardProposalReview={() => {
+            setCurrentNav('standard_proposal_review');
+            setViewTab('standard_proposal_review');
+          }}
+          onNavigateToCatalogTab={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+          }}
+          onNavigateToCheckTab={() => {
+            setCurrentNav('standard_check');
+            setViewTab('standard_check');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+          onNavigateToMappingConflictReview={() => {
+            setCurrentNav('mapping_conflict_review');
+            setViewTab('mapping_conflict_review');
+          }}
+        />
+      ) : currentNav === 'standard_check_issue_detail' || viewTab === 'standard_check_issue_detail' ? (
+        <StandardCheckIssueDetailWorkspace
+          addToast={addToast}
+          onNavigateBackToCheckList={() => {
+            setCurrentNav('standard_check');
+            setViewTab('standard_check');
+          }}
+          onNavigateToDataQuality={() => {
+            addToast('info', '数据质量治理', '已切换至数据质量管理维度');
+          }}
+          onNavigateToStandardMatching={() => {
+            setCurrentNav('standard_matching');
+            setViewTab('standard_matching');
+          }}
+          onNavigateToStandardProposalReview={() => {
+            setCurrentNav('standard_proposal_review');
+            setViewTab('standard_proposal_review');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+        />
+      ) : currentNav === 'standard_check' || viewTab === 'standard_check' ? (
+        <StandardCheckWorkspace
+          addToast={addToast}
+          onNavigateToCatalogTab={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+          }}
+          onNavigateToMatchingTab={() => {
+            setCurrentNav('standard_matching');
+            setViewTab('standard_matching');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '跳转至数据语义', '已切换至数据语义队列工作台');
+          }}
+          onNavigateToIssueDetail={() => {
+            setCurrentNav('standard_check_issue_detail');
+            setViewTab('standard_check_issue_detail');
           }}
         />
       ) : currentNav === 'data_standards' || viewTab === 'data_standards' ? (
