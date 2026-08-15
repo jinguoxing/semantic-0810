@@ -323,11 +323,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
               setActiveSubNav('connections');
               addToast?.('info', '数据连接', '查看企业异构数据源与元数据采集节点');
             }}
-            className={`w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
-              activeSubNav === 'connections'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-4 border-[#2563EB]'
-                : 'text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
-            }`}
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <Database className="w-4 h-4" />
             <span>数据连接</span>
@@ -338,11 +334,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
               setActiveSubNav('probing');
               addToast?.('info', '数据探查', '载入字段数据分布、空值率与技术探查视图');
             }}
-            className={`w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
-              activeSubNav === 'probing'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-4 border-[#2563EB]'
-                : 'text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
-            }`}
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <Search className="w-4 h-4" />
             <span>数据探查</span>
@@ -353,11 +345,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
               setActiveSubNav('quality');
               addToast?.('info', '数据质量', '查看数据质量校验规则与监控指标');
             }}
-            className={`w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
-              activeSubNav === 'quality'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-4 border-[#2563EB]'
-                : 'text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
-            }`}
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <ShieldCheck className="w-4 h-4" />
             <span>数据质量</span>
@@ -368,11 +356,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
               setActiveSubNav('views');
               addToast?.('info', '逻辑视图', '进入企业跨源物理表关联逻辑建模架构');
             }}
-            className={`w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
-              activeSubNav === 'views'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-4 border-[#2563EB]'
-                : 'text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
-            }`}
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <FolderTree className="w-4 h-4" />
             <span>逻辑视图</span>
@@ -383,11 +367,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
               setActiveSubNav('semantics');
               onNavigateToDataSemantics?.();
             }}
-            className={`w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
-              activeSubNav === 'semantics'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-4 border-[#2563EB]'
-                : 'text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
-            }`}
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <Sparkles className="w-4 h-4" />
             <span>数据语义</span>
@@ -396,7 +376,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
           {/* Current Selected Menu Item */}
           <button
             onClick={() => setActiveSubNav('standards')}
-            className="w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer bg-[#EFF6FF] text-[#2563EB] font-bold border-l-4 border-[#2563EB]"
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]"
           >
             <BookOpen className="w-4 h-4" />
             <span>数据标准</span>
@@ -417,11 +397,11 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
         {/* ========================================================= */}
         {/* PAGE HEADER: Breadcrumb + Back + Title + Wizard Stepper    */}
         {/* ========================================================= */}
-        <div className="bg-white border-b border-[#E6EAF0] px-8 pt-5 pb-4 shadow-2xs shrink-0">
+        <div className="bg-white border-b border-[#E6EAF0] px-6 py-3.5 shadow-2xs shrink-0">
           <div className="flex items-center justify-between">
             <div>
               {/* Back & Breadcrumb */}
-              <div className="flex items-center space-x-3 text-xs text-[#64748B] mb-2">
+              <div className="flex items-center space-x-2 text-xs text-[#64748B] mb-1">
                 <button
                   onClick={onBackToCatalog}
                   className="font-bold text-[#2563EB] hover:underline flex items-center space-x-1 cursor-pointer"
@@ -439,42 +419,38 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
 
               {/* Title & English Subtitle */}
               <div className="flex items-baseline space-x-3">
-                <h1 className="text-xl font-bold text-[#172033] tracking-tight">
+                <h1 className="text-base font-bold text-[#172033] tracking-tight">
                   导入标准
                 </h1>
                 <span className="text-xs font-mono text-[#64748B]">
                   Import Standards
                 </span>
               </div>
-
-              <p className="text-xs text-[#64748B] mt-0.5">
-                导入已有企业标准或标准文件，Xino 将自动识别数据元、码表和标准要求，并检查与现有标准的关系。
-              </p>
             </div>
 
             {/* Stepper (Light 4-step Stepper) */}
-            <div className="flex items-center space-x-2 bg-[#F8FAFC] border border-[#E6EAF0] px-4 py-2 rounded-xl text-xs">
+            <div className="flex items-center space-x-2 bg-[#F8FAFC] border border-[#E6EAF0] px-3 py-1.5 rounded-lg text-xs">
               <div className="flex items-center space-x-1.5 text-[#059669] font-medium">
-                <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 <span>01 选择来源</span>
               </div>
               <span className="text-[#CBD5E1]">─</span>
 
               <div className="flex items-center space-x-1.5 text-[#059669] font-medium">
-                <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 <span>02 AI 解析</span>
               </div>
               <span className="text-[#CBD5E1]">─</span>
 
               {/* ACTIVE STEP 03 */}
-              <div className="flex items-center space-x-1.5 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] px-2.5 py-1 rounded-lg font-bold shadow-2xs">
-                <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+              <div className="flex items-center space-x-1.5 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] px-2 py-0.5 rounded-md font-bold shadow-2xs">
+                <Sparkles className="w-3 h-3 text-[#2563EB]" />
                 <span>03 对齐检查</span>
               </div>
               <span className="text-[#CBD5E1]">─</span>
 
               <div className="flex items-center space-x-1.5 text-[#94A3B8]">
-                <span className="w-4 h-4 rounded-full border border-[#CBD5E1] text-[10px] flex items-center justify-center font-mono">4</span>
+                <span className="w-3.5 h-3.5 rounded-full border border-[#CBD5E1] text-[10px] flex items-center justify-center font-mono">4</span>
                 <span>04 确认导入</span>
               </div>
             </div>
@@ -483,16 +459,16 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
           {/* ========================================================= */}
           {/* TASK SUMMARY BAR & AI PARSING COMPACT SUMMARY             */}
           {/* ========================================================= */}
-          <div className="mt-4 flex flex-col md:flex-row md:items-center justify-between bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl px-4 py-2.5 gap-3">
+          <div className="mt-3 flex flex-col md:flex-row md:items-center justify-between bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg px-3.5 py-2 gap-3">
             {/* Task Info */}
-            <div className="flex items-center space-x-3 text-xs">
-              <div className="w-7 h-7 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB]">
-                <FileSpreadsheet className="w-4 h-4" />
+            <div className="flex items-center space-x-2.5 text-xs">
+              <div className="w-6 h-6 rounded-md bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB]">
+                <FileSpreadsheet className="w-3.5 h-3.5" />
               </div>
               <div>
                 <div className="flex items-center space-x-2">
                   <span className="font-bold text-[#172033]">《人口基础信息数据标准.xlsx》</span>
-                  <span className="text-[11px] text-[#64748B] bg-white border border-[#CBD5E1] px-2 py-0.2 rounded font-medium">
+                  <span className="text-[10px] text-[#64748B] bg-white border border-[#CBD5E1] px-1.5 py-0.2 rounded font-medium">
                     企业历史标准
                   </span>
                 </div>
@@ -503,8 +479,8 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
             </div>
 
             {/* Compact AI Parsing Summary */}
-            <div className="flex items-center space-x-4 text-xs border-t md:border-t-0 md:border-l border-[#E6EAF0] pt-2 md:pt-0 md:pl-4">
-              <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-3 text-xs border-t md:border-t-0 md:border-l border-[#E6EAF0] pt-2 md:pt-0 md:pl-3">
+              <div className="flex items-center space-x-1.5">
                 <span className="text-[#64748B]">共识别</span>
                 <span className="font-bold text-[#172033] font-mono">193 项标准</span>
                 <span className="text-[11px] text-[#64748B]">(186 数据元 · 7 码表)</span>
@@ -512,7 +488,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
 
               <div className="h-3 w-[1px] bg-[#CBD5E1]" />
 
-              <div className="flex items-center space-x-3 text-[11px]">
+              <div className="flex items-center space-x-2.5 text-[11px]">
                 <span className="text-[#059669] font-medium">
                   <strong>172</strong> 已完整识别
                 </span>
@@ -526,7 +502,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
 
               <button
                 onClick={() => addToast?.('info', '重新解析', 'Xino 已重新拉取 XLSX 内容与元数据关系...')}
-                className="px-2.5 py-1 text-xs font-bold text-[#2563EB] hover:bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg transition-all cursor-pointer flex items-center space-x-1 ml-auto"
+                className="px-2.5 py-1 text-xs font-bold text-[#2563EB] hover:bg-[#EFF6FF] border border-[#BFDBFE] rounded-md transition-all cursor-pointer flex items-center space-x-1 ml-auto"
               >
                 <RefreshCw className="w-3 h-3" />
                 <span>重新解析</span>
@@ -538,29 +514,29 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
         {/* ========================================================= */}
         {/* WORKSPACE CONTENT: ALIGNMENT CHECK & TWO-COLUMN VIEW       */}
         {/* ========================================================= */}
-        <div className="flex-1 flex flex-col overflow-hidden p-6 space-y-4">
+        <div className="flex-1 flex flex-col overflow-hidden p-6 space-y-3.5">
           
           {/* SECTION HEADER: Title & Filter Tabs ("Human by Exception") */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 bg-white border border-[#E6EAF0] rounded-xl p-4 shadow-2xs">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0 bg-white border border-[#E6EAF0] rounded-lg p-3.5 shadow-2xs">
             <div>
               <div className="flex items-center space-x-2">
-                <h2 className="text-sm font-bold text-[#172033] tracking-tight">
+                <h2 className="text-xs font-bold text-[#172033] tracking-tight">
                   与现有企业标准对齐
                 </h2>
-                <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
+                <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
                   Human by Exception
                 </span>
               </div>
-              <p className="text-xs text-[#64748B] mt-0.5">
+              <p className="text-[11px] text-[#64748B] mt-0.5">
                 Xino 已自动比较导入内容与当前正式标准库，优先展示需要人工确认的项目。
               </p>
             </div>
 
             {/* Alignment Filter Tabs */}
-            <div className="flex flex-wrap items-center bg-[#F1F5F9] p-1 rounded-xl text-xs font-semibold">
+            <div className="flex flex-wrap items-center bg-[#F1F5F9] p-0.5 rounded-md text-xs font-semibold">
               <button
                 onClick={() => setFilterTab('CONFIRM_NEEDED')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 ${
+                className={`px-2.5 py-1 rounded transition-all cursor-pointer flex items-center space-x-1.5 ${
                   filterTab === 'CONFIRM_NEEDED'
                     ? 'bg-white text-[#2563EB] font-bold shadow-2xs'
                     : 'text-[#64748B] hover:text-[#172033]'
@@ -574,7 +550,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
 
               <button
                 onClick={() => setFilterTab('ALL')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
                   filterTab === 'ALL'
                     ? 'bg-white text-[#172033] font-bold shadow-2xs'
                     : 'text-[#64748B] hover:text-[#172033]'
@@ -585,7 +561,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
 
               <button
                 onClick={() => setFilterTab('NEW')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
                   filterTab === 'NEW'
                     ? 'bg-white text-[#059669] font-bold shadow-2xs'
                     : 'text-[#64748B] hover:text-[#172033]'
@@ -596,7 +572,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
 
               <button
                 onClick={() => setFilterTab('SAME')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
                   filterTab === 'SAME'
                     ? 'bg-white text-[#475569] font-bold shadow-2xs'
                     : 'text-[#64748B] hover:text-[#172033]'
@@ -607,7 +583,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
 
               <button
                 onClick={() => setFilterTab('CHANGE')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
                   filterTab === 'CHANGE'
                     ? 'bg-white text-[#D97706] font-bold shadow-2xs'
                     : 'text-[#64748B] hover:text-[#172033]'
@@ -618,7 +594,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
 
               <button
                 onClick={() => setFilterTab('CONFLICT')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
                   filterTab === 'CONFLICT'
                     ? 'bg-white text-[#DC2626] font-bold shadow-2xs'
                     : 'text-[#64748B] hover:text-[#172033]'
@@ -632,13 +608,13 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
           {/* ========================================================= */}
           {/* TWO-COLUMN LAYOUT: Left Table (~65%) + Right Detail (~35%) */}
           {/* ========================================================= */}
-          <div className="flex-1 flex overflow-hidden gap-5">
+          <div className="flex-1 flex overflow-hidden gap-4">
             
             {/* LEFT MAIN ALIGNMENT LIST (~65% Width) */}
-            <div className="w-[65%] bg-white border border-[#E6EAF0] rounded-xl shadow-2xs flex flex-col overflow-hidden">
+            <div className="w-[65%] bg-white border border-[#E6EAF0] rounded-lg shadow-2xs flex flex-col overflow-hidden">
               
               {/* Table Search & Secondary Filter Bar */}
-              <div className="p-3 border-b border-[#E6EAF0] bg-[#F8FAFC] flex items-center justify-between">
+              <div className="p-2.5 border-b border-[#E6EAF0] bg-[#F8FAFC] flex items-center justify-between">
                 <div className="relative w-72">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-2 text-[#94A3B8]" />
                   <input
@@ -646,7 +622,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="搜索导入标准名称或编码…"
-                    className="w-full pl-8 pr-3 py-1 text-xs bg-white border border-[#E6EAF0] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    className="w-full pl-8 pr-3 py-1 text-xs bg-white border border-[#E6EAF0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                   />
                 </div>
 
@@ -660,11 +636,11 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                 <table className="w-full text-left border-collapse text-xs">
                   <thead className="sticky top-0 bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#64748B] font-bold z-10">
                     <tr>
-                      <th className="py-2.5 px-4 w-44">导入标准</th>
+                      <th className="py-2.5 px-3.5 w-44">导入标准</th>
                       <th className="py-2.5 px-3 w-24">类型</th>
-                      <th className="py-2.5 px-4 w-36">对齐结果</th>
-                      <th className="py-2.5 px-4">主要差异</th>
-                      <th className="py-2.5 px-4 w-32">AI 建议</th>
+                      <th className="py-2.5 px-3.5 w-36">对齐结果</th>
+                      <th className="py-2.5 px-3.5">主要差异</th>
+                      <th className="py-2.5 px-3.5 w-32">AI 建议</th>
                       <th className="py-2.5 px-3 w-24 text-right">状态</th>
                     </tr>
                   </thead>
@@ -678,12 +654,12 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                           onClick={() => setSelectedItemId(row.id)}
                           className={`transition-colors cursor-pointer group ${
                             isSelected
-                              ? 'bg-[#EFF6FF]/70 border-l-4 border-[#2563EB]'
+                              ? 'bg-[#EFF6FF]/70 border-l-2 border-[#2563EB]'
                               : 'hover:bg-[#F8FAFC]'
                           }`}
                         >
                           {/* 导入标准 */}
-                          <td className="py-3 px-4">
+                          <td className="py-2.5 px-3.5">
                             <div className="flex flex-col space-y-0.5">
                               <span className="font-bold text-[#172033] group-hover:text-[#2563EB]">
                                 {row.name}
@@ -695,37 +671,37 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                           </td>
 
                           {/* 类型 */}
-                          <td className="py-3 px-3">
+                          <td className="py-2.5 px-3">
                             {row.type === 'DATA_ELEMENT' ? (
-                              <span className="px-2 py-0.5 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] rounded text-[11px] font-bold">
+                              <span className="px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] rounded text-[11px] font-bold">
                                 数据元
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] rounded text-[11px] font-bold">
+                              <span className="px-1.5 py-0.2 bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] rounded text-[11px] font-bold">
                                 码表
                               </span>
                             )}
                           </td>
 
                           {/* 对齐结果 (Colored Badges) */}
-                          <td className="py-3 px-4">
+                          <td className="py-2.5 px-3.5">
                             {row.alignResult === 'CHANGE' ? (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A] rounded-full text-[11px] font-bold">
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A] rounded-full text-[11px] font-bold">
                                 <AlertTriangle className="w-3 h-3" />
                                 <span>{row.alignResultLabel}</span>
                               </span>
                             ) : row.alignResult === 'CONFLICT' ? (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA] rounded-full text-[11px] font-bold">
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA] rounded-full text-[11px] font-bold">
                                 <AlertCircle className="w-3 h-3" />
                                 <span>{row.alignResultLabel}</span>
                               </span>
                             ) : row.alignResult === 'SAME' ? (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 bg-[#F1F5F9] text-[#475569] border border-[#CBD5E1] rounded-full text-[11px] font-bold">
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-[#F1F5F9] text-[#475569] border border-[#CBD5E1] rounded-full text-[11px] font-bold">
                                 <CheckCircle2 className="w-3 h-3" />
                                 <span>{row.alignResultLabel}</span>
                               </span>
                             ) : (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] rounded-full text-[11px] font-bold">
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] rounded-full text-[11px] font-bold">
                                 <PlusCircle className="w-3 h-3" />
                                 <span>{row.alignResultLabel}</span>
                               </span>
@@ -733,27 +709,27 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                           </td>
 
                           {/* 主要差异 */}
-                          <td className="py-3 px-4 text-[#334155] font-medium">
+                          <td className="py-2.5 px-3.5 text-[#334155] font-medium">
                             {row.diffSummary}
                           </td>
 
                           {/* AI 建议 */}
-                          <td className="py-3 px-4 text-[#2563EB] font-bold">
+                          <td className="py-2.5 px-3.5 text-[#2563EB] font-bold">
                             {row.aiSuggestion}
                           </td>
 
                           {/* 状态 */}
-                          <td className="py-3 px-3 text-right">
+                          <td className="py-2.5 px-3 text-right">
                             {row.status === 'AUTO_PROCESSABLE' ? (
-                              <span className="text-[#059669] font-bold text-[11px] bg-[#ECFDF5] px-2 py-0.5 rounded border border-[#A7F3D0]">
+                              <span className="text-[#059669] font-bold text-[11px] bg-[#ECFDF5] px-1.5 py-0.2 rounded border border-[#A7F3D0]">
                                 可自动处理
                               </span>
                             ) : row.status === 'SUBMITTABLE' ? (
-                              <span className="text-[#2563EB] font-bold text-[11px] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
+                              <span className="text-[#2563EB] font-bold text-[11px] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
                                 可提交
                               </span>
                             ) : (
-                              <span className="text-[#D97706] font-bold text-[11px] bg-[#FEF3C7] px-2 py-0.5 rounded border border-[#FDE68A]">
+                              <span className="text-[#D97706] font-bold text-[11px] bg-[#FEF3C7] px-1.5 py-0.2 rounded border border-[#FDE68A]">
                                 待确认
                               </span>
                             )}
@@ -767,7 +743,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
             </div>
 
             {/* RIGHT COMPARISON DETAIL PANEL (~35% Width) */}
-            <div className="w-[35%] bg-white border border-[#E6EAF0] rounded-xl shadow-2xs flex flex-col overflow-y-auto p-5 space-y-5">
+            <div className="w-[35%] bg-white border border-[#E6EAF0] rounded-lg shadow-2xs flex flex-col overflow-y-auto p-4 space-y-4">
               
               {/* Header */}
               <div className="border-b border-[#E6EAF0] pb-3 flex items-center justify-between">
@@ -775,29 +751,29 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   <span className="text-[10px] font-mono font-bold text-[#64748B] uppercase">
                     {currentItem.code}
                   </span>
-                  <h3 className="text-base font-bold text-[#172033] tracking-tight">
+                  <h3 className="text-sm font-bold text-[#172033] tracking-tight">
                     {currentItem.name}
                   </h3>
                 </div>
 
                 {/* Status Badge */}
                 {currentItem.alignResult === 'CHANGE' ? (
-                  <span className="px-2.5 py-1 bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A] text-xs font-bold rounded-lg flex items-center space-x-1">
+                  <span className="px-2 py-0.5 bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A] text-xs font-bold rounded-md flex items-center space-x-1">
                     <AlertTriangle className="w-3.5 h-3.5" />
                     <span>可能是标准变更</span>
                   </span>
                 ) : currentItem.alignResult === 'CONFLICT' ? (
-                  <span className="px-2.5 py-1 bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA] text-xs font-bold rounded-lg flex items-center space-x-1">
+                  <span className="px-2 py-0.5 bg-[#FEE2E2] text-[#DC2626] border border-[#FECACA] text-xs font-bold rounded-md flex items-center space-x-1">
                     <AlertCircle className="w-3.5 h-3.5" />
                     <span>存在冲突</span>
                   </span>
                 ) : currentItem.alignResult === 'SAME' ? (
-                  <span className="px-2.5 py-1 bg-[#F1F5F9] text-[#475569] border border-[#CBD5E1] text-xs font-bold rounded-lg flex items-center space-x-1">
+                  <span className="px-2 py-0.5 bg-[#F1F5F9] text-[#475569] border border-[#CBD5E1] text-xs font-bold rounded-md flex items-center space-x-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                     <span>内容完全一致</span>
                   </span>
                 ) : (
-                  <span className="px-2.5 py-1 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] text-xs font-bold rounded-lg flex items-center space-x-1">
+                  <span className="px-2 py-0.5 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] text-xs font-bold rounded-md flex items-center space-x-1">
                     <PlusCircle className="w-3.5 h-3.5" />
                     <span>标准库无此项目</span>
                   </span>
@@ -807,11 +783,11 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
               {/* DYNAMIC CONTENT SCENARIOS */}
               {currentItem.alignResult === 'CHANGE' ? (
                 /* SCENARIO 1: 可能是标准变更 (e.g. 公民身份号码 长度 18 ↔ 20) */
-                <div className="space-y-4 text-xs">
+                <div className="space-y-3.5 text-xs">
                   
                   {/* 1. 导入标准 */}
-                  <div className="bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl p-3.5 space-y-2">
-                    <div className="flex justify-between items-center border-b border-[#E6EAF0] pb-2">
+                  <div className="bg-[#F8FAFC] border border-[#E6EAF0] rounded-md p-3 space-y-2">
+                    <div className="flex justify-between items-center border-b border-[#E6EAF0] pb-1.5">
                       <span className="font-bold text-[#172033]">导入标准内容</span>
                       <span className="text-[11px] text-[#64748B]">来源：{currentItem.importSource}</span>
                     </div>
@@ -823,7 +799,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                       </div>
                       <div>
                         <span className="text-[#64748B]">长度要求：</span>
-                        <strong className="text-[#D97706] font-mono font-bold bg-[#FEF3C7] px-1.5 py-0.2 rounded border border-[#FDE68A]">
+                        <strong className="text-[#D97706] font-mono font-bold bg-[#FEF3C7] px-1 py-0.2 rounded border border-[#FDE68A]">
                           {currentItem.importLength}
                         </strong>
                       </div>
@@ -839,8 +815,8 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   </div>
 
                   {/* 2. 当前企业标准 */}
-                  <div className="bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl p-3.5 space-y-2">
-                    <div className="flex justify-between items-center border-b border-[#E6EAF0] pb-2">
+                  <div className="bg-[#F8FAFC] border border-[#E6EAF0] rounded-md p-3 space-y-2">
+                    <div className="flex justify-between items-center border-b border-[#E6EAF0] pb-1.5">
                       <span className="font-bold text-[#172033]">当前企业标准 ({currentItem.currentVersion})</span>
                       <span className="text-[11px] font-mono text-[#2563EB]">{currentItem.currentCode}</span>
                     </div>
@@ -866,37 +842,37 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   </div>
 
                   {/* 3. 差异对比 (Mini Diff Table) */}
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <span className="font-bold text-[#172033]">差异对比 (Diff)</span>
-                    <div className="border border-[#E6EAF0] rounded-lg overflow-hidden bg-white text-[11px]">
+                    <div className="border border-[#E6EAF0] rounded-md overflow-hidden bg-white text-[11px]">
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#64748B]">
-                            <th className="py-1.5 px-3">标准要求</th>
-                            <th className="py-1.5 px-3">当前企业标准</th>
-                            <th className="py-1.5 px-3">导入标准</th>
+                            <th className="py-1.5 px-2.5">标准要求</th>
+                            <th className="py-1.5 px-2.5">当前企业标准</th>
+                            <th className="py-1.5 px-2.5">导入标准</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#E6EAF0]">
                           <tr>
-                            <td className="py-1.5 px-3 text-[#64748B]">数据类型</td>
-                            <td className="py-1.5 px-3 font-mono">VARCHAR</td>
-                            <td className="py-1.5 px-3 font-mono">VARCHAR</td>
+                            <td className="py-1.5 px-2.5 text-[#64748B]">数据类型</td>
+                            <td className="py-1.5 px-2.5 font-mono">VARCHAR</td>
+                            <td className="py-1.5 px-2.5 font-mono">VARCHAR</td>
                           </tr>
                           <tr className="bg-[#FEF3C7]/40">
-                            <td className="py-1.5 px-3 font-bold text-[#D97706]">长度</td>
-                            <td className="py-1.5 px-3 font-mono font-bold text-[#172033]">20</td>
-                            <td className="py-1.5 px-3 font-mono font-bold text-[#D97706]">18 (变化)</td>
+                            <td className="py-1.5 px-2.5 font-bold text-[#D97706]">长度</td>
+                            <td className="py-1.5 px-2.5 font-mono font-bold text-[#172033]">20</td>
+                            <td className="py-1.5 px-2.5 font-mono font-bold text-[#D97706]">18 (变化)</td>
                           </tr>
                           <tr>
-                            <td className="py-1.5 px-3 text-[#64748B]">是否为空</td>
-                            <td className="py-1.5 px-3">否</td>
-                            <td className="py-1.5 px-3">否</td>
+                            <td className="py-1.5 px-2.5 text-[#64748B]">是否为空</td>
+                            <td className="py-1.5 px-2.5">否</td>
+                            <td className="py-1.5 px-2.5">否</td>
                           </tr>
                           <tr>
-                            <td className="py-1.5 px-3 text-[#64748B]">标准依据</td>
-                            <td className="py-1.5 px-3">企业标准</td>
-                            <td className="py-1.5 px-3 text-[#2563EB]">国家标准</td>
+                            <td className="py-1.5 px-2.5 text-[#64748B]">标准依据</td>
+                            <td className="py-1.5 px-2.5">企业标准</td>
+                            <td className="py-1.5 px-2.5 text-[#2563EB]">国家标准</td>
                           </tr>
                         </tbody>
                       </table>
@@ -904,15 +880,15 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   </div>
 
                   {/* 4. Xino 建议 */}
-                  <div className="p-3.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl space-y-2 text-xs">
+                  <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md space-y-1.5 text-xs">
                     <div className="flex items-center space-x-1.5 font-bold text-[#1E40AF]">
-                      <Sparkles className="w-4 h-4 text-[#2563EB]" />
+                      <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
                       <span>Xino 建议</span>
                     </div>
                     <p className="font-bold text-[#172033]">
                       导入标准可能是现有“公民身份号码”标准的更新版本。
                     </p>
-                    <ul className="list-disc list-inside text-[11px] text-[#334155] space-y-1 pl-1">
+                    <ul className="list-disc list-inside text-[11px] text-[#334155] space-y-0.5 pl-1">
                       <li>标准名称与业务定义完全一致</li>
                       <li>数据类型与规则约束一致</li>
                       <li>新来源为较新的 GB/T 国家标准规范</li>
@@ -925,7 +901,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
 
                   {/* 5. 原文依据 */}
                   {currentItem.docTraceDocName && (
-                    <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1 flex items-center justify-between">
+                    <div className="p-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1 flex items-center justify-between">
                       <div>
                         <span className="text-[11px] font-bold text-[#172033]">原文依据</span>
                         <p className="text-[11px] text-[#64748B]">
@@ -934,7 +910,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                       </div>
                       <button
                         onClick={() => setShowDocTraceDrawer(true)}
-                        className="px-2.5 py-1 bg-white hover:bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] text-[11px] font-bold rounded-lg transition-all cursor-pointer flex items-center space-x-1"
+                        className="px-2 py-1 bg-white hover:bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] text-[11px] font-bold rounded-md transition-all cursor-pointer flex items-center space-x-1"
                       >
                         <span>查看原文</span>
                         <ExternalLink className="w-3 h-3" />
@@ -946,22 +922,22 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   <div className="space-y-2 pt-2 border-t border-[#E6EAF0]">
                     <button
                       onClick={() => handleAction('提议更新', '已成功发起“公民身份号码 V5”标准变更提议草稿')}
-                      className="w-full py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5"
+                      className="w-full py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-all cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5"
                     >
-                      <GitPullRequest className="w-4 h-4" />
+                      <GitPullRequest className="w-3.5 h-3.5" />
                       <span>提出标准变更</span>
                     </button>
 
                     <button
                       onClick={() => handleAction('保留现有', '已保留当前企业标准 V4 设定')}
-                      className="w-full py-2 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#E6EAF0] text-xs font-bold rounded-lg transition-all cursor-pointer"
+                      className="w-full py-2 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#E6EAF0] text-xs font-bold rounded-md transition-all cursor-pointer"
                     >
                       保留当前企业标准
                     </button>
 
                     <button
                       onClick={() => handleAction('暂不处理', '已暂存待后续确认')}
-                      className="w-full py-1.5 text-[#94A3B8] hover:text-[#64748B] text-xs font-medium cursor-pointer text-center"
+                      className="w-full py-1 text-[#94A3B8] hover:text-[#64748B] text-xs font-medium cursor-pointer text-center"
                     >
                       暂不处理
                     </button>
@@ -970,13 +946,13 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                 </div>
               ) : currentItem.alignResult === 'SAME' ? (
                 /* SCENARIO 2: 已有相同标准 (e.g. 性别代码) */
-                <div className="space-y-4 text-xs">
+                <div className="space-y-3.5 text-xs">
                   
-                  <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-2">
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-2">
                     <span className="font-bold text-[#172033]">值域/码表比对</span>
-                    <div className="grid grid-cols-2 gap-3 pt-1 text-[11px]">
+                    <div className="grid grid-cols-2 gap-2.5 pt-1 text-[11px]">
                       {/* 导入值域 */}
-                      <div className="bg-white p-2.5 rounded-lg border border-[#E6EAF0] space-y-1">
+                      <div className="bg-white p-2.5 rounded-md border border-[#E6EAF0] space-y-1">
                         <span className="font-bold text-[#2563EB]">导入值域码值</span>
                         <div className="space-y-0.5 font-mono">
                           {currentItem.importValues?.map((v) => (
@@ -989,7 +965,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                       </div>
 
                       {/* 当前企业值域 */}
-                      <div className="bg-white p-2.5 rounded-lg border border-[#E6EAF0] space-y-1">
+                      <div className="bg-white p-2.5 rounded-md border border-[#E6EAF0] space-y-1">
                         <span className="font-bold text-[#172033]">当前企业值域 ({currentItem.currentVersion})</span>
                         <div className="space-y-0.5 font-mono">
                           {currentItem.currentValues?.map((v) => (
@@ -1004,9 +980,9 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   </div>
 
                   {/* Xino Judgement */}
-                  <div className="p-3.5 bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl space-y-1.5 text-xs text-[#065F46]">
+                  <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] rounded-md space-y-1 text-xs text-[#065F46]">
                     <div className="flex items-center space-x-1.5 font-bold">
-                      <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                       <span>内容完全一致</span>
                     </div>
                     <p className="text-[11px] leading-relaxed">
@@ -1018,7 +994,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   <div className="pt-2 border-t border-[#E6EAF0]">
                     <button
                       onClick={() => handleAction('复用标准', `已设置复用现有“${currentItem.name} ${currentItem.currentVersion}”`)}
-                      className="w-full py-2 bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-2xs"
+                      className="w-full py-2 bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold rounded-md transition-all cursor-pointer shadow-2xs"
                     >
                       复用现有标准
                     </button>
@@ -1027,11 +1003,11 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                 </div>
               ) : currentItem.alignResult === 'CONFLICT' ? (
                 /* SCENARIO 3: 存在冲突 (e.g. 事项完成时间) */
-                <div className="space-y-4 text-xs">
+                <div className="space-y-3.5 text-xs">
                   
-                  <div className="p-3 bg-[#FEF2F2] border border-[#FECACA] rounded-xl space-y-1.5 text-[#991B1B]">
+                  <div className="p-3 bg-[#FEF2F2] border border-[#FECACA] rounded-md space-y-1 text-[#991B1B]">
                     <div className="flex items-center space-x-1.5 font-bold">
-                      <AlertCircle className="w-4 h-4 text-[#DC2626]" />
+                      <AlertCircle className="w-3.5 h-3.5 text-[#DC2626]" />
                       <span>检测到 2 个匹配的标准候选</span>
                     </div>
                     <p className="text-[11px]">
@@ -1043,7 +1019,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   <div className="space-y-2">
                     <span className="font-bold text-[#172033]">候选标准对象</span>
                     {currentItem.conflictCandidates?.map((cand, idx) => (
-                      <div key={idx} className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1">
+                      <div key={idx} className="p-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-[#172033]">{cand.name}</span>
                           <span className="text-[10px] text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
@@ -1066,7 +1042,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   <div className="pt-2 border-t border-[#E6EAF0]">
                     <button
                       onClick={() => setShowConflictDecisionModal(true)}
-                      className="w-full py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-2xs"
+                      className="w-full py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-all cursor-pointer shadow-2xs"
                     >
                       处理冲突
                     </button>
@@ -1075,10 +1051,10 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                 </div>
               ) : (
                 /* SCENARIO 4: 可新增 (e.g. 出生日期) */
-                <div className="space-y-4 text-xs">
-                  <div className="p-3.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl space-y-1.5 text-[#1E40AF]">
+                <div className="space-y-3.5 text-xs">
+                  <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md space-y-1 text-[#1E40AF]">
                     <div className="flex items-center space-x-1.5 font-bold">
-                      <PlusCircle className="w-4 h-4 text-[#2563EB]" />
+                      <PlusCircle className="w-3.5 h-3.5 text-[#2563EB]" />
                       <span>建议新增为企业正式数据标准</span>
                     </div>
                     <p className="text-[11px] leading-relaxed">
@@ -1086,7 +1062,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                     </p>
                   </div>
 
-                  <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-2 text-[11px]">
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-2 text-[11px]">
                     <div className="flex justify-between">
                       <span className="text-[#64748B]">数据类型</span>
                       <span className="font-mono font-bold text-[#172033]">{currentItem.importType}</span>
@@ -1100,7 +1076,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   <div className="pt-2 border-t border-[#E6EAF0]">
                     <button
                       onClick={() => handleAction('提交新增', `已将【${currentItem.name}】标注为拟新增数据标准`)}
-                      className="w-full py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-2xs"
+                      className="w-full py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-all cursor-pointer shadow-2xs"
                     >
                       新增为企业标准
                     </button>
@@ -1117,19 +1093,19 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
         {/* ========================================================= */}
         {/* FIXED FOOTER BAR                                         */}
         {/* ========================================================= */}
-        <footer className="bg-white border-t border-[#E6EAF0] px-8 py-3.5 flex items-center justify-between shrink-0 shadow-2xs">
+        <footer className="bg-white border-t border-[#E6EAF0] px-6 py-3 flex items-center justify-between shrink-0 shadow-2xs">
           <button
             onClick={onBackToCatalog}
-            className="px-4 py-2 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#E6EAF0] text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center space-x-1"
+            className="px-3.5 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#E6EAF0] text-xs font-bold rounded-md transition-all cursor-pointer flex items-center space-x-1"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>上一步</span>
           </button>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
             <button
               onClick={() => handleAction('草稿已保存', '已将当前 193 项对齐确认状态存为导入草稿')}
-              className="px-4 py-2 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#E6EAF0] text-xs font-bold rounded-lg transition-all cursor-pointer"
+              className="px-3.5 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#E6EAF0] text-xs font-bold rounded-md transition-all cursor-pointer"
             >
               保存导入草稿
             </button>
@@ -1137,10 +1113,10 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
             {/* Primary CTA: Step 04 Trigger */}
             <button
               onClick={() => setShowConfirmSubmitModal(true)}
-              className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
+              className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
             >
               <span>下一步：确认导入</span>
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </footer>
@@ -1154,28 +1130,28 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
       {/* 1. Original Document Trace Drawer (查看原文) */}
       {showDocTraceDrawer && (
         <div className="fixed inset-0 bg-black/30 z-50 flex justify-end">
-          <div className="w-[500px] bg-white h-full shadow-2xl flex flex-col p-6 space-y-5 overflow-y-auto animate-in slide-in-from-right duration-200">
-            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-4">
-              <h3 className="text-base font-bold text-[#172033] flex items-center space-x-2">
-                <FileText className="w-5 h-5 text-[#2563EB]" />
+          <div className="w-[480px] bg-white h-full shadow-2xl flex flex-col p-5 space-y-4 overflow-y-auto animate-in slide-in-from-right duration-200">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
+              <h3 className="text-sm font-bold text-[#172033] flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-[#2563EB]" />
                 <span>原文依据与标准来源追溯</span>
               </h3>
               <button
                 onClick={() => setShowDocTraceDrawer(false)}
                 className="p-1 text-[#94A3B8] hover:text-[#172033] rounded"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl text-[#1E40AF]">
+            <div className="space-y-3.5 text-xs">
+              <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md text-[#1E40AF]">
                 Xino 自动定位到了导入文件关联的底层标准文档，以下为提取的原文字段要求。
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <span className="font-bold text-[#172033]">标准文档信息</span>
-                <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg space-y-1">
+                <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
                   <div className="flex justify-between font-bold text-[#172033]">
                     <span>{currentItem.docTraceDocName}</span>
                     <span className="text-[#2563EB]">{currentItem.docTraceSection}</span>
@@ -1184,18 +1160,18 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <span className="font-bold text-[#172033]">PDF/Word 摘录文本</span>
-                <div className="p-4 bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl font-mono text-xs text-[#172033] leading-relaxed relative">
+                <div className="p-3.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-md font-mono text-xs text-[#172033] leading-relaxed relative">
                   "{currentItem.docTraceExcerpt}"
                 </div>
               </div>
             </div>
 
-            <div className="mt-auto pt-4 border-t border-[#E6EAF0]">
+            <div className="mt-auto pt-3 border-t border-[#E6EAF0]">
               <button
                 onClick={() => setShowDocTraceDrawer(false)}
-                className="w-full py-2 bg-[#F1F5F9] text-[#172033] font-bold text-xs rounded-lg cursor-pointer"
+                className="w-full py-2 bg-[#F1F5F9] text-[#172033] font-bold text-xs rounded-md cursor-pointer"
               >
                 关闭
               </button>
@@ -1207,54 +1183,54 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
       {/* 2. Step 04 Confirm Submit Preview Modal (导入确认) */}
       {showConfirmSubmitModal && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="w-[520px] bg-white rounded-2xl shadow-2xl p-6 space-y-5 border border-[#E6EAF0] animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
+          <div className="w-[500px] bg-white rounded-lg shadow-2xl p-5 space-y-4 border border-[#E6EAF0] animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2.5">
               <div>
-                <h3 className="text-base font-bold text-[#172033]">
+                <h3 className="text-sm font-bold text-[#172033]">
                   导入确认
                 </h3>
-                <p className="text-xs text-[#64748B]">确认后将把标准对齐结果提交至 Semovix 治理工作流</p>
+                <p className="text-[11px] text-[#64748B]">确认后将把标准对齐结果提交至 Semovix 治理工作流</p>
               </div>
               <button
                 onClick={() => setShowConfirmSubmitModal(false)}
                 className="p-1 text-[#94A3B8] hover:text-[#172033] rounded"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl space-y-1">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-2.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md space-y-0.5">
                   <span className="text-[#2563EB] font-bold">142 个</span>
                   <p className="text-[#172033] font-medium">新增标准建议</p>
                 </div>
 
-                <div className="p-3 bg-[#F1F5F9] border border-[#CBD5E1] rounded-xl space-y-1">
+                <div className="p-2.5 bg-[#F1F5F9] border border-[#CBD5E1] rounded-md space-y-0.5">
                   <span className="text-[#475569] font-bold">31 项</span>
                   <p className="text-[#172033] font-medium">复用现有标准</p>
                 </div>
 
-                <div className="p-3 bg-[#FEF3C7] border border-[#FDE68A] rounded-xl space-y-1">
+                <div className="p-2.5 bg-[#FEF3C7] border border-[#FDE68A] rounded-md space-y-0.5">
                   <span className="text-[#D97706] font-bold">14 个</span>
                   <p className="text-[#172033] font-medium">标准变更建议</p>
                 </div>
 
-                <div className="p-3 bg-[#FEE2E2] border border-[#FECACA] rounded-xl space-y-1">
+                <div className="p-2.5 bg-[#FEE2E2] border border-[#FECACA] rounded-md space-y-0.5">
                   <span className="text-[#DC2626] font-bold">6 个</span>
                   <p className="text-[#172033] font-medium">待处理冲突</p>
                 </div>
               </div>
 
-              <div className="p-3.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl text-[#64748B] text-[11px] leading-relaxed">
+              <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md text-[#64748B] text-[11px] leading-relaxed">
                 💡 <strong>温馨提示：</strong> 导入不会直接强制覆盖现有正式企业标准。所有新增和变更内容将自动生成评审提议，进入数据标准委员会治理确认环节。
               </div>
             </div>
 
-            <div className="pt-2 flex items-center justify-end space-x-3 border-t border-[#E6EAF0]">
+            <div className="pt-2 flex items-center justify-end space-x-2.5 border-t border-[#E6EAF0]">
               <button
                 onClick={() => setShowConfirmSubmitModal(false)}
-                className="px-4 py-2 bg-[#F1F5F9] hover:bg-[#E6EAF0] text-[#172033] font-bold text-xs rounded-lg cursor-pointer"
+                className="px-3.5 py-1.5 bg-[#F1F5F9] hover:bg-[#E6EAF0] text-[#172033] font-bold text-xs rounded-md cursor-pointer"
               >
                 返回修改
               </button>
@@ -1265,7 +1241,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   addToast?.('success', '提交治理确认成功', '标准导入任务已完成并送入审核中心！');
                   if (onBackToCatalog) onBackToCatalog();
                 }}
-                className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs rounded-lg transition-all cursor-pointer shadow-2xs"
+                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs rounded-md transition-all cursor-pointer shadow-2xs"
               >
                 提交治理确认
               </button>
@@ -1277,27 +1253,27 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
       {/* 3. Conflict Decision Modal (处理冲突) */}
       {showConflictDecisionModal && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4">
-          <div className="w-[540px] bg-white rounded-2xl shadow-2xl p-6 space-y-4 border border-[#E6EAF0]">
-            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
-              <h3 className="text-base font-bold text-[#172033] flex items-center space-x-2">
-                <AlertCircle className="w-5 h-5 text-[#DC2626]" />
+          <div className="w-[500px] bg-white rounded-lg shadow-2xl p-5 space-y-3.5 border border-[#E6EAF0]">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2.5">
+              <h3 className="text-sm font-bold text-[#172033] flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 text-[#DC2626]" />
                 <span>标准冲突人工裁决</span>
               </h3>
               <button
                 onClick={() => setShowConflictDecisionModal(false)}
                 className="p-1 text-[#94A3B8] hover:text-[#172033] rounded"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <div className="space-y-2.5 text-xs">
               <p className="text-[#64748B]">
                 针对导入的【<strong>事项完成时间</strong>】，请选择裁决方案：
               </p>
 
               <div className="space-y-2">
-                <label className="p-3 bg-[#F8FAFC] border border-[#2563EB] rounded-xl flex items-start space-x-3 cursor-pointer">
+                <label className="p-2.5 bg-[#F8FAFC] border border-[#2563EB] rounded-md flex items-start space-x-2.5 cursor-pointer">
                   <input type="radio" name="conflict" defaultChecked className="mt-0.5" />
                   <div>
                     <span className="font-bold text-[#172033]">映射至【业务办结时间 (DE_CASE_CLOSE_TIME)】</span>
@@ -1305,7 +1281,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   </div>
                 </label>
 
-                <label className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl flex items-start space-x-3 cursor-pointer">
+                <label className="p-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md flex items-start space-x-2.5 cursor-pointer">
                   <input type="radio" name="conflict" className="mt-0.5" />
                   <div>
                     <span className="font-bold text-[#172033]">映射至【系统关闭时间 (DE_SYSTEM_CLOSE_TIME)】</span>
@@ -1313,7 +1289,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   </div>
                 </label>
 
-                <label className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl flex items-start space-x-3 cursor-pointer">
+                <label className="p-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md flex items-start space-x-2.5 cursor-pointer">
                   <input type="radio" name="conflict" className="mt-0.5" />
                   <div>
                     <span className="font-bold text-[#172033]">拆分为全新独立标准</span>
@@ -1323,10 +1299,10 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end space-x-3 border-t border-[#E6EAF0]">
+            <div className="pt-2 flex justify-end space-x-2.5 border-t border-[#E6EAF0]">
               <button
                 onClick={() => setShowConflictDecisionModal(false)}
-                className="px-4 py-2 bg-[#F1F5F9] text-[#172033] font-bold text-xs rounded-lg cursor-pointer"
+                className="px-3.5 py-1.5 bg-[#F1F5F9] text-[#172033] font-bold text-xs rounded-md cursor-pointer"
               >
                 取消
               </button>
@@ -1335,7 +1311,7 @@ export const ImportStandardsWorkspace: React.FC<ImportStandardsWorkspaceProps> =
                   setShowConflictDecisionModal(false);
                   addToast?.('success', '冲突裁决完成', '已将“事项完成时间”映射至【业务办结时间】！');
                 }}
-                className="px-5 py-2 bg-[#2563EB] text-white font-bold text-xs rounded-lg transition-all cursor-pointer shadow-2xs"
+                className="px-4 py-1.5 bg-[#2563EB] text-white font-bold text-xs rounded-md transition-all cursor-pointer shadow-2xs"
               >
                 保存裁决
               </button>

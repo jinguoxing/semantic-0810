@@ -185,7 +185,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               setActiveSubNav('connections');
               addToast?.('info', '数据连接', '查看企业异构数据源节点');
             }}
-            className="w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <Database className="w-4 h-4" />
             <span>数据连接</span>
@@ -196,7 +196,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               setActiveSubNav('probing');
               addToast?.('info', '数据探查', '字段数据分布与探查视图');
             }}
-            className="w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <Search className="w-4 h-4" />
             <span>数据探查</span>
@@ -207,7 +207,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               setActiveSubNav('quality');
               addToast?.('info', '数据质量', '数据质量校验规则与监控指标');
             }}
-            className="w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <ShieldCheck className="w-4 h-4" />
             <span>数据质量</span>
@@ -218,7 +218,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               setActiveSubNav('views');
               addToast?.('info', '逻辑视图', '逻辑建模架构');
             }}
-            className="w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <FolderTree className="w-4 h-4" />
             <span>逻辑视图</span>
@@ -229,7 +229,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               setActiveSubNav('semantics');
               onNavigateToDataSemantics?.();
             }}
-            className="w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]"
           >
             <Sparkles className="w-4 h-4" />
             <span>数据语义</span>
@@ -238,7 +238,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
           {/* Current Selected Menu Item */}
           <button
             onClick={() => setActiveSubNav('standards')}
-            className="w-[#192px] px-3 py-2.5 rounded-lg flex items-center space-x-2.5 transition-all text-left cursor-pointer bg-[#EFF6FF] text-[#2563EB] font-bold border-l-4 border-[#2563EB]"
+            className="w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]"
           >
             <BookOpen className="w-4 h-4" />
             <span>数据标准</span>
@@ -257,11 +257,11 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
       <div className="flex-1 flex flex-col overflow-hidden">
         
         {/* HEADER SECTION */}
-        <header className="bg-white border-b border-[#E6EAF0] px-8 py-4 shadow-2xs shrink-0">
+        <header className="bg-white border-b border-[#E6EAF0] px-6 py-3.5 shadow-2xs shrink-0">
           <div className="flex items-center justify-between">
             <div>
               {/* Breadcrumb + Return Link */}
-              <div className="flex items-center space-x-3 text-xs text-[#64748B] mb-1">
+              <div className="flex items-center space-x-2 text-xs text-[#64748B] mb-1">
                 <button
                   onClick={onBackToCatalog}
                   className="font-bold text-[#2563EB] hover:underline flex items-center space-x-1 cursor-pointer"
@@ -279,7 +279,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
 
               {/* Title & Subtitle */}
               <div className="flex items-baseline space-x-3">
-                <h1 className="text-lg font-bold text-[#172033] tracking-tight">
+                <h1 className="text-base font-bold text-[#172033] tracking-tight">
                   新建码表 / 值域标准
                 </h1>
                 <span className="text-xs font-mono text-[#64748B]">
@@ -294,477 +294,482 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
 
             {/* Right Status Badge */}
             <div className="flex items-center space-x-2">
-              <span className="px-3 py-1 bg-[#F1F5F9] text-[#64748B] font-bold text-xs rounded-full border border-[#CBD5E1]">
+              <span className="px-2.5 py-0.5 bg-[#F1F5F9] text-[#64748B] font-bold text-xs rounded-full border border-[#CBD5E1]">
                 草稿
               </span>
             </div>
           </div>
         </header>
 
-        {/* WORKSPACE BODY (72% Left Main Editor + 28% Right AI Panel) */}
+        {/* WORKSPACE BODY (Left Main Editor + Right AI Panel) */}
         <div className="flex-1 flex overflow-hidden">
           
           {/* ========================================================= */}
-          {/* MAIN EDITOR AREA (~72% Width)                             */}
+          {/* MAIN EDITOR AREA                                          */}
           {/* ========================================================= */}
-          <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-[#F7F9FC]">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#F7F9FC]">
             
-            {/* --------------------------------------------------------- */}
-            {/* BLOCK 01: 标准定义                                         */}
-            {/* --------------------------------------------------------- */}
-            <section className="bg-white border border-[#E6EAF0] rounded-xl p-6 shadow-2xs space-y-5">
-              <div className="border-b border-[#E6EAF0] pb-3 flex items-center justify-between">
-                <h2 className="text-sm font-bold text-[#172033] flex items-center space-x-2">
-                  <Tag className="w-4 h-4 text-[#2563EB]" />
-                  <span>01 · 标准定义</span>
-                </h2>
-                <span className="text-[11px] text-[#64748B]">标 * 为必填项</span>
-              </div>
+            {/* Integrated Main Panel */}
+            <div className="bg-white border border-[#E6EAF0] rounded-lg shadow-2xs divide-y divide-[#E6EAF0]">
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* 标准名称 */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#172033]">
-                    标准名称 <span className="text-[#DC2626]">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033] font-semibold"
-                    placeholder="请输入码表名称..."
-                  />
+              {/* --------------------------------------------------------- */}
+              {/* BLOCK 01: 标准定义                                         */}
+              {/* --------------------------------------------------------- */}
+              <section className="p-5 space-y-4">
+                <div className="flex items-center justify-between pb-1">
+                  <h2 className="text-xs font-bold text-[#172033] flex items-center space-x-2">
+                    <Tag className="w-3.5 h-3.5 text-[#2563EB]" />
+                    <span>01 · 标准定义</span>
+                  </h2>
+                  <span className="text-[11px] text-[#64748B]">标 * 为必填项</span>
                 </div>
 
-                {/* 标准编码 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 标准名称 */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#172033]">
+                      标准名称 <span className="text-[#DC2626]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033] font-semibold"
+                      placeholder="请输入码表名称..."
+                    />
+                  </div>
+
+                  {/* 标准编码 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-[#172033]">
+                        标准编码
+                      </label>
+                      <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
+                        系统生成
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-[#F8FAFC] border border-[#E6EAF0] rounded-md font-mono text-[#475569] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    />
+                  </div>
+                </div>
+
+                {/* 标准定义 */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-[#172033]">
-                      标准编码
+                      标准定义 <span className="text-[#DC2626]">*</span>
                     </label>
-                    <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
-                      系统生成
-                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAiRefineDefinition}
+                      disabled={isAiEnhancing}
+                      className="text-xs font-bold text-[#2563EB] hover:text-[#1D4ED8] bg-[#EFF6FF] hover:bg-[#DBEAFE] px-2.5 py-1 rounded-md border border-[#BFDBFE] transition-all cursor-pointer flex items-center space-x-1"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+                      <span>{isAiEnhancing ? 'AI 正在分析完善...' : 'AI 完善'}</span>
+                    </button>
                   </div>
-                  <input
-                    type="text"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg font-mono text-[#475569] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                  <textarea
+                    rows={2}
+                    value={definition}
+                    onChange={(e) => setDefinition(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033] leading-relaxed"
+                    placeholder="请输入对该码表 / 值域允许使用的表达范围及含义定义..."
                   />
                 </div>
-              </div>
+              </section>
 
-              {/* 标准定义 */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#172033]">
-                    标准定义 <span className="text-[#DC2626]">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleAiRefineDefinition}
-                    disabled={isAiEnhancing}
-                    className="text-xs font-bold text-[#2563EB] hover:text-[#1D4ED8] bg-[#EFF6FF] hover:bg-[#DBEAFE] px-2.5 py-1 rounded-lg border border-[#BFDBFE] transition-all cursor-pointer flex items-center space-x-1"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
-                    <span>{isAiEnhancing ? 'AI 正在分析完善...' : 'AI 完善'}</span>
-                  </button>
+              {/* --------------------------------------------------------- */}
+              {/* BLOCK 02: 标准码值 (页面绝对主体 P0)                       */}
+              {/* --------------------------------------------------------- */}
+              <section className="p-5 space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-1">
+                  <div>
+                    <h2 className="text-xs font-bold text-[#172033] flex items-center space-x-2">
+                      <Layers className="w-3.5 h-3.5 text-[#2563EB]" />
+                      <span>02 · 标准码值</span>
+                    </h2>
+                    <p className="text-[11px] text-[#64748B] mt-0.5">
+                      定义该值域允许使用的标准代码及含义。
+                    </p>
+                  </div>
+
+                  {/* Top Action Buttons */}
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={handleAddValueCode}
+                      className="px-3 py-1.5 text-xs font-bold text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded-md transition-all cursor-pointer flex items-center space-x-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>添加码值</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsBatchPasteModalOpen(true)}
+                      className="px-3 py-1.5 text-xs font-bold text-[#172033] bg-white hover:bg-[#F8FAFC] border border-[#E6EAF0] rounded-md transition-all cursor-pointer flex items-center space-x-1"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-[#64748B]" />
+                      <span>批量粘贴</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsImportModalOpen(true)}
+                      className="px-3 py-1.5 text-xs font-bold text-[#172033] bg-white hover:bg-[#F8FAFC] border border-[#E6EAF0] rounded-md transition-all cursor-pointer flex items-center space-x-1"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-[#059669]" />
+                      <span>从 Excel / CSV 导入</span>
+                    </button>
+                  </div>
                 </div>
-                <textarea
-                  rows={2}
-                  value={definition}
-                  onChange={(e) => setDefinition(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033] leading-relaxed"
-                  placeholder="请输入对该码表 / 值域允许使用的表达范围及含义定义..."
-                />
-              </div>
-            </section>
 
-            {/* --------------------------------------------------------- */}
-            {/* BLOCK 02: 标准码值 (页面绝对主体 P0)                       */}
-            {/* --------------------------------------------------------- */}
-            <section className="bg-white border border-[#E6EAF0] rounded-xl p-6 shadow-2xs space-y-5">
-              <div className="border-b border-[#E6EAF0] pb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-bold text-[#172033] flex items-center space-x-2">
-                    <Layers className="w-4 h-4 text-[#2563EB]" />
-                    <span>02 · 标准码值</span>
+                {/* AI Recognition Feedback Badge */}
+                {aiPasteMessage && (
+                  <div className="p-2.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md text-xs text-[#1E40AF] flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Sparkles className="w-4 h-4 text-[#2563EB]" />
+                      <span className="font-bold">{aiPasteMessage}</span>
+                    </div>
+                    <button onClick={() => setAiPasteMessage(null)} className="text-[#64748B] hover:text-[#172033] cursor-pointer">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Filter & Table Search Row */}
+                <div className="flex items-center justify-between">
+                  <div className="relative w-64">
+                    <Search className="w-3.5 h-3.5 text-[#94A3B8] absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={codeSearchQuery}
+                      onChange={(e) => setCodeSearchQuery(e.target.value)}
+                      placeholder="搜索代码、名称或说明..."
+                      className="w-full pl-8 pr-3 py-1.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                    />
+                  </div>
+                  <span className="text-xs font-bold text-[#64748B]">
+                    共 <strong className="text-[#2563EB]">{valueCodes.length}</strong> 个有效码值
+                  </span>
+                </div>
+
+                {/* Compact Editable Table */}
+                <div className="border border-[#E6EAF0] rounded-md overflow-hidden bg-white">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#64748B] font-bold">
+                        <th className="py-2.5 px-3.5 w-28">代码 (Code)</th>
+                        <th className="py-2.5 px-3.5 w-36">名称 (Name)</th>
+                        <th className="py-2.5 px-3.5">说明 (Description)</th>
+                        <th className="py-2.5 px-3.5 w-24">状态</th>
+                        <th className="py-2.5 px-3.5 w-20 text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E6EAF0]">
+                      {filteredCodes.map((item) => (
+                        <tr key={item.id} className="hover:bg-[#F8FAFC] transition-colors group">
+                          {/* Code */}
+                          <td className="py-2 px-3.5">
+                            <input
+                              type="text"
+                              value={item.code}
+                              onChange={(e) => handleUpdateRow(item.id, 'code', e.target.value)}
+                              className="w-full px-2 py-1 bg-white border border-[#E6EAF0] rounded-md font-mono font-bold text-[#2563EB] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                            />
+                          </td>
+
+                          {/* Name */}
+                          <td className="py-2 px-3.5">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => handleUpdateRow(item.id, 'name', e.target.value)}
+                              className="w-full px-2 py-1 bg-white border border-[#E6EAF0] rounded-md font-bold text-[#172033] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                            />
+                          </td>
+
+                          {/* Description */}
+                          <td className="py-2 px-3.5">
+                            <input
+                              type="text"
+                              value={item.description}
+                              onChange={(e) => handleUpdateRow(item.id, 'description', e.target.value)}
+                              className="w-full px-2 py-1 bg-white border border-[#E6EAF0] rounded-md text-[#475569] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+                            />
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-2 px-3.5">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]">
+                              有效
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-2 px-3.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRow(item.id)}
+                              className="p-1 text-[#94A3B8] hover:text-[#DC2626] rounded transition-colors cursor-pointer"
+                              title="删除码值"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer Summary */}
+                <div className="flex items-center justify-between text-xs text-[#64748B] pt-0.5">
+                  <span>提示：双击单元格或可直接在线修改代码含义，变更将于提交审核后生效。</span>
+                  <span className="font-bold text-[#172033]">{valueCodes.length} 个有效码值</span>
+                </div>
+              </section>
+
+              {/* --------------------------------------------------------- */}
+              {/* BLOCK 03: 业务关联                                         */}
+              {/* --------------------------------------------------------- */}
+              <section className="p-5 space-y-4">
+                <div className="pb-1">
+                  <h2 className="text-xs font-bold text-[#172033] flex items-center space-x-2">
+                    <Layers className="w-3.5 h-3.5 text-[#2563EB]" />
+                    <span>03 · 业务关联</span>
                   </h2>
                   <p className="text-[11px] text-[#64748B] mt-0.5">
-                    定义该值域允许使用的标准代码及含义。
+                    关联已有业务语义，不在这里重复维护术语或业务对象。
                   </p>
                 </div>
 
-                {/* Top Action Buttons */}
-                <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={handleAddValueCode}
-                    className="px-3 py-1.5 text-xs font-bold text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded-lg transition-all cursor-pointer flex items-center space-x-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>添加码值</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsBatchPasteModalOpen(true)}
-                    className="px-3 py-1.5 text-xs font-bold text-[#172033] bg-white hover:bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg transition-all cursor-pointer flex items-center space-x-1"
-                  >
-                    <Copy className="w-3.5 h-3.5 text-[#64748B]" />
-                    <span>批量粘贴</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsImportModalOpen(true)}
-                    className="px-3 py-1.5 text-xs font-bold text-[#172033] bg-white hover:bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg transition-all cursor-pointer flex items-center space-x-1"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-[#059669]" />
-                    <span>从 Excel / CSV 导入</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* AI Recognition Feedback Badge */}
-              {aiPasteMessage && (
-                <div className="p-2.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-xs text-[#1E40AF] flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Sparkles className="w-4 h-4 text-[#2563EB]" />
-                    <span className="font-bold">{aiPasteMessage}</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 业务术语 */}
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#64748B]">业务术语</span>
+                      <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE] flex items-center space-x-1">
+                        <Sparkles className="w-3 h-3 text-[#2563EB]" />
+                        <span>AI 推荐</span>
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-[#172033]">{businessTerm}</p>
+                    <p className="text-[11px] text-[#64748B]">自然人的性别分类</p>
                   </div>
-                  <button onClick={() => setAiPasteMessage(null)} className="text-[#64748B] hover:text-[#172033]">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
 
-              {/* Filter & Table Search Row */}
-              <div className="flex items-center justify-between">
-                <div className="relative w-64">
-                  <Search className="w-3.5 h-3.5 text-[#94A3B8] absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    value={codeSearchQuery}
-                    onChange={(e) => setCodeSearchQuery(e.target.value)}
-                    placeholder="搜索代码、名称或说明..."
-                    className="w-full pl-8 pr-3 py-1.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-                  />
-                </div>
-                <span className="text-xs font-bold text-[#64748B]">
-                  共 <strong className="text-[#2563EB]">{valueCodes.length}</strong> 个有效码值
-                </span>
-              </div>
-
-              {/* Compact Editable Table */}
-              <div className="border border-[#E6EAF0] rounded-xl overflow-hidden bg-white">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#64748B] font-bold">
-                      <th className="py-2.5 px-4 w-28">代码 (Code)</th>
-                      <th className="py-2.5 px-4 w-36">名称 (Name)</th>
-                      <th className="py-2.5 px-4">说明 (Description)</th>
-                      <th className="py-2.5 px-4 w-24">状态</th>
-                      <th className="py-2.5 px-4 w-20 text-right">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#E6EAF0]">
-                    {filteredCodes.map((item) => (
-                      <tr key={item.id} className="hover:bg-[#F8FAFC] transition-colors group">
-                        {/* Code */}
-                        <td className="py-2 px-4">
-                          <input
-                            type="text"
-                            value={item.code}
-                            onChange={(e) => handleUpdateRow(item.id, 'code', e.target.value)}
-                            className="w-full px-2 py-1 bg-white border border-[#E6EAF0] rounded font-mono font-bold text-[#2563EB] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-                          />
-                        </td>
-
-                        {/* Name */}
-                        <td className="py-2 px-4">
-                          <input
-                            type="text"
-                            value={item.name}
-                            onChange={(e) => handleUpdateRow(item.id, 'name', e.target.value)}
-                            className="w-full px-2 py-1 bg-white border border-[#E6EAF0] rounded font-bold text-[#172033] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-                          />
-                        </td>
-
-                        {/* Description */}
-                        <td className="py-2 px-4">
-                          <input
-                            type="text"
-                            value={item.description}
-                            onChange={(e) => handleUpdateRow(item.id, 'description', e.target.value)}
-                            className="w-full px-2 py-1 bg-white border border-[#E6EAF0] rounded text-[#475569] focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-                          />
-                        </td>
-
-                        {/* Status */}
-                        <td className="py-2 px-4">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0]">
-                            有效
-                          </span>
-                        </td>
-
-                        {/* Actions */}
-                        <td className="py-2 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRow(item.id)}
-                            className="p-1 text-[#94A3B8] hover:text-[#DC2626] rounded transition-colors cursor-pointer"
-                            title="删除码值"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Footer Summary */}
-              <div className="flex items-center justify-between text-xs text-[#64748B] pt-1">
-                <span>提示：双击单元格或可直接在线修改代码含义，变更将于提交审核后生效。</span>
-                <span className="font-bold text-[#172033]">{valueCodes.length} 个有效码值</span>
-              </div>
-            </section>
-
-            {/* --------------------------------------------------------- */}
-            {/* BLOCK 03: 业务关联                                         */}
-            {/* --------------------------------------------------------- */}
-            <section className="bg-white border border-[#E6EAF0] rounded-xl p-6 shadow-2xs space-y-5">
-              <div className="border-b border-[#E6EAF0] pb-3">
-                <h2 className="text-sm font-bold text-[#172033] flex items-center space-x-2">
-                  <Layers className="w-4 h-4 text-[#2563EB]" />
-                  <span>03 · 业务关联</span>
-                </h2>
-                <p className="text-[11px] text-[#64748B] mt-0.5">
-                  关联已有业务语义，不在这里重复维护术语或业务对象。
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* 业务术语 */}
-                <div className="p-3.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#64748B]">业务术语</span>
-                    <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE] flex items-center space-x-1">
-                      <Sparkles className="w-3 h-3 text-[#2563EB]" />
-                      <span>AI 推荐</span>
-                    </span>
+                  {/* 业务对象属性 */}
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#64748B]">业务对象属性</span>
+                      <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE] flex items-center space-x-1">
+                        <Sparkles className="w-3 h-3 text-[#2563EB]" />
+                        <span>AI 推荐</span>
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-[#172033]">{businessObjectAttr}</p>
+                    <p className="text-[11px] text-[#64748B]">核心实体：自然人</p>
                   </div>
-                  <p className="text-xs font-bold text-[#172033]">{businessTerm}</p>
-                  <p className="text-[11px] text-[#64748B]">自然人的性别分类</p>
-                </div>
 
-                {/* 业务对象属性 */}
-                <div className="p-3.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#64748B]">业务对象属性</span>
-                    <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE] flex items-center space-x-1">
-                      <Sparkles className="w-3 h-3 text-[#2563EB]" />
-                      <span>AI 推荐</span>
-                    </span>
+                  {/* 所属业务域 */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#172033]">所属业务域</label>
+                    <select
+                      value={domain}
+                      onChange={(e) => setDomain(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033] cursor-pointer"
+                    >
+                      <option value="人口服务">人口服务</option>
+                      <option value="公共服务">公共服务</option>
+                      <option value="公共基础">公共基础</option>
+                      <option value="法人服务">法人服务</option>
+                    </select>
                   </div>
-                  <p className="text-xs font-bold text-[#172033]">{businessObjectAttr}</p>
-                  <p className="text-[11px] text-[#64748B]">核心实体：自然人</p>
-                </div>
 
-                {/* 所属业务域 */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#172033]">所属业务域</label>
-                  <select
-                    value={domain}
-                    onChange={(e) => setDomain(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033] cursor-pointer"
-                  >
-                    <option value="人口服务">人口服务</option>
-                    <option value="公共服务">公共服务</option>
-                    <option value="公共基础">公共基础</option>
-                    <option value="法人服务">法人服务</option>
-                  </select>
-                </div>
-
-                {/* 关联数据元标准 */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-[#172033]">关联数据元标准</label>
-                    <span className="text-[11px] text-[#64748B]">建立集合引用关系</span>
-                  </div>
-                  <div className="p-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg space-y-1">
-                    {relatedDataElements.map((de, i) => (
-                      <div key={i} className="text-xs font-semibold text-[#2563EB] flex items-center space-x-1">
-                        <Tag className="w-3.5 h-3.5 text-[#2563EB]" />
-                        <span>{de}</span>
-                      </div>
-                    ))}
-                    <p className="text-[10px] text-[#64748B] pt-0.5">
-                      当前值域将作为这些数据元的标准允许值集合。
-                    </p>
+                  {/* 关联数据元标准 */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-[#172033]">关联数据元标准</label>
+                      <span className="text-[11px] text-[#64748B]">建立集合引用关系</span>
+                    </div>
+                    <div className="p-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
+                      {relatedDataElements.map((de, i) => (
+                        <div key={i} className="text-xs font-semibold text-[#2563EB] flex items-center space-x-1">
+                          <Tag className="w-3.5 h-3.5 text-[#2563EB]" />
+                          <span>{de}</span>
+                        </div>
+                      ))}
+                      <p className="text-[10px] text-[#64748B] pt-0.5">
+                        当前值域将作为这些数据元的标准允许值集合。
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
+              </section>
 
-            {/* --------------------------------------------------------- */}
-            {/* BLOCK 04: 标准依据                                         */}
-            {/* --------------------------------------------------------- */}
-            <section className="bg-white border border-[#E6EAF0] rounded-xl p-6 shadow-2xs space-y-5">
-              <div className="border-b border-[#E6EAF0] pb-3 flex items-center justify-between">
-                <h2 className="text-sm font-bold text-[#172033] flex items-center space-x-2">
-                  <BookOpen className="w-4 h-4 text-[#2563EB]" />
-                  <span>04 · 标准依据</span>
-                </h2>
-                <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE] flex items-center space-x-1">
-                  <Sparkles className="w-3 h-3 text-[#2563EB]" />
-                  <span>AI 标准文件自动识别</span>
-                </span>
-              </div>
-
-              {/* AI Auto-extract Banner */}
-              <div className="p-3 bg-[#EFF6FF]/70 border border-[#BFDBFE] rounded-xl text-xs text-[#1E40AF] flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-[#2563EB] shrink-0" />
-                  <span>
-                    以下内容由 AI 根据 <strong className="font-bold">《人口基础信息分类与代码》第 4.2 条</strong> 提取，请确认。
+              {/* --------------------------------------------------------- */}
+              {/* BLOCK 04: 标准依据                                         */}
+              {/* --------------------------------------------------------- */}
+              <section className="p-5 space-y-4">
+                <div className="flex items-center justify-between pb-1">
+                  <h2 className="text-xs font-bold text-[#172033] flex items-center space-x-2">
+                    <BookOpen className="w-3.5 h-3.5 text-[#2563EB]" />
+                    <span>04 · 标准依据</span>
+                  </h2>
+                  <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE] flex items-center space-x-1">
+                    <Sparkles className="w-3 h-3 text-[#2563EB]" />
+                    <span>AI 标准文件自动识别</span>
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setIsSpecFileModalOpen(true)}
-                  className="font-bold text-[#2563EB] hover:underline flex items-center space-x-1 cursor-pointer shrink-0"
-                >
-                  <span>查看原文位置</span>
-                  <ArrowRight className="w-3 h-3" />
-                </button>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {/* 来源类型 */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#172033]">来源类型</label>
-                  <select
-                    value={sourceType}
-                    onChange={(e) => setSourceType(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033] cursor-pointer"
+                {/* AI Auto-extract Banner */}
+                <div className="p-3 bg-[#EFF6FF]/70 border border-[#BFDBFE] rounded-md text-xs text-[#1E40AF] flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Sparkles className="w-4 h-4 text-[#2563EB] shrink-0" />
+                    <span>
+                      以下内容由 AI 根据 <strong className="font-bold">《人口基础信息分类与代码》第 4.2 条</strong> 提取，请确认。
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsSpecFileModalOpen(true)}
+                    className="font-bold text-[#2563EB] hover:underline flex items-center space-x-1 cursor-pointer shrink-0"
                   >
-                    <option value="国家标准">国家标准</option>
-                    <option value="企业自主制定">企业自主制定</option>
-                    <option value="行业标准">行业标准</option>
-                    <option value="地方标准">地方标准</option>
-                  </select>
+                    <span>查看原文位置</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
                 </div>
 
-                {/* 标准号 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 来源类型 */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#172033]">来源类型</label>
+                    <select
+                      value={sourceType}
+                      onChange={(e) => setSourceType(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033] cursor-pointer"
+                    >
+                      <option value="国家标准">国家标准</option>
+                      <option value="企业自主制定">企业自主制定</option>
+                      <option value="行业标准">行业标准</option>
+                      <option value="地方标准">地方标准</option>
+                    </select>
+                  </div>
+
+                  {/* 标准号 */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#172033]">标准号</label>
+                    <input
+                      type="text"
+                      value={standardNo}
+                      onChange={(e) => setStandardNo(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-md font-mono focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033]"
+                    />
+                  </div>
+
+                  {/* 标准文件 */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#172033]">标准文件</label>
+                    <div className="px-3 py-2 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md text-xs font-semibold text-[#2563EB] flex items-center justify-between">
+                      <span>{standardFile}</span>
+                      <button className="text-[11px] font-normal text-[#64748B] hover:text-[#2563EB] cursor-pointer">
+                        更换文件
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 原文位置 */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#172033]">原文位置</label>
+                    <div className="px-3 py-2 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md text-xs font-mono text-[#172033] flex items-center justify-between">
+                      <span>{originalLocation}</span>
+                      <button
+                        onClick={() => setIsSpecFileModalOpen(true)}
+                        className="text-[11px] font-bold text-[#2563EB] hover:underline flex items-center space-x-0.5 cursor-pointer"
+                      >
+                        <span>查看原文 →</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 制定说明 */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#172033]">标准号</label>
+                  <label className="text-xs font-bold text-[#172033]">制定说明</label>
                   <input
                     type="text"
-                    value={standardNo}
-                    onChange={(e) => setStandardNo(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-lg font-mono focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033]"
+                    value={sourceNote}
+                    onChange={(e) => setSourceNote(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033]"
                   />
                 </div>
+              </section>
 
-                {/* 标准文件 */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#172033]">标准文件</label>
-                  <div className="px-3 py-2 bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg text-xs font-semibold text-[#2563EB] flex items-center justify-between">
-                    <span>{standardFile}</span>
-                    <button className="text-[11px] font-normal text-[#64748B] hover:text-[#2563EB]">
-                      更换文件
-                    </button>
+              {/* --------------------------------------------------------- */}
+              {/* BLOCK 05: 治理信息                                         */}
+              {/* --------------------------------------------------------- */}
+              <section className="p-5 space-y-4">
+                <div className="pb-1">
+                  <h2 className="text-xs font-bold text-[#172033] flex items-center space-x-2">
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#2563EB]" />
+                    <span>05 · 治理信息</span>
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
+                    <span className="text-[#64748B] text-[11px]">Owner</span>
+                    <p className="font-bold text-[#172033]">{ownerGroup}</p>
+                  </div>
+
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
+                    <span className="text-[#64748B] text-[11px]">适用范围</span>
+                    <p className="font-bold text-[#172033]">{scope}</p>
+                  </div>
+
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
+                    <span className="text-[#64748B] text-[11px]">生效方式</span>
+                    <p className="font-bold text-[#172033]">{effectiveType}</p>
                   </div>
                 </div>
+              </section>
 
-                {/* 原文位置 */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#172033]">原文位置</label>
-                  <div className="px-3 py-2 bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg text-xs font-mono text-[#172033] flex items-center justify-between">
-                    <span>{originalLocation}</span>
-                    <button
-                      onClick={() => setIsSpecFileModalOpen(true)}
-                      className="text-[11px] font-bold text-[#2563EB] hover:underline flex items-center space-x-0.5"
-                    >
-                      <span>查看原文 →</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 制定说明 */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#172033]">制定说明</label>
-                <input
-                  type="text"
-                  value={sourceNote}
-                  onChange={(e) => setSourceNote(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-[#E6EAF0] rounded-lg focus:outline-none focus:ring-1 focus:ring-[#2563EB] text-[#172033]"
-                />
-              </div>
-            </section>
-
-            {/* --------------------------------------------------------- */}
-            {/* BLOCK 05: 治理信息                                         */}
-            {/* --------------------------------------------------------- */}
-            <section className="bg-white border border-[#E6EAF0] rounded-xl p-6 shadow-2xs space-y-5">
-              <div className="border-b border-[#E6EAF0] pb-3">
-                <h2 className="text-sm font-bold text-[#172033] flex items-center space-x-2">
-                  <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
-                  <span>05 · 治理信息</span>
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs">
-                <div className="space-y-1">
-                  <span className="text-[#64748B]">Owner</span>
-                  <p className="font-bold text-[#172033]">{ownerGroup}</p>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[#64748B]">适用范围</span>
-                  <p className="font-bold text-[#172033]">{scope}</p>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[#64748B]">生效方式</span>
-                  <p className="font-bold text-[#172033]">{effectiveType}</p>
-                </div>
-              </div>
-            </section>
+            </div>
 
           </div>
 
           {/* ========================================================= */}
-          {/* RIGHT SIDEBAR: AI 辅助面板 (~28% Width)                   */}
+          {/* RIGHT SIDEBAR: AI 辅助面板 (~360px Width)                 */}
           {/* ========================================================= */}
-          <aside className="w-[380px] bg-white border-l border-[#E6EAF0] flex flex-col overflow-y-auto shrink-0 p-5 space-y-6">
+          <aside className="w-[360px] bg-white border-l border-[#E6EAF0] flex flex-col overflow-y-auto shrink-0 p-4 space-y-4">
             
             {/* Title */}
-            <div className="flex items-center space-x-2 border-b border-[#E6EAF0] pb-3">
+            <div className="flex items-center space-x-2 border-b border-[#E6EAF0] pb-2.5">
               <Sparkles className="w-4 h-4 text-[#2563EB]" />
-              <h2 className="text-sm font-bold text-[#172033]">AI 辅助</h2>
+              <h2 className="text-xs font-bold text-[#172033]">AI 辅助</h2>
             </div>
 
             {/* --------------------------------------------------------- */}
             {/* 模块 1 · 相似码表检查 + 与“人员性别代码 V2”比较              */}
             {/* --------------------------------------------------------- */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-[#172033]">1. 相似码表检查</span>
-                <span className="text-[10px] font-bold text-[#D97706] bg-[#FFFBEB] px-2 py-0.5 rounded border border-[#FDE68A]">
+                <span className="text-[10px] font-bold text-[#D97706] bg-[#FFFBEB] px-1.5 py-0.2 rounded border border-[#FDE68A]">
                   发现 2 个相关值域
                 </span>
               </div>
 
               {/* Risk Alert Box */}
-              <div className="p-3.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl space-y-2">
+              <div className="p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-md space-y-1.5">
                 <div className="flex items-center space-x-1.5 text-xs font-bold text-[#D97706]">
-                  <AlertTriangle className="w-4 h-4 text-[#D97706]" />
+                  <AlertTriangle className="w-3.5 h-3.5 text-[#D97706]" />
                   <span>存在较高重复风险</span>
                 </div>
                 <p className="text-[11px] text-[#78350F] leading-normal">
@@ -773,7 +778,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
                 <div className="pt-1 flex items-center space-x-2">
                   <button
                     onClick={() => setIsCompareModalOpen(true)}
-                    className="px-2.5 py-1 text-[11px] font-bold text-[#2563EB] bg-white hover:bg-[#EFF6FF] border border-[#BFDBFE] rounded transition-all cursor-pointer"
+                    className="px-2.5 py-1 text-[11px] font-bold text-[#2563EB] bg-white hover:bg-[#EFF6FF] border border-[#BFDBFE] rounded-md transition-all cursor-pointer"
                   >
                     查看差异
                   </button>
@@ -782,7 +787,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
                       addToast?.('info', '已采纳现有值域', '已关联使用【人员性别代码 V2 GENDER_CODE_V2】');
                       onBackToCatalog();
                     }}
-                    className="px-2.5 py-1 text-[11px] font-bold text-[#D97706] bg-white hover:bg-[#FFFBEB] border border-[#FDE68A] rounded transition-all cursor-pointer"
+                    className="px-2.5 py-1 text-[11px] font-bold text-[#D97706] bg-white hover:bg-[#FFFBEB] border border-[#FDE68A] rounded-md transition-all cursor-pointer"
                   >
                     使用现有值域
                   </button>
@@ -790,7 +795,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               </div>
 
               {/* Inline Comparison Diff Box */}
-              <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-2 text-xs">
+              <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-2 text-xs">
                 <div className="flex items-center justify-between text-[11px] font-bold text-[#64748B] border-b border-[#E6EAF0] pb-1.5">
                   <span>与“人员性别代码 V2”比较</span>
                   <span className="text-[#059669]">100% 重合</span>
@@ -811,14 +816,14 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
                   </div>
                 </div>
 
-                <p className="text-[10px] text-[#64748B] pt-1">
+                <p className="text-[10px] text-[#64748B] pt-0.5">
                   建议优先复用已有“人员性别代码 V2”，而不是创建新的值域标准。
                 </p>
               </div>
 
               {/* Similar Items List */}
-              <div className="space-y-2 text-xs">
-                <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1.5">
+              <div className="space-y-1.5 text-xs">
+                <div className="p-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-[#172033]">人员性别代码 V2</span>
                     <span className="text-[10px] font-bold text-[#DC2626] bg-[#FEF2F2] px-1.5 py-0.2 rounded border border-[#FECACA]">
@@ -836,7 +841,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
                   </div>
                 </div>
 
-                <div className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-1.5">
+                <div className="p-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-[#172033]">性别分类代码</span>
                     <span className="text-[10px] font-bold text-[#D97706] bg-[#FFFBEB] px-1.5 py-0.2 rounded border border-[#FDE68A]">
@@ -861,9 +866,9 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
             {/* --------------------------------------------------------- */}
             {/* 模块 2 · AI 推荐                                          */}
             {/* --------------------------------------------------------- */}
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <span className="text-xs font-bold text-[#172033]">2. AI 推荐</span>
-              <div className="p-3.5 bg-[#EFF6FF]/60 border border-[#BFDBFE] rounded-xl space-y-2 text-xs">
+              <div className="p-3 bg-[#EFF6FF]/60 border border-[#BFDBFE] rounded-md space-y-1.5 text-xs">
                 <div className="flex items-center space-x-2 text-[#1E40AF]">
                   <Check className="w-3.5 h-3.5 text-[#2563EB]" />
                   <span>业务术语：<strong className="font-bold">性别</strong></span>
@@ -888,24 +893,24 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
             {/* --------------------------------------------------------- */}
             {/* 模块 3 · 码值检查                                         */}
             {/* --------------------------------------------------------- */}
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <span className="text-xs font-bold text-[#172033]">3. 码值检查</span>
-              <div className="space-y-1.5 text-xs">
-                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg">
+              <div className="space-y-1 text-xs">
+                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-md">
                   <span className="text-[#334155]">无重复代码</span>
-                  <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 </div>
-                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-md">
                   <span className="text-[#334155]">所有码值均有名称说明</span>
-                  <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 </div>
-                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-md">
                   <span className="text-[#334155]">无空代码值</span>
-                  <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 </div>
-                <div className="flex items-center justify-between p-2 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-[#FFFBEB] border border-[#FDE68A] rounded-md">
                   <span className="text-[#D97706] font-bold">与已有值域高度重复</span>
-                  <AlertCircle className="w-4 h-4 text-[#D97706]" />
+                  <AlertCircle className="w-3.5 h-3.5 text-[#D97706]" />
                 </div>
               </div>
             </div>
@@ -915,28 +920,28 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
             {/* --------------------------------------------------------- */}
             {/* 模块 4 · 完整性                                           */}
             {/* --------------------------------------------------------- */}
-            <div className="space-y-3">
+            <div className="space-y-2">
               <span className="text-xs font-bold text-[#172033]">4. 完整性检查</span>
-              <div className="space-y-1.5 text-xs">
-                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg">
+              <div className="space-y-1 text-xs">
+                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-md">
                   <span className="text-[#334155]">标准定义</span>
-                  <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 </div>
-                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-md">
                   <span className="text-[#334155]">标准码值</span>
-                  <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 </div>
-                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-md">
                   <span className="text-[#334155]">业务关联</span>
-                  <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 </div>
-                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-md">
                   <span className="text-[#334155]">标准依据</span>
-                  <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 </div>
-                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg">
+                <div className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-md">
                   <span className="text-[#334155]">治理信息</span>
-                  <CheckCircle2 className="w-4 h-4 text-[#059669]" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#059669]" />
                 </div>
               </div>
             </div>
@@ -948,25 +953,25 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
         {/* ========================================================= */}
         {/* BOTTOM FIXED ACTION BAR                                   */}
         {/* ========================================================= */}
-        <footer className="bg-white border-t border-[#E6EAF0] px-8 py-3.5 shadow-md flex items-center justify-between shrink-0">
+        <footer className="bg-white border-t border-[#E6EAF0] px-6 py-3 shadow-2xs flex items-center justify-between shrink-0">
           <button
             onClick={onBackToCatalog}
-            className="px-4 py-2 text-xs font-bold text-[#64748B] hover:text-[#172033] hover:bg-[#F1F5F9] rounded-lg transition-all cursor-pointer"
+            className="px-3.5 py-1.5 text-xs font-bold text-[#64748B] hover:text-[#172033] hover:bg-[#F1F5F9] rounded-md transition-all cursor-pointer"
           >
             取消
           </button>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
             <button
               onClick={() => addToast?.('info', '草稿已保存', '码表标准草稿已成功保存')}
-              className="px-4 py-2 bg-white hover:bg-[#F8FAFC] text-[#172033] border border-[#E6EAF0] text-xs font-bold rounded-lg transition-all cursor-pointer shadow-2xs"
+              className="px-3.5 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#172033] border border-[#E6EAF0] text-xs font-bold rounded-md transition-all cursor-pointer shadow-2xs"
             >
               保存草稿
             </button>
 
             <button
               onClick={() => setIsReviewModalOpen(true)}
-              className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
+              className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-all cursor-pointer shadow-2xs flex items-center space-x-1.5"
             >
               <span>提交治理确认</span>
             </button>
@@ -980,13 +985,13 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
       {/* ========================================================= */}
       {isBatchPasteModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E6EAF0] rounded-2xl w-[520px] shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
+          <div className="bg-white border border-[#E6EAF0] rounded-lg w-[520px] shadow-2xl p-5 space-y-3.5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2.5">
               <div className="flex items-center space-x-2">
                 <Copy className="w-4 h-4 text-[#2563EB]" />
-                <h3 className="text-sm font-bold text-[#172033]">批量粘贴码值代码</h3>
+                <h3 className="text-xs font-bold text-[#172033]">批量粘贴码值代码</h3>
               </div>
-              <button onClick={() => setIsBatchPasteModalOpen(false)} className="text-[#64748B] hover:text-[#172033]">
+              <button onClick={() => setIsBatchPasteModalOpen(false)} className="text-[#64748B] hover:text-[#172033] cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1000,21 +1005,21 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               value={batchPasteText}
               onChange={(e) => setBatchPasteText(e.target.value)}
               placeholder={`01 男 男性\n02 女 女性\n09 未说明 未声明或无法确认性别`}
-              className="w-full px-3 py-2 text-xs font-mono bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
+              className="w-full px-3 py-2 text-xs font-mono bg-[#F8FAFC] border border-[#E6EAF0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
             />
 
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center justify-between pt-2 border-t border-[#E6EAF0]">
               <span className="text-[11px] text-[#94A3B8]">AI 将按空格或制表符智能切分属性</span>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setIsBatchPasteModalOpen(false)}
-                  className="px-3 py-1.5 text-xs text-[#64748B] hover:bg-[#F1F5F9] rounded-lg"
+                  className="px-3 py-1.5 text-xs text-[#64748B] hover:bg-[#F1F5F9] rounded-md cursor-pointer"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleExecuteBatchPaste}
-                  className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg shadow-2xs"
+                  className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md shadow-2xs cursor-pointer"
                 >
                   解析并导入
                 </button>
@@ -1029,33 +1034,33 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
       {/* ========================================================= */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E6EAF0] rounded-2xl w-[480px] shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
+          <div className="bg-white border border-[#E6EAF0] rounded-lg w-[480px] shadow-2xl p-5 space-y-3.5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2.5">
               <div className="flex items-center space-x-2">
                 <FileSpreadsheet className="w-4 h-4 text-[#059669]" />
-                <h3 className="text-sm font-bold text-[#172033]">从 Excel / CSV 导入码值</h3>
+                <h3 className="text-xs font-bold text-[#172033]">从 Excel / CSV 导入码值</h3>
               </div>
-              <button onClick={() => setIsImportModalOpen(false)} className="text-[#64748B]">
+              <button onClick={() => setIsImportModalOpen(false)} className="text-[#64748B] cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-8 border-2 border-dashed border-[#CBD5E1] rounded-2xl bg-[#F8FAFC] flex flex-col items-center justify-center space-y-3 cursor-pointer hover:border-[#2563EB] transition-colors">
-              <Upload className="w-8 h-8 text-[#2563EB]" />
-              <div className="text-center space-y-1">
+            <div className="p-6 border-2 border-dashed border-[#CBD5E1] rounded-md bg-[#F8FAFC] flex flex-col items-center justify-center space-y-2 cursor-pointer hover:border-[#2563EB] transition-colors">
+              <Upload className="w-7 h-7 text-[#2563EB]" />
+              <div className="text-center space-y-0.5">
                 <p className="text-xs font-bold text-[#172033]">点击或拖拽 Excel/CSV 文件至此处</p>
                 <p className="text-[11px] text-[#64748B]">支持 .xlsx, .xls, .csv 模板格式</p>
               </div>
             </div>
 
-            <div className="pt-2 flex items-center justify-between text-xs">
-              <button className="text-[#2563EB] hover:underline font-bold">下载标准码表模板.xlsx</button>
+            <div className="pt-2 flex items-center justify-between text-xs border-t border-[#E6EAF0]">
+              <button className="text-[#2563EB] hover:underline font-bold cursor-pointer">下载标准码表模板.xlsx</button>
               <button
                 onClick={() => {
                   setIsImportModalOpen(false);
                   addToast?.('success', '导入成功', '已根据标准 CSV 文件成功装载码值数据');
                 }}
-                className="px-4 py-1.5 bg-[#2563EB] text-white font-bold rounded-lg"
+                className="px-3.5 py-1.5 bg-[#2563EB] text-white font-bold rounded-md cursor-pointer"
               >
                 关闭
               </button>
@@ -1069,24 +1074,24 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
       {/* ========================================================= */}
       {isCompareModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E6EAF0] rounded-2xl w-[720px] shadow-2xl p-6 space-y-5 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
-              <h3 className="text-base font-bold text-[#172033]">与已有“人员性别代码 V2”完全比对</h3>
-              <button onClick={() => setIsCompareModalOpen(false)} className="text-[#64748B] hover:text-[#172033]">
+          <div className="bg-white border border-[#E6EAF0] rounded-lg w-[720px] shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2.5">
+              <h3 className="text-xs font-bold text-[#172033]">与已有“人员性别代码 V2”完全比对</h3>
+              <button onClick={() => setIsCompareModalOpen(false)} className="text-[#64748B] hover:text-[#172033] cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 text-xs">
+            <div className="grid grid-cols-2 gap-3.5 text-xs">
               {/* Draft */}
-              <div className="p-4 bg-[#EFF6FF]/60 border border-[#BFDBFE] rounded-xl space-y-3">
+              <div className="p-3.5 bg-[#EFF6FF]/60 border border-[#BFDBFE] rounded-md space-y-2.5">
                 <span className="text-[10px] font-bold text-[#2563EB] bg-white px-2 py-0.5 rounded border border-[#BFDBFE]">
                   当前新建草稿 ({name})
                 </span>
                 <p className="font-mono text-[#2563EB] font-bold">{code}</p>
-                <div className="space-y-1.5 font-mono text-[11px]">
+                <div className="space-y-1 font-mono text-[11px]">
                   {valueCodes.map((c) => (
-                    <div key={c.id} className="p-1.5 bg-white rounded border border-[#E6EAF0] flex justify-between">
+                    <div key={c.id} className="p-1.5 bg-white rounded-md border border-[#E6EAF0] flex justify-between">
                       <span className="font-bold">{c.code} {c.name}</span>
                       <span className="text-[#64748B]">{c.description}</span>
                     </div>
@@ -1095,21 +1100,21 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               </div>
 
               {/* Existing */}
-              <div className="p-4 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl space-y-3">
+              <div className="p-3.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-md space-y-2.5">
                 <span className="text-[10px] font-bold text-[#D97706] bg-white px-2 py-0.5 rounded border border-[#FDE68A]">
                   已有企业标准 (人员性别代码 V2)
                 </span>
                 <p className="font-mono text-[#D97706] font-bold">GENDER_CODE_V2</p>
-                <div className="space-y-1.5 font-mono text-[11px]">
-                  <div className="p-1.5 bg-white rounded border border-[#FDE68A] flex justify-between">
+                <div className="space-y-1 font-mono text-[11px]">
+                  <div className="p-1.5 bg-white rounded-md border border-[#FDE68A] flex justify-between">
                     <span className="font-bold text-[#059669]">01 男 ✓</span>
                     <span className="text-[#64748B]">男性</span>
                   </div>
-                  <div className="p-1.5 bg-white rounded border border-[#FDE68A] flex justify-between">
+                  <div className="p-1.5 bg-white rounded-md border border-[#FDE68A] flex justify-between">
                     <span className="font-bold text-[#059669]">02 女 ✓</span>
                     <span className="text-[#64748B]">女性</span>
                   </div>
-                  <div className="p-1.5 bg-white rounded border border-[#FDE68A] flex justify-between">
+                  <div className="p-1.5 bg-white rounded-md border border-[#FDE68A] flex justify-between">
                     <span className="font-bold text-[#059669]">09 未说明 ✓</span>
                     <span className="text-[#64748B]">未声明或无法确认性别</span>
                   </div>
@@ -1117,14 +1122,14 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               </div>
             </div>
 
-            <p className="text-xs text-[#78350F] bg-[#FFFBEB] p-3 rounded-xl border border-[#FDE68A]">
+            <p className="text-xs text-[#78350F] bg-[#FFFBEB] p-3 rounded-md border border-[#FDE68A]">
               诊断提示：两个值域代码集 100% 相同。强烈建议使用企业现有正式标准，避免重复发布造成系统元数据冗余。
             </p>
 
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center justify-between pt-2 border-t border-[#E6EAF0]">
               <button
                 onClick={() => setIsCompareModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-[#64748B] hover:bg-[#F1F5F9] rounded-lg"
+                className="px-3.5 py-1.5 text-xs font-bold text-[#64748B] hover:bg-[#F1F5F9] rounded-md cursor-pointer"
               >
                 仍需新建 (忽略提醒)
               </button>
@@ -1134,7 +1139,7 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
                   addToast?.('info', '已采纳现有值域', '已放弃草稿，关联现有标准【GENDER_CODE_V2】');
                   onBackToCatalog();
                 }}
-                className="px-4 py-2 bg-[#D97706] hover:bg-[#B45309] text-white text-xs font-bold rounded-lg cursor-pointer shadow-2xs"
+                className="px-4 py-1.5 bg-[#D97706] hover:bg-[#B45309] text-white text-xs font-bold rounded-md cursor-pointer shadow-2xs"
               >
                 使用现有值域
               </button>
@@ -1148,26 +1153,26 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
       {/* ========================================================= */}
       {isReviewModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E6EAF0] rounded-2xl w-[560px] shadow-2xl p-6 space-y-5 animate-in zoom-in-95 duration-150">
+          <div className="bg-white border border-[#E6EAF0] rounded-lg w-[540px] shadow-2xl p-5 space-y-4 animate-in zoom-in-95 duration-150">
             {/* Title */}
-            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2.5">
               <div className="flex items-center space-x-2">
-                <ShieldCheck className="w-5 h-5 text-[#2563EB]" />
-                <h3 className="text-base font-bold text-[#172033]">准备提交治理确认</h3>
+                <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
+                <h3 className="text-xs font-bold text-[#172033]">准备提交治理确认</h3>
               </div>
               <button
                 onClick={() => setIsReviewModalOpen(false)}
-                className="text-[#64748B] hover:text-[#172033]"
+                className="text-[#64748B] hover:text-[#172033] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Content Summary */}
-            <div className="space-y-4 text-xs">
-              <div className="bg-[#F8FAFC] border border-[#E6EAF0] p-4 rounded-xl space-y-2">
+            <div className="space-y-3 text-xs">
+              <div className="bg-[#F8FAFC] border border-[#E6EAF0] p-3.5 rounded-md space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-base font-bold text-[#172033]">{name}</span>
+                  <span className="text-sm font-bold text-[#172033]">{name}</span>
                   <span className="font-mono text-[#2563EB] font-bold bg-white px-2 py-0.5 rounded border border-[#BFDBFE]">
                     {code}
                   </span>
@@ -1179,29 +1184,29 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-[#F8FAFC] rounded-lg">
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="p-2.5 bg-[#F8FAFC] rounded-md border border-[#E6EAF0]">
                   <span className="text-[#64748B]">关联术语:</span>
                   <p className="font-bold text-[#172033] mt-0.5">{businessTerm}</p>
                 </div>
-                <div className="p-3 bg-[#F8FAFC] rounded-lg">
+                <div className="p-2.5 bg-[#F8FAFC] rounded-md border border-[#E6EAF0]">
                   <span className="text-[#64748B]">关联业务对象:</span>
                   <p className="font-bold text-[#172033] mt-0.5">{businessObjectAttr}</p>
                 </div>
-                <div className="p-3 bg-[#F8FAFC] rounded-lg">
+                <div className="p-2.5 bg-[#F8FAFC] rounded-md border border-[#E6EAF0]">
                   <span className="text-[#64748B]">关联数据元:</span>
                   <p className="font-bold text-[#2563EB] mt-0.5">性别代码 (DE_PERSON_GENDER_CODE)</p>
                 </div>
-                <div className="p-3 bg-[#F8FAFC] rounded-lg">
+                <div className="p-2.5 bg-[#F8FAFC] rounded-md border border-[#E6EAF0]">
                   <span className="text-[#64748B]">适用范围:</span>
                   <p className="font-bold text-[#172033] mt-0.5">{scope}</p>
                 </div>
               </div>
 
               {/* AI Check Result High Risk Warning */}
-              <div className="p-3.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl space-y-1.5 text-[#78350F]">
+              <div className="p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-md space-y-1 text-[#78350F]">
                 <div className="flex items-center space-x-1.5 font-bold text-[#D97706]">
-                  <AlertTriangle className="w-4 h-4 text-[#D97706]" />
+                  <AlertTriangle className="w-3.5 h-3.5 text-[#D97706]" />
                   <span>AI 检查结果：存在高重复风险</span>
                 </div>
                 <p className="text-[11px] leading-normal">
@@ -1211,13 +1216,13 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
             </div>
 
             {/* Modal Actions */}
-            <div className="pt-2 flex items-center justify-between">
+            <div className="pt-2 flex items-center justify-between border-t border-[#E6EAF0]">
               <button
                 onClick={() => {
                   setIsReviewModalOpen(false);
                   setIsCompareModalOpen(true);
                 }}
-                className="text-xs font-bold text-[#2563EB] hover:underline"
+                className="text-xs font-bold text-[#2563EB] hover:underline cursor-pointer"
               >
                 ← 返回查看已有标准
               </button>
@@ -1225,13 +1230,13 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setIsReviewModalOpen(false)}
-                  className="px-3 py-2 text-xs font-bold text-[#64748B] hover:bg-[#F1F5F9] rounded-lg cursor-pointer"
+                  className="px-3 py-1.5 text-xs font-bold text-[#64748B] hover:bg-[#F1F5F9] rounded-md cursor-pointer"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleFinalSubmit}
-                  className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg cursor-pointer shadow-2xs"
+                  className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md cursor-pointer shadow-2xs"
                 >
                   补充差异说明并继续提交
                 </button>
@@ -1246,27 +1251,27 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
       {/* ========================================================= */}
       {isSpecFileModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E6EAF0] rounded-2xl w-[600px] shadow-2xl p-6 space-y-4 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-3">
+          <div className="bg-white border border-[#E6EAF0] rounded-lg w-[580px] shadow-2xl p-5 space-y-3.5 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2.5">
               <div className="flex items-center space-x-2">
                 <BookOpen className="w-4 h-4 text-[#2563EB]" />
-                <h3 className="text-sm font-bold text-[#172033]">标准文件原文摘录</h3>
+                <h3 className="text-xs font-bold text-[#172033]">标准文件原文摘录</h3>
               </div>
-              <button onClick={() => setIsSpecFileModalOpen(false)} className="text-[#64748B]">
+              <button onClick={() => setIsSpecFileModalOpen(false)} className="text-[#64748B] cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 bg-[#F8FAFC] border border-[#E6EAF0] rounded-xl space-y-2 text-xs">
+            <div className="p-3.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md space-y-2 text-xs">
               <div className="flex items-center justify-between font-bold text-[#172033]">
                 <span>《GB/T XXXXX—2026 人口基础信息分类与代码》</span>
                 <span className="text-[#2563EB] font-mono">第 4.2 条 · P38</span>
               </div>
-              <div className="p-3 bg-white border border-[#E6EAF0] rounded-lg space-y-2 text-[#334155] leading-relaxed font-mono text-[11px]">
+              <div className="p-2.5 bg-white border border-[#E6EAF0] rounded-md space-y-1.5 text-[#334155] leading-relaxed font-mono text-[11px]">
                 <p className="font-sans font-bold text-[#172033]">4.2 自然人性别代码规范</p>
                 <p>4.2.1 编码规则：采用 2 位数字代码表达自然人性别基本分类。</p>
                 <p>4.2.2 允许码值取值如下：</p>
-                <ul className="list-disc list-inside space-y-1 pl-2">
+                <ul className="list-disc list-inside space-y-0.5 pl-2">
                   <li><strong>01</strong> — 男（Male）</li>
                   <li><strong>02</strong> — 女（Female）</li>
                   <li><strong>09</strong> — 未说明（Unspecified）</li>
@@ -1274,10 +1279,10 @@ export const CreateValueDomainStandardWorkspace: React.FC<CreateValueDomainStand
               </div>
             </div>
 
-            <div className="pt-2 text-right">
+            <div className="pt-2 text-right border-t border-[#E6EAF0]">
               <button
                 onClick={() => setIsSpecFileModalOpen(false)}
-                className="px-4 py-1.5 bg-[#2563EB] text-white text-xs font-bold rounded-lg cursor-pointer"
+                className="px-3.5 py-1.5 bg-[#2563EB] text-white text-xs font-bold rounded-md cursor-pointer"
               >
                 确认关闭
               </button>
