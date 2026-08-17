@@ -31,6 +31,7 @@ import {
 interface DataServiceMarketplaceWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
   onNavigateToResources?: (query?: string) => void;
+  onNavigateToMyRequests?: () => void;
   onNavigateToMetrics?: () => void;
   onNavigateToBusinessObject?: () => void;
   onNavigateToDataAssets?: () => void;
@@ -41,6 +42,7 @@ interface DataServiceMarketplaceWorkspaceProps {
 export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWorkspaceProps> = ({
   addToast,
   onNavigateToResources,
+  onNavigateToMyRequests,
   onNavigateToMetrics,
   onNavigateToBusinessObject,
   onNavigateToDataAssets,
@@ -66,20 +68,45 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
     path: string;
   } | null>(null);
 
+  const isExplicitGoalQuery = (query: string) => {
+    const q = query.trim();
+    if (!q) return false;
+    // Explicit Goal indicators: questions, desire verbs + analysis objects, or analytical sentence structures
+    const explicitGoalMarkers = [
+      '我想分析', '想分析', '需要哪些数据', '如何分析', '如何评估',
+      '怎么分析', '需要什么数据', '分析方案', '构建方案', '我想了解'
+    ];
+    const hasExplicitMarker = explicitGoalMarkers.some(marker => q.includes(marker));
+    const isAnalyticalQuestion = (q.includes('分析') || q.includes('评估') || q.includes('比较')) && 
+                                  (q.includes('？') || q.includes('?') || q.includes('需要') || q.includes('如何') || q.includes('哪') || q.length >= 14);
+    return hasExplicitMarker || isAnalyticalQuestion;
+  };
+
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!searchQuery.trim()) {
+    const q = searchQuery.trim();
+    if (!q) {
       if (onNavigateToResources) {
-        onNavigateToResources('分析各街镇老龄化情况');
+        onNavigateToResources('');
       } else {
-        addToast?.('info', '搜索提示', '请输入搜索关键词或业务问题，例如：各街镇老龄化情况');
+        addToast?.('info', '搜索提示', '请输入搜索关键词或业务问题，例如：人口年龄数据、老龄化率、或者直接描述业务目标');
       }
       return;
     }
-    if (onNavigateToResources) {
-      onNavigateToResources(searchQuery);
+    
+    // User is explicit -> AI retreats rule:
+    // Only route to GOAL_SEARCH if it's an explicit goal/problem statement.
+    // If it's a resource keyword or fuzzy noun (e.g. "人口年龄数据", "老龄人口", "老龄化率"), route to RESOURCE_SEARCH.
+    if (isExplicitGoalQuery(q)) {
+      if (onNavigateToResources) {
+        onNavigateToResources(q);
+      }
+      addToast?.('success', '目标意图识别', `已识别业务目标「${q}」，正在构建专属数据方案`);
     } else {
-      addToast?.('success', '检索执行', `已在数据服务超市中检索「${searchQuery}」，命中 18 项相关资源`);
+      if (onNavigateToResources) {
+        onNavigateToResources(q);
+      }
+      addToast?.('info', '精准检索', `已进入资源检索模式，搜索「${q}」`);
     }
   };
 
@@ -139,8 +166,12 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
           {/* 3. 我的申请 */}
           <button
             onClick={() => {
-              setActiveSideNav('my_requests');
-              addToast?.('info', '我的申请', '查看已申请的数据访问权限与 API 调用授权记录');
+              if (onNavigateToMyRequests) {
+                onNavigateToMyRequests();
+              } else {
+                setActiveSideNav('my_requests');
+                addToast?.('info', '我的申请', '查看已申请的数据访问权限与 API 调用授权记录');
+              }
             }}
             className={`w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'my_requests'
@@ -225,7 +256,7 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="例如：分析各街镇老龄化情况、近三年服务工单、人口基本信息、老龄化率……"
+                      placeholder="搜索数据、指标、API、业务对象，或直接描述你想完成的事情"
                       className="w-full pl-10 pr-24 py-2.5 text-xs bg-[#F8FAFC] border border-[#E6EAF0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:bg-white text-[#172033] placeholder-[#94A3B8] transition-all"
                     />
                     <div className="absolute right-3 flex items-center space-x-1 text-[11px] text-[#94A3B8] font-medium pointer-events-none select-none">
@@ -238,62 +269,79 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
                 </form>
 
                 {/* Resource Type Chips Below Search */}
-                <div className="flex items-center space-x-2 pt-0.5 text-xs">
-                  <span className="text-[11px] text-[#667085] font-medium mr-1">类型:</span>
-                  
-                  <button
-                    onClick={() => setSelectedResourceTypeChip('ALL')}
-                    className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
-                      selectedResourceTypeChip === 'ALL'
-                        ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
-                        : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
-                    }`}
-                  >
-                    全部
-                  </button>
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-xs">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[11px] text-[#667085] font-medium mr-1">类型:</span>
+                    
+                    <button
+                      onClick={() => setSelectedResourceTypeChip('ALL')}
+                      className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
+                        selectedResourceTypeChip === 'ALL'
+                          ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
+                          : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
+                      }`}
+                    >
+                      全部
+                    </button>
 
-                  <button
-                    onClick={() => setSelectedResourceTypeChip('DATA_ASSET')}
-                    className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
-                      selectedResourceTypeChip === 'DATA_ASSET'
-                        ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
-                        : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
-                    }`}
-                  >
-                    数据资产
-                  </button>
+                    <button
+                      onClick={() => setSelectedResourceTypeChip('DATA_ASSET')}
+                      className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
+                        selectedResourceTypeChip === 'DATA_ASSET'
+                          ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
+                          : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
+                      }`}
+                    >
+                      数据资产
+                    </button>
 
-                  <button
-                    onClick={() => setSelectedResourceTypeChip('METRIC')}
-                    className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
-                      selectedResourceTypeChip === 'METRIC'
-                        ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
-                        : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
-                    }`}
-                  >
-                    指标
-                  </button>
+                    <button
+                      onClick={() => setSelectedResourceTypeChip('METRIC')}
+                      className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
+                        selectedResourceTypeChip === 'METRIC'
+                          ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
+                          : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
+                      }`}
+                    >
+                      指标
+                    </button>
 
-                  <button
-                    onClick={() => setSelectedResourceTypeChip('DATA_API')}
-                    className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
-                      selectedResourceTypeChip === 'DATA_API'
-                        ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
-                        : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
-                    }`}
-                  >
-                    数据 API
-                  </button>
+                    <button
+                      onClick={() => setSelectedResourceTypeChip('DATA_API')}
+                      className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
+                        selectedResourceTypeChip === 'DATA_API'
+                          ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
+                          : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
+                      }`}
+                    >
+                      数据 API
+                    </button>
 
+                    <button
+                      onClick={() => setSelectedResourceTypeChip('BUSINESS_OBJECT')}
+                      className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
+                        selectedResourceTypeChip === 'BUSINESS_OBJECT'
+                          ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
+                          : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
+                      }`}
+                    >
+                      业务对象
+                    </button>
+                  </div>
+
+                  {/* Explicit Browse All Resources link right under Hero Search */}
                   <button
-                    onClick={() => setSelectedResourceTypeChip('BUSINESS_OBJECT')}
-                    className={`px-3 py-1 rounded-md text-xs transition-all cursor-pointer ${
-                      selectedResourceTypeChip === 'BUSINESS_OBJECT'
-                        ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
-                        : 'bg-[#F1F5F9] text-[#475569] hover:bg-[#E2E8F0]'
-                    }`}
+                    onClick={() => {
+                      if (onNavigateToResources) {
+                        onNavigateToResources('');
+                      } else {
+                        addToast?.('info', '浏览全部资源', '进入全部可发现资源列表');
+                      }
+                    }}
+                    className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold flex items-center space-x-1 hover:underline cursor-pointer py-1"
                   >
-                    业务对象
+                    <span>浏览全部资源</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -328,13 +376,29 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
           {/* 模块二：浏览资源类型                                     */}
           {/* ======================================================= */}
           <section className="space-y-3">
-            <div>
-              <h2 className="text-sm font-bold text-[#172033]">
-                浏览资源类型
-              </h2>
-              <p className="text-xs text-[#667085] mt-0.5">
-                按资源类型快速进入浏览与搜索。
-              </p>
+            <div className="flex items-end justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-[#172033]">
+                  浏览资源类型
+                </h2>
+                <p className="text-xs text-[#667085] mt-0.5">
+                  按资源类型快速进入浏览与搜索。
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (onNavigateToResources) {
+                    onNavigateToResources('');
+                  } else {
+                    addToast?.('info', '浏览全部资源', '进入全量资源浏览视图');
+                  }
+                }}
+                className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold flex items-center space-x-1 hover:underline cursor-pointer"
+              >
+                <span>浏览全部资源</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -475,7 +539,12 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
               
               {/* Domain 1: 人口服务 */}
               <div
-                onClick={() => addToast?.('info', '人口服务', '进入人口主体、居住与户籍相关 128 项资源列表')}
+                onClick={() => {
+                  if (onNavigateToResources) {
+                    onNavigateToResources('人口');
+                  }
+                  addToast?.('info', '人口服务', '进入人口主体、居住与户籍相关 128 项资源列表');
+                }}
                 className="bg-white border border-[#E6EAF0] hover:border-[#2563EB] rounded-md p-4 flex flex-col justify-between transition-all cursor-pointer group shadow-2xs"
               >
                 <div className="space-y-2">
@@ -507,7 +576,12 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
 
               {/* Domain 2: 公共服务 */}
               <div
-                onClick={() => addToast?.('info', '公共服务', '进入热线服务工单、事项办理与服务评价相关 96 项资源列表')}
+                onClick={() => {
+                  if (onNavigateToResources) {
+                    onNavigateToResources('公共');
+                  }
+                  addToast?.('info', '公共服务', '进入热线服务工单、事项办理与服务评价相关 96 项资源列表');
+                }}
                 className="bg-white border border-[#E6EAF0] hover:border-[#2563EB] rounded-md p-4 flex flex-col justify-between transition-all cursor-pointer group shadow-2xs"
               >
                 <div className="space-y-2">
@@ -539,7 +613,12 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
 
               {/* Domain 3: 企业服务 */}
               <div
-                onClick={() => addToast?.('info', '企业服务', '进入企业主体、企业状态与涉企服务相关 84 项资源列表')}
+                onClick={() => {
+                  if (onNavigateToResources) {
+                    onNavigateToResources('企业');
+                  }
+                  addToast?.('info', '企业服务', '进入企业主体、企业状态与涉企服务相关 84 项资源列表');
+                }}
                 className="bg-white border border-[#E6EAF0] hover:border-[#2563EB] rounded-md p-4 flex flex-col justify-between transition-all cursor-pointer group shadow-2xs"
               >
                 <div className="space-y-2">
@@ -571,7 +650,12 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
 
               {/* Domain 4: 养老服务 */}
               <div
-                onClick={() => addToast?.('info', '养老服务', '进入养老机构、服务能力与养老资源相关 42 项数据列表')}
+                onClick={() => {
+                  if (onNavigateToResources) {
+                    onNavigateToResources('养老');
+                  }
+                  addToast?.('info', '养老服务', '进入养老机构、服务能力与养老资源相关 42 项数据列表');
+                }}
                 className="bg-white border border-[#E6EAF0] hover:border-[#2563EB] rounded-md p-4 flex flex-col justify-between transition-all cursor-pointer group shadow-2xs"
               >
                 <div className="space-y-2">
@@ -667,7 +751,12 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
 
                 <div className="pt-2 border-t border-[#EEF2F6]">
                   <button
-                    onClick={() => addToast?.('info', '自然人', '载入自然人关联的 12 项数据资产与 7 个指标')}
+                    onClick={() => {
+                      if (onNavigateToResources) {
+                        onNavigateToResources('自然人');
+                      }
+                      addToast?.('info', '自然人', '载入自然人关联的 12 项数据资产与 7 个指标');
+                    }}
                     className="text-xs text-[#2563EB] hover:underline flex items-center space-x-1 font-bold cursor-pointer"
                   >
                     <span>查看相关资源</span>
@@ -712,7 +801,12 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
 
                 <div className="pt-2 border-t border-[#EEF2F6]">
                   <button
-                    onClick={() => addToast?.('info', '服务工单', '载入服务工单关联的 8 项数据资产与 5 个指标')}
+                    onClick={() => {
+                      if (onNavigateToResources) {
+                        onNavigateToResources('服务工单');
+                      }
+                      addToast?.('info', '服务工单', '载入服务工单关联的 8 项数据资产与 5 个指标');
+                    }}
                     className="text-xs text-[#2563EB] hover:underline flex items-center space-x-1 font-bold cursor-pointer"
                   >
                     <span>查看相关资源</span>
@@ -757,7 +851,12 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
 
                 <div className="pt-2 border-t border-[#EEF2F6]">
                   <button
-                    onClick={() => addToast?.('info', '行政区域', '载入行政区域关联的 16 项数据资产与 6 个指标')}
+                    onClick={() => {
+                      if (onNavigateToResources) {
+                        onNavigateToResources('行政区划');
+                      }
+                      addToast?.('info', '行政区域', '载入行政区域关联的 16 项数据资产与 6 个指标');
+                    }}
                     className="text-xs text-[#2563EB] hover:underline flex items-center space-x-1 font-bold cursor-pointer"
                   >
                     <span>查看相关资源</span>
@@ -802,7 +901,12 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
 
                 <div className="pt-2 border-t border-[#EEF2F6]">
                   <button
-                    onClick={() => addToast?.('info', '养老机构', '载入养老机构关联的 6 项数据资产与 4 个指标')}
+                    onClick={() => {
+                      if (onNavigateToResources) {
+                        onNavigateToResources('养老机构');
+                      }
+                      addToast?.('info', '养老机构', '载入养老机构关联的 6 项数据资产与 4 个指标');
+                    }}
                     className="text-xs text-[#2563EB] hover:underline flex items-center space-x-1 font-bold cursor-pointer"
                   >
                     <span>查看相关资源</span>

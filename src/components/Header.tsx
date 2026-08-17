@@ -18,8 +18,8 @@ interface HeaderProps {
   onOpenLauncher?: () => void;
   onOpenProfile?: () => void;
   isProfileOpen?: boolean;
-  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request';
-  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request') => void;
+  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail';
+  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail') => void;
   batchCount?: number;
 }
 
@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={() => onSelectNav && onSelectNav('marketplace_resources')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-              currentNav === 'marketplace' || currentNav === 'marketplace_resources' || currentNav === 'multi_resource_request'
+              currentNav === 'marketplace' || currentNav === 'marketplace_resources' || currentNav === 'asset_detail' || currentNav === 'metric_detail' || currentNav === 'business_object_detail' || currentNav === 'multi_resource_request' || currentNav === 'my_requests'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
                 : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
@@ -100,8 +100,12 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           <button
-            onClick={() => alert('管理中心：显示组织机构、权限审批与数据连接配置')}
-            className="px-3 py-1.5 rounded-md hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors cursor-pointer"
+            onClick={() => onSelectNav && onSelectNav('access_review')}
+            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+              currentNav === 'access_review' || currentNav === 'access_review_detail'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
+                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+            }`}
           >
             管理中心
           </button>
