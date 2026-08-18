@@ -33,7 +33,8 @@ import {
   ArrowRight,
   Database,
   Building2,
-  Table
+  Table,
+  Workflow
 } from 'lucide-react';
 import { SingleResourceAccessRequestDrawer } from './SingleResourceAccessRequestDrawer';
 
@@ -254,15 +255,15 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
   });
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-[#F7F9FC] text-[#172033] font-sans antialiased relative">
+    <div className="flex-1 flex overflow-hidden bg-white text-[#0F172A] font-sans antialiased relative selection:bg-[#EFF6FF] selection:text-[#2563EB]">
       
       {/* ========================================================= */}
-      {/* 1. MARKETPLACE SIDEBAR (210–220px)                         */}
+      {/* 1. MARKETPLACE SIDEBAR (210px)                            */}
       {/* ========================================================= */}
-      <aside className="w-[210px] bg-white border-r border-[#E6EAF0] flex flex-col shrink-0 select-none z-10">
+      <aside className="w-[210px] bg-white border-r border-[#E2E8F0] flex flex-col shrink-0 select-none z-10">
         {/* Sidebar Header Title */}
-        <div className="px-5 py-4 border-b border-[#E6EAF0]">
-          <h2 className="text-sm font-bold text-[#172033] tracking-tight">
+        <div className="px-5 py-4 border-b border-[#E2E8F0]">
+          <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">
             数据服务超市
           </h2>
         </div>
@@ -279,7 +280,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                 addToast?.('info', '发现首页', '切换至数据服务超市发现首页');
               }
             }}
-            className={`w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
+            className={`w-full px-3 py-2 rounded flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'discovery'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]'
                 : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
@@ -295,9 +296,9 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               setActiveSideNav('resources');
               if (onBackToResources) onBackToResources();
             }}
-            className={`w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
+            className={`w-full px-3 py-2 rounded flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'resources'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]'
                 : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
           >
@@ -315,9 +316,9 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                 addToast?.('info', '我的申请', '查看已申请的数据访问权限与 API 调用授权记录');
               }
             }}
-            className={`w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
+            className={`w-full px-3 py-2 rounded flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'my_requests'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]'
                 : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
           >
@@ -326,15 +327,15 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
           </button>
         </nav>
 
-        {/* Bottom Fixed Lightweight AI Partner Card */}
-        <div className="mt-auto p-3 border-t border-[#EEF2F6] bg-white">
+        {/* Bottom Fixed AI Partner Card */}
+        <div className="mt-auto p-3 border-t border-[#E2E8F0] bg-white">
           <div className="flex items-center space-x-2.5 text-xs py-1 px-1">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#3B82F6] to-[#6366F1] flex items-center justify-center text-white shrink-0 shadow-2xs">
-              <Sparkles className="w-4 h-4 fill-white/20" />
+            <div className="w-6 h-6 rounded bg-[#2563EB] flex items-center justify-center text-white shrink-0 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 fill-white/20" />
             </div>
             <div className="min-w-0">
               <div className="text-[10px] text-[#94A3B8] leading-tight">AI Partner</div>
-              <div className="text-xs font-bold text-[#172033] leading-tight truncate">
+              <div className="text-xs font-bold text-[#0F172A] leading-tight truncate">
                 Xino ｜ 犀诺
               </div>
             </div>
@@ -343,22 +344,22 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
       </aside>
 
       {/* ========================================================= */}
-      {/* 2. MAIN RESOURCE DETAIL AREA (约 72%)                      */}
+      {/* 2. CONTINUOUS MAIN CONTENT AREA (Flat Entity Detail)       */}
       {/* ========================================================= */}
-      <main className="flex-1 flex flex-col overflow-y-auto bg-[#F7F9FC] transition-all">
+      <main className="flex-1 flex flex-col overflow-y-auto bg-white transition-all">
         
-        {/* Conditional Goal Search Context Strip (仅当从 Goal Search 来源时出现) */}
+        {/* Conditional Goal Search Context Strip */}
         {fromGoalSearch && (
           <div className="bg-[#EFF6FF] border-b border-[#DBEAFE] px-8 py-2.5 flex items-center justify-between text-xs shrink-0">
             <div className="flex items-center space-x-2">
               <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
-              <span className="text-[#1E40AF] font-medium">
+              <span className="text-[#1E40AF]">
                 与当前目标「{goalQuery}」相关：该数据提供年龄、常住状态和行政区域等分析所需业务信息。
               </span>
             </div>
             <button
               onClick={onBackToResources}
-              className="text-[#2563EB] hover:text-[#1D4ED8] font-bold flex items-center space-x-1 cursor-pointer"
+              className="text-[#2563EB] hover:text-[#1D4ED8] font-semibold flex items-center space-x-1 cursor-pointer"
             >
               <span>返回当前数据方案</span>
               <ArrowRight className="w-3 h-3" />
@@ -366,11 +367,14 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
           </div>
         )}
 
-        <div className="p-8 max-w-[940px] w-full mx-auto space-y-6">
+        {/* Flat Continuous Document Canvas */}
+        <div className="max-w-[1040px] w-full mx-auto px-8 py-7 space-y-7">
 
-          {/* Top Return Link & Breadcrumb */}
+          {/* ======================================================= */}
+          {/* I. BREADCRUMB & BACK ACTION                             */}
+          {/* ======================================================= */}
           <div className="space-y-2">
-            <div className="text-xs text-[#94A3B8] flex items-center space-x-2">
+            <div className="text-xs text-[#64748B] flex items-center space-x-2">
               <span
                 onClick={onNavigateToDiscovery}
                 className="hover:text-[#2563EB] cursor-pointer"
@@ -385,11 +389,11 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                 资源
               </span>
               <span>/</span>
-              <span className="text-[#172033] font-medium">人口基本信息视图</span>
+              <span className="text-[#0F172A] font-semibold">人口基本信息视图</span>
               {isAllFieldsView && (
                 <>
                   <span>/</span>
-                  <span className="text-[#2563EB] font-medium">全部字段</span>
+                  <span className="text-[#2563EB] font-semibold">全部字段</span>
                 </>
               )}
             </div>
@@ -410,7 +414,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               </button>
 
               {/* Demo Mode Toggle for Permission Status in Use Rail */}
-              <div className="flex items-center space-x-2 text-[11px] text-[#94A3B8]">
+              <div className="flex items-center space-x-2 text-[11px] text-[#64748B]">
                 <span>访问权限模拟:</span>
                 <button
                   onClick={() => {
@@ -418,7 +422,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                     setAccessState(next);
                     addToast?.('info', '切换权限模拟', next === 'granted' ? '已模拟「可直接使用」状态' : '已模拟「需申请使用」状态');
                   }}
-                  className="px-2 py-0.5 rounded bg-white border border-[#E6EAF0] text-[#334155] hover:border-[#2563EB] font-medium transition-all cursor-pointer shadow-2xs"
+                  className="px-2 py-0.5 rounded bg-white border border-[#E2E8F0] text-[#334155] hover:border-[#2563EB] font-medium transition-all cursor-pointer shadow-2xs"
                 >
                   {accessState === 'granted' ? '🟢 当前：可直接使用' : '🟠 当前：需申请'}
                 </button>
@@ -427,132 +431,109 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
           </div>
 
           {/* ======================================================= */}
-          {/* A. RESOURCE HEADER                                      */}
+          {/* II. FLAT ENTITY HEADER (No Hero Card)                    */}
           {/* ======================================================= */}
-          <div className="bg-white border border-[#E6EAF0] rounded-md p-6 shadow-2xs space-y-5">
-            
-            {/* Top Row: Green Database Icon + Title + Badges + Subtitle */}
-            <div className="flex items-start space-x-4">
-              {/* Green Icon Box */}
-              <div className="w-14 h-14 rounded-xl bg-[#059669] flex items-center justify-center text-white shrink-0 shadow-2xs">
-                <Database className="w-7 h-7" />
-              </div>
-
-              <div className="space-y-1.5 flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="text-2xl font-bold text-[#172033] tracking-tight">
-                    人口基本信息视图
-                  </h1>
-                  <span className="px-2 py-0.5 bg-[#EFF6FF] text-[#2563EB] border border-[#DBEAFE] text-[11px] font-semibold rounded">
-                    DATA ASSET · VIEW
-                  </span>
-                  <span className="px-2 py-0.5 bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0] text-[11px] font-medium rounded">
-                    已发布资源
-                  </span>
-                </div>
-
-                <div className="text-xs font-mono text-[#94A3B8]">
-                  population_profile_view
-                </div>
-
-                {/* 正式业务定义 */}
-                <p className="text-xs text-[#334155] leading-relaxed pt-1">
-                  记录自然人的主体标识、出生日期、年龄、常住状态、性别及所属行政区域等基础信息，用于人口结构、老龄化与区域人口分析。
-                </p>
-              </div>
+          <div className="space-y-3.5">
+            {/* Title Line */}
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-extrabold text-[#0F172A] tracking-tight">
+                人口基本信息视图
+              </h1>
+              <span className="px-2 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] border border-[#DBEAFE] text-xs font-semibold">
+                DATA ASSET · VIEW
+              </span>
+              <span className="px-2 py-0.5 rounded bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0] text-xs font-medium">
+                已发布资源
+              </span>
             </div>
 
-            {/* Pills row & Applicable scenarios */}
-            <div className="space-y-2.5 pt-1">
-              <div className="flex items-center space-x-2">
-                <span className="px-3 py-0.5 rounded-md bg-white border border-[#E2E8F0] text-xs text-[#475569] font-medium">
-                  人口服务
+            <div className="text-xs text-[#64748B] font-mono">
+              population_profile_view
+            </div>
+
+            {/* Formal Business Definition Paragraph */}
+            <p className="text-sm text-[#334155] leading-relaxed">
+              记录自然人的主体标识、出生日期、年龄、常住状态、性别及所属行政区域等基础信息，用于人口结构、老龄化与区域人口分析。
+            </p>
+
+            {/* Business Context & Applicability Tags */}
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs pt-1">
+              <div className="flex items-center space-x-1.5 text-[#475569]">
+                <span className="text-[#64748B]">业务上下文：</span>
+                <button
+                  onClick={() => onNavigateToBusinessObject?.('res-01')}
+                  className="inline-flex items-center space-x-1 text-[#2563EB] hover:text-[#1D4ED8] font-semibold hover:underline cursor-pointer"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>人口服务 · 自然人</span>
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-1.5 text-[#475569]">
+                <span className="text-[#64748B]">适用于：</span>
+                <span className="text-[#0F172A] font-medium">
+                  人口结构分析 · 老龄化分析 · 区域人口统计
                 </span>
-                <span className="px-3 py-0.5 rounded-md bg-white border border-[#E2E8F0] text-xs text-[#475569] font-medium">
-                  自然人
-                </span>
-              </div>
-
-              <div className="text-xs text-[#64748B]">
-                <span className="text-[#334155] font-medium">适用于：</span>
-                <span className="ml-1">人口结构分析 · 老龄化分析 · 区域人口统计</span>
               </div>
             </div>
-
-            {/* ======================================================= */}
-            {/* B. 4 核心事实卡片 (4 列纯净分隔白底布局)                   */}
-            {/* ======================================================= */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-lg bg-[#F8FAFC]/80 border border-[#EEF2F6] text-xs">
-              
-              {/* Col 1: 一行代表 */}
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[#2563EB] shrink-0">
-                  <User className="w-4 h-4" />
-                </div>
-                <div className="space-y-0.5 min-w-0">
-                  <div className="text-[11px] text-[#64748B]">一行代表</div>
-                  <div className="font-bold text-[#172033] truncate">一个自然人主体</div>
-                </div>
-              </div>
-
-              {/* Col 2: 覆盖范围 */}
-              <div className="flex items-center space-x-3 border-l border-[#E2E8F0] pl-4">
-                <div className="w-8 h-8 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[#2563EB] shrink-0">
-                  <Globe className="w-4 h-4" />
-                </div>
-                <div className="space-y-0.5 min-w-0">
-                  <div className="text-[11px] text-[#64748B]">覆盖范围</div>
-                  <div className="font-bold text-[#172033] truncate">指定行政区域内的常住人口</div>
-                </div>
-              </div>
-
-              {/* Col 3: 业务对象 */}
-              <div className="flex items-center space-x-3 border-l border-[#E2E8F0] pl-4">
-                <div className="w-8 h-8 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[#2563EB] shrink-0">
-                  <Share2 className="w-4 h-4" />
-                </div>
-                <div className="space-y-0.5 min-w-0">
-                  <div className="text-[11px] text-[#64748B]">业务对象</div>
-                  <div
-                    onClick={() => onNavigateToBusinessObject?.('res-01')}
-                    className="font-bold text-[#172033] hover:text-[#2563EB] cursor-pointer truncate"
-                  >
-                    自然人
-                  </div>
-                </div>
-              </div>
-
-              {/* Col 4: 更新 */}
-              <div className="flex items-center space-x-3 border-l border-[#E2E8F0] pl-4">
-                <div className="w-8 h-8 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[#2563EB] shrink-0">
-                  <Calendar className="w-4 h-4" />
-                </div>
-                <div className="space-y-0.5 min-w-0">
-                  <div className="text-[11px] text-[#64748B]">更新</div>
-                  <div className="font-bold text-[#172033] truncate">每日 · 今天 08:10</div>
-                </div>
-              </div>
-
-            </div>
-
           </div>
 
           {/* ======================================================= */}
-          {/* C. SECONDARY VIEW: ALL FIELDS (查看全部字段二级视图)         */}
+          {/* III. CORE FACTS (横向事实带，不做四张统计卡)             */}
+          {/* ======================================================= */}
+          <div className="flex flex-wrap items-center justify-between py-3 px-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs gap-y-2">
+            <div className="flex items-center space-x-2">
+              <span className="text-[#64748B]">一行代表：</span>
+              <span className="font-bold text-[#0F172A]">一个自然人主体</span>
+            </div>
+
+            <div className="h-3.5 w-px bg-[#CBD5E1] hidden sm:block" />
+
+            <div className="flex items-center space-x-2">
+              <span className="text-[#64748B]">覆盖范围：</span>
+              <span className="font-bold text-[#0F172A]">指定行政区域内的常住人口</span>
+            </div>
+
+            <div className="h-3.5 w-px bg-[#CBD5E1] hidden sm:block" />
+
+            <div className="flex items-center space-x-2">
+              <span className="text-[#64748B]">业务对象：</span>
+              <button
+                onClick={() => onNavigateToBusinessObject?.('res-01')}
+                className="font-bold text-[#2563EB] hover:underline cursor-pointer"
+              >
+                自然人
+              </button>
+            </div>
+
+            <div className="h-3.5 w-px bg-[#CBD5E1] hidden sm:block" />
+
+            <div className="flex items-center space-x-2">
+              <span className="text-[#64748B]">更新：</span>
+              <span className="font-bold text-[#0F172A] flex items-center space-x-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
+                <span>每日 · 今天 08:10</span>
+              </span>
+            </div>
+          </div>
+
+          {/* ======================================================= */}
+          {/* IV. SECONDARY VIEW (ALL FIELDS) vs. MAIN ASSET VIEW      */}
           {/* ======================================================= */}
           {isAllFieldsView ? (
-            <div className="bg-white border border-[#E6EAF0] rounded-md p-6 shadow-2xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EEF2F6] pb-4">
+            /* SECONDARY VIEW: ALL FIELDS */
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
                 <div>
                   <div className="flex items-center space-x-2">
-                    <h2 className="text-base font-bold text-[#172033] tracking-tight">
+                    <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">
                       全部业务与技术字段
                     </h2>
-                    <span className="text-xs text-[#667085]">
+                    <span className="text-xs text-[#64748B]">
                       共 {ALL_ASSET_FIELDS.length} 项字段
                     </span>
                   </div>
-                  <p className="text-xs text-[#667085] mt-0.5">
+                  <p className="text-xs text-[#64748B] mt-0.5">
                     点击任意字段行可呼出字段业务定义、角色及标准映射抽屉。
                   </p>
                 </div>
@@ -565,14 +546,14 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                       value={fieldSearchTerm}
                       onChange={(e) => setFieldSearchTerm(e.target.value)}
                       placeholder="搜索字段名称或含义…"
-                      className="pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#E6EAF0] rounded-md text-[#172033] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] w-48"
+                      className="pl-8 pr-3 py-1.5 text-xs bg-[#F8FAFC] border border-[#E2E8F0] rounded text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] w-48"
                     />
                   </div>
 
                   <select
                     value={roleFilter}
                     onChange={(e) => setRoleFilter(e.target.value)}
-                    className="h-8 px-2.5 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] cursor-pointer"
+                    className="h-8 px-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] cursor-pointer"
                   >
                     <option value="all">全部角色</option>
                     <option value="主键">主体主键 (PK)</option>
@@ -585,19 +566,19 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               </div>
 
               {/* All Fields Table */}
-              <div className="border border-[#EEF2F6] rounded-md overflow-hidden text-xs">
+              <div className="border border-[#E2E8F0] rounded overflow-hidden text-xs">
                 <table className="w-full text-left">
-                  <thead className="bg-[#F8FAFC] text-[#667085] border-b border-[#EEF2F6] font-semibold">
+                  <thead className="bg-[#F8FAFC] text-[#64748B] border-b border-[#E2E8F0] font-semibold">
                     <tr>
-                      <th className="px-4 py-3">业务信息</th>
-                      <th className="px-4 py-3">技术字段</th>
-                      <th className="px-4 py-3">数据类型</th>
-                      <th className="px-4 py-3">业务角色</th>
-                      <th className="px-4 py-3">业务含义</th>
-                      <th className="px-4 py-3 text-right">操作</th>
+                      <th className="px-4 py-2.5">业务信息</th>
+                      <th className="px-4 py-2.5">技术字段</th>
+                      <th className="px-4 py-2.5">数据类型</th>
+                      <th className="px-4 py-2.5">业务角色</th>
+                      <th className="px-4 py-2.5">业务含义</th>
+                      <th className="px-4 py-2.5 text-right">操作</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#EEF2F6]">
+                  <tbody className="divide-y divide-[#F1F5F9]">
                     {filteredFields.map((field) => (
                       <tr
                         key={field.name}
@@ -607,7 +588,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                         }`}
                       >
                         <td className="px-4 py-3">
-                          <div className="font-bold text-[#172033] flex items-center space-x-1.5">
+                          <div className="font-bold text-[#0F172A] flex items-center space-x-1.5">
                             <span>{field.cnName}</span>
                             {field.isKey && (
                               <span className="px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] text-[9px] font-bold rounded">
@@ -616,7 +597,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 font-mono text-[#667085]">
+                        <td className="px-4 py-3 font-mono text-[#64748B]">
                           {field.name}
                         </td>
                         <td className="px-4 py-3 font-mono text-[#475569]">
@@ -641,7 +622,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                 </table>
               </div>
 
-              <div className="flex justify-between items-center text-xs text-[#667085] pt-2">
+              <div className="flex justify-between items-center text-xs text-[#64748B] pt-1">
                 <span>显示 {filteredFields.length} / {ALL_ASSET_FIELDS.length} 个字段</span>
                 <button
                   onClick={() => setIsAllFieldsView(false)}
@@ -652,35 +633,42 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               </div>
             </div>
           ) : (
+            /* MAIN ASSET VIEW */
             <>
               {/* ======================================================= */}
-              {/* D. 关键业务信息 (第一核心区域)                            */}
+              {/* V. 关键业务信息 (Key Business Info)                      */}
               {/* ======================================================= */}
-              <div className="bg-white border border-[#E6EAF0] rounded-md p-6 shadow-2xs space-y-4">
-                <div className="flex items-center justify-between border-b border-[#EEF2F6] pb-3">
-                  <h2 className="text-base font-bold text-[#172033] tracking-tight">
-                    关键业务信息
-                  </h2>
+              <section className="space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
+                  <div className="space-y-0.5">
+                    <h2 className="text-sm font-bold text-[#0F172A] tracking-tight flex items-center space-x-2">
+                      <Table className="w-4 h-4 text-[#2563EB]" />
+                      <span>关键业务信息</span>
+                    </h2>
+                    <p className="text-xs text-[#64748B]">
+                      覆盖人口主体、出生日期、年龄与行政区域等核心业务字段
+                    </p>
+                  </div>
+
                   <button
                     onClick={() => setIsAllFieldsView(true)}
-                    className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-medium flex items-center space-x-1 cursor-pointer transition-colors"
+                    className="inline-flex items-center space-x-1 text-xs text-[#2563EB] hover:text-[#1D4ED8] font-bold cursor-pointer transition-colors"
                   >
                     <span>查看全部字段</span>
-                    <ArrowRight className="w-3 h-3" />
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                {/* 3 列企业级轻量表格 */}
-                <div className="border border-[#EEF2F6] rounded-md overflow-hidden text-xs">
+                <div className="border border-[#E2E8F0] rounded overflow-hidden text-xs">
                   <table className="w-full text-left">
-                    <thead className="bg-[#F8FAFC] text-[#64748B] border-b border-[#EEF2F6] font-semibold">
+                    <thead className="bg-[#F8FAFC] text-[#64748B] border-b border-[#E2E8F0] font-semibold">
                       <tr>
-                        <th className="px-4 py-2.5 w-[25%] font-medium">业务信息</th>
-                        <th className="px-4 py-2.5 w-[50%] font-medium">业务含义</th>
-                        <th className="px-4 py-2.5 w-[25%] font-medium">数据字段</th>
+                        <th className="px-4 py-2.5 w-[25%]">业务信息</th>
+                        <th className="px-4 py-2.5 w-[50%]">业务含义</th>
+                        <th className="px-4 py-2.5 w-[25%]">数据字段</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#EEF2F6]">
+                    <tbody className="divide-y divide-[#F1F5F9]">
                       {[
                         { info: '人口唯一标识', meaning: '唯一识别一个自然人主体', field: 'person_id', raw: ALL_ASSET_FIELDS[0] },
                         { info: '出生日期', meaning: '支撑年龄计算与老龄人口识别', field: 'birth_date', raw: ALL_ASSET_FIELDS[1] },
@@ -694,7 +682,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                           onClick={() => setSelectedFieldDetail(item.raw)}
                           className="hover:bg-[#F8FAFC] cursor-pointer transition-colors group"
                         >
-                          <td className="px-4 py-3 font-medium text-[#172033] group-hover:text-[#2563EB]">
+                          <td className="px-4 py-3 font-semibold text-[#0F172A] group-hover:text-[#2563EB]">
                             {item.info}
                           </td>
                           <td className="px-4 py-3 text-[#475569] leading-relaxed">
@@ -708,98 +696,107 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </section>
 
               {/* ======================================================= */}
-              {/* E. 数据状态 (Fitness Only，不表达权限)                   */}
+              {/* VI. 数据状态 (Data Fitness Status)                       */}
               {/* ======================================================= */}
-              <div className="bg-white border border-[#E6EAF0] rounded-md p-6 shadow-2xs space-y-4">
-                <div className="flex items-center justify-between border-b border-[#EEF2F6] pb-3">
-                  <h2 className="text-base font-bold text-[#172033] tracking-tight">
-                    数据状态
-                  </h2>
+              <section className="space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
+                  <div className="space-y-0.5">
+                    <h2 className="text-sm font-bold text-[#0F172A] tracking-tight flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-[#2563EB]" />
+                      <span>数据状态</span>
+                    </h2>
+                    <p className="text-xs text-[#64748B]">
+                      关注数据新鲜度、时效性与可用性评估（不表达权限状态）
+                    </p>
+                  </div>
+
                   <button
                     onClick={() => setIsFitnessDrawerOpen(true)}
-                    className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-medium flex items-center space-x-1 cursor-pointer transition-colors"
+                    className="inline-flex items-center space-x-1 text-xs text-[#2563EB] hover:text-[#1D4ED8] font-bold cursor-pointer transition-colors"
                   >
                     <span>查看质量摘要</span>
-                    <ArrowRight className="w-3 h-3" />
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                {/* 3 列数据状态内容 */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs pt-1">
-                  
-                  {/* Col 1: 每日更新 */}
-                  <div className="flex items-start space-x-3">
-                    <div className="w-9 h-9 rounded-full bg-[#EFF6FF] flex items-center justify-center text-[#2563EB] shrink-0 mt-0.5">
-                      <Clock className="w-5 h-5" />
+                {/* Flat Status Definition Rows */}
+                <div className="border border-[#E2E8F0] rounded divide-y divide-[#F1F5F9] text-xs">
+                  <div className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="font-bold text-[#0F172A]">更新频率</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#EFF6FF] text-[#2563EB] border border-[#DBEAFE]">
+                        每日更新
+                      </span>
                     </div>
-                    <div className="space-y-0.5">
-                      <div className="text-sm font-bold text-[#172033]">每日更新</div>
-                      <div className="text-[11px] text-[#64748B]">更新频率</div>
-                    </div>
+                    <span className="text-[#64748B] text-[11px]">
+                      固定每日凌晨完成增量同步与全量快照归档
+                    </span>
                   </div>
 
-                  {/* Col 2: 今天 08:10 */}
-                  <div className="flex items-start space-x-3">
-                    <div className="w-9 h-9 rounded-lg bg-[#EFF6FF] flex items-center justify-center text-[#2563EB] shrink-0 mt-0.5">
-                      <Calendar className="w-5 h-5" />
+                  <div className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="font-bold text-[#0F172A]">最近数据更新</span>
+                      <span className="font-mono text-xs font-semibold text-[#475569]">
+                        今天 08:10
+                      </span>
                     </div>
-                    <div className="space-y-0.5">
-                      <div className="text-sm font-bold text-[#172033]">今天 08:10</div>
-                      <div className="text-[11px] text-[#64748B]">最近更新</div>
-                    </div>
+                    <span className="text-[#64748B] text-[11px]">
+                      底层人口基本信息视图已同步至 2026-08-18 08:10 批次
+                    </span>
                   </div>
 
-                  {/* Col 3: 存在新鲜度提醒 */}
-                  <div className="flex items-start space-x-3">
-                    <div className="w-9 h-9 rounded-full bg-[#FFFBEB] flex items-center justify-center text-[#D97706] shrink-0 mt-0.5">
-                      <AlertCircle className="w-5 h-5" />
+                  <div className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="font-bold text-[#0F172A]">数据新鲜度 (Fitness)</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A] flex items-center space-x-1">
+                        <AlertTriangle className="w-3 h-3 text-[#D97706]" />
+                        <span>存在新鲜度提醒</span>
+                      </span>
                     </div>
-                    <div className="space-y-1">
-                      <div className="text-xs font-bold text-[#D97706]">存在新鲜度提醒</div>
-                      <p className="text-[11px] text-[#64748B] leading-relaxed">
-                        当前数据可以用于历史人口、人口结构和老龄化分析；如果用于当日实时统计，建议先确认最新同步状态。
-                      </p>
-                    </div>
+                    <span className="text-[#92400E] text-[11px] font-medium">
+                      当前数据可用于历史人口与结构分析；如用于当日实时统计，建议先确认最新同步状态
+                    </span>
                   </div>
-
                 </div>
-              </div>
+              </section>
 
               {/* ======================================================= */}
-              {/* F. 相关资源 (4 张紧凑横向卡片)                             */}
+              {/* VII. 相关资源 (Related Resources)                       */}
               {/* ======================================================= */}
-              <div className="bg-white border border-[#E6EAF0] rounded-md p-6 shadow-2xs space-y-4">
-                <div className="flex items-center justify-between border-b border-[#EEF2F6] pb-3">
-                  <h2 className="text-base font-bold text-[#172033] tracking-tight">
-                    相关资源
-                  </h2>
+              <section id="section-related-resources" className="space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
+                  <div className="space-y-0.5">
+                    <h2 className="text-sm font-bold text-[#0F172A] tracking-tight flex items-center space-x-2">
+                      <Network className="w-4 h-4 text-[#2563EB]" />
+                      <span>相关资源</span>
+                    </h2>
+                    <p className="text-xs text-[#64748B]">
+                      围绕当前人口资产关联的企业正式业务对象、派生指标与服务 API
+                    </p>
+                  </div>
+
                   <button
                     onClick={onBackToResources}
-                    className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-medium flex items-center space-x-1 cursor-pointer transition-colors"
+                    className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-bold inline-flex items-center space-x-0.5 cursor-pointer"
                   >
                     <span>查看全部相关资源</span>
-                    <ArrowRight className="w-3 h-3" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5 text-xs">
-                  
+                {/* Flat Compact Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                   {/* Card 1: 自然人 (BUSINESS OBJECT) */}
-                  <div className="p-3.5 rounded-lg bg-white border border-[#E2E8F0] hover:border-[#93C5FD] transition-all flex flex-col justify-between space-y-3">
-                    <div className="space-y-2">
-                      <div className="flex items-start space-x-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-[#2563EB] flex items-center justify-center text-white shrink-0">
-                          <User className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-xs text-[#172033] truncate">自然人</div>
-                          <span className="inline-block px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] text-[9px] font-semibold rounded">
-                            BUSINESS OBJECT
-                          </span>
-                        </div>
+                  <div className="p-3 border border-[#E2E8F0] rounded hover:border-[#2563EB] transition-all bg-white flex flex-col justify-between space-y-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[#0F172A]">自然人</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#EFF6FF] text-[#2563EB]">
+                          BUSINESS OBJECT
+                        </span>
                       </div>
                       <p className="text-[11px] text-[#64748B] leading-relaxed">
                         当前资产承载的核心业务对象。
@@ -807,25 +804,21 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                     </div>
                     <button
                       onClick={() => onNavigateToBusinessObject?.('res-01')}
-                      className="text-[#2563EB] hover:text-[#1D4ED8] font-semibold text-xs text-left cursor-pointer"
+                      className="pt-1.5 border-t border-[#F1F5F9] text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold inline-flex items-center justify-between cursor-pointer"
                     >
-                      查看 →
+                      <span>查看详情</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
                   {/* Card 2: 老龄化率 (METRIC) */}
-                  <div className="p-3.5 rounded-lg bg-white border border-[#E2E8F0] hover:border-[#93C5FD] transition-all flex flex-col justify-between space-y-3">
-                    <div className="space-y-2">
-                      <div className="flex items-start space-x-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-[#4F46E5] flex items-center justify-center text-white shrink-0 font-bold text-xs">
-                          %
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-xs text-[#172033] truncate">老龄化率</div>
-                          <span className="inline-block px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] text-[9px] font-semibold rounded">
-                            METRIC
-                          </span>
-                        </div>
+                  <div className="p-3 border border-[#E2E8F0] rounded hover:border-[#2563EB] transition-all bg-white flex flex-col justify-between space-y-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[#0F172A]">老龄化率</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#F0FDF4] text-[#166534]">
+                          METRIC
+                        </span>
                       </div>
                       <p className="text-[11px] text-[#64748B] leading-relaxed">
                         使用年龄与常住人口语义形成的正式指标。
@@ -833,25 +826,21 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                     </div>
                     <button
                       onClick={() => onNavigateToMetricDetail?.('res-03')}
-                      className="text-[#2563EB] hover:text-[#1D4ED8] font-semibold text-xs text-left cursor-pointer"
+                      className="pt-1.5 border-t border-[#F1F5F9] text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold inline-flex items-center justify-between cursor-pointer"
                     >
-                      查看 →
+                      <span>查看详情</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
                   {/* Card 3: 常住人口数 (METRIC) */}
-                  <div className="p-3.5 rounded-lg bg-white border border-[#E2E8F0] hover:border-[#93C5FD] transition-all flex flex-col justify-between space-y-3">
-                    <div className="space-y-2">
-                      <div className="flex items-start space-x-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-[#4F46E5] flex items-center justify-center text-white shrink-0 font-bold text-xs">
-                          %
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-xs text-[#172033] truncate">常住人口数</div>
-                          <span className="inline-block px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] text-[9px] font-semibold rounded">
-                            METRIC
-                          </span>
-                        </div>
+                  <div className="p-3 border border-[#E2E8F0] rounded hover:border-[#2563EB] transition-all bg-white flex flex-col justify-between space-y-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[#0F172A]">常住人口数</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#F0FDF4] text-[#166534]">
+                          METRIC
+                        </span>
                       </div>
                       <p className="text-[11px] text-[#64748B] leading-relaxed">
                         基于当前人口数据形成的人口规模指标。
@@ -859,40 +848,36 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                     </div>
                     <button
                       onClick={() => onNavigateToMetricDetail?.('res-07')}
-                      className="text-[#2563EB] hover:text-[#1D4ED8] font-semibold text-xs text-left cursor-pointer"
+                      className="pt-1.5 border-t border-[#F1F5F9] text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold inline-flex items-center justify-between cursor-pointer"
                     >
-                      查看 →
+                      <span>查看详情</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
 
                   {/* Card 4: 人口统计查询 API (DATA API) */}
-                  <div className="p-3.5 rounded-lg bg-white border border-[#E2E8F0] hover:border-[#93C5FD] transition-all flex flex-col justify-between space-y-3">
-                    <div className="space-y-2">
-                      <div className="flex items-start space-x-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-[#EA580C] flex items-center justify-center text-white shrink-0 font-bold text-xs">
-                          <Code className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-bold text-xs text-[#172033] truncate">人口统计查询 API</div>
-                          <span className="inline-block px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] text-[9px] font-semibold rounded">
-                            DATA API
-                          </span>
-                        </div>
+                  <div className="p-3 border border-[#E2E8F0] rounded hover:border-[#2563EB] transition-all bg-white flex flex-col justify-between space-y-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[#0F172A]">人口统计查询 API</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#F5F3FF] text-[#7C3AED]">
+                          DATA API
+                        </span>
                       </div>
                       <p className="text-[11px] text-[#64748B] leading-relaxed">
-                        提供区域人口统计查询能力。
+                        提供区域人口统计查询标准化服务能力。
                       </p>
                     </div>
                     <button
                       onClick={() => onNavigateToApiDetail?.('res-04')}
-                      className="text-[#2563EB] hover:text-[#1D4ED8] font-semibold text-xs text-left cursor-pointer"
+                      className="pt-1.5 border-t border-[#F1F5F9] text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold inline-flex items-center justify-between cursor-pointer"
                     >
-                      查看 →
+                      <span>查看详情</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
-
                 </div>
-              </div>
+              </section>
             </>
           )}
 
@@ -900,68 +885,83 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
       </main>
 
       {/* ========================================================= */}
-      {/* 3. RIGHT USE RAIL (约 28%，只回答：权限与下一步操作)          */}
+      {/* 3. LIGHTWEIGHT RIGHT USE RAIL (Flat Sidebar)              */}
       {/* ========================================================= */}
-      <aside className="w-[300px] bg-white border-l border-[#E6EAF0] flex flex-col shrink-0 p-6 space-y-6 select-none overflow-y-auto">
+      <aside className="w-[300px] xl:w-[320px] bg-white border-l border-[#E2E8F0] flex flex-col shrink-0 overflow-y-auto select-none p-6 space-y-5">
         
         {/* Rail Title */}
-        <div>
-          <h3 className="text-base font-bold text-[#172033] tracking-tight">
+        <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+          <h3 className="text-sm font-bold text-[#0F172A] tracking-tight">
             使用
           </h3>
+          <span className="text-[11px] font-mono text-[#64748B]">
+            DATA ASSET
+          </span>
         </div>
 
         {/* 1. 当前访问 */}
         <div className="space-y-1 text-xs">
           {accessState === 'granted' ? (
             <div className="space-y-1">
-              <div className="flex items-center space-x-1.5 font-bold text-[#16A36A]">
-                <CheckCircle2 className="w-4 h-4 text-[#16A36A] shrink-0" />
-                <span>可直接使用</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[#64748B]">当前访问</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F0FDF4] text-[#166534] border border-[#BBF7D0] flex items-center space-x-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
+                  <span>可直接使用</span>
+                </span>
               </div>
-              <p className="text-[11px] text-[#64748B] leading-relaxed pl-5.5">
+              <p className="text-[11px] text-[#64748B] leading-relaxed">
                 已具备查询权限，可直接用于分析与问数。
               </p>
             </div>
           ) : (
             <div className="space-y-1">
-              <div className="flex items-center space-x-1.5 font-bold text-[#D97706]">
-                <Lock className="w-4 h-4 text-[#D97706] shrink-0" />
-                <span>需申请</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[#64748B]">当前访问</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A] flex items-center space-x-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
+                  <span>需申请</span>
+                </span>
               </div>
-              <p className="text-[11px] text-[#64748B] leading-relaxed pl-5.5">
+              <p className="text-[11px] text-[#64748B] leading-relaxed">
                 获取查询权限后，可将该数据用于分析与问数。
               </p>
             </div>
           )}
         </div>
 
+        <div className="h-px bg-[#E2E8F0]" />
+
         {/* 2. 数据提醒 */}
         <div className="space-y-1 text-xs">
-          <div className="flex items-center space-x-1.5 font-bold text-[#D97706]">
-            <AlertCircle className="w-4 h-4 text-[#D97706] shrink-0" />
-            <span>存在新鲜度提醒</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[#64748B]">数据提醒</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A] flex items-center space-x-1">
+              <AlertTriangle className="w-3 h-3 text-[#D97706]" />
+              <span>有提醒</span>
+            </span>
           </div>
-          <p className="text-[11px] text-[#64748B] leading-relaxed pl-5.5">
+          <p className="text-[11px] text-[#B45309] leading-relaxed">
             实时分析前建议确认最新同步状态。
           </p>
         </div>
 
+        <div className="h-px bg-[#E2E8F0]" />
+
         {/* 3. 详细元数据项列表 */}
-        <div className="space-y-3.5 text-xs border-t border-[#EEF2F6] pt-5">
-          
+        <div className="space-y-2.5 text-xs">
           {/* 维护团队 */}
           <div className="flex items-center justify-between">
             <span className="text-[#64748B]">维护团队</span>
-            <div className="flex items-center space-x-2">
-              <span className="font-medium text-[#172033]">人口业务治理团队</span>
+            <div className="flex items-center space-x-1.5">
+              <span className="font-semibold text-[#0F172A]">人口业务治理团队</span>
               <button
                 onClick={() => {
                   addToast?.('info', '联系团队', '已向 人口业务治理团队 发起即时咨询与工单申请');
                 }}
                 className="text-[#2563EB] hover:underline text-[11px] font-medium cursor-pointer"
               >
-                联系团队 →
+                联系 →
               </button>
             </div>
           </div>
@@ -969,37 +969,38 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
           {/* 业务域 */}
           <div className="flex items-center justify-between">
             <span className="text-[#64748B]">业务域</span>
-            <span className="font-medium text-[#172033]">人口服务</span>
+            <span className="font-semibold text-[#0F172A]">人口服务</span>
           </div>
 
           {/* 业务对象 */}
           <div className="flex items-center justify-between">
             <span className="text-[#64748B]">业务对象</span>
-            <span className="font-medium text-[#172033]">自然人</span>
+            <span className="font-semibold text-[#0F172A]">自然人</span>
           </div>
 
           {/* 一行代表 */}
           <div className="flex items-center justify-between">
             <span className="text-[#64748B]">一行代表</span>
-            <span className="font-medium text-[#172033]">一个自然人主体</span>
+            <span className="font-semibold text-[#0F172A]">一个自然人主体</span>
           </div>
 
           {/* 更新频率 */}
           <div className="flex items-center justify-between">
             <span className="text-[#64748B]">更新频率</span>
-            <span className="font-medium text-[#172033]">每日</span>
+            <span className="font-semibold text-[#0F172A]">每日</span>
           </div>
 
           {/* 最近更新 */}
           <div className="flex items-center justify-between">
             <span className="text-[#64748B]">最近更新</span>
-            <span className="font-medium text-[#172033]">今天 08:10</span>
+            <span className="font-mono font-semibold text-[#0F172A]">今天 08:10</span>
           </div>
-
         </div>
 
+        <div className="h-px bg-[#E2E8F0]" />
+
         {/* 4. 主操作按钮区 */}
-        <div className="space-y-3 border-t border-[#EEF2F6] pt-5">
+        <div className="space-y-2 pt-1">
           {accessState === 'granted' ? (
             <>
               {/* Primary: 进入分析 */}
@@ -1011,7 +1012,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                     addToast?.('success', '进入分析', '已将「人口基本信息视图」载入 AI 分析工作台');
                   }
                 }}
-                className="w-full py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+                className="w-full py-2 px-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
               >
                 <span>进入分析</span>
               </button>
@@ -1025,7 +1026,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                     addToast?.('info', '用于问数', '已在 Xino 对话流中绑定当前资产上下文');
                   }
                 }}
-                className="w-full py-2.5 bg-white hover:bg-[#EFF6FF] border border-[#CBD5E1] text-[#2563EB] text-xs font-bold rounded-md transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+                className="w-full py-2 px-4 bg-white hover:bg-[#EFF6FF] border border-[#CBD5E1] text-[#2563EB] text-xs font-bold rounded transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
               >
                 <span>用于问数</span>
               </button>
@@ -1036,9 +1037,8 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               <button
                 onClick={() => {
                   setIsAccessRequestDrawerOpen(true);
-                  addToast?.('info', '申请使用', '已打开「人口基本信息视图」访问需求确认抽屉');
                 }}
-                className="w-full py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+                className="w-full py-2 px-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
               >
                 <span>申请使用</span>
               </button>
@@ -1046,7 +1046,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               {/* Secondary: 查看相关资源 */}
               <button
                 onClick={onBackToResources}
-                className="w-full py-2.5 bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-[#2563EB] text-xs font-bold rounded-md transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
+                className="w-full py-1.5 px-4 bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-[#475569] hover:text-[#0F172A] text-xs font-medium rounded transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
               >
                 <span>查看相关资源</span>
               </button>
@@ -1074,23 +1074,23 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
       </aside>
 
       {/* ========================================================= */}
-      {/* 4. FIELD DETAIL DRAWER (字段语义上下文抽屉，无治理噪点)      */}
+      {/* 4. FIELD DETAIL DRAWER (字段语义上下文抽屉)                  */}
       {/* ========================================================= */}
       {selectedFieldDetail && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/20 backdrop-blur-xs transition-opacity animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150">
           <div 
-            className="w-full max-w-[480px] bg-white h-full shadow-2xl border-l border-[#E6EAF0] flex flex-col animate-in slide-in-from-right duration-200"
+            className="w-full max-w-[480px] bg-white h-full shadow-2xl border-l border-[#E2E8F0] flex flex-col animate-in slide-in-from-right duration-200 text-[#0F172A]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drawer Header */}
-            <div className="px-6 py-4 border-b border-[#EEF2F6] flex items-center justify-between shrink-0 bg-[#FAFCFF]">
+            <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-white">
               <div className="space-y-0.5">
-                <div className="text-[11px] font-semibold text-[#667085]">
+                <div className="text-[11px] font-semibold text-[#64748B]">
                   字段语义上下文
                 </div>
-                <div className="text-base font-bold text-[#172033] flex items-center space-x-2">
+                <div className="text-base font-bold text-[#0F172A] flex items-center space-x-2">
                   <span>{selectedFieldDetail.cnName}</span>
-                  <code className="text-xs font-mono text-[#667085] bg-[#F1F5F9] px-1.5 py-0.5 rounded">
+                  <code className="text-xs font-mono text-[#475569] bg-[#F1F5F9] px-1.5 py-0.5 rounded">
                     {selectedFieldDetail.name}
                   </code>
                 </div>
@@ -1098,7 +1098,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
 
               <button
                 onClick={() => setSelectedFieldDetail(null)}
-                className="p-1.5 text-[#94A3B8] hover:text-[#172033] hover:bg-[#F1F5F9] rounded-md transition-colors cursor-pointer"
+                className="p-1.5 text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors cursor-pointer"
                 title="关闭"
               >
                 <X className="w-4 h-4" />
@@ -1110,23 +1110,23 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               
               {/* 1. 业务定义 */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-[#667085]">业务定义</label>
-                <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-md text-xs text-[#334155] leading-relaxed">
+                <label className="text-[11px] font-semibold text-[#64748B]">业务定义</label>
+                <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#334155] leading-relaxed">
                   {selectedFieldDetail.description}
                 </div>
               </div>
 
               {/* 2. 字段基础属性 */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-white border border-[#EEF2F6] rounded-md space-y-1">
-                  <div className="text-[10px] text-[#667085]">数据类型</div>
-                  <div className="font-mono font-bold text-[#172033]">
+                <div className="p-3 bg-white border border-[#E2E8F0] rounded space-y-1">
+                  <div className="text-[10px] text-[#64748B]">数据类型</div>
+                  <div className="font-mono font-bold text-[#0F172A]">
                     {selectedFieldDetail.type}
                   </div>
                 </div>
 
-                <div className="p-3 bg-white border border-[#EEF2F6] rounded-md space-y-1">
-                  <div className="text-[10px] text-[#667085]">业务角色</div>
+                <div className="p-3 bg-white border border-[#E2E8F0] rounded space-y-1">
+                  <div className="text-[10px] text-[#64748B]">业务角色</div>
                   <div className="font-bold text-[#2563EB]">
                     {selectedFieldDetail.role}
                   </div>
@@ -1135,11 +1135,11 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
 
               {/* 3. 关联业务对象 */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-[#667085]">关联业务对象</label>
-                <div className="p-3 bg-white border border-[#EEF2F6] rounded-md flex items-center justify-between">
+                <label className="text-[11px] font-semibold text-[#64748B]">关联业务对象</label>
+                <div className="p-3 bg-white border border-[#E2E8F0] rounded flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <Users className="w-4 h-4 text-[#2563EB]" />
-                    <span className="font-bold text-[#172033]">自然人 (Person)</span>
+                    <span className="font-bold text-[#0F172A]">自然人 (Person)</span>
                   </div>
                   <button
                     onClick={() => {
@@ -1156,8 +1156,8 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               {/* 4. 关联正式业务术语 */}
               {selectedFieldDetail.businessTerm && (
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-[#667085]">关联正式业务术语</label>
-                  <div className="p-3 bg-white border border-[#EEF2F6] rounded-md text-[#334155]">
+                  <label className="text-[11px] font-semibold text-[#64748B]">关联正式业务术语</label>
+                  <div className="p-3 bg-white border border-[#E2E8F0] rounded text-[#334155]">
                     {selectedFieldDetail.businessTerm}
                   </div>
                 </div>
@@ -1166,14 +1166,14 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               {/* 5. 正式标准映射 */}
               {selectedFieldDetail.standardMapping && (
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-[#667085]">正式数据标准映射</label>
-                  <div className="p-3 bg-white border border-[#EEF2F6] rounded-md flex items-center justify-between">
+                  <label className="text-[11px] font-semibold text-[#64748B]">正式数据标准映射</label>
+                  <div className="p-3 bg-white border border-[#E2E8F0] rounded flex items-center justify-between">
                     <code className="font-mono text-[#2563EB] font-bold">
                       {selectedFieldDetail.standardMapping}
                     </code>
                     <button
                       onClick={() => handleCopyText(selectedFieldDetail.standardMapping!, 'standard')}
-                      className="text-[#64748B] hover:text-[#172033] flex items-center space-x-1 cursor-pointer"
+                      className="text-[#64748B] hover:text-[#0F172A] flex items-center space-x-1 cursor-pointer"
                     >
                       {copiedKey === 'standard' ? (
                         <Check className="w-3.5 h-3.5 text-[#16A36A]" />
@@ -1188,17 +1188,17 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
 
               {/* 6. 技术映射与安全属性 */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-[#667085]">技术元数据规范</label>
-                <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-md space-y-1.5">
-                  <div className="flex justify-between text-[#667085]">
+                <label className="text-[11px] font-semibold text-[#64748B]">技术元数据规范</label>
+                <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-1.5">
+                  <div className="flex justify-between text-[#64748B]">
                     <span>主键标识 (PK):</span>
-                    <span className="font-semibold text-[#172033]">{selectedFieldDetail.isKey ? '是' : '否'}</span>
+                    <span className="font-semibold text-[#0F172A]">{selectedFieldDetail.isKey ? '是' : '否'}</span>
                   </div>
-                  <div className="flex justify-between text-[#667085]">
+                  <div className="flex justify-between text-[#64748B]">
                     <span>可为空约束 (Nullable):</span>
-                    <span className="font-semibold text-[#172033]">{selectedFieldDetail.isKey ? '否 (NOT NULL)' : '是 (NULLABLE)'}</span>
+                    <span className="font-semibold text-[#0F172A]">{selectedFieldDetail.isKey ? '否 (NOT NULL)' : '是 (NULLABLE)'}</span>
                   </div>
-                  <div className="flex justify-between text-[#667085]">
+                  <div className="flex justify-between text-[#64748B]">
                     <span>脱敏安全策略:</span>
                     <span className="font-semibold text-[#16A36A]">
                       {selectedFieldDetail.name.includes('hash') || selectedFieldDetail.name.includes('id_card') ? '哈希不可逆散列' : '无需脱敏'}
@@ -1210,10 +1210,10 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
             </div>
 
             {/* Drawer Footer */}
-            <div className="p-4 border-t border-[#EEF2F6] bg-[#FAFCFF] flex justify-end">
+            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end">
               <button
                 onClick={() => setSelectedFieldDetail(null)}
-                className="px-4 py-2 bg-white border border-[#CBD5E1] text-[#334155] hover:bg-[#F8FAFC] font-semibold text-xs rounded-md cursor-pointer transition-colors"
+                className="px-4 py-2 bg-white border border-[#CBD5E1] text-[#334155] hover:bg-[#F8FAFC] font-semibold text-xs rounded cursor-pointer transition-colors"
               >
                 关闭
               </button>
@@ -1226,25 +1226,25 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
       {/* 5. DATA FITNESS DRAWER (数据可用性与质量摘要抽屉)              */}
       {/* ========================================================= */}
       {isFitnessDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/20 backdrop-blur-xs transition-opacity animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150">
           <div 
-            className="w-full max-w-[520px] bg-white h-full shadow-2xl border-l border-[#E6EAF0] flex flex-col animate-in slide-in-from-right duration-200"
+            className="w-full max-w-[520px] bg-white h-full shadow-2xl border-l border-[#E2E8F0] flex flex-col animate-in slide-in-from-right duration-200 text-[#0F172A]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Drawer Header */}
-            <div className="px-6 py-4 border-b border-[#EEF2F6] flex items-center justify-between shrink-0 bg-[#FAFCFF]">
+            <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-white">
               <div className="space-y-0.5">
-                <div className="text-[11px] font-semibold text-[#667085]">
+                <div className="text-[11px] font-semibold text-[#64748B]">
                   数据可用性与质量摘要
                 </div>
-                <div className="text-base font-bold text-[#172033]">
+                <div className="text-base font-bold text-[#0F172A]">
                   人口基本信息视图 · 状态评估
                 </div>
               </div>
 
               <button
                 onClick={() => setIsFitnessDrawerOpen(false)}
-                className="p-1.5 text-[#94A3B8] hover:text-[#172033] hover:bg-[#F1F5F9] rounded-md transition-colors cursor-pointer"
+                className="p-1.5 text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded transition-colors cursor-pointer"
                 title="关闭"
               >
                 <X className="w-4 h-4" />
@@ -1254,8 +1254,8 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
             {/* Drawer Content Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
               
-              {/* 核心结论卡 */}
-              <div className="p-4 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg space-y-2">
+              {/* 核心结论 */}
+              <div className="p-4 bg-[#FFFBEB] border border-[#FDE68A] rounded space-y-2">
                 <div className="flex items-center space-x-2 text-[#92400E] font-bold text-sm">
                   <AlertTriangle className="w-4 h-4 text-[#D97706]" />
                   <span>数据可用性评估：适度可用 (存在新鲜度提醒)</span>
@@ -1267,31 +1267,31 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
 
               {/* 1. 质量维度评估 */}
               <div className="space-y-3">
-                <div className="font-bold text-[#172033] text-xs">
+                <div className="font-bold text-[#0F172A] text-xs">
                   核心质量指标评估
                 </div>
 
                 <div className="space-y-2">
-                  <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-md flex items-center justify-between">
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex items-center justify-between">
                     <div>
-                      <div className="font-semibold text-[#172033]">主键完整性 (Completeness)</div>
-                      <div className="text-[11px] text-[#667085]">person_id 主键无空值率</div>
+                      <div className="font-semibold text-[#0F172A]">主键完整性 (Completeness)</div>
+                      <div className="text-[11px] text-[#64748B]">person_id 主键无空值率</div>
                     </div>
                     <span className="font-bold text-[#16A36A] text-sm">100%</span>
                   </div>
 
-                  <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-md flex items-center justify-between">
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex items-center justify-between">
                     <div>
-                      <div className="font-semibold text-[#172033]">行政区划合规率 (Validity)</div>
-                      <div className="text-[11px] text-[#667085]">符合 2024 国标行政区划编码规则</div>
+                      <div className="font-semibold text-[#0F172A]">行政区划合规率 (Validity)</div>
+                      <div className="text-[11px] text-[#64748B]">符合 2024 国标行政区划编码规则</div>
                     </div>
                     <span className="font-bold text-[#16A36A] text-sm">99.85%</span>
                   </div>
 
-                  <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-md flex items-center justify-between">
+                  <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded flex items-center justify-between">
                     <div>
-                      <div className="font-semibold text-[#172033]">数据新鲜度时延 (Timeliness)</div>
-                      <div className="text-[11px] text-[#667085]">前置库到集市同步延迟约 4 小时</div>
+                      <div className="font-semibold text-[#0F172A]">数据新鲜度时延 (Timeliness)</div>
+                      <div className="text-[11px] text-[#64748B]">前置库到集市同步延迟约 4 小时</div>
                     </div>
                     <span className="font-bold text-[#D97706] text-sm">T+1 每日</span>
                   </div>
@@ -1300,12 +1300,12 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
 
               {/* 2. 建议适用场景与规避场景 */}
               <div className="space-y-3">
-                <div className="font-bold text-[#172033] text-xs">
+                <div className="font-bold text-[#0F172A] text-xs">
                   业务适用建议
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-[11px]">
-                  <div className="p-3 rounded-md bg-[#F0FDF4] border border-[#BBF7D0] text-[#166534] space-y-1">
+                  <div className="p-3 rounded bg-[#F0FDF4] border border-[#BBF7D0] text-[#166534] space-y-1">
                     <div className="font-bold">✓ 推荐使用</div>
                     <ul className="list-disc list-inside space-y-0.5 text-[10px]">
                       <li>全区人口结构历史宏观分析</li>
@@ -1314,7 +1314,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                     </ul>
                   </div>
 
-                  <div className="p-3 rounded-md bg-[#FFF7ED] border border-[#FFEDD5] text-[#9A3412] space-y-1">
+                  <div className="p-3 rounded bg-[#FFF7ED] border border-[#FFEDD5] text-[#9A3412] space-y-1">
                     <div className="font-bold">⚠ 审慎或避免使用</div>
                     <ul className="list-disc list-inside space-y-0.5 text-[10px]">
                       <li>今日实时进出港人口监测</li>
@@ -1327,10 +1327,10 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
             </div>
 
             {/* Drawer Footer */}
-            <div className="p-4 border-t border-[#EEF2F6] bg-[#FAFCFF] flex justify-end">
+            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end">
               <button
                 onClick={() => setIsFitnessDrawerOpen(false)}
-                className="px-4 py-2 bg-white border border-[#CBD5E1] text-[#334155] hover:bg-[#F8FAFC] font-semibold text-xs rounded-md cursor-pointer transition-colors"
+                className="px-4 py-2 bg-white border border-[#CBD5E1] text-[#334155] hover:bg-[#F8FAFC] font-semibold text-xs rounded cursor-pointer transition-colors"
               >
                 关闭
               </button>
@@ -1359,4 +1359,3 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
     </div>
   );
 };
-
