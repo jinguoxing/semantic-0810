@@ -22,17 +22,24 @@ export const CERTIFICATION_BADGE: Record<string, string> = {
   BUSINESS_OBJECT: '正式对象',
 };
 
-// Frozen four-state access presentation.
-// restricted is an invitation to request, not a warning — hence Blue, not Orange.
+// Formal consumer access lifecycle:
+//   AVAILABLE → 可直接使用
+//   REQUESTABLE → 可申请使用
+//   PENDING → 申请中
+//   UNAVAILABLE → 暂不可用
+// SEMANTIC_ONLY rides alongside as a resource-class distinction (business
+// objects are consumed as semantics, not queried).
+// REQUESTABLE is an invitation to request, not a warning — Blue, not Orange.
 export const ACCESS_PRESENTATION: Record<string, { label: string; dotClass: string; textClass: string }> = {
-  available: { label: '可直接使用', dotClass: 'bg-[#16A36A]', textClass: 'text-[#16A36A]' },
-  restricted: { label: '可申请使用', dotClass: 'bg-[#2563EB]', textClass: 'text-[#2563EB]' },
-  pending: { label: '申请中', dotClass: 'bg-[#D97706]', textClass: 'text-[#D97706]' },
-  semantic_only: { label: '语义资源', dotClass: 'bg-[#6366F1]', textClass: 'text-[#6366F1]' },
+  AVAILABLE: { label: '可直接使用', dotClass: 'bg-[#16A36A]', textClass: 'text-[#16A36A]' },
+  REQUESTABLE: { label: '可申请使用', dotClass: 'bg-[#2563EB]', textClass: 'text-[#2563EB]' },
+  PENDING: { label: '申请中', dotClass: 'bg-[#D97706]', textClass: 'text-[#D97706]' },
+  UNAVAILABLE: { label: '暂不可用', dotClass: 'bg-[#94A3B8]', textClass: 'text-[#94A3B8]' },
+  SEMANTIC_ONLY: { label: '语义资源', dotClass: 'bg-[#6366F1]', textClass: 'text-[#6366F1]' },
 };
 
 export const accessPresentation = (status: string) =>
-  ACCESS_PRESENTATION[status] ?? ACCESS_PRESENTATION.available;
+  ACCESS_PRESENTATION[status] ?? ACCESS_PRESENTATION.AVAILABLE;
 
 // Goal-relative fitness labels — only meaningful with an active goal (goal_search mode)
 export const goalFitnessLabel = (status?: string): string => {

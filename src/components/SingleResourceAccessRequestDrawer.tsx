@@ -21,6 +21,14 @@ export interface SingleResourceAccessRequestDrawerProps {
   resourceName?: string;
   resourceTypeLabel?: string; // DATA ASSET · VIEW
   taskContextTitle?: string; // 街镇老龄化分析
+  /** Access decision policy. The ORDINARY path is MANUAL_REVIEW (申请已提交 ·
+   *  等待审批 → PENDING); AUTO_GRANT only when an explicit policy hits
+   *  (e.g. L1 public data) — never a blanket default. */
+  reviewDecision?: 'auto_granted' | 'manual_review';
+  /** Minimal-necessary scope chips derived from the resource's real fields. */
+  suggestedScopeItems?: string[];
+  /** 业务字段 ↔ 技术字段对照 (replaces the built-in demo mapping when provided). */
+  suggestedFieldMappings?: { label: string; field: string }[];
   onSuccessSubmit?: (resultType: 'auto_granted' | 'manual_review' | 'auto_denied') => void;
   onViewTaskDetail?: () => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
@@ -32,36 +40,44 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
   resourceName = '人口基本信息视图',
   resourceTypeLabel = 'DATA ASSET · VIEW',
   taskContextTitle = '街镇老龄化分析',
+  reviewDecision = 'manual_review',
+  suggestedScopeItems,
+  suggestedFieldMappings,
   onSuccessSubmit,
   onViewTaskDetail,
   addToast
 }) => {
   // Form states - Pre-filled based on task context (Confirm, not Configure)
-  const [purposeText, setPurposeText] = useState<string>('分析各街镇人口老龄化程度及人口结构差异');
-  const [durationOption, setDurationOption] = useState<string>('3months');
-  const [applicationRemark, setApplicationRemark] = useState<string>(
-    '用于各街镇人口老龄化分析，支持区域人口结构比较及后续养老服务资源分析。'
+  const [purposeText, setPurposeText] = useState<string>(
+    taskContextTitle ? `用于「${taskContextTitle}」相关分析` : ''
   );
+  const [durationOption, setDurationOption] = useState<string>('3months');
+  const [applicationRemark, setApplicationRemark] = useState<string>('');
 
   // Expandable detailed scope toggle
   const [isDetailScopeExpanded, setIsDetailScopeExpanded] = useState<boolean>(false);
 
   // Submission lifecycle & decision simulation state: 'form' | 'submitting' | 'result'
   const [submitPhase, setSubmitPhase] = useState<'form' | 'submitting' | 'result'>('form');
-  const [decisionResult, setDecisionResult] = useState<'auto_granted' | 'manual_review' | 'auto_denied'>('auto_granted');
+  const [decisionResult, setDecisionResult] = useState<'auto_granted' | 'manual_review' | 'auto_denied'>(reviewDecision);
 
   if (!isOpen) return null;
 
   const handleSubmit = () => {
     setSubmitPhase('submitting');
-    
+
     // Simulate automated policy evaluation
     setTimeout(() => {
-      // Normal risk, query only, minimal necessary scope -> defaults to auto_granted
-      setDecisionResult('auto_granted');
+      // Ordinary request → MANUAL_REVIEW (submitted ≠ granted); AUTO_GRANT
+      // only fires when the caller's policy explicitly hits.
+      setDecisionResult(reviewDecision);
       setSubmitPhase('result');
-      addToast?.('success', '访问权限已生效', '当前申请已根据数据策略自动处理，可以继续原来的分析任务');
-      onSuccessSubmit?.('auto_granted');
+      if (reviewDecision === 'auto_granted') {
+        addToast?.('success', '已自动授权', '当前申请命中自动授权策略，查询权限已即时生效');
+      } else {
+        addToast?.('info', '申请已提交 · 等待审批', '申请已进入人工审批，通过后可在「我的申请」中查看并使用');
+      }
+      onSuccessSubmit?.(reviewDecision);
     }, 900);
   };
 
@@ -255,11 +271,11 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
                     当前需要
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {[
+                    {(suggestedScopeItems ?? [
                       '年龄与出生信息',
                       '常住状态',
                       '行政区域'
-                    ].map((item) => (
+                    ]).map((item) => (
                       <div
                         key={item}
                         className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#1E293B]"
@@ -325,22 +341,17 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
                           业务信息与技术字段对照
                         </div>
                         <div className="divide-y divide-[#EEF2F6] text-xs">
-                          <div className="py-1.5 flex items-center justify-between">
-                            <span className="text-[#172033] font-medium">年龄</span>
-                            <code className="font-mono text-[#2563EB] text-[11px]">age</code>
-                          </div>
-                          <div className="py-1.5 flex items-center justify-between">
-                            <span className="text-[#172033] font-medium">出生日期</span>
-                            <code className="font-mono text-[#2563EB] text-[11px]">birth_date</code>
-                          </div>
-                          <div className="py-1.5 flex items-center justify-between">
-                            <span className="text-[#172033] font-medium">常住状态</span>
-                            <code className="font-mono text-[#2563EB] text-[11px]">resident_status</code>
-                          </div>
-                          <div className="py-1.5 flex items-center justify-between">
-                            <span className="text-[#172033] font-medium">所属行政区域</span>
-                            <code className="font-mono text-[#2563EB] text-[11px]">region_code</code>
-                          </div>
+                          {(suggestedFieldMappings ?? [
+                            { label: '年龄', field: 'age' },
+                            { label: '出生日期', field: 'birth_date' },
+                            { label: '常住状态', field: 'resident_status' },
+                            { label: '所属行政区域', field: 'region_code' }
+                          ]).map((m) => (
+                            <div key={m.field} className="py-1.5 flex items-center justify-between">
+                              <span className="text-[#172033] font-medium">{m.label}</span>
+                              <code className="font-mono text-[#2563EB] text-[11px]">{m.field}</code>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
