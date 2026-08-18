@@ -102,6 +102,7 @@ export interface ResourceItem {
   securityLevel?: string;
   updateFrequency?: string;
   matchReason?: string;
+  usageCount?: number;
   useCases?: string[];
   fields?: FieldItem[];
   metricFormula?: string;
@@ -166,6 +167,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessStatus: 'ready',
     fitnessLabel: '可用于分析',
     updatedAt: '2026-08-14',
+    usageCount: 342,
     owner: '统计调查与人口运行处',
     securityLevel: 'L2（受限访问）',
     updateFrequency: '每日 02:00 定时增量',
@@ -200,6 +202,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessStatus: 'ready',
     fitnessLabel: '正式指标',
     updatedAt: '2026-08-12',
+    usageCount: 518,
     owner: '发展规划与老龄办',
     securityLevel: 'L1（公开可用）',
     updateFrequency: '月度 / 季度 / 年度',
@@ -229,6 +232,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessStatus: 'good',
     fitnessLabel: '状态良好',
     updatedAt: '2026-08-01',
+    usageCount: 893,
     owner: '基础地理与民政信息科',
     securityLevel: 'L1（公开可用）',
     updateFrequency: '半年 / 依据民政调整',
@@ -258,6 +262,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessStatus: 'ready',
     fitnessLabel: '可用于分析',
     updatedAt: '2026-08-11',
+    usageCount: 127,
     owner: '人口大数据中心',
     securityLevel: 'L2（受限访问）',
     updateFrequency: '每日同步',
@@ -286,6 +291,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessStatus: 'warning',
     fitnessLabel: '更新至上月',
     updatedAt: '2026-07-31',
+    usageCount: 204,
     owner: '统计局人口处',
     securityLevel: 'L1（公开可用）',
     updateFrequency: '月度更新',
@@ -314,6 +320,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessStatus: 'semantic',
     fitnessLabel: '核心概念',
     updatedAt: '2026-08-10',
+    usageCount: 466,
     owner: '人口大数据中心',
     securityLevel: 'L3（业务概念）',
     updateFrequency: '模型持续演进',
@@ -341,6 +348,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessStatus: 'good',
     fitnessLabel: '服务正常',
     updatedAt: '2026-08-08',
+    usageCount: 1208,
     owner: '服务集成网关团队',
     securityLevel: 'L1（开放网关）',
     updateFrequency: '实时响应 (<50ms)',
@@ -370,6 +378,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessStatus: 'ready',
     fitnessLabel: '可用于分析',
     updatedAt: '2026-08-02',
+    usageCount: 96,
     owner: '民政养老服务发展处',
     securityLevel: 'L2（受限访问）',
     useCases: ['养老资源盘点', '机构覆盖分析']
@@ -389,11 +398,138 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessStatus: 'good',
     fitnessLabel: '状态良好',
     updatedAt: '2026-08-05',
+    usageCount: 57,
     owner: '民政养老服务发展处',
     securityLevel: 'L1（公开可用）',
     useCases: ['社区养老服务供给分析', '设施覆盖评估']
   }
 ];
+
+// Curated minimal solution Semovix proposes when a goal arrives WITHOUT explicit
+// candidates (goal-only entry from the discovery bar / Discovery home).
+const DEFAULT_GOAL_SOLUTION: SolutionResourceItem[] = [
+  {
+    id: 'res-02',
+    name: '人口基本信息视图',
+    type: 'DATA_ASSET',
+    subType: 'VIEW',
+    role: 'CORE_DATA',
+    roleLabel: '核心数据',
+    description: '提供年龄、出生日期、常住状态和行政区域，是计算人口年龄结构与老龄化程度的基础数据。',
+    whyNeeded: '用于确定分析人口范围，并形成不同年龄段的人口统计。',
+    accessStatus: 'restricted',
+    accessLabel: '需申请',
+    fitnessStatus: 'ready',
+    fitnessLabel: '可用于当前分析',
+    isKeyDependency: true,
+    fields: [
+      { name: 'person_id', cnName: '自然人ID', type: 'BIGINT', description: '主键', isKey: true },
+      { name: 'age', cnName: '年龄', type: 'INT', description: '实足年龄' },
+      { name: 'birth_date', cnName: '出生日期', type: 'DATE', description: '出生年月日' },
+      { name: 'is_permanent', cnName: '是否常住人口', type: 'TINYINT', description: '1-常住' },
+      { name: 'street_code', cnName: '所属街镇代码', type: 'VARCHAR(12)', description: '街镇编码' }
+    ]
+  },
+  {
+    id: 'res-03',
+    name: '老龄化率',
+    type: 'METRIC',
+    role: 'CORE_METRIC',
+    roleLabel: '核心口径',
+    description: '60 周岁及以上常住人口占全部常住人口的比例。',
+    whyNeeded: '提供企业正式认定的人口老龄化衡量口径。',
+    accessStatus: 'dependent',
+    accessLabel: '依赖人口基本信息视图',
+    fitnessStatus: 'ready',
+    fitnessLabel: '正式指标',
+    metricFormula: '( count(distinct case when age >= 60 and is_permanent=1 then person_id end) / count(distinct case when is_permanent=1 then person_id end) ) * 100%'
+  },
+  {
+    id: 'res-05',
+    name: '行政区划基础数据',
+    type: 'DATA_ASSET',
+    role: 'DIMENSION',
+    roleLabel: '分析维度',
+    description: '提供街镇及标准行政区划编码，用于将人口结果按街镇聚合和比较。',
+    whyNeeded: '提供标准街镇层级与名称编码，支持空间区域对比。',
+    accessStatus: 'available',
+    accessLabel: '可使用',
+    fitnessStatus: 'good',
+    fitnessLabel: '状态良好',
+    fields: [
+      { name: 'region_code', cnName: '区划代码', type: 'VARCHAR(12)', description: '国标行政区划编码', isKey: true },
+      { name: 'region_name', cnName: '区划全称', type: 'VARCHAR(64)', description: '街镇名称' },
+      { name: 'level', cnName: '行政层级', type: 'TINYINT', description: '3-街镇' }
+    ]
+  }
+];
+
+// Semovix Compose — Business Goal + Candidate Set → Solution Resources.
+// Candidates are HARD CONSTRAINTS: the solution is built from exactly what the user
+// collected. Roles derive per type — 1st data asset = core data, 2nd = dimension,
+// further assets = supporting. With no candidates, Semovix proposes the curated
+// default solution for the goal.
+const composeSolutionResources = (candidates: ResourceItem[]): SolutionResourceItem[] => {
+  if (candidates.length === 0) {
+    return DEFAULT_GOAL_SOLUTION.map(r => ({ ...r }));
+  }
+
+  let coreDataTaken = false;
+  let dimensionTaken = false;
+  const coreData = candidates.find(c => c.type === 'DATA_ASSET');
+
+  return candidates.map(c => {
+    let role: SolutionResourceItem['role'];
+    let roleLabel: string;
+    let whyNeeded: string;
+
+    if (c.type === 'BUSINESS_OBJECT') {
+      role = 'SUBJECT';
+      roleLabel = '业务主体';
+      whyNeeded = '方案围绕的核心业务主体，统一关联各资源的业务口径。';
+    } else if (c.type === 'METRIC') {
+      role = 'CORE_METRIC';
+      roleLabel = '核心口径';
+      whyNeeded = '提供当前业务目标所需的正式统计口径。';
+    } else if (c.type === 'DATA_API') {
+      role = 'SUPPORTING_DATA';
+      roleLabel = '取数服务';
+      whyNeeded = '为应用集成与后续分析流程提供标准取数服务。';
+    } else if (!coreDataTaken) {
+      coreDataTaken = true;
+      role = 'CORE_DATA';
+      roleLabel = '核心数据';
+      whyNeeded = '作为方案的主数据底表，承载目标分析所需的事实与明细。';
+    } else if (!dimensionTaken) {
+      dimensionTaken = true;
+      role = 'DIMENSION';
+      roleLabel = '分析维度';
+      whyNeeded = '提供标准维度与编码，支撑目标所需的分组与对比。';
+    } else {
+      role = 'SUPPORTING_DATA';
+      roleLabel = '补充数据';
+      whyNeeded = '补充目标分析所需的辅助数据。';
+    }
+
+    // A metric computes FROM the core data — its usability depends on that asset's access
+    const isDependentMetric = c.type === 'METRIC' && !!coreData;
+
+    return {
+      id: c.id,
+      name: c.name,
+      type: c.type,
+      subType: c.subType,
+      role,
+      roleLabel,
+      description: c.description,
+      whyNeeded,
+      accessStatus: isDependentMetric ? 'dependent' : c.accessStatus,
+      accessLabel: isDependentMetric ? `依赖${coreData!.name}` : (c.accessLabel || ''),
+      fitnessStatus: c.fitnessStatus,
+      fitnessLabel: c.fitnessLabel || '可用于分析',
+    };
+  });
+};
 
 export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps> = ({
   addToast,
@@ -457,70 +593,16 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
 
-  // Business Goal State for Goal Search Mode
+  // Business Goal State for Goal Search Mode — never silently defaulted
   const [businessGoal, setBusinessGoal] = useState<string>(
-    initialQuery && initialQuery.length > 5 ? initialQuery : '分析闵行区各街镇人口老龄化程度，并比较不同街镇的人口结构差异'
+    initialQuery && initialQuery.length > 5 ? initialQuery : ''
   );
   const [isEditingGoalModalOpen, setIsEditingGoalModalOpen] = useState<boolean>(false);
   const [tempGoalInput, setTempGoalInput] = useState<string>(businessGoal);
 
-  // Solution Resources for Goal Search Mode
-  const [solutionResources, setSolutionResources] = useState<SolutionResourceItem[]>([
-    {
-      id: 'res-02',
-      name: '人口基本信息视图',
-      type: 'DATA_ASSET',
-      subType: 'VIEW',
-      role: 'CORE_DATA',
-      roleLabel: '核心数据',
-      description: '提供年龄、出生日期、常住状态和行政区域，是计算人口年龄结构与老龄化程度的基础数据。',
-      whyNeeded: '用于确定分析人口范围，并形成不同年龄段的人口统计。',
-      accessStatus: 'restricted',
-      accessLabel: '需申请',
-      fitnessStatus: 'ready',
-      fitnessLabel: '可用于当前分析',
-      isKeyDependency: true,
-      fields: [
-        { name: 'person_id', cnName: '自然人ID', type: 'BIGINT', description: '主键', isKey: true },
-        { name: 'age', cnName: '年龄', type: 'INT', description: '实足年龄' },
-        { name: 'birth_date', cnName: '出生日期', type: 'DATE', description: '出生年月日' },
-        { name: 'is_permanent', cnName: '是否常住人口', type: 'TINYINT', description: '1-常住' },
-        { name: 'street_code', cnName: '所属街镇代码', type: 'VARCHAR(12)', description: '街镇编码' }
-      ]
-    },
-    {
-      id: 'res-03',
-      name: '老龄化率',
-      type: 'METRIC',
-      role: 'CORE_METRIC',
-      roleLabel: '核心口径',
-      description: '60 周岁及以上常住人口占全部常住人口的比例。',
-      whyNeeded: '提供企业正式认定的人口老龄化衡量口径。',
-      accessStatus: 'dependent',
-      accessLabel: '依赖人口基本信息视图',
-      fitnessStatus: 'ready',
-      fitnessLabel: '正式指标',
-      metricFormula: '( count(distinct case when age >= 60 and is_permanent=1 then person_id end) / count(distinct case when is_permanent=1 then person_id end) ) * 100%'
-    },
-    {
-      id: 'res-05',
-      name: '行政区划基础数据',
-      type: 'DATA_ASSET',
-      role: 'DIMENSION',
-      roleLabel: '分析维度',
-      description: '提供街镇及标准行政区划编码，用于将人口结果按街镇聚合和比较。',
-      whyNeeded: '提供标准街镇层级与名称编码，支持空间区域对比。',
-      accessStatus: 'available',
-      accessLabel: '可使用',
-      fitnessStatus: 'good',
-      fitnessLabel: '状态良好',
-      fields: [
-        { name: 'region_code', cnName: '区划代码', type: 'VARCHAR(12)', description: '国标行政区划编码', isKey: true },
-        { name: 'region_name', cnName: '区划全称', type: 'VARCHAR(64)', description: '街镇名称' },
-        { name: 'level', cnName: '行政层级', type: 'TINYINT', description: '3-街镇' }
-      ]
-    }
-  ]);
+  // Solution Resources for Goal Search Mode — ALWAYS the output of Semovix Compose
+  // (goal + candidate set); never a statically preloaded solution
+  const [solutionResources, setSolutionResources] = useState<SolutionResourceItem[]>([]);
 
   // Candidate Resources (To be added via Tray in Goal Search Mode)
   const [candidatesQueue, setCandidatesQueue] = useState<string[]>([]);
@@ -556,6 +638,9 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       if (initialQuery && isExplicitGoal(initialQuery)) {
         setCurrentMode('goal_search');
         setBusinessGoal(initialQuery);
+        setSolutionResources(composeSolutionResources(
+          selectedResourceIds.map(id => ALL_DISCOVERABLE_RESOURCES.find(r => r.id === id)).filter(Boolean) as ResourceItem[]
+        ));
       } else if (initialQuery && initialQuery.trim().length > 0) {
         setCurrentMode('resource_search');
       } else {
@@ -684,25 +769,42 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     return browseScopeResources.filter(r => r.type === activeTypeTab);
   }, [browseScopeResources, activeTypeTab]);
 
+  // Sort — 'relevance' keeps the curated order; popular / recent are real sorts
+  // over mock metadata (usageCount / updatedAt)
+  const sortedBrowseResources = useMemo(() => {
+    const list = [...filteredBrowseResources];
+    if (sortOrder === 'recent') {
+      list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    } else if (sortOrder === 'popular') {
+      list.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0) || b.updatedAt.localeCompare(a.updatedAt));
+    }
+    return list;
+  }, [filteredBrowseResources, sortOrder]);
+
   // Pagination — derived from the real result set (no decorative page buttons)
-  const totalPages = Math.max(1, Math.ceil(filteredBrowseResources.length / pageSize));
-  const pagedBrowseResources = filteredBrowseResources.slice(
+  const totalPages = Math.max(1, Math.ceil(sortedBrowseResources.length / pageSize));
+  const pagedBrowseResources = sortedBrowseResources.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
 
-  // Any change to the query / facets / tab / page size restarts from page 1
+  // Any change to the query / facets / tab / sort / page size restarts from page 1
   useEffect(() => {
     setCurrentPage(1);
-  }, [submittedQuery, activeTypeTab, domainFilter, objectFilter, accessFilter, pageSize]);
+  }, [submittedQuery, activeTypeTab, domainFilter, objectFilter, accessFilter, sortOrder, pageSize]);
 
-  // Calculate Solution Coverage facts
-  const isCoverageComplete = useMemo(() => {
+  // Solution Coverage facts — derived from the composed roles, not hardcoded per-demo
+  const coverageElements = useMemo(() => {
     const hasCoreData = solutionResources.some(r => r.role === 'CORE_DATA');
     const hasMetric = solutionResources.some(r => r.role === 'CORE_METRIC');
     const hasDimension = solutionResources.some(r => r.role === 'DIMENSION');
-    return hasCoreData && hasMetric && hasDimension;
+    return [
+      { label: '主数据（分析底表）', covered: hasCoreData },
+      { label: '统计口径（正式指标）', covered: hasMetric },
+      { label: '分析维度（分组与对比依据）', covered: hasDimension },
+    ];
   }, [solutionResources]);
+  const isCoverageComplete = coverageElements.every(e => e.covered);
 
   // Calculate Access Readiness
   const accessReadiness = useMemo(() => {
@@ -741,6 +843,10 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     : [];
   const isPreviewAdded = selectedPreviewItem ? selectedResourceIds.includes(selectedPreviewItem.id) : false;
 
+  // Compose requires an explicit goal — never silently defaulted. When already in
+  // Goal Search context, the existing goal is reused automatically.
+  const effectiveComposeGoal = goalInputValue.trim() || (currentMode === 'goal_search' ? businessGoal.trim() : '');
+
   // Clear all selected in Browse mode
   const handleClearAllSelected = () => {
     setSelectedResourceIds([]);
@@ -753,12 +859,15 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     return isExplicitGoal(query);
   };
 
-  // Confirm Goal and Compose Solution (from Candidate Drawer)
+  // Confirm Goal and Compose Solution (from Candidate Drawer).
+  // Goal is required — no silent default. Candidates are the compose constraints.
   const handleConfirmGoalAndCompose = () => {
-    const finalGoal = goalInputValue.trim() || '分析各街镇人口老龄化程度及人口结构差异';
+    const finalGoal = goalInputValue.trim() || (currentMode === 'goal_search' ? businessGoal.trim() : '');
+    if (!finalGoal) return;
     setBusinessGoal(finalGoal);
+    setSolutionResources(composeSolutionResources(selectedResourceItems));
     setCurrentMode('goal_search');
-    addToast?.('success', '构建数据方案', `已基于目标「${finalGoal}」智能解析候选资源角色与依赖`);
+    addToast?.('success', '构建数据方案', `已基于目标「${finalGoal}」与 ${selectedResourceItems.length} 项候选资源解析最小数据方案`);
   };
 
   // Execute Search in Browse Mode
@@ -771,6 +880,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       addToast?.('info', '全量浏览', '已切换为浏览可发现范围内的全部资源');
     } else if (isQueryFullGoal(q)) {
       setBusinessGoal(q);
+      setSolutionResources(composeSolutionResources(selectedResourceItems));
       setCurrentMode('goal_search');
       addToast?.('success', '业务目标解析', `已针对目标「${q}」解析最小数据方案`);
     } else {
@@ -1287,27 +1397,22 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 </div>
 
                 <div className="space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between p-2 rounded bg-[#F8FAFC] border border-[#EEF2F6]">
-                    <span className="text-[#475569]">人口范围（实足年龄 / 常住状态）</span>
-                    <span className="font-semibold text-[#16A36A] flex items-center space-x-1">
-                      <Check className="w-3.5 h-3.5" />
-                      <span>已覆盖</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded bg-[#F8FAFC] border border-[#EEF2F6]">
-                    <span className="text-[#475569]">老龄化口径（60周岁及以上比例）</span>
-                    <span className="font-semibold text-[#16A36A] flex items-center space-x-1">
-                      <Check className="w-3.5 h-3.5" />
-                      <span>已覆盖</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded bg-[#F8FAFC] border border-[#EEF2F6]">
-                    <span className="text-[#475569]">街镇维度（街镇代码与名称聚合）</span>
-                    <span className="font-semibold text-[#16A36A] flex items-center space-x-1">
-                      <Check className="w-3.5 h-3.5" />
-                      <span>已覆盖</span>
-                    </span>
-                  </div>
+                  {coverageElements.map(el => (
+                    <div key={el.label} className="flex items-center justify-between p-2 rounded bg-[#F8FAFC] border border-[#EEF2F6]">
+                      <span className="text-[#475569]">{el.label}</span>
+                      {el.covered ? (
+                        <span className="font-semibold text-[#16A36A] flex items-center space-x-1">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>已覆盖</span>
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-[#D97706] flex items-center space-x-1">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          <span>未覆盖</span>
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1329,7 +1434,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                       <span className="text-[#334155] font-medium truncate max-w-[200px]">{r.name}</span>
                       <span className="text-[11px]">
                         {r.accessStatus === 'dependent' ? (
-                          <span className="text-[#475569]">依赖人口基本信息视图</span>
+                          <span className="text-[#475569]">{r.accessLabel}</span>
                         ) : (
                           <span className={`${accessPresentation(r.accessStatus).textClass} font-semibold flex items-center space-x-1 justify-end`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(r.accessStatus).dotClass}`} />
@@ -1344,7 +1449,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 <p className="text-[11px] text-[#667085] leading-relaxed pt-1">
                   {accessReadiness.isAllReady
                     ? '当前方案已具备完整执行条件，可直接进入分析。'
-                    : '补齐人口基本信息视图的查询条件后，当前方案即可支持正式老龄化分析。'}
+                    : `补齐「${accessReadiness.restrictedItems[0]?.name ?? '受限资源'}」的访问条件后，当前方案即可开始执行。`}
                 </p>
               </div>
             </div>
@@ -1358,7 +1463,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 <p className="text-[11px] text-[#667085]">
                   {accessReadiness.isAllReady
                     ? '方案覆盖完整且所有资源均具备使用条件。'
-                    : '当前仅缺少人口基本信息视图的查询访问条件。'}
+                    : `当前仅缺少「${accessReadiness.restrictedItems[0]?.name ?? '受限资源'}」的访问授权。`}
                 </p>
               </div>
 
@@ -2020,13 +2125,22 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               className="w-full p-2.5 text-xs bg-white border border-[#CBD5E1] rounded-md text-[#172033] placeholder-[#98A2B3] focus:outline-none focus:border-[#2563EB] transition-all font-medium resize-none"
             />
 
+            {/* No silent default goal — compose stays disabled until a goal exists */}
+            {!effectiveComposeGoal && (
+              <p className="text-[11px] text-[#D97706] flex items-center space-x-1">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>请先描述这些资源准备解决什么业务问题</span>
+              </p>
+            )}
+
             <button
               type="button"
+              disabled={!effectiveComposeGoal}
               onClick={() => {
                 handleConfirmGoalAndCompose();
                 setIsSelectedTrayDrawerOpen(false);
               }}
-              className="w-full px-4 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5"
+              className="w-full px-4 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:hover:bg-[#2563EB] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>基于候选构建数据方案 →</span>
@@ -2083,6 +2197,12 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 onClick={() => {
                   if (tempGoalInput.trim()) {
                     setBusinessGoal(tempGoalInput.trim());
+                    // Recompose over the CURRENT solution membership (goal changed, resources kept)
+                    setSolutionResources(composeSolutionResources(
+                      solutionResources
+                        .map(s => ALL_DISCOVERABLE_RESOURCES.find(r => r.id === s.id))
+                        .filter(Boolean) as ResourceItem[]
+                    ));
                     setIsEditingGoalModalOpen(false);
                     addToast?.('success', '目标已更新', 'Semovix 已重新组织数据方案');
                   }
@@ -2338,12 +2458,12 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
             setIsAccessDrawerOpen(false);
             setSolutionResources(prev =>
               prev.map(r =>
-                r.id === 'res-02'
+                r.name === accessTargetResource.name
                   ? { ...r, accessStatus: 'available', accessLabel: '可使用' }
                   : r
               )
             );
-            addToast?.('success', '申请已提交', '已授予「人口基本信息视图」查询权限，方案执行条件已就绪！');
+            addToast?.('success', '申请已提交', `已授予「${accessTargetResource.name}」查询权限，方案执行条件已就绪！`);
           }}
           addToast={addToast}
         />
