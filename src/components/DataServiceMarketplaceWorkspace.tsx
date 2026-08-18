@@ -123,10 +123,13 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
                 className="flex-1 px-2.5 py-2.5 sm:py-3 text-xs sm:text-sm text-[#172033] placeholder-[#94A3B8] bg-transparent outline-none font-normal"
               />
 
-              {/* Inside Right: Built-in Native Xino Identifier */}
-              <div className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-[#FAF5FF] border border-[#E9D5FF] text-[#7C3AED] text-xs font-semibold select-none mr-2">
-                <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" />
-                <span>Xino</span>
+              {/* Inside Right: Built-in Xino Identifier — plain text mark: AI lives inside discovery, not a mode button */}
+              <div className="hidden sm:flex items-center space-x-2 mr-2 shrink-0 select-none">
+                <span className="w-4 h-px bg-[#E2E8F0]" />
+                <span className="flex items-center space-x-1 text-[#7C3AED] text-xs font-semibold">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Xino</span>
+                </span>
               </div>
 
               {/* Right Outside Primary Action Button */}

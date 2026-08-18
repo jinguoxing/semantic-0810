@@ -151,6 +151,15 @@ export interface RelatedResourceCandidate {
   whyUseful: string;
 }
 
+// Type icon presentation — one scannable visual anchor per resource type
+// (36px container + 16px icon, mirroring the discovery home rows).
+const TYPE_ICON_PRESENTATION: Record<string, { boxClass: string; Icon: typeof Users }> = {
+  BUSINESS_OBJECT: { boxClass: 'bg-[#EEF2FF] border-[#C7D2FE] text-[#4F46E5]', Icon: Users },
+  DATA_ASSET: { boxClass: 'bg-[#F1F5F9] border-[#E2E8F0] text-[#2563EB]', Icon: Table },
+  METRIC: { boxClass: 'bg-[#EFF6FF] border border-[#BFDBFE] text-[#2563EB]', Icon: BarChart3 },
+  DATA_API: { boxClass: 'bg-[#F5F3FF] border border-[#DDD6FE] text-[#7C3AED]', Icon: Globe },
+};
+
 // Full Enterprise Discoverable Resources Dataset (Used in BROWSE & RESOURCE_SEARCH modes)
 const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
   {
@@ -1659,10 +1668,13 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 </button>
               )}
 
-              {/* Built-in Xino Identifier */}
-              <div className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-[#FAF5FF] border border-[#E9D5FF] text-[#7C3AED] text-xs font-semibold select-none mr-2 shrink-0">
-                <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" />
-                <span>Xino</span>
+              {/* Built-in Xino Identifier — plain text mark: AI lives inside discovery, not a mode button */}
+              <div className="hidden sm:flex items-center space-x-2 mr-2 shrink-0 select-none">
+                <span className="w-4 h-px bg-[#E2E8F0]" />
+                <span className="flex items-center space-x-1 text-[#7C3AED] text-xs font-semibold">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Xino</span>
+                </span>
               </div>
 
               {/* Primary Action */}
@@ -1805,6 +1817,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               {pagedBrowseResources.map((item) => {
                 const isAdded = selectedResourceIds.includes(item.id);
                 const isCurrentPreview = selectedPreviewItem?.id === item.id;
+                const typeIcon = TYPE_ICON_PRESENTATION[item.type];
 
                 return (
                   <div
@@ -1816,67 +1829,52 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                         : 'hover:bg-[#F8FAFC]'
                     }`}
                   >
-                    {/* Resource Content — only the resource's own facts */}
-                    <div className="space-y-1.5 flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {item.type === 'BUSINESS_OBJECT' && (
-                          <div className="w-5 h-5 rounded bg-[#EEF2FF] border border-[#C7D2FE] flex items-center justify-center text-[#4F46E5] shrink-0">
-                            <Users className="w-3 h-3" />
-                          </div>
-                        )}
-                        {item.type === 'DATA_ASSET' && (
-                          <div className="w-5 h-5 rounded bg-[#F1F5F9] border border-[#E2E8F0] flex items-center justify-center text-[#2563EB] shrink-0">
-                            <Table className="w-3 h-3" />
-                          </div>
-                        )}
-                        {item.type === 'METRIC' && (
-                          <div className="w-5 h-5 rounded bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB] shrink-0">
-                            <BarChart3 className="w-3 h-3" />
-                          </div>
-                        )}
-                        {item.type === 'DATA_API' && (
-                          <div className="w-5 h-5 rounded bg-[#F5F3FF] border border-[#DDD6FE] flex items-center justify-center text-[#7C3AED] shrink-0">
-                            <Globe className="w-3 h-3" />
-                          </div>
-                        )}
+                    {/* Resource Content — type icon anchor + the resource's own facts */}
+                    <div className="flex items-start space-x-3.5 flex-1 min-w-0">
+                      <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 ${typeIcon.boxClass}`}>
+                        <typeIcon.Icon className="w-4 h-4" />
+                      </div>
 
-                        <h3
-                          className={`text-sm font-bold transition-colors ${
-                            isCurrentPreview ? 'text-[#2563EB]' : 'text-[#172033] hover:text-[#2563EB]'
-                          }`}
-                        >
-                          {item.name}
-                        </h3>
+                      <div className="space-y-1.5 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3
+                            className={`text-sm font-bold transition-colors ${
+                              isCurrentPreview ? 'text-[#2563EB]' : 'text-[#172033] hover:text-[#2563EB]'
+                            }`}
+                          >
+                            {item.name}
+                          </h3>
 
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
-                          {TYPE_PRESENTATION[item.type]}
-                        </span>
-
-                        {item.certification === 'OFFICIAL' && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#ECFDF5] text-[#16A36A] rounded border border-[#A7F3D0]">
-                            {CERTIFICATION_BADGE[item.type]}
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
+                            {TYPE_PRESENTATION[item.type]}
                           </span>
+
+                          {item.certification === 'OFFICIAL' && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#ECFDF5] text-[#16A36A] rounded border border-[#A7F3D0]">
+                              {CERTIFICATION_BADGE[item.type]}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-xs text-[#667085]">
+                          {item.domainName} · {item.objectName}
+                        </div>
+
+                        <p className="text-xs text-[#475569] leading-relaxed">
+                          {item.description}
+                        </p>
+
+                        {item.useCases && item.useCases.length > 0 && (
+                          <div className="text-[11px] text-[#667085] pt-0.5">
+                            适用于：{item.useCases.join(' · ')}
+                          </div>
                         )}
                       </div>
-
-                      <div className="text-xs text-[#667085]">
-                        {item.domainName} · {item.objectName}
-                      </div>
-
-                      <p className="text-xs text-[#475569] leading-relaxed">
-                        {item.description}
-                      </p>
-
-                      {item.useCases && item.useCases.length > 0 && (
-                        <div className="text-[11px] text-[#667085] pt-0.5">
-                          适用于：{item.useCases.join(' · ')}
-                        </div>
-                      )}
                     </div>
 
-                    {/* Action Rail */}
+                    {/* Action Rail — fixed width keeps action baselines aligned across rows */}
                     <div
-                      className="flex flex-col items-end gap-2 shrink-0 self-start md:self-center"
+                      className="flex flex-col items-end gap-2 w-[220px] shrink-0 self-start md:self-center"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <span className={`inline-flex items-center space-x-1 text-[11px] font-semibold ${accessPresentation(item.accessStatus).textClass}`}>
