@@ -45,6 +45,13 @@ import {
   Bot
 } from 'lucide-react';
 import { SingleResourceAccessRequestDrawer } from './SingleResourceAccessRequestDrawer';
+import {
+  TYPE_PRESENTATION,
+  SUBTYPE_PRESENTATION,
+  ACCESS_PRESENTATION,
+  accessPresentation,
+  goalFitnessLabel,
+} from './resourcePresentation';
 
 export type ExplorerMode = 'browse' | 'resource_search' | 'goal_search';
 
@@ -93,6 +100,7 @@ export interface ResourceItem {
   securityLevel?: string;
   updateFrequency?: string;
   matchReason?: string;
+  useCases?: string[];
   fields?: FieldItem[];
   metricFormula?: string;
   metricUnit?: string;
@@ -160,6 +168,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     securityLevel: 'L2（受限访问）',
     updateFrequency: '每日 02:00 定时增量',
     matchReason: '包含年龄、出生日期等人口年龄分析所需信息',
+    useCases: ['人口结构分析', '老龄化分析', '区域人口统计'],
     fields: [
       { name: 'person_id', cnName: '自然人ID', type: 'BIGINT', description: '主键', isKey: true },
       { name: 'age', cnName: '年龄', type: 'INT', description: '按当前统计时间动态计算的实足年龄' },
@@ -193,6 +202,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     securityLevel: 'L1（公开可用）',
     updateFrequency: '月度 / 季度 / 年度',
     matchReason: '正式指标口径直接对应人口年龄结构分析',
+    useCases: ['老龄化程度评估', '区域对比分析', '人口结构监测'],
     metricFormula: '( count(distinct case when age >= 60 and is_permanent=1 then person_id end) / count(distinct case when is_permanent=1 then person_id end) ) * 100%',
     metricUnit: '% (百分比)',
     timeGranularity: '年 / 季 / 月',
@@ -221,6 +231,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     securityLevel: 'L1（公开可用）',
     updateFrequency: '半年 / 依据民政调整',
     matchReason: '支持人口年龄数据按街镇进行分析',
+    useCases: ['区域聚合统计', '地址标准化', '地理维度关联'],
     fields: [
       { name: 'region_code', cnName: '区划代码', type: 'VARCHAR(12)', description: '国标行政区划编码', isKey: true },
       { name: 'region_name', cnName: '区划全称', type: 'VARCHAR(64)', description: '街道/镇行政名称' },
@@ -249,6 +260,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     securityLevel: 'L2（受限访问）',
     updateFrequency: '每日同步',
     matchReason: '与常住人口年龄分析相关',
+    useCases: ['常住人口分析', '居住状态统计'],
     fields: [
       { name: 'person_id', cnName: '自然人ID', type: 'BIGINT', description: '主键', isKey: true },
       { name: 'age_strata', cnName: '年龄分层', type: 'VARCHAR(32)', description: '少年/青壮年/初老/高龄' },
@@ -276,6 +288,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     securityLevel: 'L1（公开可用）',
     updateFrequency: '月度更新',
     matchReason: '已形成年龄区间聚合结果',
+    useCases: ['人口结构快速分析', '年龄段分布统计'],
     fields: [
       { name: 'stat_month', cnName: '统计月份', type: 'VARCHAR(7)', description: 'YYYY-MM' },
       { name: 'region_code', cnName: '区划代码', type: 'VARCHAR(12)', description: '街镇编码' },
@@ -303,6 +316,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     securityLevel: 'L3（业务概念）',
     updateFrequency: '模型持续演进',
     matchReason: '是当前人口年龄相关资源的核心业务主体',
+    useCases: ['人口类业务建模', '主体识别与关联'],
     fields: [
       { name: 'person_id', cnName: '自然人唯一标识', type: 'STRING', description: '全域自然人主键统一编码', isKey: true },
       { name: 'birth_date', cnName: '出生日期', type: 'DATE', description: '用于计算精确年龄' },
@@ -329,6 +343,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     securityLevel: 'L1（开放网关）',
     updateFrequency: '实时响应 (<50ms)',
     matchReason: '支持按年龄条件查询人口统计结果',
+    useCases: ['人口统计查询', '应用集成取数'],
     apiEndpoint: 'GET /api/v1/population/statistics/query',
     apiMethod: 'GET',
     apiParams: [
@@ -354,7 +369,8 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessLabel: '可用于分析',
     updatedAt: '2026-08-02',
     owner: '民政养老服务发展处',
-    securityLevel: 'L2（受限访问）'
+    securityLevel: 'L2（受限访问）',
+    useCases: ['养老资源盘点', '机构覆盖分析']
   },
   {
     id: 'res-community-facility',
@@ -372,7 +388,8 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fitnessLabel: '状态良好',
     updatedAt: '2026-08-05',
     owner: '民政养老服务发展处',
-    securityLevel: 'L1（公开可用）'
+    securityLevel: 'L1（公开可用）',
+    useCases: ['社区养老服务供给分析', '设施覆盖评估']
   }
 ];
 
@@ -619,14 +636,13 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   const filteredBrowseResources = useMemo(() => {
     let list = [...ALL_DISCOVERABLE_RESOURCES];
 
-    // Query filter
+    // Query filter (matchReason is goal-relative and never searched in Browse)
     if (submittedQuery.trim()) {
       const q = submittedQuery.toLowerCase().trim();
-      list = list.filter(r => 
-        r.name.toLowerCase().includes(q) || 
+      list = list.filter(r =>
+        r.name.toLowerCase().includes(q) ||
         r.description.toLowerCase().includes(q) ||
-        r.context.toLowerCase().includes(q) ||
-        (r.matchReason && r.matchReason.toLowerCase().includes(q))
+        r.context.toLowerCase().includes(q)
       );
     }
 
@@ -755,6 +771,18 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
   };
 
+  // Whether any consumer-visible filter is active (drives 清除筛选 visibility)
+  const hasActiveFilters = useMemo(() => {
+    return (
+      domainFilter !== 'all' ||
+      objectFilter !== 'all' ||
+      accessFilter !== 'all' ||
+      sortOrder !== 'relevance' ||
+      activeTypeTab !== 'ALL' ||
+      submittedQuery.trim() !== ''
+    );
+  }, [domainFilter, objectFilter, accessFilter, sortOrder, activeTypeTab, submittedQuery]);
+
   // Reset Filters in Browse Mode
   const handleResetFilters = () => {
     setDomainFilter('all');
@@ -765,7 +793,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     setSearchQuery('');
     setSubmittedQuery('');
     setCurrentMode('browse');
-    addToast?.('info', '已重置筛选', '已展示全部可发现资源');
+    addToast?.('info', '已清除筛选', '已恢复默认浏览条件');
   };
 
   // Handle Toggle Candidate in Goal Search Mode
@@ -1119,8 +1147,8 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                           {item.name}
                         </h4>
 
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded font-mono border border-[#E2E8F0]">
-                          {item.type} {item.subType ? `· ${item.subType}` : ''}
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
+                          {TYPE_PRESENTATION[item.type]}{item.subType ? ` · ${SUBTYPE_PRESENTATION[item.subType] || item.subType}` : ''}
                         </span>
                       </div>
 
@@ -1138,19 +1166,14 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                       <div className="text-right space-y-1">
                         <div className="flex items-center justify-end space-x-1 text-[11px] font-medium">
                           <span className="text-[#94A3B8]">访问:</span>
-                          {item.accessStatus === 'available' ? (
-                            <span className="text-[#16A36A] flex items-center space-x-0.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-                              <span>{item.accessLabel}</span>
-                            </span>
-                          ) : item.accessStatus === 'dependent' ? (
+                          {item.accessStatus === 'dependent' ? (
                             <span className="text-[#475569] text-[11px]">
                               {item.accessLabel}
                             </span>
                           ) : (
-                            <span className="text-[#D97706] flex items-center space-x-0.5 font-semibold">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
-                              <span>{item.accessLabel}</span>
+                            <span className={`${accessPresentation(item.accessStatus).textClass} flex items-center space-x-0.5 font-semibold`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(item.accessStatus).dotClass}`} />
+                              <span>{accessPresentation(item.accessStatus).label}</span>
                             </span>
                           )}
                         </div>
@@ -1301,12 +1324,13 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                     <div key={r.id} className="flex items-center justify-between p-2 rounded bg-[#F8FAFC] border border-[#EEF2F6]">
                       <span className="text-[#334155] font-medium truncate max-w-[200px]">{r.name}</span>
                       <span className="text-[11px]">
-                        {r.accessStatus === 'available' ? (
-                          <span className="text-[#16A36A] font-semibold">🟢 可使用</span>
-                        ) : r.accessStatus === 'dependent' ? (
+                        {r.accessStatus === 'dependent' ? (
                           <span className="text-[#475569]">依赖人口基本信息视图</span>
                         ) : (
-                          <span className="text-[#D97706] font-semibold">🟠 需申请</span>
+                          <span className={`${accessPresentation(r.accessStatus).textClass} font-semibold flex items-center space-x-1 justify-end`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(r.accessStatus).dotClass}`} />
+                            <span>{accessPresentation(r.accessStatus).label}</span>
+                          </span>
                         )}
                       </span>
                     </div>
@@ -1373,10 +1397,10 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
             <div id="related-resources-section" className="space-y-3 pt-2">
               <div>
                 <h3 className="text-sm font-bold text-[#172033]">
-                  相关资源
+                  与当前目标相关的资源
                 </h3>
                 <p className="text-xs text-[#667085] mt-0.5">
-                  围绕当前老龄化分析任务，可进一步加入并扩展的数据与服务资源。
+                  按业务目标匹配程度排序
                 </p>
               </div>
 
@@ -1397,8 +1421,8 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                           >
                             {candidate.name}
                           </h4>
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded font-mono border border-[#E2E8F0]">
-                            {candidate.type} {candidate.subType ? `· ${candidate.subType}` : ''}
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
+                            {TYPE_PRESENTATION[candidate.type]}{candidate.subType ? ` · ${SUBTYPE_PRESENTATION[candidate.subType] || candidate.subType}` : ''}
                           </span>
                           <span className="text-xs text-[#667085]">
                             {candidate.context}
@@ -1411,22 +1435,22 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
 
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs pt-0.5">
                           <span className="text-[11px] text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#DBEAFE]">
-                            {candidate.whyUseful}
+                            匹配当前目标：{candidate.whyUseful}
                           </span>
 
                           <div className="flex items-center space-x-1 text-[11px] font-medium">
                             <span className="text-[#94A3B8]">访问:</span>
-                            {candidate.accessStatus === 'available' ? (
-                              <span className="text-[#16A36A] flex items-center space-x-0.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-                                <span>{candidate.accessLabel}</span>
-                              </span>
-                            ) : (
-                              <span className="text-[#D97706] flex items-center space-x-0.5 font-semibold">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
-                                <span>{candidate.accessLabel}</span>
-                              </span>
-                            )}
+                            <span className={`${accessPresentation(candidate.accessStatus).textClass} flex items-center space-x-0.5 font-semibold`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(candidate.accessStatus).dotClass}`} />
+                              <span>{accessPresentation(candidate.accessStatus).label}</span>
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-1 text-[11px] font-medium">
+                            <span className="text-[#94A3B8]">适用性:</span>
+                            <span className="text-[#16A36A] font-semibold">
+                              {goalFitnessLabel(candidate.fitnessStatus)}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -1476,60 +1500,66 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
           /* ======================================================= */
           <div className={`p-6 lg:p-8 space-y-5 w-full max-w-[1500px] transition-all ${selectedResourceIds.length > 0 ? 'pb-28' : 'pb-12'}`}>
             
-            {/* Search Box Area */}
-            <div className="bg-white border border-[#E6EAF0] rounded-md p-4 shadow-2xs space-y-2">
-              <div className="flex items-center space-x-2">
-                <div className="relative flex-1">
-                  <Search className="w-4 h-4 absolute left-3.5 top-3 text-[#98A2B3]" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleExecuteSearch(searchQuery);
-                    }}
-                    placeholder="可搜索数据资产、指标、数据 API、业务对象，也可以直接输入业务目标…"
-                    className="w-full pl-10 pr-4 py-2 text-xs bg-[#F8FAFC] border border-[#E6EAF0] rounded-md text-[#172033] placeholder-[#98A2B3] focus:outline-none focus:border-[#2563EB] focus:bg-white transition-all font-medium"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => {
-                        setSearchQuery('');
-                        setSubmittedQuery('');
-                      }}
-                      className="absolute right-3 top-2.5 text-[#98A2B3] hover:text-[#475569]"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+            {/* Compact Unified Discovery Bar */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleExecuteSearch(searchQuery);
+              }}
+              className="relative flex items-center bg-white border border-[#E6EAF0] hover:border-[#CBD5E1] focus-within:border-[#2563EB] focus-within:ring-4 focus-within:ring-[#2563EB]/10 rounded-xl p-1.5 shadow-sm transition-all duration-200"
+            >
+              {/* Left Search Icon */}
+              <div className="pl-3.5 pr-1 text-[#94A3B8] shrink-0">
+                <Search className="w-4 h-4" />
+              </div>
 
+              {/* Discovery Input */}
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索资源，或告诉 Xino 你想解决什么业务问题……"
+                className="flex-1 px-2.5 py-2 text-xs text-[#172033] placeholder-[#94A3B8] bg-transparent outline-none font-normal min-w-0"
+              />
+
+              {/* Clear */}
+              {searchQuery && (
                 <button
-                  onClick={() => handleExecuteSearch(searchQuery)}
-                  className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs"
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSubmittedQuery('');
+                  }}
+                  className="p-1.5 text-[#98A2B3] hover:text-[#475569] rounded shrink-0 cursor-pointer"
+                  title="清空"
                 >
-                  搜索
+                  <X className="w-3.5 h-3.5" />
                 </button>
+              )}
+
+              {/* Built-in Xino Identifier */}
+              <div className="hidden sm:inline-flex items-center space-x-1 px-2.5 py-1 rounded-md bg-[#FAF5FF] border border-[#E9D5FF] text-[#7C3AED] text-xs font-semibold select-none mr-2 shrink-0">
+                <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" />
+                <span>Xino</span>
               </div>
 
-              <div className="flex items-center justify-between text-[11px] text-[#98A2B3] pl-1">
-                <span>可搜索数据资产、指标、数据 API、业务对象，或直接输入业务目标。</span>
-                {submittedQuery && (
-                  <span className="text-[#2563EB] font-medium">
-                    当前检索: “{submittedQuery}” ({filteredBrowseResources.length} 项)
-                  </span>
-                )}
-              </div>
-            </div>
+              {/* Primary Action */}
+              <button
+                type="submit"
+                className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-xs font-semibold rounded-lg transition-colors shrink-0 cursor-pointer shadow-xs"
+              >
+                搜索
+              </button>
+            </form>
 
-            {/* Resource Type Tabs (Horizontal) */}
-            <div className="flex items-center justify-between border-b border-[#EEF2F6] pb-2">
-              <div className="flex items-center space-x-2">
+            {/* Resource Type Tabs (Discover-style underline tabs) */}
+            <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2">
+              <div className="flex items-center space-x-5 text-xs">
                 {[
                   { key: 'ALL', label: '全部', count: typeCounts.ALL },
                   { key: 'DATA_ASSET', label: '数据资产', count: typeCounts.DATA_ASSET },
                   { key: 'METRIC', label: '指标', count: typeCounts.METRIC },
-                  { key: 'DATA_API', label: '数据 API', count: typeCounts.DATA_API },
+                  { key: 'DATA_API', label: '接口服务', count: typeCounts.DATA_API },
                   { key: 'BUSINESS_OBJECT', label: '业务对象', count: typeCounts.BUSINESS_OBJECT },
                 ].map((tab) => (
                   <button
@@ -1538,14 +1568,14 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                       setActiveTypeTab(tab.key as any);
                       addToast?.('info', '类型切换', `已筛选「${tab.label}」`);
                     }}
-                    className={`px-3 py-1.5 rounded-md text-xs transition-all cursor-pointer flex items-center space-x-1.5 ${
+                    className={`pb-2 -mb-2 transition-all cursor-pointer flex items-baseline space-x-1 ${
                       activeTypeTab === tab.key
-                        ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                        : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#172033]'
+                        ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
+                        : 'text-[#667085] hover:text-[#172033] font-medium'
                     }`}
                   >
                     <span>{tab.label}</span>
-                    <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${activeTypeTab === tab.key ? 'bg-[#DBEAFE] text-[#1D4ED8]' : 'bg-[#F1F5F9] text-[#94A3B8]'}`}>
+                    <span className={`text-[10px] font-mono ${activeTypeTab === tab.key ? 'text-[#60A5FA]' : 'text-[#94A3B8]'}`}>
                       {tab.count}
                     </span>
                   </button>
@@ -1553,88 +1583,99 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               </div>
             </div>
 
-            {/* Filter Bar (Only P0: 业务域、业务对象、访问条件、排序、重置) */}
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs py-1">
-              <div className="flex flex-wrap items-center gap-2">
-                {/* 业务域 */}
-                <div className="relative">
-                  <select
-                    value={domainFilter}
-                    onChange={(e) => setDomainFilter(e.target.value)}
-                    className="h-8 pl-2.5 pr-7 bg-white border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] appearance-none cursor-pointer shadow-2xs font-medium"
-                  >
-                    <option value="all">全部业务域 ▾</option>
-                    <option value="population">人口服务</option>
-                    <option value="public">公共基础</option>
-                    <option value="elderly">养老服务</option>
-                  </select>
-                  <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
-                </div>
-
-                {/* 业务对象 */}
-                <div className="relative">
-                  <select
-                    value={objectFilter}
-                    onChange={(e) => setObjectFilter(e.target.value)}
-                    className="h-8 pl-2.5 pr-7 bg-white border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] appearance-none cursor-pointer shadow-2xs font-medium"
-                  >
-                    <option value="all">全部业务对象 ▾</option>
-                    <option value="person">自然人</option>
-                    <option value="region">行政区域</option>
-                    <option value="org">养老机构</option>
-                  </select>
-                  <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
-                </div>
-
-                {/* 访问条件 */}
-                <div className="relative">
-                  <select
-                    value={accessFilter}
-                    onChange={(e) => setAccessFilter(e.target.value)}
-                    className="h-8 pl-2.5 pr-7 bg-white border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] appearance-none cursor-pointer shadow-2xs font-medium"
-                  >
-                    <option value="all">访问条件：全部 ▾</option>
-                    <option value="available">可直接使用 / 可调用</option>
-                    <option value="restricted">需申请使用</option>
-                  </select>
-                  <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
-                </div>
-
-                {/* 排序 */}
-                <div className="relative">
-                  <select
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(e.target.value)}
-                    className="h-8 pl-2.5 pr-7 bg-white border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] appearance-none cursor-pointer shadow-2xs font-medium"
-                  >
-                    <option value="relevance">排序：默认排序 ▾</option>
-                    <option value="update">最近更新时间</option>
-                    <option value="name">资源名称</option>
-                  </select>
-                  <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
-                </div>
+            {/* Filter Bar (业务领域、业务对象、使用条件、排序) */}
+            <div className="flex flex-wrap items-center gap-2 text-xs py-1">
+              {/* 业务领域 */}
+              <div className="relative">
+                <select
+                  value={domainFilter}
+                  onChange={(e) => setDomainFilter(e.target.value)}
+                  className="h-8 pl-2.5 pr-7 bg-white border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] appearance-none cursor-pointer shadow-2xs font-medium"
+                >
+                  <option value="all">全部业务领域</option>
+                  <option value="population">人口服务</option>
+                  <option value="public">公共基础</option>
+                  <option value="elderly">养老服务</option>
+                </select>
+                <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
               </div>
 
-              {/* 重置 */}
-              <button
-                onClick={handleResetFilters}
-                className="h-8 px-3 text-xs text-[#667085] hover:text-[#172033] font-medium flex items-center space-x-1 cursor-pointer hover:bg-white rounded-md transition-colors"
-              >
-                <RotateCcw className="w-3 h-3 text-[#98A2B3]" />
-                <span>重置</span>
-              </button>
+              {/* 业务对象 */}
+              <div className="relative">
+                <select
+                  value={objectFilter}
+                  onChange={(e) => setObjectFilter(e.target.value)}
+                  className="h-8 pl-2.5 pr-7 bg-white border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] appearance-none cursor-pointer shadow-2xs font-medium"
+                >
+                  <option value="all">全部业务对象</option>
+                  <option value="person">自然人</option>
+                  <option value="region">行政区域</option>
+                  <option value="org">养老机构</option>
+                </select>
+                <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
+              </div>
+
+              {/* 使用条件 */}
+              <div className="relative">
+                <select
+                  value={accessFilter}
+                  onChange={(e) => setAccessFilter(e.target.value)}
+                  className="h-8 pl-2.5 pr-7 bg-white border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] appearance-none cursor-pointer shadow-2xs font-medium"
+                >
+                  <option value="all">使用条件：全部</option>
+                  <option value="available">可直接使用 / 可调用</option>
+                  <option value="restricted">需申请使用</option>
+                </select>
+                <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
+              </div>
+
+              {/* 排序（Browse 默认排序 / Search 相关度） */}
+              <div className="relative">
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="h-8 pl-2.5 pr-7 bg-white border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] appearance-none cursor-pointer shadow-2xs font-medium"
+                >
+                  <option value="relevance">{currentMode === 'resource_search' ? '相关度' : '默认排序'}</option>
+                  <option value="popular">热门使用</option>
+                  <option value="recent">最近发布</option>
+                </select>
+                <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
+              </div>
+
+              {/* 清除筛选（仅在有筛选时出现，紧跟筛选器） */}
+              {hasActiveFilters && (
+                <button
+                  onClick={handleResetFilters}
+                  className="h-8 px-2.5 text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold flex items-center space-x-1 cursor-pointer transition-colors"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>清除筛选</span>
+                </button>
+              )}
             </div>
 
             {/* List Result Header */}
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-baseline space-x-2">
-                <h2 className="text-sm font-bold text-[#172033]">
-                  {submittedQuery ? `搜索结果` : '可发现资源'}
-                </h2>
-                <span className="text-xs text-[#667085] font-normal">
-                  {submittedQuery ? `找到与“${submittedQuery}”相关的资源` : '当前可发现范围内的全部资源'} ({filteredBrowseResources.length} 项)
-                </span>
-              </div>
+            <div className="flex items-baseline space-x-2 pt-1">
+              {submittedQuery ? (
+                <>
+                  <h2 className="text-sm font-bold text-[#172033]">
+                    找到 {filteredBrowseResources.length} 个资源
+                  </h2>
+                  <span className="text-xs text-[#667085] font-normal">
+                    与“{submittedQuery}”相关
+                  </span>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-sm font-bold text-[#172033]">
+                    {filteredBrowseResources.length} 个资源
+                  </h2>
+                  <span className="text-xs text-[#667085] font-normal">
+                    符合当前浏览条件
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Compact Rich Resource Rows */}
@@ -1653,6 +1694,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                         : 'hover:bg-[#F8FAFC]'
                     }`}
                   >
+                    {/* Resource Content — only the resource's own facts */}
                     <div className="space-y-1.5 flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         {item.type === 'BUSINESS_OBJECT' && (
@@ -1684,81 +1726,49 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                           {item.name}
                         </h3>
 
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded font-mono border border-[#E2E8F0]">
-                          {item.type} {item.subType ? `· ${item.subType}` : ''}
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
+                          {TYPE_PRESENTATION[item.type]}
                         </span>
 
-                        <span className="text-xs text-[#667085]">
-                          {item.context}
-                        </span>
+                        {(item.fitnessStatus === 'ready' || item.fitnessStatus === 'good') && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#ECFDF5] text-[#16A36A] rounded border border-[#A7F3D0]">
+                            正式资源
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-[#667085]">
+                        {item.domainName} · {item.objectName}
                       </div>
 
                       <p className="text-xs text-[#475569] leading-relaxed">
                         {item.description}
                       </p>
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-0.5 text-xs">
-                        {item.matchReason && (
-                          <div className="text-[11px] text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#DBEAFE] flex items-center space-x-1">
-                            <Check className="w-3 h-3 text-[#2563EB]" />
-                            <span>{item.matchReason}</span>
-                          </div>
-                        )}
-
-                        {item.type !== 'BUSINESS_OBJECT' ? (
-                          <div className="flex items-center space-x-1 text-[11px] font-medium">
-                            <span className="text-[#64748B]">访问:</span>
-                            {item.accessStatus === 'available' ? (
-                              <span className="text-[#16A36A] flex items-center space-x-0.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-                                <span>{item.accessLabel || '可使用'}</span>
-                              </span>
-                            ) : (
-                              <span className="text-[#D97706] flex items-center space-x-0.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
-                                <span>{item.accessLabel || '需申请'}</span>
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-[11px] text-[#64748B] font-medium">
-                            <span>类型: 语义概念资源</span>
-                          </div>
-                        )}
-
-                        {item.fitnessLabel && (
-                          <div className="flex items-center space-x-1 text-[11px] font-medium">
-                            <span className="text-[#64748B]">适用性:</span>
-                            {item.fitnessStatus === 'warning' ? (
-                              <span className="text-[#D97706] flex items-center space-x-0.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
-                                <span>{item.fitnessLabel}</span>
-                              </span>
-                            ) : (
-                              <span className="text-[#16A36A] flex items-center space-x-0.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-                                <span>{item.fitnessLabel}</span>
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                      {item.useCases && item.useCases.length > 0 && (
+                        <div className="text-[11px] text-[#667085] pt-0.5">
+                          适用于：{item.useCases.join(' · ')}
+                        </div>
+                      )}
                     </div>
 
+                    {/* Action Rail */}
                     <div
-                      className="flex items-center space-x-2 shrink-0 self-start md:self-center"
+                      className="flex flex-col items-end gap-2 shrink-0 self-start md:self-center"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      <span className={`inline-flex items-center space-x-1 text-[11px] font-semibold ${accessPresentation(item.accessStatus).textClass}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(item.accessStatus).dotClass}`} />
+                        <span>{accessPresentation(item.accessStatus).label}</span>
+                      </span>
+
                       <button
                         type="button"
                         onClick={() => handleOpenPreview(item)}
-                        className={`px-2.5 py-1.5 rounded text-xs transition-colors cursor-pointer border ${
-                          isCurrentPreview
-                            ? 'bg-[#2563EB] text-white border-[#2563EB]'
-                            : 'text-[#475569] hover:text-[#172033] hover:bg-[#F1F5F9] border-[#E6EAF0]'
-                        }`}
+                        className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold transition-colors cursor-pointer flex items-center space-x-0.5"
                       >
-                        {item.type === 'BUSINESS_OBJECT' ? '查看相关' : '查看详情'}
+                        <span>查看资源</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </button>
 
                       {isAdded ? (
@@ -1769,7 +1779,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                         >
                           <Check className="w-3.5 h-3.5 group-hover/btn:hidden text-[#2563EB]" />
                           <X className="w-3.5 h-3.5 hidden group-hover/btn:inline-block text-[#DC2626]" />
-                          <span className="group-hover/btn:hidden">✓ 已加入</span>
+                          <span className="group-hover/btn:hidden">✓ 已加入候选</span>
                           <span className="hidden group-hover/btn:inline">移除</span>
                         </button>
                       ) : (
@@ -1779,7 +1789,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                           className="px-3 py-1.5 rounded text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          <span>＋ 加入</span>
+                          <span>加入候选</span>
                         </button>
                       )}
                     </div>
@@ -1896,7 +1906,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
         {/* ========================================================= */}
         {currentMode === 'goal_search' && candidatesQueue.length > 0 && (
           <div className="sticky bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-xs border-t border-[#E6EAF0] shadow-lg px-6 lg:px-8 py-3.5 transition-all animate-in slide-in-from-bottom-2 duration-150">
-            <div className="w-full max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="w-full max-w-[1500px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-0.5 min-w-0">
                 <div className="flex items-center space-x-2">
                   <span className="text-xs font-bold text-[#172033]">
