@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
           
           <button
-            onClick={() => onSelectNav && onSelectNav('marketplace_resources')}
+            onClick={() => onSelectNav && onSelectNav('marketplace')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
               currentNav === 'marketplace' || currentNav === 'marketplace_resources' || currentNav === 'asset_detail' || currentNav === 'metric_detail' || currentNav === 'business_object_detail' || currentNav === 'multi_resource_request' || currentNav === 'my_requests'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
@@ -112,15 +112,15 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
       </div>
 
-      {/* Global Search Bar (Center) */}
-      <div className="relative hidden md:block w-72 lg:w-80">
+      {/* Global Search Bar (Downgraded & lighter than Discovery Search) */}
+      <div className="relative hidden md:block w-64 lg:w-72">
         <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#94A3B8]" />
         <input
           type="text"
-          placeholder="搜索资源名称、业务含义、业务对象或字段…"
-          className="w-full pl-8 pr-12 py-1.5 text-xs bg-[#F8FAFC] border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:bg-white text-[#0F172A] placeholder-[#94A3B8] transition-all"
+          placeholder="搜索 Semovix…"
+          className="w-full pl-8 pr-12 py-1.5 text-xs bg-[#F8FAFC] border border-[#E6EAF0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:bg-white text-[#172033] placeholder-[#94A3B8] transition-all"
         />
-        <kbd className="absolute right-2.5 top-1.5 px-1.5 py-0.2 text-[10px] font-mono text-[#64748B] bg-white border border-[#CBD5E1] rounded shadow-2xs">
+        <kbd className="absolute right-2.5 top-1.5 px-1.5 py-0.2 text-[10px] font-mono text-[#64748B] bg-white border border-[#E2E8F0] rounded shadow-2xs">
           ⌘ K
         </kbd>
       </div>
