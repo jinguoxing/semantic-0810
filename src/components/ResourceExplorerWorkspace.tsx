@@ -439,7 +439,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   // Progressive Selected Candidates (for Browse / Search mode)
   const [selectedResourceIds, setSelectedResourceIds] = useState<string[]>(['res-02', 'res-03', 'res-05']);
   const [isSelectedTrayDrawerOpen, setIsSelectedTrayDrawerOpen] = useState<boolean>(false);
-  const [isGoalCaptureModalOpen, setIsGoalCaptureModalOpen] = useState<boolean>(false);
   const [goalInputValue, setGoalInputValue] = useState<string>('');
 
   // Type Tabs for Browse Mode: ALL, DATA_ASSET, METRIC, DATA_API, BUSINESS_OBJECT
@@ -544,7 +543,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
 
   // Detail Preview Drawer
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<ResourceItem | null>(null);
-  const [activeDrawerTab, setActiveDrawerTab] = useState<'overview' | 'schema' | 'api_doc' | 'lineage'>('overview');
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
   // Synchronize when initialMode or initialQuery changes
@@ -715,6 +713,16 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
   };
 
+  // Quick-preview content chips — full schema & metric formulas live in Resource Detail, not here
+  const previewContains: string[] = selectedPreviewItem
+    ? selectedPreviewItem.type === 'METRIC'
+      ? selectedPreviewItem.dimensions || []
+      : selectedPreviewItem.type === 'DATA_API'
+        ? (selectedPreviewItem.apiParams || []).map(p => p.name)
+        : (selectedPreviewItem.fields || []).map(f => f.cnName)
+    : [];
+  const isPreviewAdded = selectedPreviewItem ? selectedResourceIds.includes(selectedPreviewItem.id) : false;
+
   // Clear all selected in Browse mode
   const handleClearAllSelected = () => {
     setSelectedResourceIds([]);
@@ -727,28 +735,10 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     return isExplicitGoal(query);
   };
 
-  // Start Building Data Solution from Browse / Search Tray
-  const handleStartComposeSolution = () => {
-    if (selectedResourceIds.length === 0) {
-      addToast?.('info', '请先加入资源', '至少加入一项资源后再构建数据方案');
-      return;
-    }
-
-    if (isQueryFullGoal(submittedQuery)) {
-      setBusinessGoal(submittedQuery);
-      setCurrentMode('goal_search');
-      addToast?.('success', '构建数据方案', `已基于目标「${submittedQuery}」组合 ${selectedResourceIds.length} 项候选资源`);
-    } else {
-      setGoalInputValue('');
-      setIsGoalCaptureModalOpen(true);
-    }
-  };
-
-  // Confirm Goal and Compose Solution
+  // Confirm Goal and Compose Solution (from Candidate Drawer)
   const handleConfirmGoalAndCompose = () => {
     const finalGoal = goalInputValue.trim() || '分析各街镇人口老龄化程度及人口结构差异';
     setBusinessGoal(finalGoal);
-    setIsGoalCaptureModalOpen(false);
     setCurrentMode('goal_search');
     addToast?.('success', '构建数据方案', `已基于目标「${finalGoal}」智能解析候选资源角色与依赖`);
   };
@@ -922,7 +912,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     } as ResourceItem;
 
     setSelectedPreviewItem(full);
-    setActiveDrawerTab('overview');
   };
 
   return (
@@ -1847,56 +1836,34 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
         )}
 
         {/* ========================================================= */}
-        {/* TRAY FOR BROWSE/RESOURCE SEARCH MODE                      */}
+        {/* TRAY FOR BROWSE/RESOURCE SEARCH MODE (collect only —      */}
+        {/* compose lives one layer deeper, in the candidate drawer)  */}
         {/* ========================================================= */}
         {currentMode !== 'goal_search' && selectedResourceIds.length > 0 && (
           <div className="sticky bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-xs border-t border-[#E6EAF0] shadow-lg px-6 lg:px-8 py-3.5 transition-all animate-in slide-in-from-bottom-2 duration-150">
-            <div className="w-full max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-0.5 min-w-0">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-bold text-[#172033]">
-                    已选资源
-                  </span>
-                  <span className="px-1.5 py-0.2 bg-[#2563EB] text-white text-[11px] font-bold rounded-full">
-                    {selectedResourceIds.length}
-                  </span>
-                  <span className="text-[11px] text-[#98A2B3]">
-                    · 临时工作集合
-                  </span>
-                </div>
-                
+            <div className="w-full max-w-[1500px] mx-auto flex items-center justify-between gap-3">
+              <div className="flex items-center space-x-3 min-w-0">
+                <span className="text-xs font-bold text-[#172033] shrink-0">
+                  候选资源
+                </span>
+                <span className="px-1.5 py-0.2 bg-[#2563EB] text-white text-[11px] font-bold rounded-full shrink-0">
+                  {selectedResourceIds.length}
+                </span>
+
                 <p className="text-xs text-[#64748B] truncate max-w-[580px]">
                   {selectedResourceItems.slice(0, 3).map(r => r.name).join(' · ')}
                   {selectedResourceItems.length > 3 ? ` · 等 ${selectedResourceItems.length} 项` : ''}
                 </p>
               </div>
 
-              <div className="flex items-center space-x-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsSelectedTrayDrawerOpen(true)}
-                  className="text-xs text-[#2563EB] hover:underline font-semibold cursor-pointer px-2 py-1"
-                >
-                  查看已选 ({selectedResourceIds.length})
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleClearAllSelected}
-                  className="text-xs text-[#667085] hover:text-[#DC2626] cursor-pointer px-2 py-1 transition-colors"
-                >
-                  清空
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleStartComposeSolution}
-                  className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-sm flex items-center space-x-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>用这些资源构建数据方案</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsSelectedTrayDrawerOpen(true)}
+                className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold cursor-pointer flex items-center space-x-0.5 shrink-0"
+              >
+                <span>查看候选</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         )}
@@ -1955,32 +1922,42 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       </main>
 
       {/* ========================================================= */}
-      {/* 3. SELECTED TRAY DRAWER (Browse Mode)                     */}
+      {/* 3. CANDIDATE DRAWER (collect → compose lives here,        */}
+      {/*    one layer deeper than the tray)                        */}
       {/* ========================================================= */}
       {isSelectedTrayDrawerOpen && (
         <aside className="w-[420px] bg-white border-l border-[#E6EAF0] shadow-2xl flex flex-col shrink-0 z-30 animate-in slide-in-from-right duration-200">
           <div className="px-5 py-4 border-b border-[#E6EAF0] bg-[#FAFCFF] flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <h3 className="text-sm font-bold text-[#172033]">
-                已选资源
+                候选资源
               </h3>
               <span className="px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] text-[11px] font-bold rounded">
                 {selectedResourceIds.length} 项
               </span>
             </div>
 
-            <button
-              onClick={() => setIsSelectedTrayDrawerOpen(false)}
-              className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center space-x-1">
+              <button
+                onClick={handleClearAllSelected}
+                className="px-2 py-1 rounded text-[11px] text-[#64748B] hover:text-[#DC2626] font-medium cursor-pointer transition-colors"
+              >
+                清空
+              </button>
+
+              <button
+                onClick={() => setIsSelectedTrayDrawerOpen(false)}
+                className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
             {selectedResourceItems.length === 0 ? (
               <div className="p-8 text-center text-xs text-[#98A2B3]">
-                暂无已选资源，请在列表中点击「＋ 加入」
+                暂无已选资源，请在列表中点击「＋ 加入候选」
               </div>
             ) : (
               selectedResourceItems.map((item) => (
@@ -1991,7 +1968,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center space-x-1.5">
                       <span className="text-[10px] font-bold px-1.5 py-0.2 bg-white text-[#475569] rounded border border-[#CBD5E1]">
-                        {item.type} {item.subType ? `· ${item.subType}` : ''}
+                        {TYPE_PRESENTATION[item.type]}{item.subType ? ` · ${SUBTYPE_PRESENTATION[item.subType] || item.subType}` : ''}
                       </span>
                       <h4 className="text-xs font-bold text-[#172033] truncate">
                         {item.name}
@@ -2013,104 +1990,33 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
             )}
           </div>
 
-          <div className="p-4 border-t border-[#E6EAF0] bg-[#FAFCFF] flex items-center justify-between">
-            <button
-              onClick={handleClearAllSelected}
-              className="text-xs text-[#64748B] hover:text-[#DC2626] font-medium cursor-pointer"
-            >
-              清空全部
-            </button>
+          {/* Compose: what does the user want to do with these candidates? */}
+          <div className="p-4 border-t border-[#E6EAF0] bg-[#FAFCFF] space-y-2.5">
+            <div className="text-[11px] font-bold text-[#172033]">
+              这些资源准备做什么？
+            </div>
+
+            <textarea
+              rows={3}
+              value={goalInputValue}
+              onChange={(e) => setGoalInputValue(e.target.value)}
+              placeholder="描述你的业务目标……"
+              className="w-full p-2.5 text-xs bg-white border border-[#CBD5E1] rounded-md text-[#172033] placeholder-[#98A2B3] focus:outline-none focus:border-[#2563EB] transition-all font-medium resize-none"
+            />
 
             <button
+              type="button"
               onClick={() => {
+                handleConfirmGoalAndCompose();
                 setIsSelectedTrayDrawerOpen(false);
-                handleStartComposeSolution();
               }}
-              className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center space-x-1.5"
+              className="w-full px-4 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>用这些资源构建数据方案</span>
+              <span>基于候选构建数据方案 →</span>
             </button>
           </div>
         </aside>
-      )}
-
-      {/* ========================================================= */}
-      {/* 4. GOAL CAPTURE MODAL                                     */}
-      {/* ========================================================= */}
-      {isGoalCaptureModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-lg border border-[#CBD5E1] shadow-2xl max-w-lg w-full overflow-hidden">
-            <div className="px-6 py-4 bg-[#F8FAFC] border-b border-[#E6EAF0] flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 rounded-md bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB]">
-                  <Sparkles className="w-3.5 h-3.5" />
-                </div>
-                <h3 className="text-sm font-bold text-[#172033]">
-                  准备用这些资源做什么？
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsGoalCaptureModalOpen(false)}
-                className="p-1 rounded hover:bg-[#E2E8F0] text-[#64748B] cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <p className="text-xs text-[#475569] leading-relaxed">
-                描述你准备完成的业务目标，Semovix 会判断这些资源分别承担什么作用、还缺哪些数据，以及当前是否适合使用。
-              </p>
-
-              <div className="space-y-1.5">
-                <div className="text-[11px] font-bold text-[#64748B]">
-                  当前已选：{selectedResourceIds.length} 项候选资源
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedResourceItems.map(r => (
-                    <span
-                      key={r.id}
-                      className="px-2 py-0.5 bg-[#F1F5F9] text-[#334155] rounded text-[11px] border border-[#E2E8F0]"
-                    >
-                      {r.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-[#172033]">
-                  业务目标描述
-                </label>
-                <textarea
-                  rows={3}
-                  value={goalInputValue}
-                  onChange={(e) => setGoalInputValue(e.target.value)}
-                  placeholder="例如：分析闵行区各街镇人口老龄化程度及人口结构差异"
-                  className="w-full p-2.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded-md text-[#172033] placeholder-[#98A2B3] focus:outline-none focus:border-[#2563EB] focus:bg-white transition-all font-medium resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="px-6 py-3.5 bg-[#F8FAFC] border-t border-[#E6EAF0] flex items-center justify-end space-x-2">
-              <button
-                type="button"
-                onClick={() => setIsGoalCaptureModalOpen(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-[#475569] hover:text-[#172033] cursor-pointer"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmGoalAndCompose}
-                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded transition-colors cursor-pointer shadow-2xs"
-              >
-                构建数据方案
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ========================================================= */}
@@ -2221,20 +2127,28 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
           <div className="px-5 py-4 border-b border-[#E6EAF0] bg-[#FAFCFF] flex items-start justify-between">
             <div className="space-y-1 min-w-0 pr-3">
               <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#EFF6FF] text-[#2563EB] font-mono border border-[#BFDBFE]">
-                  {selectedPreviewItem.type} {selectedPreviewItem.subType ? `· ${selectedPreviewItem.subType}` : ''}
+                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                  {TYPE_PRESENTATION[selectedPreviewItem.type]}{selectedPreviewItem.subType ? ` · ${SUBTYPE_PRESENTATION[selectedPreviewItem.subType] || selectedPreviewItem.subType}` : ''}
                 </span>
-                {selectedPreviewItem.accessStatus === 'available' ? (
-                  <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-[#16A36A] bg-[#ECFDF5] px-1.5 py-0.2 rounded border border-[#A7F3D0]">
-                    <Unlock className="w-2.5 h-2.5" />
-                    <span>{selectedPreviewItem.accessLabel || '可直接使用'}</span>
+                {(selectedPreviewItem.fitnessStatus === 'ready' || selectedPreviewItem.fitnessStatus === 'good') && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0]">
+                    正式资源
                   </span>
-                ) : selectedPreviewItem.accessStatus === 'restricted' ? (
-                  <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-[#D97706] bg-[#FFFBEB] px-1.5 py-0.2 rounded border border-[#FDE68A]">
-                    <Lock className="w-2.5 h-2.5" />
-                    <span>{selectedPreviewItem.accessLabel || '需申请使用'}</span>
+                )}
+                {selectedPreviewItem.accessStatus === 'semantic_only' ? (
+                  <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-[#6366F1] bg-[#EEF2FF] px-1.5 py-0.2 rounded border border-[#C7D2FE]">
+                    <span>{ACCESS_PRESENTATION.semantic_only.label}</span>
                   </span>
-                ) : null}
+                ) : (
+                  <span className={`inline-flex items-center space-x-1 text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                    selectedPreviewItem.accessStatus === 'available'
+                      ? 'text-[#16A36A] bg-[#ECFDF5] border-[#A7F3D0]'
+                      : 'text-[#2563EB] bg-[#EFF6FF] border-[#BFDBFE]'
+                  }`}>
+                    {selectedPreviewItem.accessStatus === 'available' ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                    <span>{accessPresentation(selectedPreviewItem.accessStatus).label}</span>
+                  </span>
+                )}
               </div>
               <h3 className="text-base font-bold text-[#172033] tracking-tight truncate">
                 {selectedPreviewItem.name}
@@ -2265,123 +2179,45 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
             </div>
           </div>
 
-          <div className="flex items-center border-b border-[#EEF2F6] bg-white px-5 text-xs">
-            <button
-              onClick={() => setActiveDrawerTab('overview')}
-              className={`py-2.5 mr-4 font-semibold transition-colors cursor-pointer border-b-2 ${
-                activeDrawerTab === 'overview'
-                  ? 'border-[#2563EB] text-[#2563EB]'
-                  : 'border-transparent text-[#64748B] hover:text-[#172033]'
-              }`}
-            >
-              业务概览
-            </button>
-            
-            <button
-              onClick={() => setActiveDrawerTab('schema')}
-              className={`py-2.5 mr-4 font-semibold transition-colors cursor-pointer border-b-2 ${
-                activeDrawerTab === 'schema'
-                  ? 'border-[#2563EB] text-[#2563EB]'
-                  : 'border-transparent text-[#64748B] hover:text-[#172033]'
-              }`}
-            >
-              {selectedPreviewItem.type === 'METRIC' ? '指标公式' : '字段结构'}
-            </button>
-
-            <button
-              onClick={() => setActiveDrawerTab('lineage')}
-              className={`py-2.5 font-semibold transition-colors cursor-pointer border-b-2 ${
-                activeDrawerTab === 'lineage'
-                  ? 'border-[#2563EB] text-[#2563EB]'
-                  : 'border-transparent text-[#64748B] hover:text-[#172033]'
-              }`}
-            >
-              关联与依赖
-            </button>
-          </div>
-
           <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
-            {activeDrawerTab === 'overview' && (
-              <div className="space-y-4 animate-in fade-in duration-150">
+              {/* 业务说明 */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-[#172033]">业务说明</div>
+                <p className="text-xs text-[#475569] leading-relaxed bg-[#F8FAFC] p-3 rounded-md border border-[#E6EAF0]">
+                  {selectedPreviewItem.description}
+                </p>
+              </div>
+
+              {/* 这份资源包含什么 — full schema & formulas live in Resource Detail */}
+              {previewContains.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="text-[11px] font-bold text-[#64748B]">业务定义</div>
-                  <p className="text-xs text-[#172033] leading-relaxed bg-[#F8FAFC] p-3 rounded-md border border-[#E6EAF0]">
-                    {selectedPreviewItem.description}
-                  </p>
-                </div>
-
-                {selectedPreviewItem.consumerFact && (
-                  <div className="space-y-1.5">
-                    <div className="text-[11px] font-bold text-[#64748B] flex items-center space-x-1">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#16A36A]" />
-                      <span>消费者关键事实 (Consumer Fact)</span>
-                    </div>
-                    <div className="bg-[#FAFCFF] p-3 rounded-md border border-[#BFDBFE] text-xs text-[#1E40AF] font-medium">
-                      {selectedPreviewItem.consumerFact}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-2 pt-1">
-                  <div className="text-[11px] font-bold text-[#64748B]">管理与质量属性</div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div className="bg-white p-2.5 rounded border border-[#E6EAF0]">
-                      <div className="text-[#94A3B8]">业务域 / 对象</div>
-                      <div className="font-bold text-[#172033] mt-0.5">
-                        {selectedPreviewItem.domainName} · {selectedPreviewItem.objectName}
-                      </div>
-                    </div>
-                    <div className="bg-white p-2.5 rounded border border-[#E6EAF0]">
-                      <div className="text-[#94A3B8]">数据安全等级</div>
-                      <div className="font-bold text-[#172033] mt-0.5">
-                        {selectedPreviewItem.securityLevel || 'L1（公开可用）'}
-                      </div>
-                    </div>
+                  <div className="text-[11px] font-bold text-[#172033]">这份资源包含什么</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {previewContains.map((entry) => (
+                      <span key={entry} className="px-2 py-1 rounded-md text-[11px] font-medium bg-white text-[#334155] border border-[#E6EAF0]">
+                        {entry}
+                      </span>
+                    ))}
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {activeDrawerTab === 'schema' && (
-              <div className="space-y-4 animate-in fade-in duration-150">
-                {selectedPreviewItem.type === 'METRIC' ? (
-                  <div className="space-y-3">
-                    <div className="text-[11px] font-bold text-[#64748B]">指标计算公式</div>
-                    <div className="bg-[#0F172A] text-[#38BDF8] font-mono text-[11px] p-3 rounded-md overflow-x-auto leading-relaxed border border-[#334155]">
-                      {selectedPreviewItem.metricFormula || 'SUM(target) / COUNT(*)'}
-                    </div>
+              {/* 适合做什么 */}
+              {selectedPreviewItem.useCases && selectedPreviewItem.useCases.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-bold text-[#172033]">适合做什么</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedPreviewItem.useCases.map((useCase) => (
+                      <span key={useCase} className="px-2 py-1 rounded-md text-[11px] font-medium bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                        {useCase}
+                      </span>
+                    ))}
                   </div>
-                ) : (
-                  <div className="border border-[#E6EAF0] rounded-md overflow-hidden bg-white">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-[#F8FAFC] text-[#64748B] border-b border-[#E6EAF0] text-[11px]">
-                        <tr>
-                          <th className="py-2 px-3 font-semibold">字段名 / 中文名</th>
-                          <th className="py-2 px-3 font-semibold">类型</th>
-                          <th className="py-2 px-3 font-semibold">说明</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#EEF2F6] text-[11px]">
-                        {selectedPreviewItem.fields?.map((field) => (
-                          <tr key={field.name} className="hover:bg-[#F8FAFC]">
-                            <td className="py-2 px-3">
-                              <div className="font-mono font-bold text-[#172033]">{field.name}</div>
-                              <div className="text-[10px] text-[#64748B]">{field.cnName}</div>
-                            </td>
-                            <td className="py-2 px-3 font-mono text-[#2563EB]">{field.type}</td>
-                            <td className="py-2 px-3 text-[#475569]">{field.description}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
+                </div>
+              )}
 
-            {activeDrawerTab === 'lineage' && (
-              <div className="space-y-3.5 animate-in fade-in duration-150">
-                <div className="text-[11px] font-bold text-[#64748B]">关联业务与数据资产</div>
+              <div className="space-y-3.5 pt-1">
+                <div className="text-[11px] font-bold text-[#172033]">相关资源</div>
                 {selectedPreviewItem.relatedAssets && selectedPreviewItem.relatedAssets.length > 0 ? (
                   <div className="space-y-2">
                     {selectedPreviewItem.relatedAssets.map((rel) => (
@@ -2395,7 +2231,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                       >
                         <div className="flex items-center space-x-2">
                           <span className="px-1.5 py-0.2 bg-white text-[#2563EB] text-[10px] font-bold rounded border border-[#CBD5E1]">
-                            {rel.type}
+                            {TYPE_PRESENTATION[rel.type] || rel.type}
                           </span>
                           <span className="font-bold text-xs text-[#172033]">{rel.name}</span>
                         </div>
@@ -2409,53 +2245,59 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                   </div>
                 )}
               </div>
-            )}
           </div>
 
-          <div className="p-4 border-t border-[#E6EAF0] bg-[#FAFCFF] flex items-center justify-between">
-            {selectedPreviewItem.type === 'BUSINESS_OBJECT' ? (
+          <div className="p-4 border-t border-[#E6EAF0] bg-[#FAFCFF] flex items-center justify-between gap-3">
+            {/* Collect — Browse / Resource Search only; goal mode manages its own solution set */}
+            {currentMode !== 'goal_search' ? (
+              isPreviewAdded ? (
+                <button
+                  type="button"
+                  onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
+                  className="px-3 py-1.5 rounded text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#FEE2E2] hover:text-[#DC2626] hover:border-[#FECACA] transition-all cursor-pointer flex items-center space-x-1 group/btn"
+                >
+                  <Check className="w-3.5 h-3.5 group-hover/btn:hidden text-[#2563EB]" />
+                  <X className="w-3.5 h-3.5 hidden group-hover/btn:inline-block text-[#DC2626]" />
+                  <span className="group-hover/btn:hidden">✓ 已加入候选</span>
+                  <span className="hidden group-hover/btn:inline">移除</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
+                  className="px-3 py-1.5 rounded text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>加入候选</span>
+                </button>
+              )
+            ) : (
+              <div />
+            )}
+
+            {/* Full detail — unified label, per-type navigation (DATA_API has no detail page yet) */}
+            {selectedPreviewItem.type !== 'DATA_API' ? (
               <button
                 onClick={() => {
+                  const target = selectedPreviewItem;
+                  const fromGoalSearch = currentMode === 'goal_search';
                   setSelectedPreviewItem(null);
-                  onNavigateToBusinessObjectDetail?.(selectedPreviewItem.id, currentMode === 'goal_search', businessGoal);
+                  if (target.type === 'BUSINESS_OBJECT') {
+                    onNavigateToBusinessObjectDetail?.(target.id, fromGoalSearch, businessGoal);
+                  } else if (target.type === 'DATA_ASSET') {
+                    onNavigateToDataAssetDetail?.(target.id, fromGoalSearch, businessGoal);
+                  } else {
+                    onNavigateToMetricDetail?.(target.id, fromGoalSearch, businessGoal);
+                  }
                 }}
                 className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold rounded transition-colors cursor-pointer flex items-center space-x-1"
               >
-                <span>查看业务对象详情</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            ) : selectedPreviewItem.type === 'DATA_ASSET' ? (
-              <button
-                onClick={() => {
-                  setSelectedPreviewItem(null);
-                  onNavigateToDataAssetDetail?.(selectedPreviewItem.id, currentMode === 'goal_search', businessGoal);
-                }}
-                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold rounded transition-colors cursor-pointer flex items-center space-x-1"
-              >
-                <span>查看资产详情</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            ) : selectedPreviewItem.type === 'METRIC' ? (
-              <button
-                onClick={() => {
-                  setSelectedPreviewItem(null);
-                  onNavigateToMetricDetail?.(selectedPreviewItem.id, currentMode === 'goal_search', businessGoal);
-                }}
-                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold rounded transition-colors cursor-pointer flex items-center space-x-1"
-              >
-                <span>查看指标详情</span>
+                <span>查看完整详情</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             ) : (
               <div />
             )}
-
-            <button
-              onClick={() => setSelectedPreviewItem(null)}
-              className="px-4 py-1.5 bg-white border border-[#CBD5E1] text-[#334155] text-xs font-semibold rounded hover:bg-[#F1F5F9] cursor-pointer"
-            >
-              关闭
-            </button>
           </div>
         </aside>
       )}
