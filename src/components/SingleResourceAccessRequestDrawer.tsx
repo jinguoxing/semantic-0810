@@ -14,12 +14,19 @@ import {
   User,
   Info
 } from 'lucide-react';
+import {
+  OPERATION_PRESENTATION,
+  type RequestOperation,
+} from './resourcePresentation';
 
 export interface SingleResourceAccessRequestDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   resourceName?: string;
   resourceTypeLabel?: string; // 数据资产 · 视图 (consumer-facing; never internal enums)
+  /** What the request GRANTS — parameterizes 申请能力 (an API grants a CALL,
+   *  a data asset grants a QUERY). Defaults to QUERY. */
+  operation?: RequestOperation;
   taskContextTitle?: string; // 街镇老龄化分析
   /** Access decision policy. The ORDINARY path is MANUAL_REVIEW (申请已提交 ·
    *  等待审批 → PENDING); AUTO_GRANT only when an explicit policy hits
@@ -42,6 +49,7 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
   onClose,
   resourceName = '人口基本信息视图',
   resourceTypeLabel = '数据资产 · 视图',
+  operation = 'QUERY',
   taskContextTitle = '街镇老龄化分析',
   reviewDecision = 'manual_review',
   suggestedScopeItems,
@@ -66,6 +74,9 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
   const [decisionResult, setDecisionResult] = useState<'auto_granted' | 'manual_review' | 'auto_denied'>(reviewDecision);
 
   if (!isOpen) return null;
+
+  // 申请能力 copy derives from the operation contract — never hardcoded.
+  const operationPresentation = OPERATION_PRESENTATION[operation];
 
   const handleSubmit = () => {
     setSubmitPhase('submitting');
@@ -167,7 +178,7 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
                     当前申请已根据数据安全与访问策略自动处理，建议范围授权已下发，可以继续原来的分析任务。
                   </p>
                   <div className="pt-2 border-t border-[#DCFCE7] text-[11px] text-[#15803D] space-y-1">
-                    <div>• 授权能力：查询数据（在线分析与问数）</div>
+                    <div>• 授权能力：{operationPresentation.label}（{operationPresentation.capabilitySummary}）</div>
                     <div>• 有效期限：3 个月（到期前 7 天支持续期）</div>
                     <div>• 安全要求：姓名已自动配置动态脱敏</div>
                   </div>
@@ -274,10 +285,10 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
                 <div className="w-2 h-2 rounded-full bg-[#2563EB] shrink-0 mt-1.5" />
                 <div className="space-y-0.5 min-w-0">
                   <div className="font-bold text-[#172033] text-xs">
-                    查询数据
+                    {operationPresentation.label}
                   </div>
                   <p className="text-[11px] text-[#667085] leading-relaxed">
-                    用于在线分析和问数，不包含数据导出。
+                    {operationPresentation.description}
                   </p>
                 </div>
               </div>

@@ -49,6 +49,22 @@ export const ACCESS_PRESENTATION: Record<
 export const accessPresentation = (status: string) =>
   ACCESS_PRESENTATION[status] ?? ACCESS_PRESENTATION.AVAILABLE;
 
+// Requested capability — WHAT the access request grants, parameterized by
+// resource class: an API grants a CALL, a data asset grants a QUERY. The
+// drawer renders 申请能力 and the decision-result capability line wholesale
+// from this contract; internal enum values never reach the user.
+export type RequestOperation = 'QUERY' | 'CALL' | 'PREVIEW' | 'EXPORT';
+
+export const OPERATION_PRESENTATION: Record<
+  RequestOperation,
+  { label: string; description: string; capabilitySummary: string }
+> = {
+  QUERY: { label: '查询数据', description: '用于在线分析和问数，不包含数据导出。', capabilitySummary: '在线分析与问数' },
+  CALL: { label: '调用服务', description: '用于应用与系统集成在线调用，按接口协议取数，不包含数据导出。', capabilitySummary: '应用集成调用' },
+  PREVIEW: { label: '预览数据', description: '用于申请前查看脱敏样例，不包含全量访问。', capabilitySummary: '脱敏样例预览' },
+  EXPORT: { label: '导出数据', description: '用于离线分析场景的数据文件导出。', capabilitySummary: '数据文件导出' },
+};
+
 // Goal-relative fitness labels — only meaningful with an active goal (goal_search mode)
 export const goalFitnessLabel = (status?: string): string => {
   if (status === 'good') return '高度相关';

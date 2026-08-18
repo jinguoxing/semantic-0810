@@ -1521,7 +1521,8 @@ export const DataApiDetailWorkspace: React.FC<DataApiDetailWorkspaceProps> = ({
         isOpen={isAccessRequestDrawerOpen}
         onClose={() => setIsAccessRequestDrawerOpen(false)}
         resourceName="人口统计查询 API"
-        resourceTypeLabel="DATA API"
+        resourceTypeLabel="接口服务"
+        operation="CALL"
         taskContextTitle={fromGoalSearch ? goalQuery : '人口规模与老龄人口统计分析'}
         reviewDecision="manual_review"
         suggestedScopeItems={[
