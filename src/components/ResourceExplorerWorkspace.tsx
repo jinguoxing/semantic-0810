@@ -31,8 +31,6 @@ import {
   Code2,
   FileText,
   KeyRound,
-  Lock,
-  Unlock,
   TrendingUp,
   Share2,
   Copy,
@@ -60,6 +58,7 @@ import {
   GOAL_INTENT_AUTO_THRESHOLD,
   type GoalPlanContext,
 } from './businessGoal';
+import { evaluateAccessDecision } from './accessDecision';
 
 export type ExplorerMode = 'browse' | 'resource_search' | 'goal_search';
 
@@ -77,6 +76,7 @@ interface ResourceExplorerWorkspaceProps {
   onNavigateToDataAssets?: () => void;
   onNavigateToDataAssetDetail?: (assetId: string, fromGoalSearch?: boolean, goalQuery?: string) => void;
   onNavigateToMetricDetail?: (metricId: string, fromGoalSearch?: boolean, goalQuery?: string) => void;
+  onNavigateToApiDetail?: (apiId: string, fromGoalSearch?: boolean, goalQuery?: string) => void;
   onNavigateToMultiResourceRequest?: () => void;
 }
 
@@ -115,6 +115,9 @@ export interface ResourceItem {
   updatedAt: string;
   owner?: string;
   securityLevel?: string;
+  /** Explicit auto-grant policy published for the resource — a POLICY fact,
+   *  distinct from securityLevel (数据安全等级 ≠ 自动授权策略). */
+  autoGrantPolicy?: boolean;
   updateFrequency?: string;
   matchReason?: string;
   usageCount?: number;
@@ -597,6 +600,15 @@ const isGoalishLookupQuery = (q: string) => {
   return intent.type === 'BUSINESS_GOAL' && intent.confidence < GOAL_INTENT_AUTO_THRESHOLD;
 };
 
+// Mode derivation from the entry query — the ONE reading shared by the first
+// frame (useState initializer) and the initialMode/initialQuery sync effect,
+// so they can never disagree.
+const inferMode = (q?: string): ExplorerMode => {
+  if (q && isBusinessGoalQuery(q)) return 'goal_search';
+  if (q && q.trim().length > 0) return 'resource_search';
+  return 'browse';
+};
+
 // Goal-fit sentence for the goal-mode preview — capability (real schema) ×
 // plan needs. Business reason only: no score, no AI reasoning.
 const describeGoalFit = (
@@ -616,7 +628,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   addToast,
   initialQuery = '',
   initialSelectedResourceIds = [],
-  initialMode = 'browse',
+  initialMode,
   onNavigateToDiscovery,
   onNavigateToMyRequests,
   onNavigateToMetrics,
@@ -625,18 +637,15 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   onNavigateToDataAssets,
   onNavigateToDataAssetDetail,
   onNavigateToMetricDetail,
+  onNavigateToApiDetail,
   onNavigateToMultiResourceRequest,
 }) => {
   // Mode: 'browse' (Browse all discoverable scope) | 'resource_search' | 'goal_search' (Composed Data Solution)
-  const [currentMode, setCurrentMode] = useState<ExplorerMode>(() => {
-    if (initialMode) return initialMode;
-    if (initialQuery && isBusinessGoalQuery(initialQuery)) {
-      return 'goal_search';
-    } else if (initialQuery && initialQuery.trim().length > 0) {
-      return 'resource_search';
-    }
-    return 'browse';
-  });
+  // initialMode stays undefined-until-passed (no 'browse' default masking it);
+  // an explicit mode wins, otherwise the query decides — on the FIRST frame.
+  const [currentMode, setCurrentMode] = useState<ExplorerMode>(
+    () => initialMode ?? inferMode(initialQuery)
+  );
 
   // Search Query for Browse / Resource Search mode
   const [searchQuery, setSearchQuery] = useState<string>(initialQuery || '');
@@ -708,27 +717,22 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<ResourceItem | null>(null);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
-  // Synchronize when initialMode or initialQuery changes
+  // Synchronize when initialMode or initialQuery changes — same inferMode as
+  // the first frame, so the two readings can never diverge.
   useEffect(() => {
-    if (initialMode && initialMode !== 'browse') {
-      setCurrentMode(initialMode);
-    } else if (initialQuery !== undefined) {
-      if (initialQuery && isBusinessGoalQuery(initialQuery)) {
-        setCurrentMode('goal_search');
-        setBusinessGoal(initialQuery);
-        setSolutionResources(composeSolutionResources(
-          buildGoalPlan(initialQuery),
-          selectedResourceIds.map(id => ALL_DISCOVERABLE_RESOURCES.find(r => r.id === id)).filter(Boolean) as ResourceItem[]
-        ));
-      } else if (initialQuery && initialQuery.trim().length > 0) {
-        setCurrentMode('resource_search');
-      } else {
-        setCurrentMode('browse');
-      }
-    }
+    setCurrentMode(initialMode ?? inferMode(initialQuery));
     if (initialQuery !== undefined) {
       setSearchQuery(initialQuery);
       setSubmittedQuery(initialQuery);
+    }
+    if (isBusinessGoalQuery(initialQuery)) {
+      setBusinessGoal(initialQuery);
+      setSolutionResources(composeSolutionResources(
+        buildGoalPlan(initialQuery),
+        selectedResourceIds
+          .map(id => ALL_DISCOVERABLE_RESOURCES.find(r => r.id === id))
+          .filter(Boolean) as ResourceItem[]
+      ));
     }
   }, [initialMode, initialQuery]);
 
@@ -882,22 +886,27 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   const isCoverageComplete = coverageElements.filter(e => e.required).every(e => e.covered);
 
   // Access readiness over the formal lifecycle: REQUESTABLE and PENDING both
-  // block execution (a submitted request is NOT yet usable); DEPENDENT rides
-  // on its core data and counts as ready.
+  // block execution (a submitted request is NOT yet usable); UNAVAILABLE
+  // blocks too — it needs a REPLACEMENT, not a request; DEPENDENT rides on
+  // its core data and counts as ready.
   const accessReadiness = useMemo(() => {
     const requestableItems = solutionResources.filter(r => r.accessStatus === 'REQUESTABLE');
     const pendingItems = solutionResources.filter(r => r.accessStatus === 'PENDING');
+    const unavailableItems = solutionResources.filter(r => r.accessStatus === 'UNAVAILABLE');
     const availableItems = solutionResources.filter(r => r.accessStatus === 'AVAILABLE');
     const dependentItems = solutionResources.filter(r => r.accessStatus === 'DEPENDENT');
 
-    const isAllReady = requestableItems.length === 0 && pendingItems.length === 0;
+    const isAllReady =
+      requestableItems.length === 0 && pendingItems.length === 0 && unavailableItems.length === 0;
     return {
       isAllReady,
       requestableCount: requestableItems.length,
       pendingCount: pendingItems.length,
+      unavailableCount: unavailableItems.length,
       availableCount: availableItems.length + dependentItems.length,
-      blockingItems: [...requestableItems, ...pendingItems],
+      blockingItems: [...requestableItems, ...pendingItems, ...unavailableItems],
       pendingItems,
+      unavailableItems,
     };
   }, [solutionResources]);
 
@@ -1083,15 +1092,21 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
 
     // Only REQUESTABLE resources can START a request; PENDING ones are already
-    // in the approval queue (submitted ≠ granted).
+    // in the approval queue (submitted ≠ granted); UNAVAILABLE needs a
+    // replacement, never a request.
     const requestable = solutionResources.find(r => r.accessStatus === 'REQUESTABLE');
     if (!requestable) {
-      addToast?.('info', '等待审批', '已有访问申请在审批中，通过后即可进入分析');
+      if (accessReadiness.unavailableCount > 0) {
+        addToast?.('error', '存在暂不可用资源', '当前方案存在暂不可用资源，请替换后继续');
+      } else {
+        addToast?.('info', '等待审批', '已有访问申请在审批中，通过后即可进入分析');
+      }
       return;
     }
     setAccessTargetResource({
       name: requestable.name,
-      typeBadge: `${requestable.type}${requestable.subType ? ` · ${requestable.subType}` : ''}`
+      // Consumer-facing label — internal enums never reach the drawer UI
+      typeBadge: `${TYPE_PRESENTATION[requestable.type]}${requestable.subType ? ` · ${SUBTYPE_PRESENTATION[requestable.subType] || requestable.subType}` : ''}`
     });
     setIsAccessDrawerOpen(true);
   };
@@ -1523,7 +1538,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                   <span className="text-xs text-[#667085] font-medium">
                     {accessReadiness.isAllReady
                       ? '全部资源已可使用'
-                      : `${accessReadiness.availableCount} 项可直接使用 · ${accessReadiness.requestableCount + accessReadiness.pendingCount} 项待访问条件`}
+                      : `${accessReadiness.availableCount} 项可直接使用 · ${accessReadiness.requestableCount + accessReadiness.pendingCount} 项待访问条件${accessReadiness.unavailableCount > 0 ? ` · ${accessReadiness.unavailableCount} 项暂不可用` : ''}`}
                   </span>
                 </div>
 
@@ -1548,9 +1563,11 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 <p className="text-[11px] text-[#667085] leading-relaxed pt-1">
                   {accessReadiness.isAllReady
                     ? '当前方案已具备完整执行条件，可直接进入分析。'
-                    : accessReadiness.pendingCount > 0
-                    ? `「${accessReadiness.pendingItems[0].name}」的访问申请审批中，通过后当前方案即可开始执行。`
-                    : `补齐「${accessReadiness.blockingItems[0]?.name ?? '受限资源'}」的访问条件后，当前方案即可开始执行。`}
+                    : accessReadiness.requestableCount > 0
+                    ? `补齐「${accessReadiness.blockingItems[0]?.name ?? '受限资源'}」的访问条件后，当前方案即可开始执行。`
+                    : accessReadiness.unavailableCount > 0
+                    ? '当前方案存在暂不可用资源，请替换后继续。'
+                    : `「${accessReadiness.pendingItems[0]?.name ?? '受限资源'}」的访问申请审批中，通过后当前方案即可开始执行。`}
                 </p>
               </div>
             </div>
@@ -1559,14 +1576,22 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
             <div className="bg-white border border-[#E6EAF0] rounded-md p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <div className="text-xs font-bold text-[#172033]">
-                  {accessReadiness.isAllReady ? '方案已就绪' : '方案待补齐访问授权'}
+                  {accessReadiness.isAllReady
+                    ? '方案已就绪'
+                    : accessReadiness.requestableCount > 0
+                    ? '方案待补齐访问授权'
+                    : accessReadiness.unavailableCount > 0
+                    ? '方案存在暂不可用资源'
+                    : '方案等待审批'}
                 </div>
                 <p className="text-[11px] text-[#667085]">
                   {accessReadiness.isAllReady
                     ? '方案覆盖完整且所有资源均具备使用条件。'
-                    : accessReadiness.pendingCount > 0
-                    ? `「${accessReadiness.pendingItems[0]?.name ?? '受限资源'}」的访问申请正在审批中。`
-                    : `当前仅缺少「${accessReadiness.blockingItems[0]?.name ?? '受限资源'}」的访问授权。`}
+                    : accessReadiness.requestableCount > 0
+                    ? `当前仅缺少「${accessReadiness.blockingItems[0]?.name ?? '受限资源'}」的访问授权。`
+                    : accessReadiness.unavailableCount > 0
+                    ? '当前方案存在暂不可用资源，请替换后继续。'
+                    : `「${accessReadiness.pendingItems[0]?.name ?? '受限资源'}」的访问申请正在审批中。`}
                 </p>
               </div>
 
@@ -1592,14 +1617,41 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                     <Play className="w-3.5 h-3.5 fill-current" />
                     <span>进入分析</span>
                   </button>
-                ) : (
+                ) : accessReadiness.requestableCount > 0 ? (
                   <button
                     type="button"
                     onClick={handlePrimaryAction}
                     className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center space-x-1.5"
                   >
                     <FileCheck className="w-3.5 h-3.5" />
-                    <span>申请所需资源并继续</span>
+                    <span>申请所需资源</span>
+                  </button>
+                ) : accessReadiness.unavailableCount > 0 ? (
+                  /* UNAVAILABLE can never be granted — the only way forward is
+                      a replacement from the related-resources section. */
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById('related-resources-section');
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                      addToast?.('info', '替换暂不可用资源', '当前方案存在暂不可用资源，请在下方推荐资源中选择替代资源');
+                    }}
+                    className="px-5 py-2 bg-white border border-[#D97706] text-[#D97706] hover:bg-[#FFFBEB] text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center space-x-1.5"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>替换暂不可用资源</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNavigateToMyRequests?.();
+                      addToast?.('info', '申请审批中', '可在「我的申请」查看审批进度，通过后即可进入分析');
+                    }}
+                    className="px-5 py-2 bg-white border border-[#2563EB] text-[#2563EB] hover:bg-[#EFF6FF] text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center space-x-1.5"
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>查看申请进度</span>
                   </button>
                 )}
               </div>
@@ -1923,7 +1975,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                     onClick={() => handleOpenPreview(item)}
                     className={`p-4 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer ${
                       isCurrentPreview
-                        ? 'bg-[#EFF6FF]/60 border-l-4 border-l-[#2563EB]'
+                        ? 'bg-[#F8FBFF] ring-1 ring-inset ring-[#DBEAFE]'
                         : 'hover:bg-[#F8FAFC]'
                     }`}
                   >
@@ -2387,20 +2439,17 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                     {CERTIFICATION_BADGE[selectedPreviewItem.type]}
                   </span>
                 )}
-                {selectedPreviewItem.accessStatus === 'SEMANTIC_ONLY' ? (
-                  <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-[#6366F1] bg-[#EEF2FF] px-1.5 py-0.2 rounded border border-[#C7D2FE]">
-                    <span>{ACCESS_PRESENTATION.SEMANTIC_ONLY.label}</span>
-                  </span>
-                ) : (
-                  <span className={`inline-flex items-center space-x-1 text-[10px] font-bold px-1.5 py-0.2 rounded border ${
-                    selectedPreviewItem.accessStatus === 'AVAILABLE'
-                      ? 'text-[#16A36A] bg-[#ECFDF5] border-[#A7F3D0]'
-                      : 'text-[#2563EB] bg-[#EFF6FF] border-[#BFDBFE]'
-                  }`}>
-                    {selectedPreviewItem.accessStatus === 'AVAILABLE' ? <Unlock className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
-                    <span>{accessPresentation(selectedPreviewItem.accessStatus).label}</span>
-                  </span>
-                )}
+                {(() => {
+                  // Whole badge from the one presentation contract — no
+                  // per-state branching at the call site.
+                  const ap = accessPresentation(selectedPreviewItem.accessStatus);
+                  return (
+                    <span className={`inline-flex items-center space-x-1 text-[10px] font-bold px-1.5 py-0.2 rounded border ${ap.textClass} ${ap.bgClass} ${ap.borderClass}`}>
+                      {ap.Icon && <ap.Icon className="w-2.5 h-2.5" />}
+                      <span>{ap.label}</span>
+                    </span>
+                  );
+                })()}
               </div>
               <h3 className="text-base font-bold text-[#172033] tracking-tight truncate">
                 {selectedPreviewItem.name}
@@ -2438,6 +2487,45 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 <p className="text-xs text-[#475569] leading-relaxed bg-[#F8FAFC] p-3 rounded-md border border-[#E6EAF0]">
                   {selectedPreviewItem.description}
                 </p>
+              </div>
+
+              {/* 快速判断 — at-a-glance facts straight from existing metadata
+                  (access status / consumerFact / update cadence); column labels
+                  follow the resource type. */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-[#172033]">快速判断</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {(() => {
+                    const isMetric = selectedPreviewItem.type === 'METRIC';
+                    const labels: [string, string, string] = isMetric
+                      ? ['状态', '统计粒度', '更新']
+                      : selectedPreviewItem.type === 'DATA_API'
+                      ? ['访问', '输入', '响应']
+                      : selectedPreviewItem.type === 'BUSINESS_OBJECT'
+                      ? ['访问', '资源规模', '演进']
+                      : ['访问', '数据粒度', '更新'];
+                    // 统计粒度 drops the “单位：% ·” prefix — presentation only
+                    const grain = isMetric
+                      ? (selectedPreviewItem.consumerFact ?? '').replace(/^单位：.*?·\s*/, '') || '—'
+                      : selectedPreviewItem.type === 'BUSINESS_OBJECT'
+                      ? (selectedPreviewItem.extraInfo ?? '—')
+                      : (selectedPreviewItem.consumerFact ?? '—');
+                    const accessText = selectedPreviewItem.accessStatus === 'SEMANTIC_ONLY'
+                      ? ACCESS_PRESENTATION.SEMANTIC_ONLY.label
+                      : accessPresentation(selectedPreviewItem.accessStatus).label;
+                    const values: [string, string, string] = [
+                      isMetric ? (selectedPreviewItem.fitnessLabel ?? '—') : accessText,
+                      grain,
+                      selectedPreviewItem.timeGranularity ?? selectedPreviewItem.updateFrequency ?? selectedPreviewItem.updatedAt,
+                    ];
+                    return labels.map((label, i) => (
+                      <div key={label} className="p-2 rounded-md bg-[#F8FAFC] border border-[#EEF2F6] min-w-0">
+                        <div className="text-[10px] text-[#94A3B8] font-semibold">{label}</div>
+                        <div className="text-[11px] text-[#172033] font-semibold leading-snug">{values[i]}</div>
+                      </div>
+                    ));
+                  })()}
+                </div>
               </div>
 
               {/* 这份资源包含什么 — full schema & formulas live in Resource Detail */}
@@ -2548,29 +2636,27 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               <div />
             )}
 
-            {/* Full detail — unified label, per-type navigation (DATA_API has no detail page yet) */}
-            {selectedPreviewItem.type !== 'DATA_API' ? (
-              <button
-                onClick={() => {
-                  const target = selectedPreviewItem;
-                  const fromGoalSearch = currentMode === 'goal_search';
-                  setSelectedPreviewItem(null);
-                  if (target.type === 'BUSINESS_OBJECT') {
-                    onNavigateToBusinessObjectDetail?.(target.id, fromGoalSearch, businessGoal);
-                  } else if (target.type === 'DATA_ASSET') {
-                    onNavigateToDataAssetDetail?.(target.id, fromGoalSearch, businessGoal);
-                  } else {
-                    onNavigateToMetricDetail?.(target.id, fromGoalSearch, businessGoal);
-                  }
-                }}
-                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold rounded transition-colors cursor-pointer flex items-center space-x-1"
-              >
-                <span>查看完整详情</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            ) : (
-              <div />
-            )}
+            {/* Full detail — unified label, per-type navigation */}
+            <button
+              onClick={() => {
+                const target = selectedPreviewItem;
+                const fromGoalSearch = currentMode === 'goal_search';
+                setSelectedPreviewItem(null);
+                if (target.type === 'BUSINESS_OBJECT') {
+                  onNavigateToBusinessObjectDetail?.(target.id, fromGoalSearch, businessGoal);
+                } else if (target.type === 'DATA_ASSET') {
+                  onNavigateToDataAssetDetail?.(target.id, fromGoalSearch, businessGoal);
+                } else if (target.type === 'DATA_API') {
+                  onNavigateToApiDetail?.(target.id, fromGoalSearch, businessGoal);
+                } else {
+                  onNavigateToMetricDetail?.(target.id, fromGoalSearch, businessGoal);
+                }
+              }}
+              className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold rounded transition-colors cursor-pointer flex items-center space-x-1"
+            >
+              <span>查看完整详情</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </aside>
       )}
@@ -2580,11 +2666,15 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       {/* ========================================================= */}
       {isAccessDrawerOpen && accessTargetResource && (() => {
         // Drawer content derives from the real library item — no hardcoded
-        // aging-resource metadata. Access policy: only an explicit auto-grant
-        // hit (L1 public data) becomes AVAILABLE immediately; the ordinary
-        // path is MANUAL_REVIEW → PENDING (submitted ≠ granted).
+        // aging-resource metadata. The decision comes from the access policy
+        // engine (autoGrantPolicy → AUTO_GRANT; otherwise MANUAL_REVIEW →
+        // PENDING, submitted ≠ granted). Security level is an engine INPUT,
+        // never the verdict itself.
         const lib = ALL_DISCOVERABLE_RESOURCES.find(r => r.name === accessTargetResource.name);
-        const autoGrant = lib?.securityLevel?.startsWith('L1') ?? false;
+        const decision = evaluateAccessDecision({
+          securityLevel: lib?.securityLevel,
+          autoGrantPolicy: lib?.autoGrantPolicy,
+        });
         return (
           <SingleResourceAccessRequestDrawer
             key={accessTargetResource.name}
@@ -2593,14 +2683,13 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
             resourceName={accessTargetResource.name}
             resourceTypeLabel={accessTargetResource.typeBadge}
             taskContextTitle={businessGoal || '数据方案'}
-            reviewDecision={autoGrant ? 'auto_granted' : 'manual_review'}
+            reviewDecision={decision.type === 'AUTO_GRANT' ? 'auto_granted' : 'manual_review'}
             suggestedScopeItems={lib?.fields?.filter(f => !f.isKey).slice(0, 3).map(f => f.cnName)}
             suggestedFieldMappings={lib?.fields?.filter(f => !f.isKey).slice(0, 4).map(f => ({ label: f.cnName, field: f.name }))}
             onSuccessSubmit={(resultType) => {
-              setIsAccessDrawerOpen(false);
-              // The drawer owns submission toasts (申请已提交 · 等待审批 /
-              // 已自动授权); the workspace only advances the formal lifecycle
-              // on the solution row.
+              // The drawer owns submission toasts and stays open to show its
+              // decision result; the workspace only advances the formal
+              // lifecycle on the solution row.
               setSolutionResources(prev =>
                 prev.map(r =>
                   r.name === accessTargetResource.name
@@ -2610,6 +2699,11 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                     : r
                 )
               );
+            }}
+            onViewMyRequests={() => {
+              setIsAccessDrawerOpen(false);
+              onNavigateToMyRequests?.();
+              addToast?.('info', '我的申请', '查看访问申请审批进度与评估反馈');
             }}
             addToast={addToast}
           />

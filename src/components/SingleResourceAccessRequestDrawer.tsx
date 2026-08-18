@@ -19,7 +19,7 @@ export interface SingleResourceAccessRequestDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   resourceName?: string;
-  resourceTypeLabel?: string; // DATA ASSET · VIEW
+  resourceTypeLabel?: string; // 数据资产 · 视图 (consumer-facing; never internal enums)
   taskContextTitle?: string; // 街镇老龄化分析
   /** Access decision policy. The ORDINARY path is MANUAL_REVIEW (申请已提交 ·
    *  等待审批 → PENDING); AUTO_GRANT only when an explicit policy hits
@@ -31,6 +31,9 @@ export interface SingleResourceAccessRequestDrawerProps {
   suggestedFieldMappings?: { label: string; field: string }[];
   onSuccessSubmit?: (resultType: 'auto_granted' | 'manual_review' | 'auto_denied') => void;
   onViewTaskDetail?: () => void;
+  /** Manual-review result CTA target — 查看我的申请. Falls back to a plain
+   *  返回数据方案 close when not provided. */
+  onViewMyRequests?: () => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
@@ -38,13 +41,14 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
   isOpen,
   onClose,
   resourceName = '人口基本信息视图',
-  resourceTypeLabel = 'DATA ASSET · VIEW',
+  resourceTypeLabel = '数据资产 · 视图',
   taskContextTitle = '街镇老龄化分析',
   reviewDecision = 'manual_review',
   suggestedScopeItems,
   suggestedFieldMappings,
   onSuccessSubmit,
   onViewTaskDetail,
+  onViewMyRequests,
   addToast
 }) => {
   // Form states - Pre-filled based on task context (Confirm, not Configure)
@@ -200,12 +204,42 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
             </div>
 
             <div className="pt-6 border-t border-[#EEF2F6] flex justify-end space-x-3">
-              <button
-                onClick={handleResetAndClose}
-                className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md cursor-pointer transition-colors shadow-2xs"
-              >
-                继续分析
-              </button>
+              {/* Result CTA follows the decision semantics: granted → resume
+                  analysis; submitted → track the request, not “继续分析”. */}
+              {decisionResult === 'manual_review' ? (
+                onViewMyRequests ? (
+                  <button
+                    onClick={() => {
+                      setSubmitPhase('form');
+                      onViewMyRequests();
+                    }}
+                    className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md cursor-pointer transition-colors shadow-2xs"
+                  >
+                    查看我的申请
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleResetAndClose}
+                    className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md cursor-pointer transition-colors shadow-2xs"
+                  >
+                    返回数据方案
+                  </button>
+                )
+              ) : decisionResult === 'auto_denied' ? (
+                <button
+                  onClick={() => setSubmitPhase('form')}
+                  className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md cursor-pointer transition-colors shadow-2xs"
+                >
+                  调整申请范围
+                </button>
+              ) : (
+                <button
+                  onClick={handleResetAndClose}
+                  className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md cursor-pointer transition-colors shadow-2xs"
+                >
+                  继续分析
+                </button>
+              )}
             </div>
           </div>
         ) : (
