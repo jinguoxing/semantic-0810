@@ -13,6 +13,15 @@ export const SUBTYPE_PRESENTATION: Record<string, string> = {
   DATASET: '数据集',
 };
 
+// Certification display — per-type official badge label.
+// Certification (trust designation) is orthogonal to fitness (goal-relative).
+export const CERTIFICATION_BADGE: Record<string, string> = {
+  DATA_ASSET: '正式资源',
+  METRIC: '正式指标',
+  DATA_API: '正式服务',
+  BUSINESS_OBJECT: '正式对象',
+};
+
 // Frozen four-state access presentation.
 // restricted is an invitation to request, not a warning — hence Blue, not Orange.
 export const ACCESS_PRESENTATION: Record<string, { label: string; dotClass: string; textClass: string }> = {

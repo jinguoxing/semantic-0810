@@ -49,6 +49,7 @@ import {
   TYPE_PRESENTATION,
   SUBTYPE_PRESENTATION,
   ACCESS_PRESENTATION,
+  CERTIFICATION_BADGE,
   accessPresentation,
   goalFitnessLabel,
 } from './resourcePresentation';
@@ -93,7 +94,9 @@ export interface ResourceItem {
   objectName: string;
   consumerFact?: string;
   extraInfo?: string;
-  accessStatus: 'available' | 'restricted' | 'semantic_only';
+  accessStatus: 'available' | 'restricted' | 'pending' | 'semantic_only';
+  /** Trust designation — NOT goal fitness. Only OFFICIAL renders a 正式 badge. */
+  certification: 'OFFICIAL' | 'GENERAL';
   fitnessStatus: 'ready' | 'good' | 'warning' | 'semantic';
   fitnessLabel?: string;
   accessLabel?: string;
@@ -124,7 +127,7 @@ export interface SolutionResourceItem {
   roleLabel: string;
   description: string;
   whyNeeded: string;
-  accessStatus: 'available' | 'restricted' | 'dependent' | 'semantic_only';
+  accessStatus: 'available' | 'restricted' | 'pending' | 'dependent' | 'semantic_only';
   accessLabel: string;
   fitnessStatus: 'ready' | 'good' | 'warning' | 'semantic';
   fitnessLabel: string;
@@ -164,6 +167,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     consumerFact: '一行代表：一个自然人主体',
     accessStatus: 'restricted',
     accessLabel: '需申请',
+    certification: 'OFFICIAL',
     fitnessStatus: 'ready',
     fitnessLabel: '可用于分析',
     updatedAt: '2026-08-14',
@@ -199,6 +203,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     consumerFact: '单位：% · 行政区域 × 统计期',
     accessStatus: 'available',
     accessLabel: '依赖数据访问条件',
+    certification: 'OFFICIAL',
     fitnessStatus: 'ready',
     fitnessLabel: '正式指标',
     updatedAt: '2026-08-12',
@@ -229,6 +234,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     consumerFact: '一行代表：一个行政区划单元',
     accessStatus: 'available',
     accessLabel: '可使用',
+    certification: 'OFFICIAL',
     fitnessStatus: 'good',
     fitnessLabel: '状态良好',
     updatedAt: '2026-08-01',
@@ -259,6 +265,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     consumerFact: '一行代表：一个常住人口主题记录',
     accessStatus: 'restricted',
     accessLabel: '需申请',
+    certification: 'OFFICIAL',
     fitnessStatus: 'ready',
     fitnessLabel: '可用于分析',
     updatedAt: '2026-08-11',
@@ -288,6 +295,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     consumerFact: '一行代表：一个街镇某一统计期的年龄区间聚合结果',
     accessStatus: 'available',
     accessLabel: '可使用',
+    certification: 'GENERAL',
     fitnessStatus: 'warning',
     fitnessLabel: '更新至上月',
     updatedAt: '2026-07-31',
@@ -317,6 +325,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     extraInfo: '12 数据资产 · 7 指标 · 3 API',
     accessStatus: 'semantic_only',
     accessLabel: '语义资源',
+    certification: 'GENERAL',
     fitnessStatus: 'semantic',
     fitnessLabel: '核心概念',
     updatedAt: '2026-08-10',
@@ -345,6 +354,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     consumerFact: '输入：区域 / 年龄 / 时间',
     accessStatus: 'available',
     accessLabel: '可调用',
+    certification: 'OFFICIAL',
     fitnessStatus: 'good',
     fitnessLabel: '服务正常',
     updatedAt: '2026-08-08',
@@ -375,6 +385,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     objectName: '养老机构',
     accessStatus: 'restricted',
     accessLabel: '需申请',
+    certification: 'OFFICIAL',
     fitnessStatus: 'ready',
     fitnessLabel: '可用于分析',
     updatedAt: '2026-08-02',
@@ -395,6 +406,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     objectName: '社区设施',
     accessStatus: 'available',
     accessLabel: '可使用',
+    certification: 'OFFICIAL',
     fitnessStatus: 'good',
     fitnessLabel: '状态良好',
     updatedAt: '2026-08-05',
@@ -1034,6 +1046,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       objectName: '通用业务实体',
       accessStatus: item.accessStatus as any,
       accessLabel: item.accessLabel,
+      certification: 'GENERAL',
       fitnessStatus: (item as any).fitnessStatus || 'ready',
       fitnessLabel: (item as any).fitnessLabel || '可用于分析',
       updatedAt: '2026-08-14'
@@ -1839,9 +1852,9 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                           {TYPE_PRESENTATION[item.type]}
                         </span>
 
-                        {(item.fitnessStatus === 'ready' || item.fitnessStatus === 'good') && (
+                        {item.certification === 'OFFICIAL' && (
                           <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#ECFDF5] text-[#16A36A] rounded border border-[#A7F3D0]">
-                            正式资源
+                            {CERTIFICATION_BADGE[item.type]}
                           </span>
                         )}
                       </div>
@@ -2267,9 +2280,9 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
                   {TYPE_PRESENTATION[selectedPreviewItem.type]}{selectedPreviewItem.subType ? ` · ${SUBTYPE_PRESENTATION[selectedPreviewItem.subType] || selectedPreviewItem.subType}` : ''}
                 </span>
-                {(selectedPreviewItem.fitnessStatus === 'ready' || selectedPreviewItem.fitnessStatus === 'good') && (
+                {selectedPreviewItem.certification === 'OFFICIAL' && (
                   <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0]">
-                    正式资源
+                    {CERTIFICATION_BADGE[selectedPreviewItem.type]}
                   </span>
                 )}
                 {selectedPreviewItem.accessStatus === 'semantic_only' ? (
