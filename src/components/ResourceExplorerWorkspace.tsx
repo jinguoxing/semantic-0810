@@ -2,8 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Sparkles,
-  Compass,
-  Layers,
   FileCheck,
   Table,
   BarChart3,
@@ -392,9 +390,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   onNavigateToMetricDetail,
   onNavigateToMultiResourceRequest,
 }) => {
-  // Navigation inside Marketplace Sidebar
-  const [activeSideNav, setActiveSideNav] = useState<'discovery' | 'resources' | 'my_requests'>('resources');
-
   // Mode: 'browse' (Browse all discoverable scope) | 'resource_search' | 'goal_search' (Composed Data Solution)
   const isExplicitGoal = (q?: string) => {
     if (!q) return false;
@@ -903,166 +898,43 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   };
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-[#F7F9FC]">
-      
-      {/* ========================================================= */}
-      {/* 1. MARKETPLACE SIDEBAR (240px, Dark Enterprise Navy)      */}
-      {/* ========================================================= */}
-      <aside className="w-60 bg-[#0F172A] text-[#94A3B8] flex flex-col justify-between shrink-0 border-r border-[#1E293B] select-none z-20">
-        <div>
-          {/* Marketplace Title */}
-          <div className="p-4 border-b border-[#1E293B] flex items-center justify-between">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-7 h-7 rounded-md bg-[#2563EB]/20 border border-[#2563EB]/40 flex items-center justify-center text-[#60A5FA]">
-                <Layers className="w-4 h-4" />
-              </div>
-              <span className="font-bold text-sm text-white tracking-tight">
-                数据服务超市
-              </span>
-            </div>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 bg-[#1E293B] text-[#94A3B8] rounded border border-[#334155]">
-              V1.3
-            </span>
-          </div>
-
-          {/* Sidebar Menu Items */}
-          <div className="p-3 space-y-1 text-xs font-medium">
-            <button
-              onClick={() => {
-                setActiveSideNav('discovery');
-                onNavigateToDiscovery?.();
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md transition-colors cursor-pointer ${
-                activeSideNav === 'discovery'
-                  ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
-                  : 'hover:bg-[#1E293B] text-[#94A3B8] hover:text-white'
-              }`}
-            >
-              <div className="flex items-center space-x-2.5">
-                <Compass className="w-4 h-4" />
-                <span>发现</span>
-              </div>
-              <span className="text-[10px] text-[#64748B]">首页</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveSideNav('resources');
-                setCurrentMode('browse');
-                setSearchQuery('');
-                setSubmittedQuery('');
-                addToast?.('info', '全量浏览', '已载入当前 Discover Scope 内所有可发现资源');
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md transition-colors cursor-pointer ${
-                activeSideNav === 'resources'
-                  ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
-                  : 'hover:bg-[#1E293B] text-[#94A3B8] hover:text-white'
-              }`}
-            >
-              <div className="flex items-center space-x-2.5">
-                <Layers className="w-4 h-4" />
-                <span>资源</span>
-              </div>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 bg-white/20 text-white rounded">
-                128
-              </span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveSideNav('my_requests');
-                onNavigateToMyRequests?.();
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md transition-colors cursor-pointer ${
-                activeSideNav === 'my_requests'
-                  ? 'bg-[#2563EB] text-white font-bold shadow-2xs'
-                  : 'hover:bg-[#1E293B] text-[#94A3B8] hover:text-white'
-              }`}
-            >
-              <div className="flex items-center space-x-2.5">
-                <FileCheck className="w-4 h-4" />
-                <span>我的申请</span>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {/* AI Partner Footer (Xino) */}
-        <div className="p-3.5 border-t border-[#1E293B] bg-[#090D16]">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-7 h-7 rounded-md bg-[#2563EB]/30 border border-[#3B82F6]/50 flex items-center justify-center text-[#60A5FA]">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <div className="text-[11px] font-bold text-white flex items-center space-x-1">
-                <span>Xino｜犀诺</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
-              </div>
-              <div className="text-[10px] text-[#64748B]">企业 AI 语义伙伴在线</div>
-            </div>
-          </div>
-        </div>
-      </aside>
+    <div className="flex-1 flex overflow-hidden bg-[#F8FAFC]">
 
       {/* ========================================================= */}
-      {/* 2. MAIN WORKSPACE (Single Natural Reading Path)            */}
+      {/* MAIN WORKSPACE (Single Natural Reading Path)               */}
       {/* ========================================================= */}
-      <main className="flex-1 flex flex-col overflow-y-auto bg-[#F7F9FC] relative transition-all">
-        
+      <main className="flex-1 flex flex-col overflow-y-auto bg-[#F8FAFC] relative transition-all">
+
         {/* Page Top Header */}
         <div className="bg-white border-b border-[#E6EAF0] px-6 lg:px-8 pt-4 pb-4 shrink-0">
-          <div className="w-full max-w-7xl">
-            {/* Breadcrumb */}
-            <div className="flex items-center space-x-2 text-xs text-[#667085] mb-1.5 font-normal">
-              <span
-                onClick={onNavigateToDiscovery}
-                className="hover:text-[#2563EB] cursor-pointer"
-              >
-                数据服务超市
-              </span>
-              <span className="text-[#CBD5E1]">/</span>
-              <span className="font-semibold text-[#172033]">
-                资源
-              </span>
-            </div>
-
+          <div className="w-full max-w-[1500px]">
             {/* Title & Subtitle */}
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-xl font-bold text-[#172033] tracking-tight">
-                  资源
+                  {currentMode === 'goal_search' ? '数据方案' : '浏览数据资源'}
                 </h1>
                 <p className="text-xs text-[#667085] mt-0.5 leading-relaxed">
-                  围绕业务目标发现、组合并使用可信的数据与业务语义资源。
+                  {currentMode === 'goal_search'
+                    ? '围绕业务目标组合并使用可信的数据与业务语义资源。'
+                    : '搜索、筛选并发现适合业务需求的可信数据资源。'}
                 </p>
               </div>
 
-              {/* Mode Toggle Tag for Demo Clarity */}
-              <div className="flex items-center space-x-2">
-                {currentMode === 'goal_search' ? (
-                  <button
-                    onClick={() => {
-                      setCurrentMode('browse');
-                      setSearchQuery('');
-                      setSubmittedQuery('');
-                      addToast?.('info', '切换视图', '已切换回全量资源浏览模式');
-                    }}
-                    className="px-2.5 py-1 text-xs text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded font-medium cursor-pointer transition-colors"
-                  >
-                    ← 返回全量资源浏览
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setCurrentMode('goal_search');
-                      addToast?.('info', '切换视图', '已切换至当前数据方案视图');
-                    }}
-                    className="px-2.5 py-1 text-xs text-[#475569] bg-white hover:bg-[#F8FAFC] border border-[#E6EAF0] rounded font-medium cursor-pointer transition-colors"
-                  >
-                    查看老龄化数据方案 →
-                  </button>
-                )}
-              </div>
+              {/* Exit Goal Search state back to Browse (only rendered in Goal Search) */}
+              {currentMode === 'goal_search' && (
+                <button
+                  onClick={() => {
+                    setCurrentMode('browse');
+                    setSearchQuery('');
+                    setSubmittedQuery('');
+                    addToast?.('info', '切换视图', '已切换回全量资源浏览模式');
+                  }}
+                  className="px-2.5 py-1 text-xs text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded font-medium cursor-pointer transition-colors"
+                >
+                  ← 返回全量资源浏览
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1071,7 +943,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
         {/* VIEW BRANCH A: GOAL SEARCH (CURRENT DATA SOLUTION)      */}
         {/* ======================================================= */}
         {currentMode === 'goal_search' ? (
-          <div className={`p-6 lg:p-8 space-y-6 w-full max-w-7xl transition-all ${candidatesQueue.length > 0 ? 'pb-28' : 'pb-12'}`}>
+          <div className={`p-6 lg:p-8 space-y-6 w-full max-w-[1500px] transition-all ${candidatesQueue.length > 0 ? 'pb-28' : 'pb-12'}`}>
             
             {/* SECTION 1: BUSINESS GOAL (Context Strip) */}
             <div className="bg-white border border-[#E6EAF0] rounded-md p-4 shadow-2xs space-y-2.5">
@@ -1602,7 +1474,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
           /* VIEW BRANCH B: BROWSE ALL / RESOURCE SEARCH MODE        */
           /* (Standard Discover Scope Browse: Filters, Rows & Tray)  */
           /* ======================================================= */
-          <div className={`p-6 lg:p-8 space-y-5 w-full max-w-7xl transition-all ${selectedResourceIds.length > 0 ? 'pb-28' : 'pb-12'}`}>
+          <div className={`p-6 lg:p-8 space-y-5 w-full max-w-[1500px] transition-all ${selectedResourceIds.length > 0 ? 'pb-28' : 'pb-12'}`}>
             
             {/* Search Box Area */}
             <div className="bg-white border border-[#E6EAF0] rounded-md p-4 shadow-2xs space-y-2">
