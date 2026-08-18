@@ -47,17 +47,19 @@ import { DataServiceMarketplaceWorkspace } from './components/DataServiceMarketp
 import { ResourceExplorerWorkspace } from './components/ResourceExplorerWorkspace';
 import { MultiResourceAccessRequestWorkspace } from './components/MultiResourceAccessRequestWorkspace';
 import { MyAccessRequestsWorkspace } from './components/MyAccessRequestsWorkspace';
+import { DataApiDetailWorkspace } from './components/DataApiDetailWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
   const [assetDetailContext, setAssetDetailContext] = useState<{ assetId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ assetId: 'res-02', fromGoalSearch: false, goalQuery: '' });
   const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'res-03', fromGoalSearch: false, goalQuery: '' });
   const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_person', fromGoalSearch: false, goalQuery: '' });
+  const [apiDetailContext, setApiDetailContext] = useState<{ apiId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ apiId: 'res-04', fromGoalSearch: false, goalQuery: '' });
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -574,6 +576,12 @@ export default function App() {
             setViewTab('metric_detail');
             addToast('info', '指标详情', '已载入「老龄化率」企业正式指标详情');
           }}
+          onNavigateToApiDetail={(apiId, fromGoalSearch, goalQuery) => {
+            setApiDetailContext({ apiId: apiId || 'res-04', fromGoalSearch, goalQuery });
+            setCurrentNav('api_detail');
+            setViewTab('api_detail');
+            addToast('info', 'API 详情', '已载入「人口统计查询 API」服务详情');
+          }}
         />
       ) : currentNav === 'business_object_detail' || viewTab === 'business_object_detail' ? (
         <BusinessObjectDetailWorkspace
@@ -608,10 +616,10 @@ export default function App() {
             addToast('info', '指标详情', '已载入「老龄化率」企业正式指标详情');
           }}
           onNavigateToApiDetail={(apiId) => {
-            setResourceSearchQuery('人口统计查询 API');
-            setCurrentNav('marketplace_resources');
-            setViewTab('marketplace_resources');
-            addToast('info', 'API 资源', '已在资源超市中定位 API 服务');
+            setApiDetailContext({ apiId: apiId || 'res-04', fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('api_detail');
+            setViewTab('api_detail');
+            addToast('info', 'API 详情', '已载入「人口统计查询 API」服务详情');
           }}
           onNavigateToKnowledgeNetwork={(objectId) => {
             setCurrentNav('governance');
@@ -665,9 +673,10 @@ export default function App() {
             addToast('info', '业务对象详情', '已载入「自然人」正式业务对象详情');
           }}
           onNavigateToApiDetail={(apiId) => {
-            setCurrentNav('marketplace_resources');
-            setViewTab('marketplace_resources');
-            addToast('info', 'API 资源', '已在资源超市中定位 API 服务');
+            setApiDetailContext({ apiId: apiId || 'res-04', fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('api_detail');
+            setViewTab('api_detail');
+            addToast('info', 'API 详情', '已载入「人口统计查询 API」服务详情');
           }}
           onEnterAnalysis={(metricName) => {
             addToast('success', '进入分析', `已将「${metricName}」指标载入 AI 数据分析工作台`);
@@ -1031,9 +1040,10 @@ export default function App() {
             addToast('info', '业务对象详情', '已载入「自然人」正式业务对象详情');
           }}
           onNavigateToApiDetail={(apiId) => {
-            setCurrentNav('marketplace_resources');
-            setViewTab('marketplace_resources');
-            addToast('info', 'API 资源', '已在资源超市中定位 API 服务');
+            setApiDetailContext({ apiId: apiId || 'res-04', fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('api_detail');
+            setViewTab('api_detail');
+            addToast('info', 'API 详情', '已载入「人口统计查询 API」服务详情');
           }}
           onEnterAnalysis={(assetName) => {
             addToast('success', '进入分析', `已将「${assetName}」载入 AI 数据分析工作台`);
@@ -1046,6 +1056,52 @@ export default function App() {
             setCurrentNav('marketplace_resources');
             setViewTab('marketplace_resources');
             addToast('info', '围绕此资源找数据', `已在资源超市中筛选与「${assetName}」相关的指标与数据集`);
+          }}
+          addToast={addToast}
+        />
+      ) : currentNav === 'api_detail' || viewTab === 'api_detail' ? (
+        <DataApiDetailWorkspace
+          apiId={apiDetailContext.apiId}
+          fromGoalSearch={apiDetailContext.fromGoalSearch}
+          goalQuery={apiDetailContext.goalQuery}
+          onBackToResources={() => {
+            setCurrentNav('marketplace_resources');
+            setViewTab('marketplace_resources');
+            addToast('info', '返回资源浏览', '已返回数据服务超市 · 资源列表');
+          }}
+          onNavigateToDiscovery={() => {
+            setCurrentNav('marketplace');
+            setViewTab('marketplace');
+            addToast('info', '发现首页', '已返回数据服务超市 · 发现首页');
+          }}
+          onNavigateToMyRequests={() => {
+            setCurrentNav('my_requests');
+            setViewTab('my_requests');
+            addToast('info', '我的申请', '查看已申请的数据访问需求与任务就绪状态');
+          }}
+          onNavigateToDataAssetDetail={(assetId) => {
+            setAssetDetailContext({ assetId, fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('asset_detail');
+            setViewTab('asset_detail');
+            addToast('info', '数据资产详情', '已载入底层数据资产详情');
+          }}
+          onNavigateToMetricDetail={(metricId) => {
+            setMetricDetailContext({ metricId, fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('metric_detail');
+            setViewTab('metric_detail');
+            addToast('info', '指标详情', '已载入「老龄化率」企业正式指标详情');
+          }}
+          onNavigateToBusinessObject={(objectId) => {
+            setBusinessObjectDetailContext({ objectId: objectId || 'bo_person', fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+            addToast('info', '业务对象详情', '已载入「自然人」正式业务对象详情');
+          }}
+          onNavigateToResourceExplorerWithQuery={(query) => {
+            setResourceSearchQuery(query);
+            setCurrentNav('marketplace_resources');
+            setViewTab('marketplace_resources');
+            addToast('info', '围绕此服务找数据', `已在资源超市中筛选与「${query}」相关的指标与数据集`);
           }}
           addToast={addToast}
         />

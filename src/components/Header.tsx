@@ -18,8 +18,8 @@ interface HeaderProps {
   onOpenLauncher?: () => void;
   onOpenProfile?: () => void;
   isProfileOpen?: boolean;
-  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail';
-  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail') => void;
+  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail';
+  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail') => void;
   batchCount?: number;
 }
 
@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={() => onSelectNav && onSelectNav('marketplace')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-              currentNav === 'marketplace' || currentNav === 'marketplace_resources' || currentNav === 'asset_detail' || currentNav === 'metric_detail' || currentNav === 'business_object_detail' || currentNav === 'multi_resource_request' || currentNav === 'my_requests'
+              currentNav === 'marketplace' || currentNav === 'marketplace_resources' || currentNav === 'asset_detail' || currentNav === 'metric_detail' || currentNav === 'business_object_detail' || currentNav === 'api_detail' || currentNav === 'multi_resource_request' || currentNav === 'my_requests'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
                 : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
