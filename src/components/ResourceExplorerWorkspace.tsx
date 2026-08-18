@@ -59,6 +59,8 @@ interface ResourceExplorerWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
   initialQuery?: string;
   initialMode?: ExplorerMode;
+  /** Demo/story-only: pre-checked candidates. Product default is an empty selection. */
+  initialSelectedResourceIds?: string[];
   onNavigateToDiscovery?: () => void;
   onNavigateToMyRequests?: () => void;
   onNavigateToMetrics?: () => void;
@@ -396,6 +398,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
 export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps> = ({
   addToast,
   initialQuery = '',
+  initialSelectedResourceIds = [],
   initialMode = 'browse',
   onNavigateToDiscovery,
   onNavigateToMyRequests,
@@ -437,7 +440,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   const [submittedQuery, setSubmittedQuery] = useState<string>(initialQuery || '');
 
   // Progressive Selected Candidates (for Browse / Search mode)
-  const [selectedResourceIds, setSelectedResourceIds] = useState<string[]>(['res-02', 'res-03', 'res-05']);
+  const [selectedResourceIds, setSelectedResourceIds] = useState<string[]>(initialSelectedResourceIds);
   const [isSelectedTrayDrawerOpen, setIsSelectedTrayDrawerOpen] = useState<boolean>(false);
   const [goalInputValue, setGoalInputValue] = useState<string>('');
 
@@ -630,8 +633,9 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       .filter(Boolean) as ResourceItem[];
   }, [selectedResourceIds]);
 
-  // Filtering for Browse / Resource Search mode
-  const filteredBrowseResources = useMemo(() => {
+  // Browse scope — query + facet filters applied, BEFORE the type tab.
+  // Facet counts are computed over this scope so tabs and the result header always agree.
+  const browseScopeResources = useMemo(() => {
     let list = [...ALL_DISCOVERABLE_RESOURCES];
 
     // Query filter (matchReason is goal-relative and never searched in Browse)
@@ -642,10 +646,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
         r.description.toLowerCase().includes(q) ||
         r.context.toLowerCase().includes(q)
       );
-    }
-
-    if (activeTypeTab !== 'ALL') {
-      list = list.filter(r => r.type === activeTypeTab);
     }
 
     if (domainFilter !== 'all') {
@@ -665,18 +665,36 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
 
     return list;
-  }, [submittedQuery, activeTypeTab, domainFilter, objectFilter, accessFilter]);
+  }, [submittedQuery, domainFilter, objectFilter, accessFilter]);
 
-  // Type Counts within discoverable scope
+  // Type facets — real counts over the current scope (never hardcoded totals)
   const typeCounts = useMemo(() => {
     return {
-      ALL: 128,
-      DATA_ASSET: 73,
-      METRIC: 21,
-      DATA_API: 12,
-      BUSINESS_OBJECT: 22
+      ALL: browseScopeResources.length,
+      DATA_ASSET: browseScopeResources.filter(r => r.type === 'DATA_ASSET').length,
+      METRIC: browseScopeResources.filter(r => r.type === 'METRIC').length,
+      DATA_API: browseScopeResources.filter(r => r.type === 'DATA_API').length,
+      BUSINESS_OBJECT: browseScopeResources.filter(r => r.type === 'BUSINESS_OBJECT').length
     };
-  }, []);
+  }, [browseScopeResources]);
+
+  // Filtering for Browse / Resource Search mode (scope + active type tab)
+  const filteredBrowseResources = useMemo(() => {
+    if (activeTypeTab === 'ALL') return browseScopeResources;
+    return browseScopeResources.filter(r => r.type === activeTypeTab);
+  }, [browseScopeResources, activeTypeTab]);
+
+  // Pagination — derived from the real result set (no decorative page buttons)
+  const totalPages = Math.max(1, Math.ceil(filteredBrowseResources.length / pageSize));
+  const pagedBrowseResources = filteredBrowseResources.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  // Any change to the query / facets / tab / page size restarts from page 1
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [submittedQuery, activeTypeTab, domainFilter, objectFilter, accessFilter, pageSize]);
 
   // Calculate Solution Coverage facts
   const isCoverageComplete = useMemo(() => {
@@ -922,37 +940,34 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       {/* ========================================================= */}
       <main className="flex-1 flex flex-col overflow-y-auto bg-[#F8FAFC] relative transition-all">
 
-        {/* Page Top Header */}
-        <div className="bg-white border-b border-[#E6EAF0] px-6 lg:px-8 pt-4 pb-4 shrink-0">
-          <div className="w-full max-w-[1500px]">
-            {/* Title & Subtitle */}
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-[#172033] tracking-tight">
-                  {currentMode === 'goal_search' ? '数据方案' : '浏览数据资源'}
-                </h1>
-                <p className="text-xs text-[#667085] mt-0.5 leading-relaxed">
-                  {currentMode === 'goal_search'
-                    ? '围绕业务目标组合并使用可信的数据与业务语义资源。'
-                    : '搜索、筛选并发现适合业务需求的可信数据资源。'}
-                </p>
-              </div>
-
-              {/* Exit Goal Search state back to Browse (only rendered in Goal Search) */}
-              {currentMode === 'goal_search' && (
-                <button
-                  onClick={() => {
-                    setCurrentMode('browse');
-                    setSearchQuery('');
-                    setSubmittedQuery('');
-                    addToast?.('info', '切换视图', '已切换回全量资源浏览模式');
-                  }}
-                  className="px-2.5 py-1 text-xs text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded font-medium cursor-pointer transition-colors"
-                >
-                  ← 返回全量资源浏览
-                </button>
-              )}
+        {/* Page Title — in the centered working surface (no admin header strip) */}
+        <div className="w-full max-w-[1500px] mx-auto px-6 lg:px-8 pt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-[#172033] tracking-tight">
+                {currentMode === 'goal_search' ? '数据方案' : '浏览数据资源'}
+              </h1>
+              <p className="text-xs text-[#667085] mt-0.5 leading-relaxed">
+                {currentMode === 'goal_search'
+                  ? '围绕业务目标组合并使用可信的数据与业务语义资源。'
+                  : '搜索、筛选并发现适合业务需求的可信数据资源。'}
+              </p>
             </div>
+
+            {/* Exit Goal Search state back to Browse (only rendered in Goal Search) */}
+            {currentMode === 'goal_search' && (
+              <button
+                onClick={() => {
+                  setCurrentMode('browse');
+                  setSearchQuery('');
+                  setSubmittedQuery('');
+                  addToast?.('info', '切换视图', '已切换回全量资源浏览模式');
+                }}
+                className="px-2.5 py-1 text-xs text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded font-medium cursor-pointer transition-colors"
+              >
+                ← 返回全量资源浏览
+              </button>
+            )}
           </div>
         </div>
 
@@ -960,7 +975,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
         {/* VIEW BRANCH A: GOAL SEARCH (CURRENT DATA SOLUTION)      */}
         {/* ======================================================= */}
         {currentMode === 'goal_search' ? (
-          <div className={`p-6 lg:p-8 space-y-6 w-full max-w-[1500px] transition-all ${candidatesQueue.length > 0 ? 'pb-28' : 'pb-12'}`}>
+          <div className={`p-6 lg:p-8 space-y-6 w-full max-w-[1500px] mx-auto transition-all ${candidatesQueue.length > 0 ? 'pb-28' : 'pb-12'}`}>
             
             {/* SECTION 1: BUSINESS GOAL (Context Strip) */}
             <div className="bg-white border border-[#E6EAF0] rounded-md p-4 shadow-2xs space-y-2.5">
@@ -1487,7 +1502,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
           /* VIEW BRANCH B: BROWSE ALL / RESOURCE SEARCH MODE        */
           /* (Standard Discover Scope Browse: Filters, Rows & Tray)  */
           /* ======================================================= */
-          <div className={`p-6 lg:p-8 space-y-5 w-full max-w-[1500px] transition-all ${selectedResourceIds.length > 0 ? 'pb-28' : 'pb-12'}`}>
+          <div className={`p-6 lg:p-8 space-y-5 w-full max-w-[1500px] mx-auto transition-all ${selectedResourceIds.length > 0 ? 'pb-28' : 'pb-12'}`}>
             
             {/* Compact Unified Discovery Bar */}
             <form
@@ -1669,7 +1684,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
 
             {/* Compact Rich Resource Rows */}
             <div className="bg-white border border-[#E6EAF0] rounded-md divide-y divide-[#EEF2F6] shadow-2xs overflow-hidden">
-              {filteredBrowseResources.map((item) => {
+              {pagedBrowseResources.map((item) => {
                 const isAdded = selectedResourceIds.includes(item.id);
                 const isCurrentPreview = selectedPreviewItem?.id === item.id;
 
@@ -1801,7 +1816,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               </div>
 
               <div className="flex items-center space-x-1 font-medium">
-                {[1, 2, 3, 4].map((p) => (
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                   <button
                     key={p}
                     onClick={() => {
@@ -1822,10 +1837,11 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               <div>
                 <button
                   onClick={() => {
-                    setCurrentPage((prev) => Math.min(prev + 1, 4));
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
                     addToast?.('info', '下一页', `已翻至下一页`);
                   }}
-                  className="px-3 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E6EAF0] rounded text-xs text-[#334155] font-medium cursor-pointer transition-colors"
+                  disabled={currentPage >= totalPages}
+                  className="px-3 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E6EAF0] rounded text-xs text-[#334155] font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   下一页
                 </button>
@@ -2120,10 +2136,11 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       )}
 
       {/* ========================================================= */}
-      {/* 7. RESOURCE DETAIL PREVIEW DRAWER                         */}
+      {/* 7. RESOURCE DETAIL PREVIEW DRAWER — true overlay:         */}
+      {/*    floats over the explorer, never reflows the list       */}
       {/* ========================================================= */}
       {selectedPreviewItem && (
-        <aside className="w-full sm:w-[460px] xl:w-[500px] bg-white border-l border-[#E6EAF0] shadow-2xl flex flex-col shrink-0 z-30 animate-in slide-in-from-right duration-200">
+        <aside className="fixed right-0 top-[64px] bottom-0 w-full sm:w-[480px] bg-white border-l border-[#E6EAF0] shadow-2xl flex flex-col z-40 animate-in slide-in-from-right duration-200">
           <div className="px-5 py-4 border-b border-[#E6EAF0] bg-[#FAFCFF] flex items-start justify-between">
             <div className="space-y-1 min-w-0 pr-3">
               <div className="flex items-center space-x-2">
