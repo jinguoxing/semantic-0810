@@ -793,7 +793,7 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
                     }}
                     className="text-xs text-[#2563EB] hover:underline font-medium cursor-pointer"
                   >
-                    查看全部最近使用 →
+                    查看我的申请 →
                   </button>
                 </div>
 

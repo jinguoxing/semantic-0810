@@ -1046,7 +1046,9 @@ export default function App() {
             addToast('info', '发现首页', '已返回数据服务超市 · 发现首页');
           }}
           onNavigateToMyRequests={() => {
-            addToast('info', '我的申请', '查看已申请的数据访问权限与 API 调用授权记录');
+            setCurrentNav('my_requests');
+            setViewTab('my_requests');
+            addToast('info', '我的申请', '查看已申请的数据访问需求与任务就绪状态');
           }}
           onNavigateToMetricDetail={(metricId) => {
             setMetricDetailContext({ metricId, fromGoalSearch: false, goalQuery: '' });

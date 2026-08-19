@@ -590,18 +590,16 @@ export const MyAccessRequestsWorkspace: React.FC<MyAccessRequestsWorkspaceProps>
   };
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-[#F7F9FC] text-[#172033] select-none">
+    <div className="flex-1 flex overflow-hidden bg-white text-[#0F172A] font-sans antialiased relative select-none selection:bg-[#EFF6FF] selection:text-[#2563EB]">
       {/* ========================================================= */}
-      {/* 1. LEFT NAVIGATION SIDEBAR (220px)                        */}
+      {/* 1. LEFT NAVIGATION SIDEBAR (210px)                        */}
       {/* ========================================================= */}
-      <aside className="w-[220px] bg-white border-r border-[#E6EAF0] flex flex-col shrink-0">
-        <div className="p-4 border-b border-[#EEF2F6]">
-          <div className="text-xs font-bold text-[#667085] tracking-wider uppercase">
-            Marketplace
-          </div>
-          <div className="text-sm font-extrabold text-[#172033] mt-0.5">
+      <aside className="w-[210px] bg-white border-r border-[#E2E8F0] flex flex-col shrink-0 select-none z-10">
+        {/* Sidebar Header Title */}
+        <div className="px-5 py-4 border-b border-[#E2E8F0]">
+          <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">
             数据服务超市
-          </div>
+          </h2>
         </div>
 
         {/* Navigation Items */}
@@ -612,7 +610,7 @@ export const MyAccessRequestsWorkspace: React.FC<MyAccessRequestsWorkspaceProps>
               setActiveSideNav('discovery');
               onNavigateToDiscovery?.();
             }}
-            className={`w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
+            className={`w-full px-3 py-2 rounded flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'discovery'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]'
                 : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
@@ -628,7 +626,7 @@ export const MyAccessRequestsWorkspace: React.FC<MyAccessRequestsWorkspaceProps>
               setActiveSideNav('resources');
               onNavigateToResources?.();
             }}
-            className={`w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
+            className={`w-full px-3 py-2 rounded flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'resources'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]'
                 : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
@@ -641,7 +639,7 @@ export const MyAccessRequestsWorkspace: React.FC<MyAccessRequestsWorkspaceProps>
           {/* 3. 我的申请 (当前高亮) */}
           <button
             onClick={() => setActiveSideNav('my_requests')}
-            className={`w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
+            className={`w-full px-3 py-2 rounded flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'my_requests'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]'
                 : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
@@ -652,18 +650,16 @@ export const MyAccessRequestsWorkspace: React.FC<MyAccessRequestsWorkspaceProps>
           </button>
         </nav>
 
-        {/* Bottom Fixed Lightweight AI Partner Card */}
-        <div className="mt-auto p-3 border-t border-[#EEF2F6] bg-[#FAFCFF]">
-          <div className="p-2.5 rounded-md border border-[#E0E7FF] bg-white shadow-2xs">
-            <div className="flex items-center space-x-2 text-xs">
-              <div className="w-6 h-6 rounded-md bg-[#EEF2FF] border border-[#C7D2FE] flex items-center justify-center text-[#4F46E5] shrink-0">
-                <Sparkles className="w-3.5 h-3.5" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] text-[#667085] leading-tight">AI Partner</div>
-                <div className="text-xs font-bold text-[#172033] leading-tight truncate">
-                  Xino｜犀诺
-                </div>
+        {/* Bottom Fixed AI Partner Card */}
+        <div className="mt-auto p-3 border-t border-[#E2E8F0] bg-white">
+          <div className="flex items-center space-x-2.5 text-xs py-1 px-1">
+            <div className="w-6 h-6 rounded bg-[#2563EB] flex items-center justify-center text-white shrink-0 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 fill-white/20" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] text-[#94A3B8] leading-tight">AI Partner</div>
+              <div className="text-xs font-bold text-[#0F172A] leading-tight truncate">
+                Xino ｜ 犀诺
               </div>
             </div>
           </div>
@@ -673,8 +669,8 @@ export const MyAccessRequestsWorkspace: React.FC<MyAccessRequestsWorkspaceProps>
       {/* ========================================================= */}
       {/* 2. MAIN SUBMISSION WORKSPACE (宽阔主体，~1080-1160px)        */}
       {/* ========================================================= */}
-      <main className="flex-1 overflow-y-auto px-8 py-6 flex flex-col space-y-4">
-        <div className="max-w-[1140px] w-full mx-auto space-y-4">
+      <main className="flex-1 flex flex-col overflow-y-auto bg-white transition-all">
+        <div className="max-w-[1140px] w-full mx-auto px-8 py-7 space-y-6">
           
           {/* Breadcrumb */}
           <div className="flex items-center space-x-2 text-xs text-[#667085] font-normal">

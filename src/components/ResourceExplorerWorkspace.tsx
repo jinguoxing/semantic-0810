@@ -1087,20 +1087,34 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               </p>
             </div>
 
-            {currentMode === 'goal_search' && (
+            <div className="flex items-center space-x-2">
+              {currentMode === 'goal_search' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentMode('browse');
+                    setSearchQuery('');
+                    setSubmittedQuery('');
+                    addToast?.('info', '切换视图', '已切换回全量资源浏览模式');
+                  }}
+                  className="px-3 py-1.5 text-xs text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded font-semibold cursor-pointer transition-colors"
+                >
+                  ← 返回全量资源浏览
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
-                  setCurrentMode('browse');
-                  setSearchQuery('');
-                  setSubmittedQuery('');
-                  addToast?.('info', '切换视图', '已切换回全量资源浏览模式');
+                  onNavigateToMyRequests?.();
+                  addToast?.('info', '我的申请', '查看已申请的数据访问需求与任务就绪状态');
                 }}
-                className="px-3 py-1.5 text-xs text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded-md font-semibold cursor-pointer transition-colors"
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-[#334155] hover:text-[#2563EB] text-xs font-semibold rounded shadow-2xs transition-colors cursor-pointer"
               >
-                ← 返回全量资源浏览
+                <FileCheck className="w-3.5 h-3.5 text-[#64748B]" />
+                <span>我的申请</span>
               </button>
-            )}
+            </div>
           </div>
         </div>
 
