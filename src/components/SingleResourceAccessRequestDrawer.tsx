@@ -18,6 +18,7 @@ import {
   OPERATION_PRESENTATION,
   type RequestOperation,
 } from './resourcePresentation';
+import { isAutoAllowed, type AccessDecisionKind } from './accessDomain';
 
 export interface SingleResourceAccessRequestDrawerProps {
   isOpen: boolean;
@@ -28,15 +29,16 @@ export interface SingleResourceAccessRequestDrawerProps {
    *  a data asset grants a QUERY). Defaults to QUERY. */
   operation?: RequestOperation;
   taskContextTitle?: string; // 街镇老龄化分析
-  /** Access decision policy. The ORDINARY path is MANUAL_REVIEW (申请已提交 ·
-   *  等待审批 → PENDING); AUTO_GRANT only when an explicit policy hits
-   *  (e.g. L1 public data) — never a blanket default. */
-  reviewDecision?: 'auto_granted' | 'manual_review';
+  /** Policy verdict from the access engine, in the FINAL contract enum
+   *  (AUTO_ALLOW / AUTO_ALLOW_WITH_LIMITS / HARD_DENY / REVIEW_REQUIRED).
+   *  The ORDINARY path is REVIEW_REQUIRED; auto-allow only when an explicit
+   *  policy hits — never a blanket default. */
+  policyDecision?: AccessDecisionKind;
   /** Minimal-necessary scope chips derived from the resource's real fields. */
   suggestedScopeItems?: string[];
   /** 业务字段 ↔ 技术字段对照 (replaces the built-in demo mapping when provided). */
   suggestedFieldMappings?: { label: string; field: string }[];
-  onSuccessSubmit?: (resultType: 'auto_granted' | 'manual_review' | 'auto_denied') => void;
+  onSuccessSubmit?: (decision: AccessDecisionKind) => void;
   onViewTaskDetail?: () => void;
   /** Manual-review result CTA target — 查看我的申请. Falls back to a plain
    *  返回数据方案 close when not provided. */
@@ -51,7 +53,7 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
   resourceTypeLabel = '数据资产 · 视图',
   operation = 'QUERY',
   taskContextTitle = '街镇老龄化分析',
-  reviewDecision = 'manual_review',
+  policyDecision = 'REVIEW_REQUIRED' as AccessDecisionKind,
   suggestedScopeItems,
   suggestedFieldMappings,
   onSuccessSubmit,
@@ -71,7 +73,7 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
 
   // Submission lifecycle & decision simulation state: 'form' | 'submitting' | 'result'
   const [submitPhase, setSubmitPhase] = useState<'form' | 'submitting' | 'result'>('form');
-  const [decisionResult, setDecisionResult] = useState<'auto_granted' | 'manual_review' | 'auto_denied'>(reviewDecision);
+  const [decisionResult, setDecisionResult] = useState<AccessDecisionKind>(policyDecision);
 
   if (!isOpen) return null;
 
@@ -83,16 +85,17 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
 
     // Simulate automated policy evaluation
     setTimeout(() => {
-      // Ordinary request → MANUAL_REVIEW (submitted ≠ granted); AUTO_GRANT
+      // Ordinary request → REVIEW_REQUIRED (submitted ≠ granted); an auto-allow
       // only fires when the caller's policy explicitly hits.
-      setDecisionResult(reviewDecision);
+      const decided: AccessDecisionKind = policyDecision;
+      setDecisionResult(decided);
       setSubmitPhase('result');
-      if (reviewDecision === 'auto_granted') {
+      if (isAutoAllowed(decided)) {
         addToast?.('success', '已自动授权', '当前申请命中自动授权策略，查询权限已即时生效');
       } else {
         addToast?.('info', '申请已提交 · 等待审批', '申请已进入人工审批，通过后可在「我的申请」中查看并使用');
       }
-      onSuccessSubmit?.(reviewDecision);
+      onSuccessSubmit?.(decided);
     }, 900);
   };
 
@@ -166,7 +169,7 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
           /* Decision Result View */
           <div className="flex-1 overflow-y-auto p-6 flex flex-col justify-between text-xs">
             <div className="space-y-6">
-              {decisionResult === 'auto_granted' && (
+              {isAutoAllowed(decisionResult) && (
                 <div className="p-5 rounded-lg bg-[#F0FDF4] border border-[#BBF7D0] space-y-3">
                   <div className="flex items-center space-x-2.5 text-[#166534]">
                     <CheckCircle2 className="w-5 h-5 text-[#16A36A] shrink-0" />
@@ -180,12 +183,15 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
                   <div className="pt-2 border-t border-[#DCFCE7] text-[11px] text-[#15803D] space-y-1">
                     <div>• 授权能力：{operationPresentation.label}（{operationPresentation.capabilitySummary}）</div>
                     <div>• 有效期限：3 个月（到期前 7 天支持续期）</div>
+                    {decisionResult === 'AUTO_ALLOW_WITH_LIMITS' && (
+                      <div>• 使用限制：敏感字段动态脱敏 · 仅限聚合结果</div>
+                    )}
                     <div>• 安全要求：姓名已自动配置动态脱敏</div>
                   </div>
                 </div>
               )}
 
-              {decisionResult === 'manual_review' && (
+              {decisionResult === 'REVIEW_REQUIRED' && (
                 <div className="p-5 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] space-y-3">
                   <div className="flex items-center space-x-2.5 text-[#1E40AF]">
                     <Clock className="w-5 h-5 text-[#2563EB] shrink-0" />
@@ -199,7 +205,7 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
                 </div>
               )}
 
-              {decisionResult === 'auto_denied' && (
+              {decisionResult === 'HARD_DENY' && (
                 <div className="p-5 rounded-lg bg-[#FEF2F2] border border-[#FECACA] space-y-3">
                   <div className="flex items-center space-x-2.5 text-[#991B1B]">
                     <AlertCircle className="w-5 h-5 text-[#DC2626] shrink-0" />
@@ -217,7 +223,7 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
             <div className="pt-6 border-t border-[#EEF2F6] flex justify-end space-x-3">
               {/* Result CTA follows the decision semantics: granted → resume
                   analysis; submitted → track the request, not “继续分析”. */}
-              {decisionResult === 'manual_review' ? (
+              {decisionResult === 'REVIEW_REQUIRED' ? (
                 onViewMyRequests ? (
                   <button
                     onClick={() => {
@@ -236,7 +242,7 @@ export const SingleResourceAccessRequestDrawer: React.FC<SingleResourceAccessReq
                     返回数据方案
                   </button>
                 )
-              ) : decisionResult === 'auto_denied' ? (
+              ) : decisionResult === 'HARD_DENY' ? (
                 <button
                   onClick={() => setSubmitPhase('form')}
                   className="px-5 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md cursor-pointer transition-colors shadow-2xs"

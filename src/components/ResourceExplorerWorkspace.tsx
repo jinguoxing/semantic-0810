@@ -59,6 +59,9 @@ import {
   type GoalPlanContext,
 } from './businessGoal';
 import { evaluateAccessDecision } from './accessDecision';
+import { evaluateTaskReadiness, isAutoAllowed, type AccessOperation } from './accessDomain';
+import { resolveAccessDelta, multiRouteReason, type AccessResolution } from './accessResolution';
+import { MultiResourceAccessRequestPage } from './MultiResourceAccessRequestPage';
 
 export type ExplorerMode = 'browse' | 'resource_search' | 'goal_search';
 
@@ -66,6 +69,14 @@ interface ResourceExplorerWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
   initialQuery?: string;
   initialMode?: ExplorerMode;
+  /** Facet entry from Discover — pre-applies BROWSE type/domain/object filters.
+   *  Mount-time only (pass NO query: facet entry opens BROWSE, not search);
+   *  changing the object while mounted does not reset user-adjusted filters. */
+  initialBrowseFilters?: {
+    type?: 'DATA_ASSET' | 'METRIC' | 'DATA_API' | 'BUSINESS_OBJECT';
+    domain?: string;
+    object?: string;
+  };
   /** Demo/story-only: pre-checked candidates. Product default is an empty selection. */
   initialSelectedResourceIds?: string[];
   onNavigateToDiscovery?: () => void;
@@ -629,6 +640,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   initialQuery = '',
   initialSelectedResourceIds = [],
   initialMode,
+  initialBrowseFilters,
   onNavigateToDiscovery,
   onNavigateToMyRequests,
   onNavigateToMetrics,
@@ -656,12 +668,18 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   const [isSelectedTrayDrawerOpen, setIsSelectedTrayDrawerOpen] = useState<boolean>(false);
   const [goalInputValue, setGoalInputValue] = useState<string>('');
 
+  // Facet entry applies only to query-less entries — a text/goal query entry
+  // always wins the mode, so stale facets must not ride along.
+  const entryFilters = initialQuery ? undefined : initialBrowseFilters;
+
   // Type Tabs for Browse Mode: ALL, DATA_ASSET, METRIC, DATA_API, BUSINESS_OBJECT
-  const [activeTypeTab, setActiveTypeTab] = useState<'ALL' | 'DATA_ASSET' | 'METRIC' | 'DATA_API' | 'BUSINESS_OBJECT'>('ALL');
+  const [activeTypeTab, setActiveTypeTab] = useState<'ALL' | 'DATA_ASSET' | 'METRIC' | 'DATA_API' | 'BUSINESS_OBJECT'>(
+    entryFilters?.type ?? 'ALL'
+  );
 
   // Filter Bar state for Browse Mode (Only P0)
-  const [domainFilter, setDomainFilter] = useState<string>('all');
-  const [objectFilter, setObjectFilter] = useState<string>('all');
+  const [domainFilter, setDomainFilter] = useState<string>(entryFilters?.domain ?? 'all');
+  const [objectFilter, setObjectFilter] = useState<string>(entryFilters?.object ?? 'all');
   const [accessFilter, setAccessFilter] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<string>('relevance');
 
@@ -711,7 +729,10 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
 
   // Single Resource Access Request Drawer
   const [isAccessDrawerOpen, setIsAccessDrawerOpen] = useState<boolean>(false);
-  const [accessTargetResource, setAccessTargetResource] = useState<{ name: string; typeBadge: string } | null>(null);
+  const [accessTargetResource, setAccessTargetResource] = useState<{ name: string; typeBadge: string; operation?: AccessOperation } | null>(null);
+  // MULTI route of the AccessRequestRouter — the whole resolution is kept so
+  // the page renders exactly what resolveAccessDelta() computed.
+  const [multiAccessResolution, setMultiAccessResolution] = useState<AccessResolution | null>(null);
 
   // Detail Preview Drawer
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<ResourceItem | null>(null);
@@ -885,30 +906,14 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   }, [goalPlan, solutionResources]);
   const isCoverageComplete = coverageElements.filter(e => e.required).every(e => e.covered);
 
-  // Access readiness over the formal lifecycle: REQUESTABLE and PENDING both
-  // block execution (a submitted request is NOT yet usable); UNAVAILABLE
-  // blocks too — it needs a REPLACEMENT, not a request; DEPENDENT rides on
-  // its core data and counts as ready.
-  const accessReadiness = useMemo(() => {
-    const requestableItems = solutionResources.filter(r => r.accessStatus === 'REQUESTABLE');
-    const pendingItems = solutionResources.filter(r => r.accessStatus === 'PENDING');
-    const unavailableItems = solutionResources.filter(r => r.accessStatus === 'UNAVAILABLE');
-    const availableItems = solutionResources.filter(r => r.accessStatus === 'AVAILABLE');
-    const dependentItems = solutionResources.filter(r => r.accessStatus === 'DEPENDENT');
-
-    const isAllReady =
-      requestableItems.length === 0 && pendingItems.length === 0 && unavailableItems.length === 0;
-    return {
-      isAllReady,
-      requestableCount: requestableItems.length,
-      pendingCount: pendingItems.length,
-      unavailableCount: unavailableItems.length,
-      availableCount: availableItems.length + dependentItems.length,
-      blockingItems: [...requestableItems, ...pendingItems, ...unavailableItems],
-      pendingItems,
-      unavailableItems,
-    };
-  }, [solutionResources]);
+  // Access readiness over the formal lifecycle — domain contract
+  // (evaluateTaskReadiness): REQUESTABLE and PENDING both block execution (a
+  // submitted request is NOT yet usable); UNAVAILABLE needs a REPLACEMENT, not
+  // a request; DEPENDENT rides on its core data and counts as ready.
+  const accessReadiness = useMemo(
+    () => evaluateTaskReadiness(solutionResources),
+    [solutionResources],
+  );
 
   // Toggle Add / Remove Resource in Browse / Resource Search mode
   const handleToggleBrowseResource = (resource: ResourceItem) => {
@@ -1079,7 +1084,12 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     addToast?.('error', '已移除核心依赖', '方案覆盖情况已改变，当前缺少核心计算底表');
   };
 
-  // Handle Primary CTA in Goal Search Mode
+  // Handle Primary CTA in Goal Search Mode. The page never decides WHICH
+  // resource to request: it hands the DataSolution to the
+  // AccessResolutionService — resolveAccessDelta() drafts every REQUESTABLE
+  // resource (PENDING is already in flight; UNAVAILABLE needs a replacement,
+  // never a request) and the router picks the entry surface:
+  // SINGLE → single drawer, MULTI → multi-resource request page.
   const handlePrimaryAction = () => {
     if (!isCoverageComplete) {
       addToast?.('error', '方案不完整', '请先在下方补充所需的核心口径或维度');
@@ -1091,24 +1101,44 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       return;
     }
 
-    // Only REQUESTABLE resources can START a request; PENDING ones are already
-    // in the approval queue (submitted ≠ granted); UNAVAILABLE needs a
-    // replacement, never a request.
-    const requestable = solutionResources.find(r => r.accessStatus === 'REQUESTABLE');
-    if (!requestable) {
-      if (accessReadiness.unavailableCount > 0) {
+    const resolution = resolveAccessDelta(
+      solutionResources.map(r => {
+        const lib = ALL_DISCOVERABLE_RESOURCES.find(res => res.id === r.id);
+        return {
+          id: r.id,
+          name: r.name,
+          accessStatus: r.accessStatus,
+          resourceType: r.type,
+          securityLevel: lib?.securityLevel,
+          autoGrantPolicy: lib?.autoGrantPolicy,
+          requestedScope: lib?.fields?.filter(f => !f.isKey).slice(0, 3).map(f => f.cnName),
+        };
+      }),
+    );
+
+    if (resolution.requiredRequests.length === 0) {
+      if (resolution.unavailableItems.length > 0) {
         addToast?.('error', '存在暂不可用资源', '当前方案存在暂不可用资源，请替换后继续');
       } else {
         addToast?.('info', '等待审批', '已有访问申请在审批中，通过后即可进入分析');
       }
       return;
     }
-    setAccessTargetResource({
-      name: requestable.name,
-      // Consumer-facing label — internal enums never reach the drawer UI
-      typeBadge: `${TYPE_PRESENTATION[requestable.type]}${requestable.subType ? ` · ${SUBTYPE_PRESENTATION[requestable.subType] || requestable.subType}` : ''}`
-    });
-    setIsAccessDrawerOpen(true);
+
+    if (resolution.route === 'SINGLE') {
+      const draft = resolution.requiredRequests[0];
+      const sol = solutionResources.find(r => r.id === draft.resourceId);
+      setAccessTargetResource({
+        name: draft.resourceName,
+        // Consumer-facing label — internal enums never reach the drawer UI
+        typeBadge: `${TYPE_PRESENTATION[draft.resourceType]}${sol?.subType ? ` · ${SUBTYPE_PRESENTATION[sol.subType] || sol.subType}` : ''}`,
+        operation: draft.operation,
+      });
+      setIsAccessDrawerOpen(true);
+      return;
+    }
+
+    setMultiAccessResolution(resolution);
   };
 
   // Open Preview Drawer
@@ -2667,13 +2697,15 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       {isAccessDrawerOpen && accessTargetResource && (() => {
         // Drawer content derives from the real library item — no hardcoded
         // aging-resource metadata. The decision comes from the access policy
-        // engine (autoGrantPolicy → AUTO_GRANT; otherwise MANUAL_REVIEW →
-        // PENDING, submitted ≠ granted). Security level is an engine INPUT,
-        // never the verdict itself.
+        // engine in the FINAL contract enum (autoGrantPolicy → AUTO_ALLOW /
+        // AUTO_ALLOW_WITH_LIMITS; otherwise REVIEW_REQUIRED → PENDING,
+        // submitted ≠ granted). Security level is an engine INPUT, never the
+        // verdict itself.
         const lib = ALL_DISCOVERABLE_RESOURCES.find(r => r.name === accessTargetResource.name);
         const decision = evaluateAccessDecision({
           securityLevel: lib?.securityLevel,
           autoGrantPolicy: lib?.autoGrantPolicy,
+          requestedOperation: accessTargetResource.operation,
         });
         return (
           <SingleResourceAccessRequestDrawer
@@ -2682,18 +2714,19 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
             onClose={() => setIsAccessDrawerOpen(false)}
             resourceName={accessTargetResource.name}
             resourceTypeLabel={accessTargetResource.typeBadge}
+            operation={accessTargetResource.operation}
             taskContextTitle={businessGoal || '数据方案'}
-            reviewDecision={decision.type === 'AUTO_GRANT' ? 'auto_granted' : 'manual_review'}
+            policyDecision={decision.kind}
             suggestedScopeItems={lib?.fields?.filter(f => !f.isKey).slice(0, 3).map(f => f.cnName)}
             suggestedFieldMappings={lib?.fields?.filter(f => !f.isKey).slice(0, 4).map(f => ({ label: f.cnName, field: f.name }))}
-            onSuccessSubmit={(resultType) => {
+            onSuccessSubmit={(decisionKind) => {
               // The drawer owns submission toasts and stays open to show its
               // decision result; the workspace only advances the formal
               // lifecycle on the solution row.
               setSolutionResources(prev =>
                 prev.map(r =>
                   r.name === accessTargetResource.name
-                    ? resultType === 'auto_granted'
+                    ? isAutoAllowed(decisionKind)
                       ? { ...r, accessStatus: 'AVAILABLE', accessLabel: '可直接使用' }
                       : { ...r, accessStatus: 'PENDING', accessLabel: '申请中' }
                     : r
@@ -2709,6 +2742,40 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
           />
         );
       })()}
+
+      {/* ========================================================= */}
+      {/* 9. MULTI-RESOURCE ACCESS REQUEST PAGE (MULTI 路由入口)     */}
+      {/* ========================================================= */}
+      {multiAccessResolution && (
+        <MultiResourceAccessRequestPage
+          isOpen={!!multiAccessResolution}
+          onClose={() => setMultiAccessResolution(null)}
+          resolution={multiAccessResolution}
+          routeReason={multiRouteReason(multiAccessResolution.requiredRequests)}
+          taskContextTitle={businessGoal || '数据方案'}
+          onSubmitted={(result) => {
+            // Advance the formal lifecycle per request, only on rows that were
+            // REQUESTABLE (submitted ≠ granted): auto-allowed → AVAILABLE,
+            // under review → PENDING.
+            const grantedIds = new Set(result.grants.map(g => g.resourceId));
+            setSolutionResources(prev =>
+              prev.map(r =>
+                r.accessStatus === 'REQUESTABLE'
+                  ? grantedIds.has(r.id)
+                    ? { ...r, accessStatus: 'AVAILABLE', accessLabel: '可直接使用' }
+                    : { ...r, accessStatus: 'PENDING', accessLabel: '申请中' }
+                  : r
+              ),
+            );
+          }}
+          onViewMyRequests={() => {
+            setMultiAccessResolution(null);
+            onNavigateToMyRequests?.();
+            addToast?.('info', '我的申请', '查看访问申请审批进度与评估反馈');
+          }}
+          addToast={addToast}
+        />
+      )}
 
     </div>
   );

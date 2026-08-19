@@ -43,7 +43,7 @@ import { MetricDetailWorkspace } from './components/MetricDetailWorkspace';
 import { BusinessObjectDetailWorkspace } from './components/BusinessObjectDetailWorkspace';
 import { AccessReviewWorkspace } from './components/AccessReviewWorkspace';
 import { AccessReviewDetailWorkspace } from './components/AccessReviewDetailWorkspace';
-import { DataServiceMarketplaceWorkspace } from './components/DataServiceMarketplaceWorkspace';
+import { DataServiceMarketplaceWorkspace, type BrowseEntryFilters } from './components/DataServiceMarketplaceWorkspace';
 import { ResourceExplorerWorkspace } from './components/ResourceExplorerWorkspace';
 import { MultiResourceAccessRequestWorkspace } from './components/MultiResourceAccessRequestWorkspace';
 import { MyAccessRequestsWorkspace } from './components/MyAccessRequestsWorkspace';
@@ -56,6 +56,9 @@ export default function App() {
   const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
   const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
+  // Facet entry from Discover — BROWSE with a pre-applied type/domain/object
+  // filter; cleared on every text-query entry (query wins the mode in REW).
+  const [resourceBrowseFilters, setResourceBrowseFilters] = useState<BrowseEntryFilters | undefined>(undefined);
   const [assetDetailContext, setAssetDetailContext] = useState<{ assetId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ assetId: 'res-02', fromGoalSearch: false, goalQuery: '' });
   const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'res-03', fromGoalSearch: false, goalQuery: '' });
   const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_person', fromGoalSearch: false, goalQuery: '' });
@@ -528,6 +531,7 @@ export default function App() {
         <ResourceExplorerWorkspace
           addToast={addToast}
           initialQuery={resourceSearchQuery}
+          initialBrowseFilters={resourceBrowseFilters}
           onNavigateToMultiResourceRequest={() => {
             setCurrentNav('multi_resource_request');
             setViewTab('multi_resource_request');
@@ -697,6 +701,7 @@ export default function App() {
           addToast={addToast}
           onNavigateToResources={(query) => {
             setResourceSearchQuery(query || '');
+            setResourceBrowseFilters(undefined);
             setCurrentNav('marketplace_resources');
             setViewTab('marketplace_resources');
             if (query && query.trim()) {
@@ -705,25 +710,17 @@ export default function App() {
               addToast('info', '浏览全部资源', '已载入当前 Discover Scope 内所有可发现资源');
             }
           }}
+          onNavigateToBrowse={(filters, label) => {
+            setResourceBrowseFilters(filters);
+            setResourceSearchQuery('');
+            setCurrentNav('marketplace_resources');
+            setViewTab('marketplace_resources');
+            addToast('info', '浏览资源', `已按「${label}」筛选可发现资源`);
+          }}
           onNavigateToMyRequests={() => {
             setCurrentNav('my_requests');
             setViewTab('my_requests');
             addToast('info', '我的申请', '查看已申请的数据访问需求与任务就绪状态');
-          }}
-          onNavigateToMetrics={() => {
-            setCurrentNav('metrics');
-            setViewTab('metrics');
-            addToast('info', '指标注册表', '已进入 Metric Registry 统一指标管理视图');
-          }}
-          onNavigateToBusinessObject={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '业务对象发现', '已切换至业务概念实体与建模视图');
-          }}
-          onNavigateToDataAssets={() => {
-            setCurrentNav('assets');
-            setViewTab('assets');
-            addToast('info', '数据资产目录', '已切换至企业数据资产全景目录');
           }}
           onNavigateToDataStandards={() => {
             setCurrentNav('data_standards');

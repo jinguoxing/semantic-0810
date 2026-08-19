@@ -37,6 +37,7 @@ import {
   Workflow
 } from 'lucide-react';
 import { SingleResourceAccessRequestDrawer } from './SingleResourceAccessRequestDrawer';
+import { isAutoAllowed } from './accessDomain';
 
 export interface DataAssetDetailWorkspaceProps {
   assetId?: string;
@@ -1348,8 +1349,8 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
         resourceName="人口基本信息视图"
         resourceTypeLabel="DATA ASSET · VIEW"
         taskContextTitle={goalQuery || "街镇老龄化分析"}
-        onSuccessSubmit={(resultType) => {
-          if (resultType === 'auto_granted') {
+        onSuccessSubmit={(decision) => {
+          if (isAutoAllowed(decision)) {
             setAccessState('granted');
           }
         }}

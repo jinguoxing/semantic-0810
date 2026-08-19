@@ -1524,7 +1524,7 @@ export const DataApiDetailWorkspace: React.FC<DataApiDetailWorkspaceProps> = ({
         resourceTypeLabel="接口服务"
         operation="CALL"
         taskContextTitle={fromGoalSearch ? goalQuery : '人口规模与老龄人口统计分析'}
-        reviewDecision="manual_review"
+        policyDecision="REVIEW_REQUIRED"
         suggestedScopeItems={[
           '接口调用权限 (CALL)',
           '按行政区与统计期聚合人口规模',
