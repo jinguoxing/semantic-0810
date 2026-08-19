@@ -717,6 +717,30 @@ export default function App() {
             setViewTab('marketplace_resources');
             addToast('info', '浏览资源', `已按「${label}」筛选可发现资源`);
           }}
+          onNavigateToDataAssetDetail={(assetId) => {
+            setAssetDetailContext({ assetId: assetId || 'res-02', fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('asset_detail');
+            setViewTab('asset_detail');
+            addToast('info', '数据资产详情', '已载入数据资产详情');
+          }}
+          onNavigateToMetricDetail={(metricId) => {
+            setMetricDetailContext({ metricId: metricId || 'res-03', fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('metric_detail');
+            setViewTab('metric_detail');
+            addToast('info', '指标详情', '已载入「老龄化率」企业正式指标详情');
+          }}
+          onNavigateToApiDetail={(apiId) => {
+            setApiDetailContext({ apiId: apiId || 'res-04', fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('api_detail');
+            setViewTab('api_detail');
+            addToast('info', 'API 详情', '已载入「人口统计查询 API」服务详情');
+          }}
+          onNavigateToBusinessObject={(objectId) => {
+            setBusinessObjectDetailContext({ objectId: objectId || 'bo_person', fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+            addToast('info', '业务对象详情', '已载入「自然人」正式业务对象详情');
+          }}
           onNavigateToMyRequests={() => {
             setCurrentNav('my_requests');
             setViewTab('my_requests');

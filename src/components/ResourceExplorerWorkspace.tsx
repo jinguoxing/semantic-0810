@@ -9,38 +9,19 @@ import {
   ChevronRight,
   ChevronDown,
   RotateCcw,
-  SlidersHorizontal,
   X,
-  Eye,
-  Info,
+  Plus,
   Play,
   ArrowRight,
-  ExternalLink,
-  ShieldCheck,
-  Building2,
-  Users,
-  Layers3,
-  CheckCircle2,
   AlertCircle,
-  HelpCircle,
   Clock,
-  Filter,
   Check,
   RefreshCw,
-  Database,
-  Code2,
-  FileText,
-  KeyRound,
-  TrendingUp,
-  Share2,
   Copy,
-  FolderGit2,
-  Network,
-  Plus,
-  Trash2,
-  MoreHorizontal,
-  ArrowLeft,
-  Bot
+  Users,
+  Building2,
+  Workflow,
+  FolderTree
 } from 'lucide-react';
 import { SingleResourceAccessRequestDrawer } from './SingleResourceAccessRequestDrawer';
 import {
@@ -65,18 +46,19 @@ import { MultiResourceAccessRequestPage } from './MultiResourceAccessRequestPage
 
 export type ExplorerMode = 'browse' | 'resource_search' | 'goal_search';
 
+export interface BrowseEntryFilters {
+  resourceType?: string;
+  domain?: string;
+  businessObject?: string;
+  scope?: string;
+}
+
 interface ResourceExplorerWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
   initialQuery?: string;
   initialMode?: ExplorerMode;
-  /** Facet entry from Discover — pre-applies BROWSE type/domain/object filters.
-   *  Mount-time only (pass NO query: facet entry opens BROWSE, not search);
-   *  changing the object while mounted does not reset user-adjusted filters. */
-  initialBrowseFilters?: {
-    type?: 'DATA_ASSET' | 'METRIC' | 'DATA_API' | 'BUSINESS_OBJECT';
-    domain?: string;
-    object?: string;
-  };
+  /** Facet entry from Discover — pre-applies BROWSE type/domain/object filters. */
+  initialBrowseFilters?: BrowseEntryFilters;
   /** Demo/story-only: pre-checked candidates. Product default is an empty selection. */
   initialSelectedResourceIds?: string[];
   onNavigateToDiscovery?: () => void;
@@ -112,13 +94,11 @@ export interface ResourceItem {
   objectName: string;
   consumerFact?: string;
   extraInfo?: string;
-  /** Formal access lifecycle: AVAILABLE / REQUESTABLE / PENDING / UNAVAILABLE
-   *  (+ SEMANTIC_ONLY — a resource-class distinction, not a query grant). */
+  /** Formal access lifecycle: AVAILABLE / REQUESTABLE / PENDING / UNAVAILABLE / SEMANTIC_ONLY */
   accessStatus: 'AVAILABLE' | 'REQUESTABLE' | 'PENDING' | 'UNAVAILABLE' | 'SEMANTIC_ONLY';
   /** Trust designation — NOT goal fitness. Only OFFICIAL renders a 正式 badge. */
   certification: 'OFFICIAL' | 'GENERAL';
-  /** Semantic shape of a data asset — how it can serve a goal. Solution roles
-   *  derive from goal↔resource match over this shape, never selection order. */
+  /** Semantic shape of a data asset */
   semanticRole?: 'FACT' | 'AGGREGATE' | 'DIMENSION' | 'MASTER_DATA';
   fitnessStatus: 'ready' | 'good' | 'warning' | 'semantic';
   fitnessLabel?: string;
@@ -126,8 +106,6 @@ export interface ResourceItem {
   updatedAt: string;
   owner?: string;
   securityLevel?: string;
-  /** Explicit auto-grant policy published for the resource — a POLICY fact,
-   *  distinct from securityLevel (数据安全等级 ≠ 自动授权策略). */
   autoGrantPolicy?: boolean;
   updateFrequency?: string;
   matchReason?: string;
@@ -176,23 +154,22 @@ export interface RelatedResourceCandidate {
   whyUseful: string;
 }
 
-// Type icon presentation — one scannable visual anchor per resource type
-// (36px container + 16px icon, mirroring the discovery home rows).
+// Type icon presentation — 36–40px visual container with low-saturation theme backgrounds
 const TYPE_ICON_PRESENTATION: Record<string, { boxClass: string; Icon: typeof Users }> = {
-  BUSINESS_OBJECT: { boxClass: 'bg-[#EEF2FF] border-[#C7D2FE] text-[#4F46E5]', Icon: Users },
-  DATA_ASSET: { boxClass: 'bg-[#F1F5F9] border-[#E2E8F0] text-[#2563EB]', Icon: Table },
-  METRIC: { boxClass: 'bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]', Icon: BarChart3 },
-  DATA_API: { boxClass: 'bg-[#F5F3FF] border border-[#DDD6FE] text-[#7C3AED]', Icon: Globe },
+  BUSINESS_OBJECT: { boxClass: 'bg-[#F5F3FF] border-[#DDD6FE] text-[#7C3AED]', Icon: FolderTree },
+  DATA_ASSET: { boxClass: 'bg-[#EFF6FF] border-[#BFDBFE] text-[#2563EB]', Icon: Table },
+  METRIC: { boxClass: 'bg-[#EEF2FF] border-[#C7D2FE] text-[#4F46E5]', Icon: BarChart3 },
+  DATA_API: { boxClass: 'bg-[#ECFEFF] border-[#A5F3FC] text-[#0891B2]', Icon: Globe },
 };
 
-// Full Enterprise Discoverable Resources Dataset (Used in BROWSE & RESOURCE_SEARCH modes)
+// Full Enterprise Discoverable Resources Dataset
 const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
   {
     id: 'res-02',
     name: '人口基本信息视图',
     type: 'DATA_ASSET',
     subType: 'VIEW',
-    description: '提供自然人的年龄、出生日期、常住状态、户籍及所属行政区域等基础人口信息。',
+    description: '覆盖自然人的年龄、出生日期、常住状态、户籍及行政区划等人口基础信息。',
     context: '人口服务 · 自然人',
     domain: 'population',
     domainName: '人口服务',
@@ -209,8 +186,8 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     usageCount: 342,
     owner: '统计调查与人口运行处',
     securityLevel: 'L2（受限访问）',
-    updateFrequency: '每日 02:00 定时增量',
-    matchReason: '包含年龄、出生日期等人口年龄分析所需信息',
+    updateFrequency: '每日增量同步',
+    matchReason: '包含年龄、出生日期等人口年龄分析所需核心信息',
     useCases: ['人口结构分析', '老龄化分析', '区域人口统计'],
     fields: [
       { name: 'person_id', cnName: '自然人ID', type: 'BIGINT', description: '主键', isKey: true },
@@ -230,7 +207,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     name: '老龄化率',
     type: 'METRIC',
     description: '60 周岁及以上常住人口占全部常住人口的比例，用于衡量区域人口老龄化程度。',
-    context: '人口服务 · 自然人',
+    context: '养老服务 · 人口统计',
     domain: 'population',
     domainName: '人口服务',
     object: 'person',
@@ -251,7 +228,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     metricFormula: '( count(distinct case when age >= 60 and is_permanent=1 then person_id end) / count(distinct case when is_permanent=1 then person_id end) ) * 100%',
     metricUnit: '% (百分比)',
     timeGranularity: '年 / 季 / 月',
-    dimensions: ['行政区划（省/市/区县/街镇）', '统计期（年度/季度）', '性别分组'],
+    dimensions: ['行政区划', '年龄', '时间'],
     relatedAssets: [
       { name: '人口基本信息视图', type: 'DATA_ASSET', id: 'res-02' }
     ]
@@ -261,7 +238,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     name: '行政区划基础数据',
     type: 'DATA_ASSET',
     description: '提供街镇、居委及行政区划编码等标准区域信息，用于区域聚合与比较。',
-    context: '公共基础 · 行政区域',
+    context: '公共基础 · 行政区划',
     domain: 'public',
     domainName: '公共基础',
     object: 'region',
@@ -277,9 +254,9 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     usageCount: 893,
     owner: '基础地理与民政信息科',
     securityLevel: 'L1（公开可用）',
-    updateFrequency: '半年 / 依据民政调整',
+    updateFrequency: '定期维护',
     matchReason: '支持人口年龄数据按街镇进行分析',
-    useCases: ['区域聚合统计', '地址标准化', '地理维度关联'],
+    useCases: ['区域分析', '人口统计', '公共服务分析'],
     fields: [
       { name: 'region_code', cnName: '区划代码', type: 'VARCHAR(12)', description: '国标行政区划编码', isKey: true },
       { name: 'region_name', cnName: '区划全称', type: 'VARCHAR(64)', description: '街道/镇行政名称' },
@@ -292,7 +269,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     name: '常住人口主题视图',
     type: 'DATA_ASSET',
     subType: 'VIEW',
-    description: '提供常住人口身份、年龄结构、居住状态及区域分布等主题数据。',
+    description: '提供常住人口年龄、居住状态、行政区划及人口属性等主题数据。',
     context: '人口服务 · 常住人口',
     domain: 'population',
     domainName: '人口服务',
@@ -309,9 +286,9 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     usageCount: 127,
     owner: '人口大数据中心',
     securityLevel: 'L2（受限访问）',
-    updateFrequency: '每日同步',
+    updateFrequency: '每日更新',
     matchReason: '与常住人口年龄分析相关',
-    useCases: ['常住人口分析', '居住状态统计'],
+    useCases: ['人口画像', '年龄结构', '区域人口分析'],
     fields: [
       { name: 'person_id', cnName: '自然人ID', type: 'BIGINT', description: '主键', isKey: true },
       { name: 'age_strata', cnName: '年龄分层', type: 'VARCHAR(32)', description: '少年/青壮年/初老/高龄' },
@@ -319,35 +296,34 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     ]
   },
   {
-    id: 'res-07',
-    name: '人口年龄结构数据集',
-    type: 'DATA_ASSET',
-    subType: 'DATASET',
-    description: '按照年龄段和行政区域汇总的人口结构数据。',
-    context: '统计调查 · 人口集市',
-    domain: 'population',
-    domainName: '人口服务',
-    object: 'person',
-    objectName: '自然人',
-    consumerFact: '一行代表：一个街镇某一统计期的年龄区间聚合结果',
-    accessStatus: 'AVAILABLE',
-    accessLabel: '可使用',
-    certification: 'GENERAL',
-    semanticRole: 'AGGREGATE',
-    fitnessStatus: 'warning',
-    fitnessLabel: '更新至上月',
-    updatedAt: '2026-07-31',
-    usageCount: 204,
-    owner: '统计局人口处',
-    securityLevel: 'L1（公开可用）',
-    updateFrequency: '月度更新',
-    matchReason: '已形成年龄区间聚合结果',
-    useCases: ['人口结构快速分析', '年龄段分布统计'],
-    fields: [
-      { name: 'stat_month', cnName: '统计月份', type: 'VARCHAR(7)', description: 'YYYY-MM' },
-      { name: 'region_code', cnName: '区划代码', type: 'VARCHAR(12)', description: '街镇编码' },
-      { name: 'age_bracket', cnName: '年龄区间', type: 'VARCHAR(16)', description: '如 60-64, 65-69' },
-      { name: 'population_count', cnName: '区间人数', type: 'INT', description: '总人数' }
+    id: 'res-04',
+    name: '养老机构服务能力接口',
+    type: 'DATA_API',
+    description: '提供养老机构、床位数量、服务能力及区域覆盖等可调用服务能力。',
+    context: '养老服务 · 养老机构',
+    domain: 'elderly',
+    domainName: '养老服务',
+    object: 'org',
+    objectName: '养老机构',
+    consumerFact: '调用方式：API 调用 · 实时响应',
+    accessStatus: 'REQUESTABLE',
+    accessLabel: '需申请',
+    certification: 'OFFICIAL',
+    fitnessStatus: 'good',
+    fitnessLabel: '服务正常',
+    updatedAt: '2026-08-08',
+    usageCount: 1208,
+    owner: '养老数字化服务中心',
+    securityLevel: 'L2（受限网关）',
+    updateFrequency: '实时响应 (<50ms)',
+    matchReason: '支持查询养老机构床位与服务供给明细',
+    useCases: ['养老机构查询', '服务能力评估', '应用系统集成'],
+    apiEndpoint: 'POST /api/v1/elderly/service/query',
+    apiMethod: 'POST',
+    apiParams: [
+      { name: 'region_code', type: 'string', required: true, desc: '行政区划编码' },
+      { name: 'service_type', type: 'string', required: false, desc: '服务类型过滤' },
+      { name: 'min_beds', type: 'integer', required: false, desc: '最小床位数量' }
     ]
   },
   {
@@ -363,7 +339,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     extraInfo: '12 数据资产 · 7 指标 · 3 API',
     accessStatus: 'SEMANTIC_ONLY',
     accessLabel: '语义资源',
-    certification: 'GENERAL',
+    certification: 'OFFICIAL',
     fitnessStatus: 'semantic',
     fitnessLabel: '核心概念',
     updatedAt: '2026-08-10',
@@ -380,38 +356,6 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     ]
   },
   {
-    id: 'res-04',
-    name: '人口统计查询服务',
-    type: 'DATA_API',
-    description: '提供按行政区域与年龄范围查询人口统计结果的数据服务。',
-    context: '人口服务 · 统计查询',
-    domain: 'population',
-    domainName: '人口服务',
-    object: 'person',
-    objectName: '自然人',
-    consumerFact: '输入：区域 / 年龄 / 时间',
-    accessStatus: 'AVAILABLE',
-    accessLabel: '可调用',
-    certification: 'OFFICIAL',
-    fitnessStatus: 'good',
-    fitnessLabel: '服务正常',
-    updatedAt: '2026-08-08',
-    usageCount: 1208,
-    owner: '服务集成网关团队',
-    securityLevel: 'L1（开放网关）',
-    updateFrequency: '实时响应 (<50ms)',
-    matchReason: '支持按年龄条件查询人口统计结果',
-    useCases: ['人口统计查询', '应用集成取数'],
-    apiEndpoint: 'GET /api/v1/population/statistics/query',
-    apiMethod: 'GET',
-    apiParams: [
-      { name: 'region_code', type: 'string', required: true, desc: '行政区划代码（如 310104001）' },
-      { name: 'min_age', type: 'integer', required: false, desc: '最小年龄（默认 0）' },
-      { name: 'max_age', type: 'integer', required: false, desc: '最大年龄（可为空）' },
-      { name: 'stat_period', type: 'string', required: true, desc: '统计周期（格式 YYYY-MM）' }
-    ]
-  },
-  {
     id: 'res-elderly-org',
     name: '养老机构基本信息',
     type: 'DATA_ASSET',
@@ -421,6 +365,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     domainName: '养老服务',
     object: 'org',
     objectName: '养老机构',
+    consumerFact: '一行代表：一家正式备案的养老机构',
     accessStatus: 'REQUESTABLE',
     accessLabel: '需申请',
     certification: 'OFFICIAL',
@@ -431,6 +376,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     usageCount: 96,
     owner: '民政养老服务发展处',
     securityLevel: 'L2（受限访问）',
+    updateFrequency: '每周同步',
     useCases: ['养老资源盘点', '机构覆盖分析']
   },
   {
@@ -443,6 +389,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     domainName: '养老服务',
     object: 'facility',
     objectName: '社区设施',
+    consumerFact: '一行代表：一个社区养老服务网点',
     accessStatus: 'AVAILABLE',
     accessLabel: '可使用',
     certification: 'OFFICIAL',
@@ -453,17 +400,60 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     usageCount: 57,
     owner: '民政养老服务发展处',
     securityLevel: 'L1（公开可用）',
+    updateFrequency: '月度维护',
     useCases: ['社区养老服务供给分析', '设施覆盖评估']
+  },
+  {
+    id: 'res-workorder',
+    name: '公共服务热线工单',
+    type: 'DATA_ASSET',
+    description: '记录企业与市民公共服务诉求、受理部门、处理时效与满意度评价等工单信息。',
+    context: '公共服务 · 服务工单',
+    domain: 'public',
+    domainName: '公共基础',
+    object: 'workorder',
+    objectName: '服务工单',
+    consumerFact: '一行代表：一条市民服务热线诉求记录',
+    accessStatus: 'REQUESTABLE',
+    accessLabel: '需申请',
+    certification: 'OFFICIAL',
+    semanticRole: 'FACT',
+    fitnessStatus: 'ready',
+    fitnessLabel: '可用于分析',
+    updatedAt: '2026-08-15',
+    usageCount: 382,
+    owner: '城运与政务服务中心',
+    securityLevel: 'L2（受限访问）',
+    updateFrequency: '实时流式汇聚',
+    useCases: ['市民诉求分析', '热线响应效率分析', '工单满意度监测']
+  },
+  {
+    id: 'res-enterprise-profile',
+    name: '企业基础信息视图',
+    type: 'DATA_ASSET',
+    description: '汇聚企业注册登记、行业分类、统一社会信用代码、经营状态与纳税评级等信息。',
+    context: '企业服务 · 法人主体',
+    domain: 'enterprise',
+    domainName: '企业服务',
+    object: 'enterprise',
+    objectName: '企业法人',
+    consumerFact: '一行代表：一个法人企业主体',
+    accessStatus: 'AVAILABLE',
+    accessLabel: '可直接使用',
+    certification: 'OFFICIAL',
+    semanticRole: 'FACT',
+    fitnessStatus: 'ready',
+    fitnessLabel: '正式资源',
+    updatedAt: '2026-08-16',
+    usageCount: 410,
+    owner: '市场监督与政务数据局',
+    securityLevel: 'L1（公开可用）',
+    updateFrequency: '每日更新',
+    useCases: ['企业经营分析', '产业结构画像', '营商环境评估']
   }
 ];
 
-// ── Resource Retrieval (Demo mock) ──────────────────────────────────────────
-// mockGoalResolver stands in for the future goal agent's retrieval stage:
-// Goal → Semantic Understanding → Resource Retrieval → Candidate Recommendation.
-// 先找，再组：with no user candidates, the plan's recommendation becomes the
-// candidate set and the SAME compose logic runs on it. There are NO per-domain
-// default solution templates and never a universal fallback plan — what the
-// goal cannot resolve simply stays uncovered.
+// ── Resource Retrieval (Goal Resolver) ──────────────────────────────────────────
 const mockGoalResolver = (plan: GoalPlanContext): ResourceItem[] => {
   const target = resolveSubjectTarget(plan.subject);
   if (!target) return [];
@@ -478,9 +468,6 @@ const mockGoalResolver = (plan: GoalPlanContext): ResourceItem[] => {
   return [core, metric, dimension].filter(Boolean) as ResourceItem[];
 };
 
-// Full plan = parsed semantics + retrieval recommendation + goal-aware coverage
-// requirements. The Goal Search page renders ONLY from this plan — business
-// content never lives in JSX.
 const buildGoalPlan = (rawGoal: string): GoalPlanContext => {
   const plan = parseBusinessGoal(rawGoal);
   return {
@@ -494,16 +481,7 @@ const buildGoalPlan = (rawGoal: string): GoalPlanContext => {
   };
 };
 
-// Semovix Compose — Goal Semantics + Candidate Semantics + Resource Relations
-// → Role Assignment → Dependency Completion → Solution.
-// Candidates are HARD CONSTRAINTS (WHAT the user chose); the parsed plan decides
-// WHY each candidate is in the solution. Roles therefore come from goal↔resource
-// semantic match over each asset's semanticRole — never from selection order:
-// a second data asset is NOT automatically a dimension (it may be master data
-// or an entity-binding supplement, which is exactly what its shape says).
 const composeSolutionResources = (plan: GoalPlanContext, candidates: ResourceItem[]): SolutionResourceItem[] => {
-  // 先找，再组：user candidates are the hard constraint; with none, the
-  // resolver's recommendation becomes the candidate set.
   const picks = candidates.length > 0 ? candidates : mockGoalResolver(plan);
   if (picks.length === 0) return [];
 
@@ -511,9 +489,6 @@ const composeSolutionResources = (plan: GoalPlanContext, candidates: ResourceIte
   const measureText = plan.concerns.join('、');
   const dimensionText = plan.dimensions.join('、');
 
-  // Pass 1 — Role Assignment (goal subject × resource semantic shape) — over
-  // picks, so the resolver's recommendation enters the same role pipeline as
-  // user-selected candidates.
   let coreClaimed = false;
   const assigned = picks.map(c => {
     let role: SolutionResourceItem['role'];
@@ -538,9 +513,6 @@ const composeSolutionResources = (plan: GoalPlanContext, candidates: ResourceIte
       roleLabel = '取数服务';
       whyNeeded = '为应用集成与后续分析流程提供标准取数服务。';
     } else {
-      // DATA_ASSET — role from semantic shape × goal subject match. An asset
-      // claims CORE_DATA only when the goal's subject points at its object;
-      // with no parsable subject, facts still beat dimensions/master data.
       const isSubjectMatch = !!subjectTarget && c.domain === subjectTarget.domain && c.object === subjectTarget.object;
       if (c.semanticRole === 'DIMENSION') {
         role = 'DIMENSION';
@@ -567,8 +539,6 @@ const composeSolutionResources = (plan: GoalPlanContext, candidates: ResourceIte
     return { item: c, role, roleLabel, whyNeeded };
   });
 
-  // Pass 2 — Dependency Completion: a metric computes FROM the core data, so
-  // its usability rides on that asset's access conditions.
   const coreData = assigned.find(a => a.role === 'CORE_DATA')?.item;
 
   return assigned.map(({ item: c, role, roleLabel, whyNeeded }) => {
@@ -590,16 +560,12 @@ const composeSolutionResources = (plan: GoalPlanContext, candidates: ResourceIte
   });
 };
 
-// Coverage requirement id → the solution role that satisfies it.
 const COVERAGE_ROLE_BY_ID: Record<string, SolutionResourceItem['role']> = {
   core_data: 'CORE_DATA',
   core_metric: 'CORE_METRIC',
   dimension: 'DIMENSION',
 };
 
-// Intent gate for the unified discovery entry: high-confidence goals auto-enter
-// Goal Search; ambiguous queries stay in Resource Search with a lightweight
-// “让 Xino 按业务目标理解” escalation (rendered under the discovery bar).
 const isBusinessGoalQuery = (q?: string) => {
   if (!q) return false;
   const intent = detectDiscoveryIntent(q);
@@ -611,17 +577,12 @@ const isGoalishLookupQuery = (q: string) => {
   return intent.type === 'BUSINESS_GOAL' && intent.confidence < GOAL_INTENT_AUTO_THRESHOLD;
 };
 
-// Mode derivation from the entry query — the ONE reading shared by the first
-// frame (useState initializer) and the initialMode/initialQuery sync effect,
-// so they can never disagree.
 const inferMode = (q?: string): ExplorerMode => {
   if (q && isBusinessGoalQuery(q)) return 'goal_search';
   if (q && q.trim().length > 0) return 'resource_search';
   return 'browse';
 };
 
-// Goal-fit sentence for the goal-mode preview — capability (real schema) ×
-// plan needs. Business reason only: no score, no AI reasoning.
 const describeGoalFit = (
   item: Pick<ResourceItem, 'type' | 'fields' | 'dimensions' | 'apiParams'>,
   plan: GoalPlanContext
@@ -652,9 +613,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   onNavigateToApiDetail,
   onNavigateToMultiResourceRequest,
 }) => {
-  // Mode: 'browse' (Browse all discoverable scope) | 'resource_search' | 'goal_search' (Composed Data Solution)
-  // initialMode stays undefined-until-passed (no 'browse' default masking it);
-  // an explicit mode wins, otherwise the query decides — on the FIRST frame.
+  // Mode: 'browse' (Browse all discoverable scope) | 'resource_search' | 'goal_search'
   const [currentMode, setCurrentMode] = useState<ExplorerMode>(
     () => initialMode ?? inferMode(initialQuery)
   );
@@ -663,23 +622,21 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   const [searchQuery, setSearchQuery] = useState<string>(initialQuery || '');
   const [submittedQuery, setSubmittedQuery] = useState<string>(initialQuery || '');
 
-  // Progressive Selected Candidates (for Browse / Search mode)
+  // P0-1: Default Browse initial state has ZERO selected candidates (empty array)
   const [selectedResourceIds, setSelectedResourceIds] = useState<string[]>(initialSelectedResourceIds);
   const [isSelectedTrayDrawerOpen, setIsSelectedTrayDrawerOpen] = useState<boolean>(false);
   const [goalInputValue, setGoalInputValue] = useState<string>('');
 
-  // Facet entry applies only to query-less entries — a text/goal query entry
-  // always wins the mode, so stale facets must not ride along.
   const entryFilters = initialQuery ? undefined : initialBrowseFilters;
 
   // Type Tabs for Browse Mode: ALL, DATA_ASSET, METRIC, DATA_API, BUSINESS_OBJECT
   const [activeTypeTab, setActiveTypeTab] = useState<'ALL' | 'DATA_ASSET' | 'METRIC' | 'DATA_API' | 'BUSINESS_OBJECT'>(
-    entryFilters?.type ?? 'ALL'
+    (entryFilters?.resourceType as any) ?? 'ALL'
   );
 
-  // Filter Bar state for Browse Mode (Only P0)
+  // Filter Bar state for Browse Mode
   const [domainFilter, setDomainFilter] = useState<string>(entryFilters?.domain ?? 'all');
-  const [objectFilter, setObjectFilter] = useState<string>(entryFilters?.object ?? 'all');
+  const [objectFilter, setObjectFilter] = useState<string>(entryFilters?.businessObject ?? 'all');
   const [accessFilter, setAccessFilter] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<string>('relevance');
 
@@ -687,17 +644,14 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
 
-  // Business Goal State for Goal Search Mode — never silently defaulted
+  // Business Goal State for Goal Search Mode
   const [businessGoal, setBusinessGoal] = useState<string>(
     initialQuery && initialQuery.length > 5 ? initialQuery : ''
   );
   const [isEditingGoalModalOpen, setIsEditingGoalModalOpen] = useState<boolean>(false);
   const [tempGoalInput, setTempGoalInput] = useState<string>(businessGoal);
 
-  // Solution Resources for Goal Search Mode — ALWAYS the output of Semovix Compose
-  // (goal + candidate set); never a statically preloaded solution. Entering with
-  // a high-confidence goal composes immediately (no empty-solution flash on the
-  // first frame); later changes all route through the same compose.
+  // Solution Resources for Goal Search Mode
   const [solutionResources, setSolutionResources] = useState<SolutionResourceItem[]>(() =>
     initialQuery && isBusinessGoalQuery(initialQuery)
       ? composeSolutionResources(
@@ -709,11 +663,11 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       : []
   );
 
-  // Candidate Resources (To be added via Tray in Goal Search Mode)
+  // Candidate Resources (for Goal Search Mode additions)
   const [candidatesQueue, setCandidatesQueue] = useState<string[]>([]);
   const [isCandidateTrayDrawerOpen, setIsCandidateTrayDrawerOpen] = useState<boolean>(false);
 
-  // Warnings / Notices
+  // Overlap Notice & Goal Extension Prompts
   const [activeOverlapNotice, setActiveOverlapNotice] = useState<{
     newResource: string;
     existingResource: string;
@@ -727,19 +681,15 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
 
   const [removalTargetResource, setRemovalTargetResource] = useState<SolutionResourceItem | null>(null);
 
-  // Single Resource Access Request Drawer
+  // Single & Multi Resource Access Request Drawer
   const [isAccessDrawerOpen, setIsAccessDrawerOpen] = useState<boolean>(false);
   const [accessTargetResource, setAccessTargetResource] = useState<{ name: string; typeBadge: string; operation?: AccessOperation } | null>(null);
-  // MULTI route of the AccessRequestRouter — the whole resolution is kept so
-  // the page renders exactly what resolveAccessDelta() computed.
   const [multiAccessResolution, setMultiAccessResolution] = useState<AccessResolution | null>(null);
 
   // Detail Preview Drawer
   const [selectedPreviewItem, setSelectedPreviewItem] = useState<ResourceItem | null>(null);
-  const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
 
-  // Synchronize when initialMode or initialQuery changes — same inferMode as
-  // the first frame, so the two readings can never diverge.
+  // Synchronize when initialMode or initialQuery changes
   useEffect(() => {
     setCurrentMode(initialMode ?? inferMode(initialQuery));
     if (initialQuery !== undefined) {
@@ -757,19 +707,17 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
   }, [initialMode, initialQuery]);
 
-  // Selected items objects for Browse/Resource Search mode
+  // Selected items objects
   const selectedResourceItems = useMemo(() => {
     return selectedResourceIds
       .map(id => ALL_DISCOVERABLE_RESOURCES.find(r => r.id === id))
       .filter(Boolean) as ResourceItem[];
   }, [selectedResourceIds]);
 
-  // Browse scope — query + facet filters applied, BEFORE the type tab.
-  // Facet counts are computed over this scope so tabs and the result header always agree.
+  // Browse scope — query + facet filters applied, BEFORE the type tab
   const browseScopeResources = useMemo(() => {
     let list = [...ALL_DISCOVERABLE_RESOURCES];
 
-    // Query filter (matchReason is goal-relative and never searched in Browse)
     if (submittedQuery.trim()) {
       const q = submittedQuery.toLowerCase().trim();
       list = list.filter(r =>
@@ -780,11 +728,11 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
 
     if (domainFilter !== 'all') {
-      list = list.filter(r => r.domain === domainFilter);
+      list = list.filter(r => r.domain === domainFilter || r.domainName === domainFilter);
     }
 
     if (objectFilter !== 'all') {
-      list = list.filter(r => r.object === objectFilter);
+      list = list.filter(r => r.object === objectFilter || r.objectName === objectFilter);
     }
 
     if (accessFilter !== 'all') {
@@ -798,7 +746,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     return list;
   }, [submittedQuery, domainFilter, objectFilter, accessFilter]);
 
-  // Type facets — real counts over the current scope (never hardcoded totals)
+  // P0-2: Type facets — dynamic counts strictly from the current search result / scope
   const typeCounts = useMemo(() => {
     return {
       ALL: browseScopeResources.length,
@@ -815,11 +763,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     return browseScopeResources.filter(r => r.type === activeTypeTab);
   }, [browseScopeResources, activeTypeTab]);
 
-  // Sort — Browse 默认排序 keeps the curated order; popular / recent are real
-  // sorts over mock metadata (usageCount / updatedAt). Resource Search 相关度
-  // is a naive but REAL score: name hit > context hit > description hit, equal
-  // scores keep the curated order (stable sort). Swap in the retrieval
-  // service's score when one exists.
+  // P1-4: Sort — Real sort implementation over usage count, updatedAt, and search score
   const sortedBrowseResources = useMemo(() => {
     const list = [...filteredBrowseResources];
     if (sortOrder === 'recent') {
@@ -837,24 +781,21 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     return list;
   }, [filteredBrowseResources, sortOrder, submittedQuery]);
 
-  // Pagination — derived from the real result set (no decorative page buttons)
+  // P1-5: Pagination — derived from sorted results
   const totalPages = Math.max(1, Math.ceil(sortedBrowseResources.length / pageSize));
   const pagedBrowseResources = sortedBrowseResources.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
 
-  // Any change to the query / facets / tab / sort / page size restarts from page 1
   useEffect(() => {
     setCurrentPage(1);
   }, [submittedQuery, activeTypeTab, domainFilter, objectFilter, accessFilter, sortOrder, pageSize]);
 
-  // Full goal plan (semantics + recommendation + coverage requirements) — the
-  // single source Goal Search renders from; Compose consumes the same plan.
+  // Full goal plan
   const goalPlan = useMemo(() => buildGoalPlan(businessGoal), [businessGoal]);
 
-  // Candidate Recommendation for the CURRENT plan — derived from the library
-  // by goal match (subject domain first, then usage), never a fixed demo list.
+  // Candidate Recommendation for Goal Search
   const relatedCandidates = useMemo(() => {
     const inSolution = new Set(solutionResources.map(r => r.id));
     const target = resolveSubjectTarget(goalPlan.subject);
@@ -888,16 +829,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       }));
   }, [goalPlan, solutionResources]);
 
-  // Business-object anchor for the parsed subject — drives the subject context
-  // row; when the subject has no modeled business object the row stays generic.
-  const subjectBusinessObject = useMemo(() => {
-    const target = resolveSubjectTarget(goalPlan.subject);
-    return target
-      ? ALL_DISCOVERABLE_RESOURCES.find(r => r.type === 'BUSINESS_OBJECT' && r.domain === target.domain && r.object === target.object)
-      : undefined;
-  }, [goalPlan]);
-
-  // Solution Coverage facts — plan-declared requirements × composed roles
+  // Solution Coverage facts
   const coverageElements = useMemo(() => {
     return goalPlan.coverageRequirements.map(req => ({
       ...req,
@@ -906,10 +838,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   }, [goalPlan, solutionResources]);
   const isCoverageComplete = coverageElements.filter(e => e.required).every(e => e.covered);
 
-  // Access readiness over the formal lifecycle — domain contract
-  // (evaluateTaskReadiness): REQUESTABLE and PENDING both block execution (a
-  // submitted request is NOT yet usable); UNAVAILABLE needs a REPLACEMENT, not
-  // a request; DEPENDENT rides on its core data and counts as ready.
+  // Access readiness
   const accessReadiness = useMemo(
     () => evaluateTaskReadiness(solutionResources),
     [solutionResources],
@@ -920,14 +849,13 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     const isAdded = selectedResourceIds.includes(resource.id);
     if (isAdded) {
       setSelectedResourceIds(prev => prev.filter(id => id !== resource.id));
-      addToast?.('info', '已从已选资源移除', `已移除「${resource.name}」`);
+      addToast?.('info', '已移出候选', `已从候选资源中移除「${resource.name}」`);
     } else {
       setSelectedResourceIds(prev => [...prev, resource.id]);
-      addToast?.('success', '已加入', `已加入「${resource.name}」至当前工作集合`);
+      addToast?.('success', '已加入候选', `已加入「${resource.name}」至候选资源`);
     }
   };
 
-  // Quick-preview content chips — full schema & metric formulas live in Resource Detail, not here
   const previewContains: string[] = selectedPreviewItem
     ? selectedPreviewItem.type === 'METRIC'
       ? selectedPreviewItem.dimensions || []
@@ -937,19 +865,16 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     : [];
   const isPreviewAdded = selectedPreviewItem ? selectedResourceIds.includes(selectedPreviewItem.id) : false;
 
-  // Compose requires an explicit goal — never silently defaulted. When already in
-  // Goal Search context, the existing goal is reused automatically.
+  // Effective Compose Goal: no silent default fallback
   const effectiveComposeGoal = goalInputValue.trim() || (currentMode === 'goal_search' ? businessGoal.trim() : '');
 
-  // Clear all selected in Browse mode
   const handleClearAllSelected = () => {
     setSelectedResourceIds([]);
     setIsSelectedTrayDrawerOpen(false);
-    addToast?.('info', '已清空已选资源', '已重置当前临时工作集合');
+    addToast?.('info', '已清空候选', '已重置当前候选资源列表');
   };
 
-  // Confirm Goal and Compose Solution (from Candidate Drawer).
-  // Goal is required — no silent default. Candidates are the compose constraints.
+  // P0-3 & P0-4: Compose from user candidate constraints with explicit goal
   const handleConfirmGoalAndCompose = () => {
     const finalGoal = goalInputValue.trim() || (currentMode === 'goal_search' ? businessGoal.trim() : '');
     if (!finalGoal) return;
@@ -959,8 +884,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     addToast?.('success', '构建数据方案', `已基于目标「${finalGoal}」与 ${selectedResourceItems.length} 项候选资源解析最小数据方案`);
   };
 
-  // Explicit goal interpretation — shared by high-confidence auto-entry and
-  // the lightweight “让 Xino 按业务目标理解” escalation under search results.
   const handleInterpretQueryAsGoal = (q: string) => {
     setBusinessGoal(q);
     setSolutionResources(composeSolutionResources(buildGoalPlan(q), selectedResourceItems));
@@ -968,7 +891,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     addToast?.('success', '业务目标解析', `已针对目标「${q}」解析最小数据方案`);
   };
 
-  // Execute Search in Browse Mode
   const handleExecuteSearch = (val: string) => {
     const q = val.trim();
     setSubmittedQuery(q);
@@ -984,7 +906,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
   };
 
-  // Whether any consumer-visible filter is active (drives 清除筛选 visibility)
   const hasActiveFilters = useMemo(() => {
     return (
       domainFilter !== 'all' ||
@@ -996,7 +917,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     );
   }, [domainFilter, objectFilter, accessFilter, sortOrder, activeTypeTab, submittedQuery]);
 
-  // Reset Filters in Browse Mode
   const handleResetFilters = () => {
     setDomainFilter('all');
     setObjectFilter('all');
@@ -1009,7 +929,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     addToast?.('info', '已清除筛选', '已恢复默认浏览条件');
   };
 
-  // Handle Toggle Candidate in Goal Search Mode
   const handleToggleCandidate = (candidateId: string) => {
     const candidate = relatedCandidates.find(c => c.id === candidateId);
     if (!candidate) return;
@@ -1023,19 +942,15 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
   };
 
-  // Clear Candidates in Goal Search Mode
   const handleClearCandidates = () => {
     setCandidatesQueue([]);
     setIsCandidateTrayDrawerOpen(false);
     addToast?.('info', '已清空待添加资源', '已重置待更新队列');
   };
 
-  // Recompose Data Solution with Candidates in Goal Search Mode
   const handleRecomposeSolution = () => {
     if (candidatesQueue.length === 0) return;
 
-    // Overlap guard (semantic dedup demo): 常住人口主题视图 overlaps the
-    // 人口基本信息视图 core when that core is already in the solution.
     if (candidatesQueue.includes('res-04-asset') && solutionResources.some(r => r.id === 'res-02')) {
       setActiveOverlapNotice({
         newResource: '常住人口主题视图',
@@ -1054,9 +969,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       });
     }
 
-    // No compose bypass: current solution membership + queued additions all
-    // go through the SAME goal-aware compose — roles are re-derived, never
-    // hand-assigned as “补充数据”.
     const memberIds = new Set([...solutionResources.map(r => r.id), ...candidatesQueue]);
     const picks = ALL_DISCOVERABLE_RESOURCES.filter(r => memberIds.has(r.id));
     setSolutionResources(composeSolutionResources(goalPlan, picks));
@@ -1065,9 +977,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     addToast?.('success', '方案已更新', 'Semovix 已重新计算资源角色、依赖与数据访问缺口');
   };
 
-  // Remove resource from solution
   const handleRequestRemoveResource = (resource: SolutionResourceItem) => {
-    setActiveActionMenuId(null);
     if (resource.role === 'CORE_DATA' || resource.role === 'CORE_METRIC') {
       setRemovalTargetResource(resource);
     } else {
@@ -1076,7 +986,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
   };
 
-  // Confirm Removal of key resource
   const handleConfirmRemoveKeyResource = () => {
     if (!removalTargetResource) return;
     setSolutionResources(prev => prev.filter(r => r.id !== removalTargetResource.id));
@@ -1084,12 +993,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     addToast?.('error', '已移除核心依赖', '方案覆盖情况已改变，当前缺少核心计算底表');
   };
 
-  // Handle Primary CTA in Goal Search Mode. The page never decides WHICH
-  // resource to request: it hands the DataSolution to the
-  // AccessResolutionService — resolveAccessDelta() drafts every REQUESTABLE
-  // resource (PENDING is already in flight; UNAVAILABLE needs a replacement,
-  // never a request) and the router picks the entry surface:
-  // SINGLE → single drawer, MULTI → multi-resource request page.
   const handlePrimaryAction = () => {
     if (!isCoverageComplete) {
       addToast?.('error', '方案不完整', '请先在下方补充所需的核心口径或维度');
@@ -1130,7 +1033,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       const sol = solutionResources.find(r => r.id === draft.resourceId);
       setAccessTargetResource({
         name: draft.resourceName,
-        // Consumer-facing label — internal enums never reach the drawer UI
         typeBadge: `${TYPE_PRESENTATION[draft.resourceType]}${sol?.subType ? ` · ${SUBTYPE_PRESENTATION[sol.subType] || sol.subType}` : ''}`,
         operation: draft.operation,
       });
@@ -1141,7 +1043,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     setMultiAccessResolution(resolution);
   };
 
-  // Open Preview Drawer
   const handleOpenPreview = (item: ResourceItem | SolutionResourceItem | RelatedResourceCandidate) => {
     const full = ALL_DISCOVERABLE_RESOURCES.find(r => r.id === item.id) || {
       id: item.id,
@@ -1167,36 +1068,35 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
 
   return (
     <div className="flex-1 flex overflow-hidden bg-[#F8FAFC]">
-
       {/* ========================================================= */}
-      {/* MAIN WORKSPACE (Single Natural Reading Path)               */}
+      {/* MAIN WORKSPACE CONTAINER: Max-width ~1500px, Centered      */}
       {/* ========================================================= */}
       <main className="flex-1 flex flex-col overflow-y-auto bg-[#F8FAFC] relative transition-all">
-
-        {/* Page Title — in the centered working surface (no admin header strip) */}
-        <div className="w-full max-w-[1500px] mx-auto px-6 lg:px-8 pt-6">
+        
+        {/* Page Title & Subtitle in Same Plain Surface (No full-width white admin header strip) */}
+        <div className="w-full max-w-[1500px] mx-auto px-6 sm:px-8 pt-6">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-[#172033] tracking-tight">
+            <div className="space-y-0.5">
+              <h1 className="text-xl sm:text-2xl font-bold text-[#172033] tracking-tight">
                 {currentMode === 'goal_search' ? '数据方案' : '浏览数据资源'}
               </h1>
-              <p className="text-xs text-[#667085] mt-0.5 leading-relaxed">
+              <p className="text-xs text-[#667085] leading-relaxed">
                 {currentMode === 'goal_search'
                   ? '围绕业务目标组合并使用可信的数据与业务语义资源。'
                   : '搜索、筛选并发现适合业务需求的可信数据资源。'}
               </p>
             </div>
 
-            {/* Exit Goal Search state back to Browse (only rendered in Goal Search) */}
             {currentMode === 'goal_search' && (
               <button
+                type="button"
                 onClick={() => {
                   setCurrentMode('browse');
                   setSearchQuery('');
                   setSubmittedQuery('');
                   addToast?.('info', '切换视图', '已切换回全量资源浏览模式');
                 }}
-                className="px-2.5 py-1 text-xs text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded font-medium cursor-pointer transition-colors"
+                className="px-3 py-1.5 text-xs text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded-md font-semibold cursor-pointer transition-colors"
               >
                 ← 返回全量资源浏览
               </button>
@@ -1208,18 +1108,18 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
         {/* VIEW BRANCH A: GOAL SEARCH (CURRENT DATA SOLUTION)      */}
         {/* ======================================================= */}
         {currentMode === 'goal_search' ? (
-          <div className={`p-6 lg:p-8 space-y-6 w-full max-w-[1500px] mx-auto transition-all ${candidatesQueue.length > 0 ? 'pb-28' : 'pb-12'}`}>
+          <div className={`p-6 sm:p-8 space-y-6 w-full max-w-[1500px] mx-auto transition-all ${candidatesQueue.length > 0 ? 'pb-28' : 'pb-12'}`}>
             
             {/* SECTION 1: BUSINESS GOAL (Context Strip) */}
-            <div className="bg-white border border-[#E6EAF0] rounded-md p-4 shadow-2xs space-y-2.5">
+            <div className="bg-white border border-[#E6EAF0] rounded-xl p-4 shadow-xs space-y-2.5">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1.5 flex-1 min-w-0">
                   <div className="flex items-center space-x-2">
-                    <span className="text-[11px] font-semibold text-[#667085] px-1.5 py-0.2 bg-[#F1F5F9] rounded border border-[#E2E8F0]">
+                    <span className="text-[11px] font-semibold text-[#667085] px-1.5 py-0.5 bg-[#F1F5F9] rounded border border-[#E2E8F0]">
                       当前需求
                     </span>
                   </div>
-                  <h2 className="text-sm font-bold text-[#172033] leading-snug">
+                  <h2 className="text-sm sm:text-base font-bold text-[#172033] leading-snug">
                     {businessGoal}
                   </h2>
                 </div>
@@ -1236,9 +1136,8 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 </button>
               </div>
 
-              {/* Light Semantic Parsing Summary — rendered from the same
-                  GoalPlanContext that Compose consumes */}
-              <div className="pt-2 border-t border-[#EEF2F6] flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-[#475569]">
+              {/* Semantic Parsing Summary */}
+              <div className="pt-2 border-t border-[#F1F5F9] flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-[#475569]">
                 <div className="flex items-center space-x-1">
                   <span className="text-[#94A3B8]">分析主体:</span>
                   <span className="font-semibold text-[#172033]">{goalPlan.subject || '未识别'}</span>
@@ -1260,9 +1159,9 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               </div>
             </div>
 
-            {/* SECTION 2: CURRENT DATA SOLUTION (The Core Solution) */}
-            <div className="bg-white border border-[#E6EAF0] rounded-md shadow-2xs overflow-hidden">
-              <div className="p-4 border-b border-[#EEF2F6] bg-[#FAFCFF] flex items-center justify-between">
+            {/* SECTION 2: CURRENT DATA SOLUTION */}
+            <div className="bg-white border border-[#E6EAF0] rounded-xl shadow-xs overflow-hidden">
+              <div className="p-4 border-b border-[#F1F5F9] bg-[#FAFCFF] flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-[#172033]">
                     当前数据方案
@@ -1279,14 +1178,14 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                     el?.scrollIntoView({ behavior: 'smooth' });
                     addToast?.('info', '添加资源', '已定位至下方推荐资源列表，点击「＋ 加入」即可暂存');
                   }}
-                  className="px-3 py-1.5 bg-white border border-[#CBD5E1] text-[#334155] hover:border-[#2563EB] hover:text-[#2563EB] text-xs font-semibold rounded transition-colors cursor-pointer flex items-center space-x-1"
+                  className="px-3 py-1.5 bg-white border border-[#CBD5E1] text-[#334155] hover:border-[#2563EB] hover:text-[#2563EB] text-xs font-semibold rounded-md transition-colors cursor-pointer flex items-center space-x-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>添加资源</span>
                 </button>
               </div>
 
-              {/* Overlap Notice Banner if triggered */}
+              {/* Overlap Notice Banner */}
               {activeOverlapNotice && (
                 <div className="p-3.5 bg-[#FFFBEB] border-b border-[#FDE68A] flex items-start justify-between gap-3 text-xs animate-in fade-in duration-150">
                   <div className="flex items-start space-x-2.5">
@@ -1298,312 +1197,73 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                       </p>
                     </div>
                   </div>
-
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <button
-                      onClick={() => {
-                        setActiveOverlapNotice(null);
-                        addToast?.('info', '保留当前核心数据', '已取消重复添加常住人口主题视图');
-                      }}
-                      className="px-2.5 py-1 bg-white border border-[#D97706] text-[#92400E] font-semibold rounded hover:bg-[#FEF3C7] cursor-pointer"
-                    >
-                      保留当前核心数据
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveOverlapNotice(null);
-                        addToast?.('info', '都保留', '已将两项资源同时置于候选范围');
-                      }}
-                      className="px-2 py-1 text-[#92400E] hover:underline cursor-pointer"
-                    >
-                      都保留
-                    </button>
-                  </div>
                 </div>
               )}
 
-              {/* Goal Extension Notice Banner if triggered */}
-              {goalExtensionPrompt && (
-                <div className="p-3.5 bg-[#EFF6FF] border-b border-[#BFDBFE] flex items-start justify-between gap-3 text-xs animate-in fade-in duration-150">
-                  <div className="flex items-start space-x-2.5">
-                    <Sparkles className="w-4 h-4 text-[#2563EB] shrink-0 mt-0.5" />
-                    <div className="space-y-0.5">
-                      <div className="font-bold text-[#1E40AF]">新资源扩展了当前分析范围</div>
-                      <p className="text-[#1E3A8A] leading-relaxed">
-                        「{goalExtensionPrompt.resourceName}」更适合用于进一步分析养老资源覆盖。如果希望使用该资源，可一键扩展当前目标。
-                      </p>
-                    </div>
-                  </div>
+              {/* Solution Resource Items */}
+              <div className="divide-y divide-[#F1F5F9]">
+                {solutionResources.map((item) => {
+                  const typeIcon = TYPE_ICON_PRESENTATION[item.type] || TYPE_ICON_PRESENTATION.DATA_ASSET;
 
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <button
-                      onClick={() => {
-                        const nextGoal = goalExtensionPrompt.extendedGoal;
-                        setBusinessGoal(nextGoal);
-                        setGoalExtensionPrompt(null);
-                        // Goal changed → recompose over the current membership
-                        setSolutionResources(composeSolutionResources(
-                          buildGoalPlan(nextGoal),
-                          solutionResources
-                            .map(s => ALL_DISCOVERABLE_RESOURCES.find(r => r.id === s.id))
-                            .filter(Boolean) as ResourceItem[]
-                        ));
-                        addToast?.('success', '目标已扩展', '已按扩展后的目标重新组织数据方案');
-                      }}
-                      className="px-2.5 py-1 bg-[#2563EB] text-white font-semibold rounded hover:bg-[#1D4ED8] cursor-pointer"
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#F8FAFC] transition-colors"
                     >
-                      扩展当前目标
-                    </button>
-                    <button
-                      onClick={() => {
-                        setGoalExtensionPrompt(null);
-                        addToast?.('info', '暂时保留', '保留原有分析目标，新资源作为补充参考');
-                      }}
-                      className="px-2 py-1 text-[#2563EB] hover:underline cursor-pointer"
-                    >
-                      暂时保留
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* 1. Solution Resource Rows */}
-              <div className="divide-y divide-[#EEF2F6]">
-                {solutionResources.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-4 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#F8FAFC]"
-                  >
-                    <div className="space-y-1.5 flex-1 min-w-0 max-w-[760px]">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                          item.role === 'CORE_DATA'
-                            ? 'bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]'
-                            : item.role === 'CORE_METRIC'
-                            ? 'bg-[#F0FDF4] text-[#16A36A] border border-[#BBF7D0]'
-                            : item.role === 'DIMENSION'
-                            ? 'bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0]'
-                            : 'bg-[#FAF5FF] text-[#7C3AED] border border-[#E9D5FF]'
-                        }`}>
-                          {item.roleLabel}
-                        </span>
-
-                        <h4
-                          onClick={() => handleOpenPreview(item)}
-                          className="text-sm font-bold text-[#172033] hover:text-[#2563EB] cursor-pointer transition-colors"
-                        >
-                          {item.name}
-                        </h4>
-
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
-                          {TYPE_PRESENTATION[item.type]}{item.subType ? ` · ${SUBTYPE_PRESENTATION[item.subType] || item.subType}` : ''}
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-[#475569] leading-relaxed">
-                        {item.description}
-                      </p>
-
-                      <div className="text-[11px] text-[#667085] flex items-center space-x-1.5 pt-0.5">
-                        <span className="font-semibold text-[#172033]">为什么需要:</span>
-                        <span>{item.whyNeeded}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3 shrink-0 self-start md:self-center">
-                      <div className="text-right space-y-1">
-                        <div className="flex items-center justify-end space-x-1 text-[11px] font-medium">
-                          <span className="text-[#94A3B8]">访问:</span>
-                          {item.accessStatus === 'DEPENDENT' ? (
-                            <span className="text-[#475569] text-[11px]">
-                              {item.accessLabel}
-                            </span>
-                          ) : (
-                            <span className={`${accessPresentation(item.accessStatus).textClass} flex items-center space-x-0.5 font-semibold`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(item.accessStatus).dotClass}`} />
-                              <span>{accessPresentation(item.accessStatus).label}</span>
-                            </span>
-                          )}
+                      <div className="flex items-start space-x-3.5 flex-1 min-w-0">
+                        <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 ${typeIcon.boxClass}`}>
+                          <typeIcon.Icon className="w-4.5 h-4.5" />
                         </div>
 
-                        <div className="flex items-center justify-end space-x-1 text-[11px] font-medium">
-                          <span className="text-[#94A3B8]">适用性:</span>
-                          {item.fitnessStatus === 'warning' ? (
-                            <span className="text-[#D97706] flex items-center space-x-0.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
-                              <span>{item.fitnessLabel}</span>
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4
+                              onClick={() => handleOpenPreview(item)}
+                              className="text-sm font-bold text-[#172033] hover:text-[#2563EB] cursor-pointer transition-colors"
+                            >
+                              {item.name}
+                            </h4>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
+                              {TYPE_PRESENTATION[item.type]}
                             </span>
-                          ) : (
-                            <span className="text-[#16A36A] flex items-center space-x-0.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-                              <span>{item.fitnessLabel}</span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#EFF6FF] text-[#2563EB] rounded border border-[#BFDBFE]">
+                              {item.roleLabel}
                             </span>
-                          )}
+                          </div>
+
+                          <p className="text-xs text-[#475569] leading-relaxed">
+                            {item.description}
+                          </p>
+
+                          <div className="text-xs text-[#2563EB] font-medium">
+                            {item.whyNeeded}
+                          </div>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleOpenPreview(item)}
-                        className="px-2.5 py-1.5 rounded text-xs text-[#475569] hover:text-[#172033] hover:bg-[#F1F5F9] border border-[#E6EAF0] transition-colors cursor-pointer"
-                      >
-                        查看详情
-                      </button>
+                      <div className="flex items-center space-x-3 shrink-0 self-start md:self-center">
+                        <span className={`inline-flex items-center space-x-1 text-xs font-semibold ${accessPresentation(item.accessStatus).textClass}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(item.accessStatus).dotClass}`} />
+                          <span>{item.accessLabel || accessPresentation(item.accessStatus).label}</span>
+                        </span>
 
-                      <div className="relative">
                         <button
                           type="button"
-                          onClick={() => setActiveActionMenuId(activeActionMenuId === item.id ? null : item.id)}
-                          className="p-1.5 text-[#94A3B8] hover:text-[#172033] hover:bg-[#F1F5F9] rounded border border-transparent hover:border-[#E2E8F0] cursor-pointer"
-                          title="更多操作"
+                          onClick={() => handleRequestRemoveResource(item)}
+                          className="text-xs text-[#94A3B8] hover:text-[#DC2626] cursor-pointer p-1"
+                          title="移除"
                         >
-                          <MoreHorizontal className="w-4 h-4" />
+                          <X className="w-4 h-4" />
                         </button>
-
-                        {activeActionMenuId === item.id && (
-                          <div className="absolute right-0 top-8 w-36 bg-white border border-[#E6EAF0] rounded-md shadow-lg py-1 z-20 text-xs animate-in fade-in duration-100">
-                            <button
-                              onClick={() => {
-                                setActiveActionMenuId(null);
-                                addToast?.('info', '查看替代资源', `正在为「${item.name}」查找同类可替代数据源`);
-                              }}
-                              className="w-full text-left px-3 py-1.5 text-[#334155] hover:bg-[#F8FAFC] cursor-pointer"
-                            >
-                              查看替代资源
-                            </button>
-                            <button
-                              onClick={() => handleRequestRemoveResource(item)}
-                              className="w-full text-left px-3 py-1.5 text-[#DC2626] hover:bg-[#FEE2E2] cursor-pointer"
-                            >
-                              从当前方案移除
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* 2. Business Subject Context Row — derived from the parsed plan */}
-              <div className="px-4 py-3 bg-[#F8FAFC] border-t border-[#EEF2F6] flex items-center justify-between text-xs">
-                <div className="flex items-center space-x-2">
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 bg-white text-[#4F46E5] rounded border border-[#C7D2FE]">
-                    BUSINESS OBJECT · 业务主体
-                  </span>
-                  <span className="font-bold text-[#172033]">{goalPlan.subject || '未识别主体'}</span>
-                  <span className="text-[#64748B] hidden sm:inline">
-                    — 当前分析围绕{goalPlan.subject || '目标主体'}及其相关业务属性展开。
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (subjectBusinessObject) {
-                      onNavigateToBusinessObjectDetail?.(subjectBusinessObject.id, true, businessGoal);
-                      addToast?.('info', '业务对象', `已跳转至「${subjectBusinessObject.name}」业务概念实体与建模视图`);
-                    } else {
-                      onNavigateToBusinessObject?.();
-                      addToast?.('info', '业务对象', '已跳转至业务对象总览');
-                    }
-                  }}
-                  className="text-xs text-[#2563EB] hover:underline font-semibold cursor-pointer shrink-0"
-                >
-                  查看业务对象
-                </button>
+                  );
+                })}
               </div>
             </div>
 
-            {/* SECTION 3: ASSESSMENT (Coverage & Access Separated) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white border border-[#E6EAF0] rounded-md p-4 shadow-2xs space-y-3">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-bold text-[#172033]">
-                    方案覆盖
-                  </span>
-                  {isCoverageComplete ? (
-                    <span className="inline-flex items-center space-x-1 text-[11px] font-bold text-[#16A36A] bg-[#ECFDF5] px-1.5 py-0.2 rounded border border-[#A7F3D0]">
-                      <CheckCircle2 className="w-3 h-3" />
-                      <span>已覆盖当前分析所需核心要素</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center space-x-1 text-[11px] font-bold text-[#D97706] bg-[#FFFBEB] px-1.5 py-0.2 rounded border border-[#FDE68A]">
-                      <AlertCircle className="w-3 h-3" />
-                      <span>缺少必要方案要素</span>
-                    </span>
-                  )}
-                </div>
-
-                <div className="space-y-1.5 text-xs">
-                  {coverageElements.map(el => (
-                    <div key={el.id} className="flex items-center justify-between p-2 rounded bg-[#F8FAFC] border border-[#EEF2F6]">
-                      <span className="text-[#475569]">{el.label}</span>
-                      {el.covered ? (
-                        <span className="font-semibold text-[#16A36A] flex items-center space-x-1">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>已覆盖</span>
-                        </span>
-                      ) : el.required ? (
-                        <span className="font-semibold text-[#D97706] flex items-center space-x-1">
-                          <AlertCircle className="w-3.5 h-3.5" />
-                          <span>未覆盖</span>
-                        </span>
-                      ) : (
-                        <span className="font-semibold text-[#64748B] flex items-center space-x-1">
-                          <HelpCircle className="w-3.5 h-3.5" />
-                          <span>未覆盖 · 可选</span>
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-white border border-[#E6EAF0] rounded-md p-4 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#172033]">
-                    访问准备
-                  </span>
-                  <span className="text-xs text-[#667085] font-medium">
-                    {accessReadiness.isAllReady
-                      ? '全部资源已可使用'
-                      : `${accessReadiness.availableCount} 项可直接使用 · ${accessReadiness.requestableCount + accessReadiness.pendingCount} 项待访问条件${accessReadiness.unavailableCount > 0 ? ` · ${accessReadiness.unavailableCount} 项暂不可用` : ''}`}
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 text-xs">
-                  {solutionResources.map(r => (
-                    <div key={r.id} className="flex items-center justify-between p-2 rounded bg-[#F8FAFC] border border-[#EEF2F6]">
-                      <span className="text-[#334155] font-medium truncate max-w-[200px]">{r.name}</span>
-                      <span className="text-[11px]">
-                        {r.accessStatus === 'DEPENDENT' ? (
-                          <span className="text-[#475569]">{r.accessLabel}</span>
-                        ) : (
-                          <span className={`${accessPresentation(r.accessStatus).textClass} font-semibold flex items-center space-x-1 justify-end`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(r.accessStatus).dotClass}`} />
-                            <span>{accessPresentation(r.accessStatus).label}</span>
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <p className="text-[11px] text-[#667085] leading-relaxed pt-1">
-                  {accessReadiness.isAllReady
-                    ? '当前方案已具备完整执行条件，可直接进入分析。'
-                    : accessReadiness.requestableCount > 0
-                    ? `补齐「${accessReadiness.blockingItems[0]?.name ?? '受限资源'}」的访问条件后，当前方案即可开始执行。`
-                    : accessReadiness.unavailableCount > 0
-                    ? '当前方案存在暂不可用资源，请替换后继续。'
-                    : `「${accessReadiness.pendingItems[0]?.name ?? '受限资源'}」的访问申请审批中，通过后当前方案即可开始执行。`}
-                </p>
-              </div>
-            </div>
-
-            {/* SECTION 4: MAIN ACTION CTA AREA */}
-            <div className="bg-white border border-[#E6EAF0] rounded-md p-4 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* SECTION 4: PRIMARY ACTION CTA */}
+            <div className="bg-white border border-[#E6EAF0] rounded-xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-0.5">
                 <div className="text-xs font-bold text-[#172033]">
                   {accessReadiness.isAllReady
@@ -1642,7 +1302,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                   <button
                     type="button"
                     onClick={handlePrimaryAction}
-                    className="px-5 py-2 bg-[#16A36A] hover:bg-[#15803D] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center space-x-1.5"
+                    className="px-5 py-2 bg-[#16A36A] hover:bg-[#15803D] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-xs flex items-center space-x-1.5"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
                     <span>进入分析</span>
@@ -1651,14 +1311,12 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                   <button
                     type="button"
                     onClick={handlePrimaryAction}
-                    className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center space-x-1.5"
+                    className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-xs flex items-center space-x-1.5"
                   >
                     <FileCheck className="w-3.5 h-3.5" />
                     <span>申请所需资源</span>
                   </button>
                 ) : accessReadiness.unavailableCount > 0 ? (
-                  /* UNAVAILABLE can never be granted — the only way forward is
-                      a replacement from the related-resources section. */
                   <button
                     type="button"
                     onClick={() => {
@@ -1666,7 +1324,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                       el?.scrollIntoView({ behavior: 'smooth' });
                       addToast?.('info', '替换暂不可用资源', '当前方案存在暂不可用资源，请在下方推荐资源中选择替代资源');
                     }}
-                    className="px-5 py-2 bg-white border border-[#D97706] text-[#D97706] hover:bg-[#FFFBEB] text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center space-x-1.5"
+                    className="px-5 py-2 bg-white border border-[#D97706] text-[#D97706] hover:bg-[#FFFBEB] text-xs font-bold rounded-md transition-colors cursor-pointer shadow-xs flex items-center space-x-1.5"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
                     <span>替换暂不可用资源</span>
@@ -1678,7 +1336,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                       onNavigateToMyRequests?.();
                       addToast?.('info', '申请审批中', '可在「我的申请」查看审批进度，通过后即可进入分析');
                     }}
-                    className="px-5 py-2 bg-white border border-[#2563EB] text-[#2563EB] hover:bg-[#EFF6FF] text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center space-x-1.5"
+                    className="px-5 py-2 bg-white border border-[#2563EB] text-[#2563EB] hover:bg-[#EFF6FF] text-xs font-bold rounded-md transition-colors cursor-pointer shadow-xs flex items-center space-x-1.5"
                   >
                     <Clock className="w-3.5 h-3.5" />
                     <span>查看申请进度</span>
@@ -1698,7 +1356,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 </p>
               </div>
 
-              <div className="bg-white border border-[#E6EAF0] rounded-md divide-y divide-[#EEF2F6] shadow-2xs overflow-hidden">
+              <div className="bg-white border border-[#E6EAF0] rounded-xl divide-y divide-[#F1F5F9] shadow-xs overflow-hidden">
                 {relatedCandidates.map((candidate) => {
                   const isCandidateQueued = candidatesQueue.includes(candidate.id);
 
@@ -1707,7 +1365,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                       key={candidate.id}
                       className="p-4 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#F8FAFC]"
                     >
-                      <div className="space-y-1.5 flex-1 min-w-0 max-w-[760px]">
+                      <div className="space-y-1.5 flex-1 min-w-0 max-w-[800px]">
                         <div className="flex flex-wrap items-center gap-2">
                           <h4
                             onClick={() => handleOpenPreview(candidate)}
@@ -1715,8 +1373,8 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                           >
                             {candidate.name}
                           </h4>
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
-                            {TYPE_PRESENTATION[candidate.type]}{candidate.subType ? ` · ${SUBTYPE_PRESENTATION[candidate.subType] || candidate.subType}` : ''}
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
+                            {TYPE_PRESENTATION[candidate.type]}
                           </span>
                           <span className="text-xs text-[#667085]">
                             {candidate.context}
@@ -1789,22 +1447,21 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
           </div>
         ) : (
           /* ======================================================= */
-          /* VIEW BRANCH B: BROWSE ALL / RESOURCE SEARCH MODE        */
-          /* (Standard Discover Scope Browse: Filters, Rows & Tray)  */
+          /* VIEW BRANCH B: DEFAULT BROWSE / RESOURCE SEARCH MODE    */
           /* ======================================================= */
-          <div className={`p-6 lg:p-8 space-y-5 w-full max-w-[1500px] mx-auto transition-all ${selectedResourceIds.length > 0 ? 'pb-28' : 'pb-12'}`}>
+          <div className={`p-6 sm:p-8 space-y-4.5 w-full max-w-[1500px] mx-auto transition-all ${selectedResourceIds.length > 0 ? 'pb-28' : 'pb-12'}`}>
             
-            {/* Compact Unified Discovery Bar */}
+            {/* SECTION VIII: Compact Unified Discovery Bar (Width ~1050–1150px) */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleExecuteSearch(searchQuery);
               }}
-              className="relative flex items-center bg-white border border-[#E6EAF0] hover:border-[#CBD5E1] focus-within:border-[#2563EB] focus-within:ring-4 focus-within:ring-[#2563EB]/10 rounded-xl p-1.5 shadow-sm transition-all duration-200"
+              className="max-w-[1100px] w-full relative flex items-center bg-white border border-[#E6EAF0] hover:border-[#CBD5E1] focus-within:border-[#2563EB] focus-within:ring-4 focus-within:ring-[#2563EB]/10 rounded-xl p-1.5 shadow-sm transition-all duration-200"
             >
               {/* Left Search Icon */}
               <div className="pl-3.5 pr-1 text-[#94A3B8] shrink-0">
-                <Search className="w-4 h-4" />
+                <Search className="w-4.5 h-4.5" />
               </div>
 
               {/* Discovery Input */}
@@ -1812,11 +1469,11 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索资源，或告诉 Xino 你想解决什么业务问题……"
-                className="flex-1 px-2.5 py-2 text-xs text-[#172033] placeholder-[#94A3B8] bg-transparent outline-none font-normal min-w-0"
+                placeholder="搜索资源，或告诉 Xino 你想解决什么业务问题…"
+                className="flex-1 px-2.5 py-2 text-xs sm:text-sm text-[#172033] placeholder-[#94A3B8] bg-transparent outline-none font-normal min-w-0"
               />
 
-              {/* Clear */}
+              {/* Clear button if text entered */}
               {searchQuery && (
                 <button
                   type="button"
@@ -1831,29 +1488,24 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 </button>
               )}
 
-              {/* Built-in Xino Identifier — plain text mark: AI lives inside discovery, not a mode button */}
-              <div className="hidden sm:flex items-center space-x-2 mr-2 shrink-0 select-none">
-                <span className="w-4 h-px bg-[#E2E8F0]" />
-                <span className="flex items-center space-x-1 text-[#7C3AED] text-xs font-semibold">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Xino</span>
-                </span>
+              {/* P1-3: Xino Intelligence Indicator (Plain text / icon, NOT a mode button) */}
+              <div className="hidden sm:flex items-center space-x-1.5 px-2 text-[#7C3AED] text-xs font-semibold select-none shrink-0">
+                <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" />
+                <span>Xino</span>
               </div>
 
-              {/* Primary Action */}
+              {/* Right Primary Search Button */}
               <button
                 type="submit"
-                className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-xs font-semibold rounded-lg transition-colors shrink-0 cursor-pointer shadow-xs"
+                className="px-5 py-2 sm:py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-xs sm:text-sm font-semibold rounded-lg transition-colors shrink-0 cursor-pointer shadow-xs"
               >
                 搜索
               </button>
             </form>
 
-            {/* Low-confidence goal escalation — the query reads goal-ish but sits
-                below the auto threshold: Resource Search stays the default and
-                Xino offers a one-click re-interpretation (轻量入口，非模式切换) */}
+            {/* Low-confidence goal escalation */}
             {currentMode === 'resource_search' && submittedQuery && isGoalishLookupQuery(submittedQuery) && (
-              <div className="flex items-center gap-1.5 text-xs text-[#667085]">
+              <div className="flex items-center gap-1.5 text-xs text-[#667085] pt-0.5">
                 <Sparkles className="w-3.5 h-3.5 text-[#7C3AED] shrink-0" />
                 <span>这更像一个业务目标？</span>
                 <button
@@ -1866,9 +1518,9 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               </div>
             )}
 
-            {/* Resource Type Tabs (Discover-style underline tabs) */}
+            {/* SECTION IX: Resource Type Tabs (Lightweight tabs, 接口服务 named accurately) */}
             <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2">
-              <div className="flex items-center space-x-5 text-xs">
+              <div className="flex items-center space-x-6 text-xs sm:text-sm">
                 {[
                   { key: 'ALL', label: '全部', count: typeCounts.ALL },
                   { key: 'DATA_ASSET', label: '数据资产', count: typeCounts.DATA_ASSET },
@@ -1878,18 +1530,19 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 ].map((tab) => (
                   <button
                     key={tab.key}
+                    type="button"
                     onClick={() => {
                       setActiveTypeTab(tab.key as any);
                       addToast?.('info', '类型切换', `已筛选「${tab.label}」`);
                     }}
-                    className={`pb-2 -mb-2 transition-all cursor-pointer flex items-baseline space-x-1 ${
+                    className={`pb-2 -mb-2 transition-all cursor-pointer flex items-baseline space-x-1.5 ${
                       activeTypeTab === tab.key
                         ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
                         : 'text-[#667085] hover:text-[#172033] font-medium'
                     }`}
                   >
                     <span>{tab.label}</span>
-                    <span className={`text-[10px] font-mono ${activeTypeTab === tab.key ? 'text-[#60A5FA]' : 'text-[#94A3B8]'}`}>
+                    <span className={`text-xs font-mono ${activeTypeTab === tab.key ? 'text-[#60A5FA]' : 'text-[#94A3B8]'}`}>
                       {tab.count}
                     </span>
                   </button>
@@ -1897,9 +1550,9 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               </div>
             </div>
 
-            {/* Filter Bar (业务领域、业务对象、使用条件、排序) */}
-            <div className="flex flex-wrap items-center gap-2 text-xs py-1">
-              {/* 业务领域 */}
+            {/* SECTION X: Consumer Facet Filter Bar (Single line, no isolated reset) */}
+            <div className="flex flex-wrap items-center gap-2.5 text-xs py-0.5">
+              {/* 全部业务领域 ▾ */}
               <div className="relative">
                 <select
                   value={domainFilter}
@@ -1910,11 +1563,12 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                   <option value="population">人口服务</option>
                   <option value="public">公共基础</option>
                   <option value="elderly">养老服务</option>
+                  <option value="enterprise">企业服务</option>
                 </select>
                 <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
               </div>
 
-              {/* 业务对象 */}
+              {/* 全部业务对象 ▾ */}
               <div className="relative">
                 <select
                   value={objectFilter}
@@ -1925,11 +1579,14 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                   <option value="person">自然人</option>
                   <option value="region">行政区域</option>
                   <option value="org">养老机构</option>
+                  <option value="facility">社区设施</option>
+                  <option value="workorder">服务工单</option>
+                  <option value="enterprise">企业法人</option>
                 </select>
                 <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
               </div>
 
-              {/* 使用条件 */}
+              {/* 使用条件：全部 ▾ */}
               <div className="relative">
                 <select
                   value={accessFilter}
@@ -1937,13 +1594,13 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                   className="h-8 pl-2.5 pr-7 bg-white border border-[#E6EAF0] rounded-md text-xs text-[#334155] focus:outline-none focus:border-[#2563EB] appearance-none cursor-pointer shadow-2xs font-medium"
                 >
                   <option value="all">使用条件：全部</option>
-                  <option value="AVAILABLE">可直接使用 / 可调用</option>
-                  <option value="REQUESTABLE">需申请使用</option>
+                  <option value="AVAILABLE">可直接使用</option>
+                  <option value="REQUESTABLE">可申请使用</option>
                 </select>
                 <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
               </div>
 
-              {/* 排序（Browse 默认排序 / Search 相关度） */}
+              {/* 默认排序 ▾ */}
               <div className="relative">
                 <select
                   value={sortOrder}
@@ -1957,11 +1614,12 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
               </div>
 
-              {/* 清除筛选（仅在有筛选时出现，紧跟筛选器） */}
+              {/* 清除筛选 (紧跟在最后一个筛选器旁边) */}
               {hasActiveFilters && (
                 <button
+                  type="button"
                   onClick={handleResetFilters}
-                  className="h-8 px-2.5 text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold flex items-center space-x-1 cursor-pointer transition-colors"
+                  className="h-8 px-2 text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold flex items-center space-x-1 cursor-pointer transition-colors"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>清除筛选</span>
@@ -1969,8 +1627,8 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               )}
             </div>
 
-            {/* List Result Header */}
-            <div className="flex items-baseline space-x-2 pt-1">
+            {/* SECTION XII: Result Count Header */}
+            <div className="flex items-baseline space-x-2 pt-0.5">
               {submittedQuery ? (
                 <>
                   <h2 className="text-sm font-bold text-[#172033]">
@@ -1992,12 +1650,20 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               )}
             </div>
 
-            {/* Compact Rich Resource Rows */}
-            <div className="bg-white border border-[#E6EAF0] rounded-md divide-y divide-[#EEF2F6] shadow-2xs overflow-hidden">
+            {/* SECTION XIII–XIX: Resource Brief List (Two-part structure: Left Content + Right Action Rail) */}
+            <div className="bg-white border border-[#E6EAF0] rounded-xl divide-y divide-[#F1F5F9] shadow-xs overflow-hidden">
               {pagedBrowseResources.map((item) => {
                 const isAdded = selectedResourceIds.includes(item.id);
                 const isCurrentPreview = selectedPreviewItem?.id === item.id;
-                const typeIcon = TYPE_ICON_PRESENTATION[item.type];
+                const typeIcon = TYPE_ICON_PRESENTATION[item.type] || TYPE_ICON_PRESENTATION.DATA_ASSET;
+
+                const actionText = item.type === 'METRIC'
+                  ? '查看指标 →'
+                  : item.type === 'DATA_API'
+                  ? '查看接口 →'
+                  : item.type === 'BUSINESS_OBJECT'
+                  ? '查看对象 →'
+                  : '查看资源 →';
 
                 return (
                   <div
@@ -2009,13 +1675,15 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                         : 'hover:bg-[#F8FAFC]'
                     }`}
                   >
-                    {/* Resource Content — type icon anchor + the resource's own facts */}
+                    {/* Left Resource Content 主体 (~1050–1120px) */}
                     <div className="flex items-start space-x-3.5 flex-1 min-w-0">
-                      <div className={`w-9 h-9 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 ${typeIcon.boxClass}`}>
-                        <typeIcon.Icon className="w-4 h-4" />
+                      {/* Resource Type Icon (36–40px container, 16–18px icon) */}
+                      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 ${typeIcon.boxClass}`}>
+                        <typeIcon.Icon className="w-4.5 h-4.5" />
                       </div>
 
-                      <div className="space-y-1.5 min-w-0">
+                      <div className="space-y-1 min-w-0">
+                        {/* Title + Tags + Certification */}
                         <div className="flex flex-wrap items-center gap-2">
                           <h3
                             className={`text-sm font-bold transition-colors ${
@@ -2025,57 +1693,65 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                             {item.name}
                           </h3>
 
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
+                          <span className="text-[11px] font-medium px-2 py-0.5 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
                             {TYPE_PRESENTATION[item.type]}
                           </span>
 
                           {item.certification === 'OFFICIAL' && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#ECFDF5] text-[#16A36A] rounded border border-[#A7F3D0]">
+                            <span className="text-[11px] font-medium px-2 py-0.5 bg-[#ECFDF5] text-[#16A36A] rounded border border-[#A7F3D0]">
                               {CERTIFICATION_BADGE[item.type]}
                             </span>
                           )}
+
+                          <span className="text-xs text-[#667085]">
+                            {item.domainName} · {item.objectName}
+                          </span>
                         </div>
 
-                        <div className="text-xs text-[#667085]">
-                          {item.domainName} · {item.objectName}
-                        </div>
-
+                        {/* Description */}
                         <p className="text-xs text-[#475569] leading-relaxed">
                           {item.description}
                         </p>
 
-                        {item.useCases && item.useCases.length > 0 && (
-                          <div className="text-[11px] text-[#667085] pt-0.5">
+                        {/* Applicable Scenarios or Supported Dimensions */}
+                        {item.type === 'METRIC' && item.dimensions && item.dimensions.length > 0 ? (
+                          <div className="text-xs text-[#667085] font-medium">
+                            支持：{item.dimensions.join(' · ')}
+                          </div>
+                        ) : item.useCases && item.useCases.length > 0 ? (
+                          <div className="text-xs text-[#667085] font-medium">
                             适用于：{item.useCases.join(' · ')}
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
 
-                    {/* Action Rail — fixed width keeps action baselines aligned across rows */}
+                    {/* Right Access / Action Rail (~220–240px Fixed Width) */}
                     <div
-                      className="flex flex-col items-end gap-2 w-[220px] shrink-0 self-start md:self-center"
+                      className="flex flex-col items-end justify-center gap-2 w-[230px] shrink-0 self-start md:self-center"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <span className={`inline-flex items-center space-x-1 text-[11px] font-semibold ${accessPresentation(item.accessStatus).textClass}`}>
+                      {/* Access Status always visible */}
+                      <span className={`inline-flex items-center space-x-1 text-xs font-semibold ${accessPresentation(item.accessStatus).textClass}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(item.accessStatus).dotClass}`} />
                         <span>{accessPresentation(item.accessStatus).label}</span>
                       </span>
 
+                      {/* Primary Text Navigation Link */}
                       <button
                         type="button"
                         onClick={() => handleOpenPreview(item)}
-                        className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold transition-colors cursor-pointer flex items-center space-x-0.5"
+                        className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold transition-colors cursor-pointer flex items-center space-x-0.5 hover:underline"
                       >
-                        <span>查看资源</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
+                        <span>{actionText}</span>
                       </button>
 
+                      {/* Secondary Candidate Action Button */}
                       {isAdded ? (
                         <button
                           type="button"
                           onClick={() => handleToggleBrowseResource(item)}
-                          className="px-3 py-1.5 rounded text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#FEE2E2] hover:text-[#DC2626] hover:border-[#FECACA] transition-all cursor-pointer flex items-center space-x-1 group/btn"
+                          className="px-3 py-1.5 rounded-md text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#FEE2E2] hover:text-[#DC2626] hover:border-[#FECACA] transition-all cursor-pointer flex items-center space-x-1 group/btn shadow-2xs"
                         >
                           <Check className="w-3.5 h-3.5 group-hover/btn:hidden text-[#2563EB]" />
                           <X className="w-3.5 h-3.5 hidden group-hover/btn:inline-block text-[#DC2626]" />
@@ -2086,10 +1762,10 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                         <button
                           type="button"
                           onClick={() => handleToggleBrowseResource(item)}
-                          className="px-3 py-1.5 rounded text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1"
+                          className="px-3 py-1.5 rounded-md text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1 shadow-2xs"
                         >
                           <Plus className="w-3.5 h-3.5" />
-                          <span>加入候选</span>
+                          <span>＋ 加入候选</span>
                         </button>
                       )}
                     </div>
@@ -2098,74 +1774,73 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               })}
             </div>
 
-            {/* Pagination — only when results actually overflow the page
-                (totalPages > 1); a lone page offers no user value */}
+            {/* Pagination — only when totalPages > 1 */}
             {totalPages > 1 && (
-            <div className="bg-white border border-[#E6EAF0] rounded-md px-4 py-3 flex items-center justify-between text-xs text-[#64748B] shadow-2xs">
-              <div className="flex items-center space-x-2">
-                <select
-                  value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="h-7 px-2 bg-[#F8FAFC] border border-[#E6EAF0] rounded text-xs text-[#334155] focus:outline-none cursor-pointer"
-                >
-                  <option value={20}>每页 20 条</option>
-                  <option value={50}>每页 50 条</option>
-                </select>
-              </div>
-
-              <div className="flex items-center space-x-1 font-medium">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => {
-                      setCurrentPage(p);
-                      addToast?.('info', `第 ${p} 页`, `已载入第 ${p} 页资源`);
-                    }}
-                    className={`w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
-                      currentPage === p
-                        ? 'bg-[#2563EB] text-white font-bold'
-                        : 'hover:bg-[#F1F5F9] text-[#475569]'
-                    }`}
+              <div className="bg-white border border-[#E6EAF0] rounded-xl px-4 py-3 flex items-center justify-between text-xs text-[#64748B] shadow-xs">
+                <div className="flex items-center space-x-2">
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="h-7 px-2 bg-[#F8FAFC] border border-[#E6EAF0] rounded text-xs text-[#334155] focus:outline-none cursor-pointer"
                   >
-                    {p}
-                  </button>
-                ))}
-              </div>
+                    <option value={20}>每页 20 条</option>
+                    <option value={50}>每页 50 条</option>
+                  </select>
+                </div>
 
-              <div>
-                <button
-                  onClick={() => {
-                    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
-                    addToast?.('info', '下一页', `已翻至下一页`);
-                  }}
-                  disabled={currentPage >= totalPages}
-                  className="px-3 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E6EAF0] rounded text-xs text-[#334155] font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  下一页
-                </button>
+                <div className="flex items-center space-x-1 font-medium">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => {
+                        setCurrentPage(p);
+                        addToast?.('info', `第 ${p} 页`, `已载入第 ${p} 页资源`);
+                      }}
+                      className={`w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
+                        currentPage === p
+                          ? 'bg-[#2563EB] text-white font-bold'
+                          : 'hover:bg-[#F1F5F9] text-[#475569]'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+
+                <div>
+                  <button
+                    onClick={() => {
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+                      addToast?.('info', '下一页', `已翻至下一页`);
+                    }}
+                    disabled={currentPage >= totalPages}
+                    className="px-3 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E6EAF0] rounded text-xs text-[#334155] font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    下一页
+                  </button>
+                </div>
               </div>
-            </div>
             )}
 
           </div>
         )}
 
         {/* ========================================================= */}
-        {/* TRAY FOR BROWSE/RESOURCE SEARCH MODE (collect only —      */}
-        {/* compose lives one layer deeper, in the candidate drawer)  */}
+        {/* SECTION XXV & L: CANDIDATE TRAY (Browse Mode)             */}
+        {/* (Only visible when selectedResourceIds.length > 0)        */}
         {/* ========================================================= */}
         {currentMode !== 'goal_search' && selectedResourceIds.length > 0 && (
-          <div className="sticky bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-xs border-t border-[#E6EAF0] shadow-lg px-6 lg:px-8 py-3.5 transition-all animate-in slide-in-from-bottom-2 duration-150">
+          <div className="sticky bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-xs border-t border-[#E6EAF0] shadow-lg px-6 sm:px-8 py-3 transition-all animate-in slide-in-from-bottom-2 duration-150">
             <div className="w-full max-w-[1500px] mx-auto flex items-center justify-between gap-3">
               <div className="flex items-center space-x-3 min-w-0">
                 <span className="text-xs font-bold text-[#172033] shrink-0">
                   候选资源
                 </span>
-                <span className="px-1.5 py-0.2 bg-[#2563EB] text-white text-[11px] font-bold rounded-full shrink-0">
+                <span className="px-1.5 py-0.5 bg-[#2563EB] text-white text-[11px] font-bold rounded-full shrink-0">
                   {selectedResourceIds.length}
                 </span>
 
-                <p className="text-xs text-[#64748B] truncate max-w-[580px]">
+                <p className="text-xs text-[#64748B] truncate max-w-[620px]">
                   {selectedResourceItems.slice(0, 3).map(r => r.name).join(' · ')}
                   {selectedResourceItems.length > 3 ? ` · 等 ${selectedResourceItems.length} 项` : ''}
                 </p>
@@ -2174,7 +1849,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               <button
                 type="button"
                 onClick={() => setIsSelectedTrayDrawerOpen(true)}
-                className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold cursor-pointer flex items-center space-x-0.5 shrink-0"
+                className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold cursor-pointer flex items-center space-x-1 shrink-0 hover:underline"
               >
                 <span>查看候选</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -2183,18 +1858,16 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
           </div>
         )}
 
-        {/* ========================================================= */}
-        {/* TRAY FOR GOAL SEARCH MODE (待加入当前方案)                  */}
-        {/* ========================================================= */}
+        {/* TRAY FOR GOAL SEARCH MODE (待加入当前方案) */}
         {currentMode === 'goal_search' && candidatesQueue.length > 0 && (
-          <div className="sticky bottom-0 left-0 right-0 z-20 bg-white/95 backdrop-blur-xs border-t border-[#E6EAF0] shadow-lg px-6 lg:px-8 py-3.5 transition-all animate-in slide-in-from-bottom-2 duration-150">
+          <div className="sticky bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-xs border-t border-[#E6EAF0] shadow-lg px-6 sm:px-8 py-3 transition-all animate-in slide-in-from-bottom-2 duration-150">
             <div className="w-full max-w-[1500px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-0.5 min-w-0">
                 <div className="flex items-center space-x-2">
                   <span className="text-xs font-bold text-[#172033]">
                     待加入当前方案
                   </span>
-                  <span className="px-1.5 py-0.2 bg-[#2563EB] text-white text-[11px] font-bold rounded-full">
+                  <span className="px-1.5 py-0.5 bg-[#2563EB] text-white text-[11px] font-bold rounded-full">
                     {candidatesQueue.length}
                   </span>
                 </div>
@@ -2224,7 +1897,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 <button
                   type="button"
                   onClick={handleRecomposeSolution}
-                  className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-sm flex items-center space-x-1.5"
+                  className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-xs flex items-center space-x-1.5"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>更新当前方案</span>
@@ -2237,125 +1910,365 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       </main>
 
       {/* ========================================================= */}
-      {/* 3. CANDIDATE DRAWER (collect → compose lives here,        */}
-      {/*    one layer deeper than the tray)                        */}
+      {/* SECTION LI: CANDIDATE DRAWER                              */}
       {/* ========================================================= */}
       {isSelectedTrayDrawerOpen && (
-        <aside className="w-[420px] bg-white border-l border-[#E6EAF0] shadow-2xl flex flex-col shrink-0 z-30 animate-in slide-in-from-right duration-200">
-          <div className="px-5 py-4 border-b border-[#E6EAF0] bg-[#FAFCFF] flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <h3 className="text-sm font-bold text-[#172033]">
-                候选资源
-              </h3>
-              <span className="px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] text-[11px] font-bold rounded">
-                {selectedResourceIds.length} 项
-              </span>
-            </div>
-
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={handleClearAllSelected}
-                className="px-2 py-1 rounded text-[11px] text-[#64748B] hover:text-[#DC2626] font-medium cursor-pointer transition-colors"
-              >
-                清空
-              </button>
-
-              <button
-                onClick={() => setIsSelectedTrayDrawerOpen(false)}
-                className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-            {selectedResourceItems.length === 0 ? (
-              <div className="p-8 text-center text-xs text-[#98A2B3]">
-                暂无已选资源，请在列表中点击「＋ 加入候选」
+        <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/25 backdrop-blur-2xs">
+          <aside className="w-full max-w-[440px] h-full bg-white shadow-2xl flex flex-col shrink-0 border-l border-[#E6EAF0] animate-in slide-in-from-right duration-200">
+            <div className="px-5 py-4 border-b border-[#E6EAF0] bg-[#F8FAFC] flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <h3 className="text-sm font-bold text-[#172033]">
+                  候选资源
+                </h3>
+                <span className="px-2 py-0.5 bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] text-xs font-bold rounded">
+                  {selectedResourceIds.length} 项
+                </span>
               </div>
-            ) : (
-              selectedResourceItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md flex items-center justify-between gap-3"
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleClearAllSelected}
+                  className="px-2 py-1 rounded text-xs text-[#64748B] hover:text-[#DC2626] font-medium cursor-pointer transition-colors"
                 >
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center space-x-1.5">
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 bg-white text-[#475569] rounded border border-[#CBD5E1]">
-                        {TYPE_PRESENTATION[item.type]}{item.subType ? ` · ${SUBTYPE_PRESENTATION[item.subType] || item.subType}` : ''}
-                      </span>
-                      <h4 className="text-xs font-bold text-[#172033] truncate">
-                        {item.name}
-                      </h4>
-                    </div>
-                    <p className="text-[11px] text-[#64748B] line-clamp-1">
-                      {item.description}
-                    </p>
-                  </div>
+                  清空
+                </button>
 
-                  <button
-                    onClick={() => handleToggleBrowseResource(item)}
-                    className="text-xs text-[#98A2B3] hover:text-[#DC2626] font-medium shrink-0 cursor-pointer px-1.5 py-1"
-                  >
-                    移除
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Compose: what does the user want to do with these candidates? */}
-          <div className="p-4 border-t border-[#E6EAF0] bg-[#FAFCFF] space-y-2.5">
-            <div className="text-[11px] font-bold text-[#172033]">
-              这些资源准备做什么？
+                <button
+                  type="button"
+                  onClick={() => setIsSelectedTrayDrawerOpen(false)}
+                  className="p-1 rounded hover:bg-[#E2E8F0] text-[#64748B] hover:text-[#172033] cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
-            <textarea
-              rows={3}
-              value={goalInputValue}
-              onChange={(e) => setGoalInputValue(e.target.value)}
-              placeholder="描述你的业务目标……"
-              className="w-full p-2.5 text-xs bg-white border border-[#CBD5E1] rounded-md text-[#172033] placeholder-[#98A2B3] focus:outline-none focus:border-[#2563EB] transition-all font-medium resize-none"
-            />
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {selectedResourceItems.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[#98A2B3]">
+                  暂无候选资源，请在列表中点击「＋ 加入候选」
+                </div>
+              ) : (
+                selectedResourceItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3 bg-[#F8FAFC] border border-[#E6EAF0] rounded-lg flex items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 bg-white text-[#475569] rounded border border-[#CBD5E1]">
+                          {TYPE_PRESENTATION[item.type]}
+                        </span>
+                        <h4 className="text-xs font-bold text-[#172033] truncate">
+                          {item.name}
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-[#64748B] line-clamp-1">
+                        {item.description}
+                      </p>
+                    </div>
 
-            {/* No silent default goal — compose stays disabled until a goal exists */}
-            {!effectiveComposeGoal && (
-              <p className="text-[11px] text-[#D97706] flex items-center space-x-1">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>请先描述这些资源准备解决什么业务问题</span>
-              </p>
-            )}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBrowseResource(item)}
+                      className="text-xs text-[#98A2B3] hover:text-[#DC2626] font-medium shrink-0 cursor-pointer px-1.5 py-1"
+                    >
+                      移除
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
 
-            <button
-              type="button"
-              disabled={!effectiveComposeGoal}
-              onClick={() => {
-                handleConfirmGoalAndCompose();
-                setIsSelectedTrayDrawerOpen(false);
-              }}
-              className="w-full px-4 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:hover:bg-[#2563EB] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>基于候选构建数据方案 →</span>
-            </button>
-          </div>
-        </aside>
+            {/* Compose Area: Required goal description with no silent fallback */}
+            <div className="p-4 border-t border-[#E6EAF0] bg-[#F8FAFC] space-y-2.5">
+              <div className="text-xs font-bold text-[#172033]">
+                这些资源准备做什么？
+              </div>
+
+              <textarea
+                rows={3}
+                value={goalInputValue}
+                onChange={(e) => setGoalInputValue(e.target.value)}
+                placeholder="描述你的业务目标……"
+                className="w-full p-2.5 text-xs bg-white border border-[#CBD5E1] rounded-lg text-[#172033] placeholder-[#98A2B3] focus:outline-none focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/10 transition-all font-medium resize-none"
+              />
+
+              {!effectiveComposeGoal && (
+                <p className="text-[11px] text-[#D97706] flex items-center space-x-1">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>请先描述这些候选资源准备解决什么业务问题</span>
+                </p>
+              )}
+
+              <button
+                type="button"
+                disabled={!effectiveComposeGoal}
+                onClick={() => {
+                  handleConfirmGoalAndCompose();
+                  setIsSelectedTrayDrawerOpen(false);
+                }}
+                className="w-full px-4 py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:hover:bg-[#2563EB] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-xs flex items-center justify-center space-x-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>基于候选构建数据方案 →</span>
+              </button>
+            </div>
+          </aside>
+        </div>
       )}
 
       {/* ========================================================= */}
-      {/* 5. EDIT GOAL MODAL (In Goal Search Mode)                  */}
+      {/* SECTION XLV–XLVIII: QUICK PREVIEW OVERLAY DRAWER          */}
       {/* ========================================================= */}
+      {selectedPreviewItem && (
+        <div className="fixed inset-0 z-40 flex items-center justify-end bg-black/20 backdrop-blur-2xs">
+          <aside className="w-full max-w-[480px] h-full bg-white shadow-2xl flex flex-col border-l border-[#E6EAF0] animate-in slide-in-from-right duration-200">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-[#E6EAF0] bg-[#F8FAFC] flex items-start justify-between">
+              <div className="space-y-1 min-w-0 pr-3">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                    {TYPE_PRESENTATION[selectedPreviewItem.type]}
+                  </span>
+                  {selectedPreviewItem.certification === 'OFFICIAL' && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0]">
+                      {CERTIFICATION_BADGE[selectedPreviewItem.type]}
+                    </span>
+                  )}
+                  {(() => {
+                    const ap = accessPresentation(selectedPreviewItem.accessStatus);
+                    return (
+                      <span className={`inline-flex items-center space-x-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${ap.textClass} ${ap.bgClass} ${ap.borderClass}`}>
+                        {ap.Icon && <ap.Icon className="w-2.5 h-2.5" />}
+                        <span>{ap.label}</span>
+                      </span>
+                    );
+                  })()}
+                </div>
+                <h3 className="text-base font-bold text-[#172033] tracking-tight truncate">
+                  {selectedPreviewItem.name}
+                </h3>
+                <p className="text-xs text-[#64748B] truncate">
+                  业务上下文：{selectedPreviewItem.domainName} · {selectedPreviewItem.objectName}
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(selectedPreviewItem.name);
+                    addToast?.('success', '已复制', `已复制「${selectedPreviewItem.name}」名称`);
+                  }}
+                  className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
+                  title="复制名称"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPreviewItem(null)}
+                  className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
+                  title="关闭预览"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+              {/* 业务说明 */}
+              <div className="space-y-1.5">
+                <div className="text-xs font-bold text-[#172033]">业务说明</div>
+                <p className="text-xs text-[#475569] leading-relaxed bg-[#F8FAFC] p-3 rounded-lg border border-[#E6EAF0]">
+                  {selectedPreviewItem.description}
+                </p>
+              </div>
+
+              {/* 快速判断 (3 Items Consumer Facts) */}
+              <div className="space-y-1.5">
+                <div className="text-xs font-bold text-[#172033]">快速判断</div>
+                <div className="grid grid-cols-3 gap-2">
+                  {(() => {
+                    const isMetric = selectedPreviewItem.type === 'METRIC';
+                    const labels: [string, string, string] = isMetric
+                      ? ['状态', '统计粒度', '更新节奏']
+                      : selectedPreviewItem.type === 'DATA_API'
+                      ? ['访问条件', '调用方式', '响应情况']
+                      : selectedPreviewItem.type === 'BUSINESS_OBJECT'
+                      ? ['访问', '资源规模', '演进情况']
+                      : ['访问条件', '数据粒度', '更新情况'];
+                    
+                    const grain = isMetric
+                      ? (selectedPreviewItem.consumerFact ?? '').replace(/^单位：.*?·\s*/, '') || '行政区域 × 统计期'
+                      : selectedPreviewItem.type === 'BUSINESS_OBJECT'
+                      ? (selectedPreviewItem.extraInfo ?? '12 数据资产')
+                      : (selectedPreviewItem.consumerFact ?? '一行代表一个实体');
+                    
+                    const accessText = selectedPreviewItem.accessStatus === 'SEMANTIC_ONLY'
+                      ? ACCESS_PRESENTATION.SEMANTIC_ONLY.label
+                      : accessPresentation(selectedPreviewItem.accessStatus).label;
+                    
+                    const values: [string, string, string] = [
+                      isMetric ? (selectedPreviewItem.fitnessLabel ?? '正式指标') : accessText,
+                      grain,
+                      selectedPreviewItem.timeGranularity ?? selectedPreviewItem.updateFrequency ?? selectedPreviewItem.updatedAt,
+                    ];
+
+                    return labels.map((label, i) => (
+                      <div key={label} className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6EAF0] min-w-0">
+                        <div className="text-[10px] text-[#94A3B8] font-semibold">{label}</div>
+                        <div className="text-xs text-[#172033] font-semibold leading-snug mt-0.5 truncate">{values[i]}</div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+
+              {/* 这份资源包含什么 */}
+              {previewContains.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-bold text-[#172033]">这份资源包含什么</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {previewContains.map((entry) => (
+                      <span key={entry} className="px-2 py-1 rounded-md text-xs font-medium bg-white text-[#334155] border border-[#E6EAF0]">
+                        {entry}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 适合做什么 */}
+              {selectedPreviewItem.useCases && selectedPreviewItem.useCases.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-bold text-[#172033]">适合做什么</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedPreviewItem.useCases.map((useCase) => (
+                      <span key={useCase} className="px-2 py-1 rounded-md text-xs font-medium bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                        {useCase}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 为什么适合当前目标 (Goal Mode Only) */}
+              {currentMode === 'goal_search' && (() => {
+                const reason =
+                  solutionResources.find(r => r.id === selectedPreviewItem.id)?.whyNeeded
+                  ?? relatedCandidates.find(c => c.id === selectedPreviewItem.id)?.whyUseful
+                  ?? describeGoalFit(selectedPreviewItem, goalPlan);
+                if (!reason) return null;
+                return (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-bold text-[#172033]">为什么适合当前目标</div>
+                    <p className="text-xs text-[#1E40AF] leading-relaxed bg-[#EFF6FF] p-3 rounded-lg border border-[#DBEAFE]">
+                      {reason}
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* 相关资源 */}
+              <div className="space-y-2 pt-1">
+                <div className="text-xs font-bold text-[#172033]">相关资源</div>
+                {selectedPreviewItem.relatedAssets && selectedPreviewItem.relatedAssets.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {selectedPreviewItem.relatedAssets.map((rel) => (
+                      <div
+                        key={rel.id}
+                        onClick={() => {
+                          const target = ALL_DISCOVERABLE_RESOURCES.find(r => r.id === rel.id);
+                          if (target) setSelectedPreviewItem(target);
+                        }}
+                        className="p-2.5 rounded-lg bg-[#F8FAFC] hover:bg-[#EFF6FF] border border-[#E6EAF0] hover:border-[#BFDBFE] flex items-center justify-between cursor-pointer transition-all"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <span className="px-1.5 py-0.5 bg-white text-[#2563EB] text-[10px] font-bold rounded border border-[#CBD5E1]">
+                            {TYPE_PRESENTATION[rel.type] || rel.type}
+                          </span>
+                          <span className="font-bold text-xs text-[#172033]">{rel.name}</span>
+                        </div>
+                        <ArrowRight className="w-3.5 h-3.5 text-[#94A3B8]" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E6EAF0] text-center text-[#94A3B8]">
+                    暂无直接关联资产记录
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-[#E6EAF0] bg-[#F8FAFC] flex items-center justify-between gap-3">
+              {currentMode !== 'goal_search' ? (
+                isPreviewAdded ? (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#FEE2E2] hover:text-[#DC2626] hover:border-[#FECACA] transition-all cursor-pointer flex items-center space-x-1 group/btn shadow-2xs"
+                  >
+                    <Check className="w-3.5 h-3.5 group-hover/btn:hidden text-[#2563EB]" />
+                    <X className="w-3.5 h-3.5 hidden group-hover/btn:inline-block text-[#DC2626]" />
+                    <span className="group-hover/btn:hidden">✓ 已加入候选</span>
+                    <span className="hidden group-hover/btn:inline">移除</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1 shadow-2xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>＋ 加入候选</span>
+                  </button>
+                )
+              ) : (
+                <div />
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const target = selectedPreviewItem;
+                  const fromGoalSearch = currentMode === 'goal_search';
+                  setSelectedPreviewItem(null);
+                  if (target.type === 'BUSINESS_OBJECT') {
+                    onNavigateToBusinessObjectDetail?.(target.id, fromGoalSearch, businessGoal);
+                  } else if (target.type === 'DATA_ASSET') {
+                    onNavigateToDataAssetDetail?.(target.id, fromGoalSearch, businessGoal);
+                  } else if (target.type === 'DATA_API') {
+                    onNavigateToApiDetail?.(target.id, fromGoalSearch, businessGoal);
+                  } else {
+                    onNavigateToMetricDetail?.(target.id, fromGoalSearch, businessGoal);
+                  }
+                }}
+                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer flex items-center space-x-1 shadow-xs"
+              >
+                <span>{selectedPreviewItem.type === 'DATA_API' ? '查看接口说明' : '查看完整详情'}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* EDIT GOAL MODAL */}
       {isEditingGoalModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-lg border border-[#CBD5E1] shadow-2xl max-w-lg w-full overflow-hidden">
+          <div className="bg-white rounded-xl border border-[#CBD5E1] shadow-2xl max-w-lg w-full overflow-hidden">
             <div className="px-6 py-4 bg-[#F8FAFC] border-b border-[#E6EAF0] flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <h3 className="text-sm font-bold text-[#172033]">
-                  修改业务目标
-                </h3>
-              </div>
+              <h3 className="text-sm font-bold text-[#172033]">
+                修改业务目标
+              </h3>
               <button
+                type="button"
                 onClick={() => setIsEditingGoalModalOpen(false)}
                 className="p-1 rounded hover:bg-[#E2E8F0] text-[#64748B] cursor-pointer"
               >
@@ -2368,14 +2281,12 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 更新目标后，Semovix 将重新评估当前资源组合的角色分配、口径依赖与覆盖完整性。
               </p>
 
-              <div className="space-y-1.5">
-                <textarea
-                  rows={3}
-                  value={tempGoalInput}
-                  onChange={(e) => setTempGoalInput(e.target.value)}
-                  className="w-full p-2.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded-md text-[#172033] placeholder-[#98A2B3] focus:outline-none focus:border-[#2563EB] focus:bg-white transition-all font-medium resize-none"
-                />
-              </div>
+              <textarea
+                rows={3}
+                value={tempGoalInput}
+                onChange={(e) => setTempGoalInput(e.target.value)}
+                className="w-full p-2.5 text-xs bg-[#F8FAFC] border border-[#CBD5E1] rounded-lg text-[#172033] placeholder-[#98A2B3] focus:outline-none focus:border-[#2563EB] focus:bg-white transition-all font-medium resize-none"
+              />
             </div>
 
             <div className="px-6 py-3.5 bg-[#F8FAFC] border-t border-[#E6EAF0] flex items-center justify-end space-x-2">
@@ -2391,7 +2302,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 onClick={() => {
                   if (tempGoalInput.trim()) {
                     setBusinessGoal(tempGoalInput.trim());
-                    // Recompose over the CURRENT solution membership (goal changed, resources kept)
                     setSolutionResources(composeSolutionResources(
                       buildGoalPlan(tempGoalInput.trim()),
                       solutionResources
@@ -2402,7 +2312,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                     addToast?.('success', '目标已更新', 'Semovix 已重新组织数据方案');
                   }
                 }}
-                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded transition-colors cursor-pointer shadow-2xs"
+                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-xs"
               >
                 重新构建方案
               </button>
@@ -2411,12 +2321,10 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* 6. KEY RESOURCE REMOVAL CONFIRMATION MODAL               */}
-      {/* ========================================================= */}
+      {/* KEY RESOURCE REMOVAL CONFIRMATION MODAL */}
       {removalTargetResource && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-lg border border-[#CBD5E1] shadow-2xl max-w-md w-full overflow-hidden">
+          <div className="bg-white rounded-xl border border-[#CBD5E1] shadow-2xl max-w-md w-full overflow-hidden">
             <div className="px-6 py-4 bg-[#FFFBEB] border-b border-[#FDE68A] flex items-center space-x-2.5">
               <AlertCircle className="w-5 h-5 text-[#D97706]" />
               <h3 className="text-sm font-bold text-[#92400E]">
@@ -2443,7 +2351,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               <button
                 type="button"
                 onClick={handleConfirmRemoveKeyResource}
-                className="px-4 py-1.5 bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-bold rounded transition-colors cursor-pointer shadow-2xs"
+                className="px-4 py-1.5 bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shadow-xs"
               >
                 仍然移除
               </button>
@@ -2452,255 +2360,8 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* 7. RESOURCE DETAIL PREVIEW DRAWER — true overlay:         */}
-      {/*    floats over the explorer, never reflows the list       */}
-      {/* ========================================================= */}
-      {selectedPreviewItem && (
-        <aside className="fixed right-0 top-[64px] bottom-0 w-full sm:w-[480px] bg-white border-l border-[#E6EAF0] shadow-2xl flex flex-col z-40 animate-in slide-in-from-right duration-200">
-          <div className="px-5 py-4 border-b border-[#E6EAF0] bg-[#FAFCFF] flex items-start justify-between">
-            <div className="space-y-1 min-w-0 pr-3">
-              <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
-                  {TYPE_PRESENTATION[selectedPreviewItem.type]}{selectedPreviewItem.subType ? ` · ${SUBTYPE_PRESENTATION[selectedPreviewItem.subType] || selectedPreviewItem.subType}` : ''}
-                </span>
-                {selectedPreviewItem.certification === 'OFFICIAL' && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0]">
-                    {CERTIFICATION_BADGE[selectedPreviewItem.type]}
-                  </span>
-                )}
-                {(() => {
-                  // Whole badge from the one presentation contract — no
-                  // per-state branching at the call site.
-                  const ap = accessPresentation(selectedPreviewItem.accessStatus);
-                  return (
-                    <span className={`inline-flex items-center space-x-1 text-[10px] font-bold px-1.5 py-0.2 rounded border ${ap.textClass} ${ap.bgClass} ${ap.borderClass}`}>
-                      {ap.Icon && <ap.Icon className="w-2.5 h-2.5" />}
-                      <span>{ap.label}</span>
-                    </span>
-                  );
-                })()}
-              </div>
-              <h3 className="text-base font-bold text-[#172033] tracking-tight truncate">
-                {selectedPreviewItem.name}
-              </h3>
-              <p className="text-[11px] text-[#64748B] truncate">
-                归属：{selectedPreviewItem.domainName} · {selectedPreviewItem.objectName}
-              </p>
-            </div>
-
-            <div className="flex items-center space-x-1 shrink-0">
-              <button
-                onClick={() => {
-                  navigator.clipboard?.writeText(selectedPreviewItem.name);
-                  addToast?.('success', '已复制', `已复制「${selectedPreviewItem.name}」名称`);
-                }}
-                className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
-                title="复制名称"
-              >
-                <Copy className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setSelectedPreviewItem(null)}
-                className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
-                title="关闭预览"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
-              {/* 业务说明 */}
-              <div className="space-y-1.5">
-                <div className="text-[11px] font-bold text-[#172033]">业务说明</div>
-                <p className="text-xs text-[#475569] leading-relaxed bg-[#F8FAFC] p-3 rounded-md border border-[#E6EAF0]">
-                  {selectedPreviewItem.description}
-                </p>
-              </div>
-
-              {/* 快速判断 — at-a-glance facts straight from existing metadata
-                  (access status / consumerFact / update cadence); column labels
-                  follow the resource type. */}
-              <div className="space-y-1.5">
-                <div className="text-[11px] font-bold text-[#172033]">快速判断</div>
-                <div className="grid grid-cols-3 gap-2">
-                  {(() => {
-                    const isMetric = selectedPreviewItem.type === 'METRIC';
-                    const labels: [string, string, string] = isMetric
-                      ? ['状态', '统计粒度', '更新']
-                      : selectedPreviewItem.type === 'DATA_API'
-                      ? ['访问', '输入', '响应']
-                      : selectedPreviewItem.type === 'BUSINESS_OBJECT'
-                      ? ['访问', '资源规模', '演进']
-                      : ['访问', '数据粒度', '更新'];
-                    // 统计粒度 drops the “单位：% ·” prefix — presentation only
-                    const grain = isMetric
-                      ? (selectedPreviewItem.consumerFact ?? '').replace(/^单位：.*?·\s*/, '') || '—'
-                      : selectedPreviewItem.type === 'BUSINESS_OBJECT'
-                      ? (selectedPreviewItem.extraInfo ?? '—')
-                      : (selectedPreviewItem.consumerFact ?? '—');
-                    const accessText = selectedPreviewItem.accessStatus === 'SEMANTIC_ONLY'
-                      ? ACCESS_PRESENTATION.SEMANTIC_ONLY.label
-                      : accessPresentation(selectedPreviewItem.accessStatus).label;
-                    const values: [string, string, string] = [
-                      isMetric ? (selectedPreviewItem.fitnessLabel ?? '—') : accessText,
-                      grain,
-                      selectedPreviewItem.timeGranularity ?? selectedPreviewItem.updateFrequency ?? selectedPreviewItem.updatedAt,
-                    ];
-                    return labels.map((label, i) => (
-                      <div key={label} className="p-2 rounded-md bg-[#F8FAFC] border border-[#EEF2F6] min-w-0">
-                        <div className="text-[10px] text-[#94A3B8] font-semibold">{label}</div>
-                        <div className="text-[11px] text-[#172033] font-semibold leading-snug">{values[i]}</div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              </div>
-
-              {/* 这份资源包含什么 — full schema & formulas live in Resource Detail */}
-              {previewContains.length > 0 && (
-                <div className="space-y-1.5">
-                  <div className="text-[11px] font-bold text-[#172033]">这份资源包含什么</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {previewContains.map((entry) => (
-                      <span key={entry} className="px-2 py-1 rounded-md text-[11px] font-medium bg-white text-[#334155] border border-[#E6EAF0]">
-                        {entry}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 适合做什么 */}
-              {selectedPreviewItem.useCases && selectedPreviewItem.useCases.length > 0 && (
-                <div className="space-y-1.5">
-                  <div className="text-[11px] font-bold text-[#172033]">适合做什么</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedPreviewItem.useCases.map((useCase) => (
-                      <span key={useCase} className="px-2 py-1 rounded-md text-[11px] font-medium bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
-                        {useCase}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 为什么适合当前目标 — goal mode only. Mirrors the list rows
-                  (solution members → 为什么需要; candidates → 匹配当前目标);
-                  items outside the retrieval relation derive from real
-                  schema × plan. No score, no AI reasoning — business reason
-                  only. */}
-              {currentMode === 'goal_search' && (() => {
-                const reason =
-                  solutionResources.find(r => r.id === selectedPreviewItem.id)?.whyNeeded
-                  ?? relatedCandidates.find(c => c.id === selectedPreviewItem.id)?.whyUseful
-                  ?? describeGoalFit(selectedPreviewItem, goalPlan);
-                if (!reason) return null;
-                return (
-                  <div className="space-y-1.5">
-                    <div className="text-[11px] font-bold text-[#172033]">为什么适合当前目标</div>
-                    <p className="text-xs text-[#1E40AF] leading-relaxed bg-[#EFF6FF] p-3 rounded-md border border-[#DBEAFE]">
-                      {reason}
-                    </p>
-                  </div>
-                );
-              })()}
-
-              <div className="space-y-3.5 pt-1">
-                <div className="text-[11px] font-bold text-[#172033]">相关资源</div>
-                {selectedPreviewItem.relatedAssets && selectedPreviewItem.relatedAssets.length > 0 ? (
-                  <div className="space-y-2">
-                    {selectedPreviewItem.relatedAssets.map((rel) => (
-                      <div
-                        key={rel.id}
-                        onClick={() => {
-                          const target = ALL_DISCOVERABLE_RESOURCES.find(r => r.id === rel.id);
-                          if (target) setSelectedPreviewItem(target);
-                        }}
-                        className="p-2.5 rounded-md bg-[#F8FAFC] hover:bg-[#EFF6FF] border border-[#E2E8F0] hover:border-[#BFDBFE] flex items-center justify-between cursor-pointer transition-all"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <span className="px-1.5 py-0.2 bg-white text-[#2563EB] text-[10px] font-bold rounded border border-[#CBD5E1]">
-                            {TYPE_PRESENTATION[rel.type] || rel.type}
-                          </span>
-                          <span className="font-bold text-xs text-[#172033]">{rel.name}</span>
-                        </div>
-                        <ArrowRight className="w-3.5 h-3.5 text-[#94A3B8]" />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-4 bg-[#F8FAFC] rounded border border-[#E6EAF0] text-center text-[#94A3B8]">
-                    暂无直接关联资产记录
-                  </div>
-                )}
-              </div>
-          </div>
-
-          <div className="p-4 border-t border-[#E6EAF0] bg-[#FAFCFF] flex items-center justify-between gap-3">
-            {/* Collect — Browse / Resource Search only; goal mode manages its own solution set */}
-            {currentMode !== 'goal_search' ? (
-              isPreviewAdded ? (
-                <button
-                  type="button"
-                  onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
-                  className="px-3 py-1.5 rounded text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#FEE2E2] hover:text-[#DC2626] hover:border-[#FECACA] transition-all cursor-pointer flex items-center space-x-1 group/btn"
-                >
-                  <Check className="w-3.5 h-3.5 group-hover/btn:hidden text-[#2563EB]" />
-                  <X className="w-3.5 h-3.5 hidden group-hover/btn:inline-block text-[#DC2626]" />
-                  <span className="group-hover/btn:hidden">✓ 已加入候选</span>
-                  <span className="hidden group-hover/btn:inline">移除</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
-                  className="px-3 py-1.5 rounded text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>加入候选</span>
-                </button>
-              )
-            ) : (
-              <div />
-            )}
-
-            {/* Full detail — unified label, per-type navigation */}
-            <button
-              onClick={() => {
-                const target = selectedPreviewItem;
-                const fromGoalSearch = currentMode === 'goal_search';
-                setSelectedPreviewItem(null);
-                if (target.type === 'BUSINESS_OBJECT') {
-                  onNavigateToBusinessObjectDetail?.(target.id, fromGoalSearch, businessGoal);
-                } else if (target.type === 'DATA_ASSET') {
-                  onNavigateToDataAssetDetail?.(target.id, fromGoalSearch, businessGoal);
-                } else if (target.type === 'DATA_API') {
-                  onNavigateToApiDetail?.(target.id, fromGoalSearch, businessGoal);
-                } else {
-                  onNavigateToMetricDetail?.(target.id, fromGoalSearch, businessGoal);
-                }
-              }}
-              className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold rounded transition-colors cursor-pointer flex items-center space-x-1"
-            >
-              <span>查看完整详情</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </aside>
-      )}
-
-      {/* ========================================================= */}
-      {/* 8. SINGLE RESOURCE ACCESS REQUEST DRAWER                  */}
-      {/* ========================================================= */}
+      {/* SINGLE RESOURCE ACCESS REQUEST DRAWER */}
       {isAccessDrawerOpen && accessTargetResource && (() => {
-        // Drawer content derives from the real library item — no hardcoded
-        // aging-resource metadata. The decision comes from the access policy
-        // engine in the FINAL contract enum (autoGrantPolicy → AUTO_ALLOW /
-        // AUTO_ALLOW_WITH_LIMITS; otherwise REVIEW_REQUIRED → PENDING,
-        // submitted ≠ granted). Security level is an engine INPUT, never the
-        // verdict itself.
         const lib = ALL_DISCOVERABLE_RESOURCES.find(r => r.name === accessTargetResource.name);
         const decision = evaluateAccessDecision({
           securityLevel: lib?.securityLevel,
@@ -2720,9 +2381,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
             suggestedScopeItems={lib?.fields?.filter(f => !f.isKey).slice(0, 3).map(f => f.cnName)}
             suggestedFieldMappings={lib?.fields?.filter(f => !f.isKey).slice(0, 4).map(f => ({ label: f.cnName, field: f.name }))}
             onSuccessSubmit={(decisionKind) => {
-              // The drawer owns submission toasts and stays open to show its
-              // decision result; the workspace only advances the formal
-              // lifecycle on the solution row.
               setSolutionResources(prev =>
                 prev.map(r =>
                   r.name === accessTargetResource.name
@@ -2743,9 +2401,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
         );
       })()}
 
-      {/* ========================================================= */}
-      {/* 9. MULTI-RESOURCE ACCESS REQUEST PAGE (MULTI 路由入口)     */}
-      {/* ========================================================= */}
+      {/* MULTI-RESOURCE ACCESS REQUEST PAGE */}
       {multiAccessResolution && (
         <MultiResourceAccessRequestPage
           isOpen={!!multiAccessResolution}
@@ -2754,9 +2410,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
           routeReason={multiRouteReason(multiAccessResolution.requiredRequests)}
           taskContextTitle={businessGoal || '数据方案'}
           onSubmitted={(result) => {
-            // Advance the formal lifecycle per request, only on rows that were
-            // REQUESTABLE (submitted ≠ granted): auto-allowed → AVAILABLE,
-            // under review → PENDING.
             const grantedIds = new Set(result.grants.map(g => g.resourceId));
             setSolutionResources(prev =>
               prev.map(r =>

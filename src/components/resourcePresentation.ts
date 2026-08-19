@@ -32,9 +32,6 @@ export const CERTIFICATION_BADGE: Record<string, string> = {
 // SEMANTIC_ONLY rides alongside as a resource-class distinction (business
 // objects are consumed as semantics, not queried).
 // REQUESTABLE is an invitation to request, not a warning — Blue, not Orange.
-// One presentation contract per state: dot / text / badge background / border
-// / icon. Consumers render badges WHOLESALE from here — never re-derive
-// "if available else blue" at the call site.
 export const ACCESS_PRESENTATION: Record<
   string,
   { label: string; dotClass: string; textClass: string; bgClass: string; borderClass: string; Icon?: LucideIcon }
@@ -46,13 +43,19 @@ export const ACCESS_PRESENTATION: Record<
   SEMANTIC_ONLY: { label: '语义资源', dotClass: 'bg-[#6366F1]', textClass: 'text-[#6366F1]', bgClass: 'bg-[#EEF2FF]', borderClass: 'border-[#C7D2FE]', Icon: Boxes },
 };
 
-export const accessPresentation = (status: string) =>
-  ACCESS_PRESENTATION[status] ?? ACCESS_PRESENTATION.AVAILABLE;
+export const accessPresentation = (status: string) => {
+  if (!status) return ACCESS_PRESENTATION.AVAILABLE;
+  const upper = status.toUpperCase();
+  if (upper === 'RESTRICTED') return ACCESS_PRESENTATION.REQUESTABLE;
+  if (upper === 'AVAILABLE') return ACCESS_PRESENTATION.AVAILABLE;
+  if (upper === 'PENDING') return ACCESS_PRESENTATION.PENDING;
+  if (upper === 'UNAVAILABLE') return ACCESS_PRESENTATION.UNAVAILABLE;
+  if (upper === 'SEMANTIC_ONLY') return ACCESS_PRESENTATION.SEMANTIC_ONLY;
+  return ACCESS_PRESENTATION[upper] ?? ACCESS_PRESENTATION.AVAILABLE;
+};
 
 // Requested capability — WHAT the access request grants, parameterized by
-// resource class: an API grants a CALL, a data asset grants a QUERY. The
-// drawer renders 申请能力 and the decision-result capability line wholesale
-// from this contract; internal enum values never reach the user.
+// resource class: an API grants a CALL, a data asset grants a QUERY.
 export type RequestOperation = 'QUERY' | 'CALL' | 'PREVIEW' | 'EXPORT';
 
 export const OPERATION_PRESENTATION: Record<
