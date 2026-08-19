@@ -78,7 +78,7 @@ export default function App() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isReanalyzing, setIsReanalyzing] = useState<boolean>(false);
   const [selectedReviewRequestId, setSelectedReviewRequestId] = useState<string>('rev-001');
-  const [, setActiveExecutionContext] = useState<SolutionExecutionContext | null>(null);
+  const [activeExecutionContext, setActiveExecutionContext] = useState<SolutionExecutionContext | null>(null);
 
   // Helper to trigger toast
   const addToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
@@ -526,11 +526,6 @@ export default function App() {
             setCurrentNav('my_requests');
             setViewTab('my_requests');
             addToast('info', '我的申请', '查看已申请的数据访问需求与任务就绪状态');
-          }}
-          onContinueAnalysis={(taskName) => {
-            setCurrentNav('marketplace_resources');
-            setViewTab('marketplace_resources');
-            addToast('success', '进入分析', `已就绪「${taskName}」所需的全部 4 项数据资源`);
           }}
           addToast={addToast}
         />
@@ -1191,6 +1186,7 @@ export default function App() {
         />
       ) : currentNav === 'home' ? (
         <XinoHomeWorkspace
+          executionContext={activeExecutionContext}
           onNavigateToGovernance={() => {
             setCurrentNav('governance');
             setViewTab('discovery');

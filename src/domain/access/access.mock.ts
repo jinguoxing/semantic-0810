@@ -44,6 +44,6 @@ export const EFFECTIVE_GRANTS: EffectiveGrant[] = [
   grant('grant-pop-basic', 'req-pop-basic', 'res-view-pop-basic', ['年龄与出生信息', '常住状态', '行政区域'], '2026-11-17T00:00:00.000Z', true),
   grant('grant-pop-history', 'req-pop-history', 'res-history-pop', ['统计年份', '街镇编码', '年龄区间', '常住人口汇总数'], '2026-11-16T00:00:00.000Z'),
   grant('grant-region-geo', 'req-region-geo', 'res-region-geo', ['区划代码', '街镇名称', '地理边界'], '2027-08-16T00:00:00.000Z'),
-  grant('grant-care-sites', 'req-care-sites', 'res-care-sites', ['网点名称', '街道社区归属', '空间位置', '供餐能力'], '2026-11-14T00:00:00.000Z', true),
+  grant('grant-care-sites', 'req-care-sites', 'res-care-sites', ['网点名称', '街道社区归属', '空间位置'], '2026-11-14T00:00:00.000Z', true),
   grant('grant-aging-metric', 'req-aging-metric', 'res-aging-metric', ['标准口径名称', '计算逻辑'], '2027-08-12T00:00:00.000Z'),
 ];

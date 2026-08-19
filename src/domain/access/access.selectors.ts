@@ -37,7 +37,7 @@ const typeLabel = (resourceType: string) => {
 };
 const readinessInfo = (readiness: TaskReadiness): [string, string, string, MyAccessSubmissionViewModel['primaryAction']['actionType']] => {
   if (readiness === 'WAITING') return ['等待所需资源', '当前仍有必要资源等待人工处理，完整任务暂不能继续。', '查看进度', 'check_progress'];
-  if (readiness === 'READY') return ['已准备', '当前获批范围已满足原分析任务所需的数据能力。', '继续分析', 'resume'];
+  if (readiness === 'READY') return ['可继续', '当前获批范围已满足原分析任务所需的数据能力。', '继续分析', 'resume'];
   if (readiness === 'DEGRADED') return ['受限可继续', '当前授权可支持部分任务目标，敏感或非必要范围已被收敛。', '按当前授权继续', 'resume_degraded'];
   return ['暂无法继续', '必要资源未获授权，请调整数据方案或重新申请必要范围。', '调整数据方案', 'adjust_plan'];
 };

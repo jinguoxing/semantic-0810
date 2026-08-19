@@ -1096,6 +1096,15 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       return;
     }
 
+    // The application-level request workspace owns the shared access store.
+    // Route into it before falling back to this component's legacy local demo
+    // surfaces, so a submission, its decisions, and task readiness stay in one
+    // state domain with My Requests and Access Review.
+    if (onNavigateToMultiResourceRequest) {
+      onNavigateToMultiResourceRequest();
+      return;
+    }
+
     if (resolution.route === 'SINGLE') {
       const draft = resolution.requiredRequests[0];
       const sol = solutionResources.find(r => r.id === draft.resourceId);

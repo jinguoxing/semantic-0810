@@ -60,16 +60,48 @@ function createGrant(result: AccessDecisionResult, request: AccessRequest): Effe
 
 function reducer(state: AccessDomainState, action: Action): AccessDomainState {
   if (action.type === 'CREATE_SUBMISSION') {
+    // Low-risk online queries are decided by the policy engine at submission time.
+    // Other request types remain pending for a reviewer, so a submission may contain
+    // both automatic and manual decision paths without bypassing task readiness.
+    const autoApproved = action.requests.filter((request) => request.riskLevel === 'LOW' && request.operation === 'QUERY');
+    const decidedAt = new Date().toISOString();
+    const autoGrants = autoApproved
+      .map((request) => createGrant({ requestId: request.id, decision: 'GRANT', reason: '符合低风险在线查询自动授权策略。' }, request))
+      .filter((grant): grant is EffectiveGrant => Boolean(grant));
+    const grantsByRequestId = Object.fromEntries(autoGrants.map((grant) => [grant.requestId, grant]));
+    const requests = action.requests.map((request) => autoApproved.some((candidate) => candidate.id === request.id)
+      ? { ...request, state: 'GRANTED' as const, updatedAt: decidedAt }
+      : request);
+    const decisions = Object.fromEntries(autoApproved.map((request) => {
+      const id = `decision-${request.id}-${Date.now()}`;
+      const grant = grantsByRequestId[request.id];
+      return [id, {
+        id,
+        requestId: request.id,
+        decision: 'GRANT' as const,
+        decidedBy: '系统策略引擎',
+        decidedAt,
+        reason: '符合低风险在线查询自动授权策略。',
+        grant,
+      } satisfies AccessDecision];
+    }));
     const next = {
       ...state,
       submissions: { ...state.submissions, [action.submission.id]: action.submission },
-      requests: { ...state.requests, ...byId(action.requests) },
+      requests: { ...state.requests, ...byId(requests) },
+      decisions: { ...state.decisions, ...decisions },
+      grants: { ...state.grants, ...byId(autoGrants) },
     };
     return reevaluate(next, action.submission.id);
   }
   if (action.type === 'SUBMIT_REQUEST') {
     const request = { ...action.request, state: 'PENDING_REVIEW' as const, updatedAt: new Date().toISOString() };
-    return reevaluate({ ...state, requests: { ...state.requests, [request.id]: request } }, request.submissionId);
+    const submission = state.submissions[request.submissionId];
+    return reevaluate({
+      ...state,
+      requests: { ...state.requests, [request.id]: request },
+      submissions: submission ? { ...state.submissions, [submission.id]: { ...submission, updatedAt: request.updatedAt } } : state.submissions,
+    }, request.submissionId);
   }
   if (action.type === 'EXPIRE_GRANT') {
     const grant = state.grants[action.grantId];
@@ -79,6 +111,9 @@ function reducer(state: AccessDomainState, action: Action): AccessDomainState {
       ...state,
       grants: { ...state.grants, [grant.id]: { ...grant, state: 'EXPIRED' as const } },
       requests: request ? { ...state.requests, [request.id]: { ...request, state: 'EXPIRED' as const, updatedAt: new Date().toISOString() } } : state.requests,
+      submissions: request && state.submissions[request.submissionId]
+        ? { ...state.submissions, [request.submissionId]: { ...state.submissions[request.submissionId], updatedAt: new Date().toISOString() } }
+        : state.submissions,
     };
     return request ? reevaluate(next, request.submissionId) : next;
   }
@@ -102,6 +137,10 @@ function reducer(state: AccessDomainState, action: Action): AccessDomainState {
   const next: AccessDomainState = {
     ...state,
     requests: { ...state.requests, [request.id]: { ...request, state: requestState, updatedAt: decision.decidedAt } },
+    submissions: {
+      ...state.submissions,
+      [request.submissionId]: { ...state.submissions[request.submissionId], updatedAt: decision.decidedAt },
+    },
     decisions: { ...state.decisions, [decision.id]: decision },
     grants: grant ? { ...state.grants, [grant.id]: grant } : state.grants,
   };

@@ -19,13 +19,14 @@ import {
   FileText,
   AlertCircle
 } from 'lucide-react';
+import { useAccessStore } from '../domain/access/access.store';
+import type { AccessRequest, AccessSubmission } from '../domain/access/access.types';
 
 export interface MultiResourceAccessRequestWorkspaceProps {
   onBackToSolution?: () => void;
   onNavigateToDiscovery?: () => void;
   onNavigateToResources?: () => void;
   onNavigateToMyRequests?: () => void;
-  onContinueAnalysis?: (taskName: string) => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
@@ -51,9 +52,9 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
   onNavigateToDiscovery,
   onNavigateToResources,
   onNavigateToMyRequests,
-  onContinueAnalysis,
   addToast,
 }) => {
+  const { createSubmission } = useAccessStore();
   // Navigation active side item
   const [activeSideNav, setActiveSideNav] = useState<'discovery' | 'resources' | 'my_requests'>('resources');
 
@@ -108,6 +109,9 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
   // Active resource count
   const activeResources = resources.filter((r) => !r.isExcluded);
   const activeCount = activeResources.length;
+  const isAutoDecisionResource = (resource: ResourceItemRequest) => resource.id !== 'res-pop-view';
+  const autoDecisionCount = activeResources.filter(isAutoDecisionResource).length;
+  const pendingReviewCount = activeCount - autoDecisionCount;
 
   // Duration label display
   const durationLabelMap: Record<string, string> = {
@@ -156,14 +160,45 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
       return;
     }
 
-    setSubmissionPhase('evaluating');
-    addToast?.('info', '正在提交申请', 'Semovix 策略引擎正在逐项评估访问合规性…');
-
-    // Simulate automated policy evaluation
-    setTimeout(() => {
-      setSubmissionPhase('result');
-      addToast?.('success', '申请处理完成', '所有资源均已通过策略自动化评估并完成授权');
-    }, 1100);
+    const submittedAt = new Date().toISOString();
+    const submissionId = `sub-${Date.now()}`;
+    const taskId = `task-${Date.now()}`;
+    const solutionId = `solution-aging-resource`;
+    const durationDays = durationOption === '1month' ? 30 : durationOption === '6months' ? 180 : 90;
+    const submission: AccessSubmission = {
+      id: submissionId,
+      taskId,
+      solutionId,
+      taskTitle: '街镇老龄化与养老资源分析',
+      purpose: applicationRemark,
+      source: '推荐数据方案',
+      requestIds: activeResources.map((resource, index) => `${submissionId}-request-${index + 1}`),
+      createdAt: submittedAt,
+      updatedAt: submittedAt,
+    };
+    const requests: AccessRequest[] = activeResources.map((resource, index) => ({
+      id: submission.requestIds[index],
+      submissionId,
+      taskId,
+      solutionId,
+      resourceId: resource.id,
+      resourceName: resource.name,
+      resourceType: resource.id === 'res-pop-view' ? 'DATA_ASSET_VIEW' : 'DATA_ASSET',
+      required: true,
+      operation: 'QUERY',
+      requestedScope: { operation: 'QUERY', fields: resource.requiredScopeList, geography: { regionNames: ['闵行区'] } },
+      state: 'PENDING_REVIEW',
+      applicant: { id: 'user-zhangming', name: '张明', department: '人口分析部门' },
+      purpose: applicationRemark,
+      reviewReason: resource.protectionSummary,
+      riskLevel: isAutoDecisionResource(resource) ? 'LOW' : 'MEDIUM',
+      requestedDurationDays: durationDays,
+      submittedAt,
+      updatedAt: submittedAt,
+    }));
+    createSubmission(submission, requests);
+    setSubmissionPhase('result');
+    addToast?.('success', '申请已提交', `${autoDecisionCount} 项低风险查询已自动授权，${pendingReviewCount} 项请求正在等待人工审核。`);
   };
 
   // Handle return to solution
@@ -739,7 +774,7 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
               <div className="flex items-center space-x-2.5 text-[#166534]">
                 <CheckCircle2 className="w-5 h-5 text-[#16A36A] shrink-0" />
                 <h3 className="text-sm font-bold text-[#166534]">
-                  访问权限已生效 · 2项资源已准备就绪
+                  访问申请已提交 · {autoDecisionCount} 项已授权，{pendingReviewCount} 项等待处理
                 </h3>
               </div>
             </div>
@@ -747,7 +782,7 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
             {/* Modal Body */}
             <div className="p-6 space-y-4 text-xs">
               <p className="text-[#334155] leading-relaxed">
-                当前申请已根据数据安全与访问策略自动处理，所有必要资源已成功接入分析工作区。
+                已创建一个 Access Submission，并为每项资源创建独立 Access Request。任务是否可继续将由后续授权结果自动计算。
               </p>
 
               {/* Atomic Items Evaluation Status */}
@@ -756,32 +791,15 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
                   逐项处理结果 (One Submission, Independent Evaluation)
                 </div>
                 
-                {/* Item 1 */}
-                <div className="p-2.5 bg-white rounded border border-[#EEF2F6] flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <div className="font-bold text-[#172033]">人口基本信息视图</div>
-                    <div className="text-[11px] text-[#15803D]">已按最小必要范围授权 · 姓名已自动配置动态脱敏</div>
-                  </div>
-                  <span className="px-2 py-0.5 bg-[#DCFCE7] text-[#15803D] font-bold text-[10px] rounded">
-                    自动生效
-                  </span>
-                </div>
-
-                {/* Item 2 */}
-                <div className="p-2.5 bg-white rounded border border-[#EEF2F6] flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <div className="font-bold text-[#172033]">养老机构基本信息</div>
-                    <div className="text-[11px] text-[#15803D]">公共机构基础信息 · 策略允许直接查询分析</div>
-                  </div>
-                  <span className="px-2 py-0.5 bg-[#DCFCE7] text-[#15803D] font-bold text-[10px] rounded">
-                    自动生效
-                  </span>
-                </div>
+                {activeResources.map((resource) => <div key={resource.id} className="p-2.5 bg-white rounded border border-[#EEF2F6] flex items-center justify-between">
+                  <div className="space-y-0.5"><div className="font-bold text-[#172033]">{resource.name}</div><div className={`text-[11px] ${isAutoDecisionResource(resource) ? 'text-[#15803D]' : 'text-[#B45309]'}`}>{isAutoDecisionResource(resource) ? '低风险在线查询，已按标准策略自动授权' : '已按最小必要范围创建访问请求，等待人工确认'}</div></div>
+                  <span className={`px-2 py-0.5 font-bold text-[10px] rounded ${isAutoDecisionResource(resource) ? 'bg-[#DCFCE7] text-[#15803D]' : 'bg-[#FFFBEB] text-[#B45309]'}`}>{isAutoDecisionResource(resource) ? '自动生效' : '等待处理'}</span>
+                </div>)}
               </div>
 
-              <div className="p-3 bg-[#F0FDF4] rounded border border-[#DCFCE7] text-[11px] text-[#15803D] space-y-1">
+              <div className="p-3 bg-[#FFFBEB] rounded border border-[#FDE68A] text-[11px] text-[#B45309] space-y-1">
                 <div>• 有效期限：3 个月（到期前 7 天支持续期）</div>
-                <div>• 授权能力：查询数据（在线分析与问数）</div>
+                <div>• 当前状态：任务正在等待必要资源的访问结果</div>
               </div>
             </div>
 
@@ -799,16 +817,12 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
               <button
                 onClick={() => {
                   setSubmissionPhase('idle');
-                  if (onContinueAnalysis) {
-                    onContinueAnalysis('街镇老龄化与养老资源分析');
-                  } else {
-                    handleReturnToSolution();
-                  }
-                  addToast?.('success', '进入分析', '已载入全部 4 项资源至 AI 语义分析工作区');
+                  onNavigateToMyRequests?.();
+                  addToast?.('info', '查看等待进展', '任务仍在等待必要资源；授权完成后可在“我的申请”中继续原工作。');
                 }}
                 className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded cursor-pointer shadow-2xs"
               >
-                继续分析任务
+                查看等待进展
               </button>
             </div>
           </div>

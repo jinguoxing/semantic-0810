@@ -21,16 +21,19 @@ import {
   Check,
   Clock
 } from 'lucide-react';
+import type { SolutionExecutionContext } from '../domain/access/access.types';
 
 interface XinoHomeWorkspaceProps {
   onNavigateToGovernance?: () => void;
   onOpenLauncher?: () => void;
+  executionContext?: SolutionExecutionContext | null;
 }
 
 type ModeType = 'auto' | 'data' | 'knowledge' | 'governance';
 
 export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
-  onNavigateToGovernance
+  onNavigateToGovernance,
+  executionContext,
 }) => {
   const [promptInput, setPromptInput] = useState('');
   const [searchHistory, setSearchHistory] = useState('');
@@ -221,6 +224,12 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
       ========================================================= */}
       <main className="flex-1 flex flex-col justify-between items-center p-6 md:p-12 overflow-y-auto relative bg-[#F7F9FC]">
         <div className="w-full max-w-[860px] my-auto space-y-7 text-center">
+          {executionContext && (
+            <div className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-3 text-left text-xs text-[#1E3A8A]">
+              <div className="font-bold">已恢复原分析任务上下文</div>
+              <div className="mt-1">任务 {executionContext.taskId} · 数据方案 {executionContext.solutionId} · 已关联 {executionContext.resourceIds.length} 项资源与 {executionContext.grantIds.length} 项有效授权。</div>
+            </div>
+          )}
           
           {/* Central Xino Brand Section */}
           <div className="flex flex-col items-center space-y-2">
@@ -462,4 +471,3 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
     </div>
   );
 };
-
