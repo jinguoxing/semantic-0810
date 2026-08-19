@@ -24,7 +24,10 @@ import {
   Lock,
   Unlock,
   MessageSquare,
-  Sparkle
+  Workflow,
+  FolderTree,
+  SlidersHorizontal,
+  FileText
 } from 'lucide-react';
 
 export interface BusinessObjectDetailWorkspaceProps {
@@ -128,7 +131,7 @@ interface RelatedResourceItem {
 
 const RELATED_RESOURCES: RelatedResourceItem[] = [
   {
-    id: 'view_pop_basic_info',
+    id: 'res-02',
     name: '人口基本信息视图',
     type: 'DATA_ASSET',
     subType: 'VIEW',
@@ -138,7 +141,7 @@ const RELATED_RESOURCES: RelatedResourceItem[] = [
     accessLabel: '需申请'
   },
   {
-    id: 'metric_aging_rate',
+    id: 'res-03',
     name: '老龄化率',
     type: 'METRIC',
     description: '衡量 60 周岁及以上常住人口占全部常住人口的比例。',
@@ -147,7 +150,7 @@ const RELATED_RESOURCES: RelatedResourceItem[] = [
     accessLabel: '正式指标'
   },
   {
-    id: 'metric_resident_pop_count',
+    id: 'res-07',
     name: '常住人口数',
     type: 'METRIC',
     description: '表示指定统计范围内常住人口主体数量。',
@@ -156,7 +159,7 @@ const RELATED_RESOURCES: RelatedResourceItem[] = [
     accessLabel: '正式指标'
   },
   {
-    id: 'api_pop_stat_query',
+    id: 'res-04',
     name: '人口统计查询 API',
     type: 'DATA_API',
     description: '按区域、年龄范围与统计期提供人口统计查询能力。',
@@ -198,547 +201,591 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   };
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-[#F7F9FC] text-[#172033] font-sans antialiased relative select-none">
+    <div className="flex-1 flex overflow-hidden bg-white text-[#0F172A] font-sans antialiased relative selection:bg-[#EFF6FF] selection:text-[#2563EB]">
       
       {/* ========================================================= */}
-      {/* 1. MARKETPLACE SIDEBAR (210–220px)                         */}
+      {/* 1. MARKETPLACE SIDEBAR (210px)                            */}
       {/* ========================================================= */}
-      <aside className="w-[210px] bg-white border-r border-[#E6EAF0] flex flex-col shrink-0 select-none z-10">
-        <div className="p-4 border-b border-[#E6EAF0]">
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-6 rounded bg-[#2563EB] flex items-center justify-center text-white font-bold text-xs">
-              S
-            </div>
-            <div>
-              <h2 className="text-xs font-bold text-[#172033] tracking-tight">数据服务超市</h2>
-              <p className="text-[10px] text-[#667085]">Data Marketplace</p>
-            </div>
-          </div>
+      <aside className="w-[210px] bg-white border-r border-[#E2E8F0] flex flex-col shrink-0 select-none z-10">
+        {/* Sidebar Header Title */}
+        <div className="px-5 py-4 border-b border-[#E2E8F0]">
+          <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">
+            数据服务超市
+          </h2>
         </div>
 
-        <div className="p-2.5 flex-1 space-y-1">
+        {/* Sidebar Navigation Items */}
+        <nav className="p-3 space-y-1 text-xs">
+          {/* 1. 发现 */}
           <button
             onClick={() => {
               setActiveSideNav('discovery');
               onNavigateToDiscovery?.();
             }}
-            className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-xs transition-colors cursor-pointer ${
+            className={`w-full px-3 py-2 rounded flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'discovery'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
-                : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#172033]'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]'
+                : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
           >
-            <Compass className="w-4 h-4" />
+            <Compass className="w-4 h-4 text-[#64748B]" />
             <span>发现</span>
           </button>
 
+          {/* 2. 资源 (当前高亮) */}
           <button
             onClick={() => {
               setActiveSideNav('resources');
               onBackToResources?.();
             }}
-            className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-xs transition-colors cursor-pointer ${
+            className={`w-full px-3 py-2 rounded flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'resources'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
-                : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#172033]'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]'
+                : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-4 h-4 text-[#2563EB]" />
             <span>资源</span>
           </button>
 
+          {/* 3. 我的申请 */}
           <button
             onClick={() => {
               setActiveSideNav('my_requests');
               onNavigateToMyRequests?.();
             }}
-            className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-xs transition-colors cursor-pointer ${
+            className={`w-full px-3 py-2 rounded flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
               activeSideNav === 'my_requests'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
-                : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#172033]'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border-l-2 border-[#2563EB]'
+                : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
           >
-            <FileCheck className="w-4 h-4" />
+            <FileCheck className="w-4 h-4 text-[#64748B]" />
             <span>我的申请</span>
           </button>
-        </div>
+        </nav>
 
-        {/* AI Partner Footer (Xino) */}
-        <div className="p-3.5 border-t border-[#EEF2F6] bg-[#FAFCFF]">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-7 h-7 rounded-md bg-[#2563EB]/10 border border-[#2563EB]/20 flex items-center justify-center text-[#2563EB]">
-              <Sparkles className="w-3.5 h-3.5" />
+        {/* Bottom Fixed AI Partner Card */}
+        <div className="mt-auto p-3 border-t border-[#E2E8F0] bg-white">
+          <div className="flex items-center space-x-2.5 text-xs py-1 px-1">
+            <div className="w-6 h-6 rounded bg-[#2563EB] flex items-center justify-center text-white shrink-0 shadow-2xs">
+              <Sparkles className="w-3.5 h-3.5 fill-white/20" />
             </div>
-            <div>
-              <div className="text-[11px] font-bold text-[#172033] flex items-center space-x-1">
-                <span>Xino｜犀诺</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+            <div className="min-w-0">
+              <div className="text-[10px] text-[#94A3B8] leading-tight">AI Partner</div>
+              <div className="text-xs font-bold text-[#0F172A] leading-tight truncate">
+                Xino ｜ 犀诺
               </div>
-              <div className="text-[10px] text-[#667085]">企业 AI 语义伙伴</div>
             </div>
           </div>
         </div>
       </aside>
 
       {/* ========================================================= */}
-      {/* 2. MAIN BUSINESS OBJECT DETAIL (72% Main + 28% Right Rail) */}
+      {/* 2. CONTINUOUS MAIN CONTENT AREA (Flat Entity Detail)       */}
       {/* ========================================================= */}
-      <main className="flex-1 flex overflow-hidden">
-        
-        {/* Main Content Scrollable Area (72%) */}
-        <div className="flex-1 overflow-y-auto bg-[#F7F9FC]">
-          <div className="p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
-            
-            {/* Top Navigation & Breadcrumb */}
-            <div className="space-y-1.5">
-              <button
-                onClick={onBackToResources}
-                className="inline-flex items-center space-x-1.5 text-xs text-[#667085] hover:text-[#2563EB] transition-colors cursor-pointer"
+      <main className="flex-1 flex flex-col overflow-y-auto bg-white transition-all">
+
+        {/* Conditional Goal Search Context Strip */}
+        {fromGoalSearch && (
+          <div className="bg-[#EFF6FF] border-b border-[#DBEAFE] px-8 py-2.5 flex items-center justify-between text-xs shrink-0">
+            <div className="flex items-center space-x-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+              <span className="text-[#1E40AF]">
+                与当前目标「{goalQuery}」相关：<strong className="font-semibold text-[#1E40AF]">自然人</strong> 是该分析场景的核心业务概念实体。
+              </span>
+            </div>
+            <button
+              onClick={onBackToResources}
+              className="text-[#2563EB] hover:text-[#1D4ED8] font-semibold flex items-center space-x-1 cursor-pointer"
+            >
+              <span>返回当前数据方案</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
+        {/* Flat Continuous Document Canvas */}
+        <div className="max-w-[1040px] w-full mx-auto px-8 py-7 space-y-7">
+
+          {/* ======================================================= */}
+          {/* I. BREADCRUMB & BACK ACTION                             */}
+          {/* ======================================================= */}
+          <div className="space-y-2">
+            <div className="text-xs text-[#64748B] flex items-center space-x-2">
+              <span
+                onClick={onNavigateToDiscovery}
+                className="hover:text-[#2563EB] cursor-pointer"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>返回资源</span>
-              </button>
-
-              <div className="flex items-center space-x-2 text-xs text-[#98A2B3]">
-                <span onClick={onNavigateToDiscovery} className="hover:text-[#667085] cursor-pointer">数据服务超市</span>
-                <span>/</span>
-                <span onClick={onBackToResources} className="hover:text-[#667085] cursor-pointer">资源</span>
-                <span>/</span>
-                <span className="text-[#475569] font-medium">自然人</span>
-              </div>
+                数据服务超市
+              </span>
+              <span>/</span>
+              <span
+                onClick={onBackToResources}
+                className="hover:text-[#2563EB] cursor-pointer"
+              >
+                资源
+              </span>
+              <span>/</span>
+              <span className="text-[#0F172A] font-semibold">自然人</span>
             </div>
 
-            {/* Goal Search Condition Context Notice (If navigated from goal search) */}
-            {fromGoalSearch && (
-              <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-md px-4 py-2.5 flex items-center justify-between text-xs">
-                <div className="flex items-center space-x-2 text-[#1E40AF]">
-                  <Sparkles className="w-3.5 h-3.5 text-[#2563EB] shrink-0" />
-                  <span>与当前目标相关：<strong>自然人</strong>是「{goalQuery}」的核心业务对象。</span>
-                </div>
-                <button
-                  onClick={onBackToResources}
-                  className="text-xs text-[#2563EB] font-semibold hover:underline cursor-pointer"
-                >
-                  返回当前数据方案
-                </button>
-              </div>
-            )}
+            <button
+              onClick={onBackToResources}
+              className="inline-flex items-center space-x-1.5 text-xs text-[#2563EB] hover:text-[#1D4ED8] font-medium transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>返回资源</span>
+            </button>
+          </div>
 
-            {/* ======================================================= */}
-            {/* RESOURCE HEADER                                         */}
-            {/* ======================================================= */}
-            <div className="bg-white border border-[#E6EAF0] rounded-md p-6 shadow-2xs space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                <div className="space-y-1.5 flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] font-mono">
-                      BUSINESS OBJECT
-                    </span>
-                    <span className="text-xs text-[#98A2B3] font-mono">
-                      Person
-                    </span>
-                    <span className="text-[11px] text-[#CBD5E1] font-mono">
-                      bo_person
-                    </span>
-                  </div>
-
-                  <h1 className="text-2xl font-bold text-[#172033] tracking-tight">
-                    自然人
-                  </h1>
-
-                  {/* Formal Business Definition */}
-                  <p className="text-xs text-[#334155] leading-relaxed pt-1">
-                    人口与公共服务业务中的个人主体，用于统一表达人口身份、人口属性以及个人与行政区域、家庭和公共服务之间的业务关系。
-                  </p>
-
-                  <div className="flex items-center space-x-3 pt-1 text-xs">
-                    <span className="text-[#667085]">
-                      人口服务 · 公共服务
-                    </span>
-                    <span className="text-[#CBD5E1]">·</span>
-                    <span className="text-[#16A36A] font-medium flex items-center space-x-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-                      <span>正式业务对象</span>
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2 shrink-0">
-                  <button
-                    onClick={() => handleCopyText('bo_person', 'ID')}
-                    className="p-1.5 rounded hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#172033] border border-[#E6EAF0] transition-colors cursor-pointer"
-                    title="复制对象标识"
-                  >
-                    {copiedKey === 'ID' ? <Check className="w-3.5 h-3.5 text-[#16A36A]" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Facts Strip (No nested card, subtle borders) */}
-              <div className="border-t border-[#EEF2F6] pt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-                <div className="space-y-0.5">
-                  <div className="text-[11px] text-[#98A2B3]">主业务域</div>
-                  <div className="font-semibold text-[#172033]">人口服务</div>
-                </div>
-                <div className="space-y-0.5">
-                  <div className="text-[11px] text-[#98A2B3]">业务身份</div>
-                  <div className="font-semibold text-[#172033]">个人主体</div>
-                </div>
-                <div className="space-y-0.5">
-                  <div className="text-[11px] text-[#98A2B3]">常见业务称谓</div>
-                  <div className="font-semibold text-[#172033]">人口 · 居民 · 个人</div>
-                </div>
-                <div className="space-y-0.5">
-                  <div className="text-[11px] text-[#98A2B3]">关联范围</div>
-                  <div className="font-semibold text-[#172033]">数据资产 · 指标 · 数据 API</div>
-                </div>
-              </div>
+          {/* ======================================================= */}
+          {/* II. FLAT ENTITY HEADER (No Hero Card)                    */}
+          {/* ======================================================= */}
+          <div className="space-y-3.5">
+            {/* Title Line */}
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-extrabold text-[#0F172A] tracking-tight">
+                自然人
+              </h1>
+              <span className="px-2 py-0.5 rounded bg-[#F5F3FF] text-[#7C3AED] border border-[#DDD6FE] text-xs font-semibold">
+                BUSINESS OBJECT
+              </span>
+              <span className="px-2 py-0.5 rounded bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0] text-xs font-medium">
+                正式业务对象
+              </span>
             </div>
 
-            {/* ======================================================= */}
-            {/* 1. CORE ATTRIBUTES                                      */}
-            {/* ======================================================= */}
-            <div className="bg-white border border-[#E6EAF0] rounded-md p-6 shadow-2xs space-y-4">
-              <div className="flex items-center justify-between border-b border-[#EEF2F6] pb-3">
-                <div className="space-y-0.5">
-                  <h2 className="text-sm font-bold text-[#172033]">核心属性</h2>
-                  <p className="text-[11px] text-[#667085]">
-                    自然人在企业业务语义模型中的核心定义属性（非物理字段类型）。
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setIsAllAttributesDrawerOpen(true)}
-                  className="text-xs text-[#2563EB] hover:underline font-semibold flex items-center space-x-1 cursor-pointer"
-                >
-                  <span>查看全部属性</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Two-Column Business Attribute Table */}
-              <div className="overflow-hidden border border-[#E6EAF0] rounded-md">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#64748B]">
-                      <th className="py-2.5 px-4 font-semibold w-1/3">业务属性</th>
-                      <th className="py-2.5 px-4 font-semibold">业务含义</th>
-                      <th className="py-2.5 px-4 font-semibold text-right w-36">探索</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#EEF2F6]">
-                    {CORE_ATTRIBUTES.map((attr) => (
-                      <tr key={attr.id} className="hover:bg-[#F8FAFC] transition-colors group">
-                        <td className="py-3 px-4">
-                          <div className="font-bold text-[#172033] flex items-center space-x-2">
-                            <span>{attr.name}</span>
-                            {attr.domainContext && (
-                              <span className="text-[10px] font-normal px-1.5 py-0.2 bg-[#F1F5F9] text-[#64748B] rounded border border-[#E2E8F0]">
-                                {attr.domainContext}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-[#475569] leading-relaxed">
-                          {attr.meaning}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            onClick={() => {
-                              onExploreResourcesForObject?.('自然人', attr.name);
-                              addToast?.('info', '查看承载资源', `已筛选承载「${attr.name}」属性的真实数据资产`);
-                            }}
-                            className="text-[11px] text-[#64748B] group-hover:text-[#2563EB] font-medium hover:underline cursor-pointer transition-colors"
-                          >
-                            查看承载资源 →
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="text-xs text-[#64748B] font-mono">
+              Person · bo_person
             </div>
 
-            {/* ======================================================= */}
-            {/* 2. BUSINESS RELATIONSHIPS                               */}
-            {/* ======================================================= */}
-            <div className="bg-white border border-[#E6EAF0] rounded-md p-6 shadow-2xs space-y-4">
-              <div className="space-y-0.5 border-b border-[#EEF2F6] pb-3">
-                <h2 className="text-sm font-bold text-[#172033]">业务关系</h2>
-                <p className="text-[11px] text-[#667085]">
-                  表达业务世界的正式关系语义（业务关系 ≠ 数据库物理 Join）。
+            {/* Formal Business Definition Paragraph */}
+            <p className="text-sm text-[#334155] leading-relaxed">
+              人口与公共服务业务中的个人主体，用于统一表达人口身份、人口属性以及个人与行政区域、家庭和公共服务之间的业务关系。
+            </p>
+
+            {/* Business Context & Tags */}
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs pt-1">
+              <div className="flex items-center space-x-1.5 text-[#475569]">
+                <span className="text-[#64748B]">主业务域：</span>
+                <span className="text-[#0F172A] font-medium">人口服务 · 公共服务</span>
+              </div>
+
+              <div className="flex items-center space-x-1.5 text-[#475569]">
+                <span className="text-[#64748B]">定位：</span>
+                <span className="text-[#0F172A] font-medium">
+                  企业统一语义主体概念 · 支撑全域数据对齐
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* ======================================================= */}
+          {/* III. CORE FACTS (横向事实带，不做四张统计卡)             */}
+          {/* ======================================================= */}
+          <div className="flex flex-wrap items-center justify-between py-3 px-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs gap-y-2">
+            <div className="flex items-center space-x-2">
+              <span className="text-[#64748B]">主体类型：</span>
+              <span className="font-bold text-[#0F172A]">个人主体 (Person)</span>
+            </div>
+
+            <div className="h-3.5 w-px bg-[#CBD5E1] hidden sm:block" />
+
+            <div className="flex items-center space-x-2">
+              <span className="text-[#64748B]">常见称谓：</span>
+              <span className="font-bold text-[#0F172A]">人口 · 居民 · 个人</span>
+            </div>
+
+            <div className="h-3.5 w-px bg-[#CBD5E1] hidden sm:block" />
+
+            <div className="flex items-center space-x-2">
+              <span className="text-[#64748B]">承载资源：</span>
+              <span className="font-bold text-[#0F172A] flex items-center space-x-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                <span>12 资产 · 7 指标 · 3 API</span>
+              </span>
+            </div>
+
+            <div className="h-3.5 w-px bg-[#CBD5E1] hidden sm:block" />
+
+            <div className="flex items-center space-x-2">
+              <span className="text-[#64748B]">概念状态：</span>
+              <span className="font-bold text-[#0F172A] flex items-center space-x-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
+                <span>已发布正式生效</span>
+              </span>
+            </div>
+          </div>
+
+          {/* ======================================================= */}
+          {/* IV. 核心属性 (Core Attributes - High Density Table)       */}
+          {/* ======================================================= */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
+              <div className="space-y-0.5">
+                <h2 className="text-sm font-bold text-[#0F172A] tracking-tight flex items-center space-x-2">
+                  <Table className="w-4 h-4 text-[#2563EB]" />
+                  <span>核心属性</span>
+                </h2>
+                <p className="text-xs text-[#64748B]">
+                  自然人在企业业务语义模型中的核心定义属性（非物理字段类型）
                 </p>
               </div>
 
-              {/* Relationship Rows */}
-              <div className="space-y-2.5">
-                {BUSINESS_RELATIONSHIPS.map((rel) => (
-                  <div
-                    key={rel.id}
-                    className="p-4 bg-[#F8FAFC] border border-[#E6EAF0] rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-white hover:border-[#CBD5E1] transition-all"
-                  >
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 text-xs">
-                        <span className="font-bold text-[#172033] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
-                          {rel.source}
-                        </span>
-                        <span className="text-[11px] text-[#4F46E5] font-semibold flex items-center space-x-1 px-1.5 py-0.2 bg-[#EEF2FF] rounded border border-[#C7D2FE]">
-                          <span>— {rel.relation} →</span>
-                        </span>
-                        <span className="font-bold text-[#172033] bg-white px-2 py-0.5 rounded border border-[#E2E8F0]">
-                          {rel.target}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[#475569] leading-relaxed pt-0.5">
-                        {rel.description}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        addToast?.('info', `业务对象 · ${rel.target}`, `已查看「${rel.target}」业务对象概况`);
-                      }}
-                      className="text-xs text-[#2563EB] hover:underline font-semibold shrink-0 cursor-pointer flex items-center space-x-1"
-                    >
-                      <span>查看{rel.target}</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* ======================================================= */}
-            {/* 3. RELATED RESOURCES                                    */}
-            {/* ======================================================= */}
-            <div className="bg-white border border-[#E6EAF0] rounded-md p-6 shadow-2xs space-y-4">
-              <div className="flex items-center justify-between border-b border-[#EEF2F6] pb-3">
-                <div className="space-y-0.5">
-                  <div className="flex items-baseline space-x-2">
-                    <h2 className="text-sm font-bold text-[#172033]">相关资源</h2>
-                    <span className="text-[11px] text-[#98A2B3]">
-                      当前权限范围内可发现的真实资源
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[#667085]">
-                    承载该业务概念的数据资产、已注册指标与对外开放的数据服务 API。
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => {
-                    onExploreResourcesForObject?.('自然人');
-                    addToast?.('info', '全部相关资源', '已在资源超市中筛选归属于「自然人」的全部资源');
-                  }}
-                  className="text-xs text-[#2563EB] hover:underline font-semibold flex items-center space-x-1 cursor-pointer"
-                >
-                  <span>查看全部相关资源</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Resource Rows (Unified Resource Space View) */}
-              <div className="divide-y divide-[#EEF2F6] border border-[#E6EAF0] rounded-md overflow-hidden bg-white">
-                {RELATED_RESOURCES.map((res) => (
-                  <div
-                    key={res.id}
-                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#F8FAFC] transition-colors"
-                  >
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {res.type === 'DATA_ASSET' && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F1F5F9] text-[#2563EB] rounded border border-[#E2E8F0] font-mono flex items-center space-x-1">
-                            <Table className="w-3 h-3" />
-                            <span>DATA ASSET · {res.subType || 'TABLE'}</span>
-                          </span>
-                        )}
-                        {res.type === 'METRIC' && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] rounded border border-[#BFDBFE] font-mono flex items-center space-x-1">
-                            <BarChart3 className="w-3 h-3" />
-                            <span>METRIC</span>
-                          </span>
-                        )}
-                        {res.type === 'DATA_API' && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#F5F3FF] text-[#7C3AED] rounded border border-[#DDD6FE] font-mono flex items-center space-x-1">
-                            <Globe className="w-3 h-3" />
-                            <span>DATA API</span>
-                          </span>
-                        )}
-
-                        <h4 className="text-xs font-bold text-[#172033]">
-                          {res.name}
-                        </h4>
-
-                        <span className="text-[11px] text-[#667085] px-1.5 py-0.2 bg-[#F8FAFC] rounded border border-[#EEF2F6]">
-                          角色：{res.role}
-                        </span>
-
-                        {res.accessStatus && (
-                          <span className="text-[11px] flex items-center space-x-1">
-                            {res.accessStatus === 'available' ? (
-                              <span className="text-[#16A36A] flex items-center space-x-0.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-                                <span>{res.accessLabel}</span>
-                              </span>
-                            ) : (
-                              <span className="text-[#D97706] flex items-center space-x-0.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
-                                <span>{res.accessLabel}</span>
-                              </span>
-                            )}
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="text-xs text-[#475569] leading-relaxed">
-                        {res.description}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => {
-                        if (res.type === 'DATA_ASSET') {
-                          onNavigateToDataAssetDetail?.(res.id);
-                        } else if (res.type === 'METRIC') {
-                          onNavigateToMetricDetail?.(res.id);
-                        } else if (res.type === 'DATA_API') {
-                          onNavigateToApiDetail?.(res.id);
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded text-xs text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] font-semibold transition-colors cursor-pointer shrink-0"
-                    >
-                      查看 →
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        {/* ======================================================= */}
-        {/* RIGHT RAIL: 探索 (28% Fixed Rail)                        */}
-        {/* ======================================================= */}
-        <aside className="w-[300px] xl:w-[320px] bg-white border-l border-[#E6EAF0] flex flex-col shrink-0 overflow-y-auto select-none">
-          <div className="p-6 space-y-6">
-            
-            {/* Rail Header */}
-            <div className="space-y-1 border-b border-[#EEF2F6] pb-4">
-              <h3 className="text-sm font-bold text-[#172033]">探索</h3>
-              <p className="text-xs text-[#667085] leading-relaxed">
-                从当前业务对象继续进入关联资源、目标找数或知识网络。
-              </p>
-            </div>
-
-            {/* Belonging Domain */}
-            <div className="space-y-1.5">
-              <div className="text-[11px] text-[#98A2B3] font-medium">主业务域</div>
-              <div className="text-xs font-bold text-[#172033]">人口服务</div>
-              <div className="text-[11px] text-[#667085]">关联：公共服务 · 养老服务</div>
-            </div>
-
-            {/* Object State (Formal Only) */}
-            <div className="space-y-1.5">
-              <div className="text-[11px] text-[#98A2B3] font-medium">对象状态</div>
-              <div className="text-xs font-bold text-[#16A36A] flex items-center space-x-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-                <span>正式业务对象</span>
-              </div>
-              <p className="text-[11px] text-[#667085] leading-relaxed">
-                当前业务定义已正式生效，可用于企业资源发现和语义导航。
-              </p>
-            </div>
-
-            {/* Maintenance Team */}
-            <div className="space-y-1.5">
-              <div className="text-[11px] text-[#98A2B3] font-medium">维护团队</div>
-              <div className="text-xs font-semibold text-[#172033]">人口业务治理团队</div>
               <button
-                onClick={() => setIsContactModalOpen(true)}
-                className="text-xs text-[#2563EB] hover:underline font-medium cursor-pointer"
+                onClick={() => setIsAllAttributesDrawerOpen(true)}
+                className="inline-flex items-center space-x-1 text-xs text-[#2563EB] hover:text-[#1D4ED8] font-bold cursor-pointer transition-colors"
               >
-                联系团队 →
+                <span>查看全部属性 ({ALL_ATTRIBUTES.length})</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            {/* Main Action CTAs */}
-            <div className="pt-2 space-y-2.5 border-t border-[#EEF2F6]">
-              {/* Primary CTA: 查看相关资源 */}
+            <div className="border border-[#E2E8F0] rounded overflow-hidden text-xs">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[#64748B] font-semibold">
+                    <th className="py-2.5 px-4 w-[28%]">业务属性</th>
+                    <th className="py-2.5 px-4">业务含义</th>
+                    <th className="py-2.5 px-4 text-right w-36">探索</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F1F5F9]">
+                  {CORE_ATTRIBUTES.map((attr) => (
+                    <tr key={attr.id} className="hover:bg-[#F8FAFC] transition-colors group">
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-[#0F172A] flex items-center space-x-2">
+                          <span>{attr.name}</span>
+                          {attr.domainContext && (
+                            <span className="text-[10px] font-normal px-1.5 py-0.2 bg-[#F1F5F9] text-[#64748B] rounded border border-[#E2E8F0]">
+                              {attr.domainContext}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-[#475569] leading-relaxed">
+                        {attr.meaning}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => {
+                            onExploreResourcesForObject?.('自然人', attr.name);
+                            addToast?.('info', '查看承载资源', `已筛选承载「${attr.name}」属性的真实数据资产`);
+                          }}
+                          className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold hover:underline cursor-pointer transition-colors"
+                        >
+                          查看承载资源 →
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* ======================================================= */}
+          {/* V. 业务关系 (Business Relationships - Flat Semantic Flow) */}
+          {/* ======================================================= */}
+          <section className="space-y-3">
+            <div className="space-y-0.5 pb-2 border-b border-[#E2E8F0]">
+              <h2 className="text-sm font-bold text-[#0F172A] tracking-tight flex items-center space-x-2">
+                <Workflow className="w-4 h-4 text-[#7C3AED]" />
+                <span>业务关系</span>
+              </h2>
+              <p className="text-xs text-[#64748B]">
+                表达业务世界的正式关系语义（业务关系 ≠ 数据库物理外键 Join）
+              </p>
+            </div>
+
+            <div className="border border-[#E2E8F0] rounded divide-y divide-[#F1F5F9] text-xs">
+              {BUSINESS_RELATIONSHIPS.map((rel) => (
+                <div
+                  key={rel.id}
+                  className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#F8FAFC] transition-colors"
+                >
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <div className="flex items-center space-x-2 text-xs">
+                      <span className="font-bold text-[#0F172A] bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0]">
+                        {rel.source}
+                      </span>
+                      <span className="text-[11px] text-[#7C3AED] font-semibold flex items-center space-x-1 px-1.5 py-0.2 bg-[#F5F3FF] rounded border border-[#DDD6FE]">
+                        <span>— {rel.relation} →</span>
+                      </span>
+                      <span className="font-bold text-[#0F172A] bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0]">
+                        {rel.target}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#475569] leading-relaxed pt-0.5">
+                      {rel.description}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      addToast?.('info', `业务对象 · ${rel.target}`, `已查看「${rel.target}」业务对象概况`);
+                    }}
+                    className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold shrink-0 cursor-pointer flex items-center space-x-0.5"
+                  >
+                    <span>查看{rel.target}</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* ======================================================= */}
+          {/* VI. 相关资源 (Related Resources - Flat High-Density Grid)  */}
+          {/* ======================================================= */}
+          <section id="section-related-resources" className="space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E2E8F0]">
+              <div className="space-y-0.5">
+                <h2 className="text-sm font-bold text-[#0F172A] tracking-tight flex items-center space-x-2">
+                  <Network className="w-4 h-4 text-[#2563EB]" />
+                  <span>相关资源</span>
+                </h2>
+                <p className="text-xs text-[#64748B]">
+                  承载该业务概念的数据资产、已注册指标与对外开放的数据服务 API
+                </p>
+              </div>
+
               <button
                 onClick={() => {
                   onExploreResourcesForObject?.('自然人');
-                  addToast?.('info', '查看相关资源', '已在资源超市中筛选「自然人」的全部数据资产、指标与 API');
+                  addToast?.('info', '全部相关资源', '已在资源超市中筛选归属于「自然人」的全部资源');
                 }}
-                className="w-full py-2.5 px-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5"
+                className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-bold inline-flex items-center space-x-0.5 cursor-pointer"
               >
-                <Layers className="w-4 h-4" />
-                <span>查看相关资源</span>
-              </button>
-
-              {/* Secondary CTA: 基于此对象找数 */}
-              <button
-                onClick={() => {
-                  onFindDataWithObjectGoal?.('自然人');
-                  addToast?.('info', '基于此对象找数', '已将「自然人」作为已知语义上下文载入目标找数');
-                }}
-                className="w-full py-2.5 px-4 bg-white hover:bg-[#F8FAFC] text-[#2563EB] border border-[#BFDBFE] text-xs font-bold rounded-md transition-colors cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>基于此对象找数</span>
-              </button>
-
-              {/* Tertiary CTA: 进入知识网络 */}
-              <button
-                onClick={() => {
-                  onNavigateToKnowledgeNetwork?.(objectId);
-                  addToast?.('info', '知识网络', '已跳转至企业知识网络查看完整的自然人关系图谱与拓扑');
-                }}
-                className="w-full py-2 px-3 text-xs text-[#475569] hover:text-[#172033] hover:bg-[#F1F5F9] rounded-md transition-colors cursor-pointer flex items-center justify-center space-x-1"
-              >
-                <Network className="w-3.5 h-3.5 text-[#64748B]" />
-                <span>进入知识网络 →</span>
+                <span>查看全部相关资源</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
-          </div>
-        </aside>
+            {/* Flat Compact Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              {RELATED_RESOURCES.map((res) => (
+                <div
+                  key={res.id}
+                  className="p-3 border border-[#E2E8F0] rounded hover:border-[#2563EB] transition-all bg-white flex flex-col justify-between space-y-2"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-[#0F172A] truncate max-w-[130px]" title={res.name}>
+                        {res.name}
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        res.type === 'DATA_ASSET'
+                          ? 'bg-[#EFF6FF] text-[#2563EB]'
+                          : res.type === 'METRIC'
+                          ? 'bg-[#F0FDF4] text-[#166534]'
+                          : 'bg-[#F5F3FF] text-[#7C3AED]'
+                      }`}>
+                        {res.type === 'DATA_ASSET' ? 'DATA ASSET' : res.type === 'METRIC' ? 'METRIC' : 'DATA API'}
+                      </span>
+                    </div>
 
+                    <div className="text-[11px] text-[#64748B] flex items-center justify-between">
+                      <span>角色：{res.role}</span>
+                      <span className={res.accessStatus === 'available' ? 'text-[#16A36A] font-medium' : 'text-[#D97706] font-medium'}>
+                        {res.accessLabel}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-[#475569] leading-relaxed line-clamp-2">
+                      {res.description}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (res.type === 'DATA_ASSET') {
+                        onNavigateToDataAssetDetail?.(res.id);
+                      } else if (res.type === 'METRIC') {
+                        onNavigateToMetricDetail?.(res.id);
+                      } else if (res.type === 'DATA_API') {
+                        onNavigateToApiDetail?.(res.id);
+                      }
+                    }}
+                    className="pt-1.5 border-t border-[#F1F5F9] text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold inline-flex items-center justify-between cursor-pointer"
+                  >
+                    <span>查看详情</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+        </div>
       </main>
 
       {/* ========================================================= */}
-      {/* 3. ALL ATTRIBUTES DRAWER                                  */}
+      {/* 3. LIGHTWEIGHT RIGHT USE RAIL (Flat Sidebar)              */}
+      {/* ========================================================= */}
+      <aside className="w-[300px] xl:w-[320px] bg-white border-l border-[#E2E8F0] flex flex-col shrink-0 overflow-y-auto select-none p-6 space-y-5">
+        
+        {/* Rail Title */}
+        <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
+          <h3 className="text-sm font-bold text-[#0F172A] tracking-tight">
+            使用与探索
+          </h3>
+          <span className="text-[11px] font-mono text-[#7C3AED]">
+            BUSINESS OBJECT
+          </span>
+        </div>
+
+        {/* Section 1: 语义概念说明 */}
+        <div className="space-y-1 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[#64748B]">概念状态</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F0FDF4] text-[#166534] border border-[#BBF7D0] flex items-center space-x-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
+              <span>正式业务对象</span>
+            </span>
+          </div>
+          <p className="text-[11px] text-[#64748B] leading-relaxed">
+            业务对象为企业统一概念主体，不可直接作为物理表查询；请通过关联的数据资产、指标或 API 获取真实数据。
+          </p>
+        </div>
+
+        <div className="h-px bg-[#E2E8F0]" />
+
+        {/* Section 2: 详细元数据项 */}
+        <div className="space-y-2.5 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[#64748B]">主业务域</span>
+            <span className="font-semibold text-[#0F172A]">人口服务</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-[#64748B]">关联业务域</span>
+            <span className="font-semibold text-[#0F172A]">公共服务 · 养老服务</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-[#64748B]">下属数据资产</span>
+            <span className="font-mono font-semibold text-[#0F172A]">12 项</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-[#64748B]">注册指标</span>
+            <span className="font-mono font-semibold text-[#0F172A]">7 项</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-[#64748B]">开放 API</span>
+            <span className="font-mono font-semibold text-[#0F172A]">3 项</span>
+          </div>
+        </div>
+
+        <div className="h-px bg-[#E2E8F0]" />
+
+        {/* Section 3: 维护团队 */}
+        <div className="space-y-1.5 text-xs">
+          <div className="text-[#64748B]">维护团队</div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-1.5">
+              <div className="w-5 h-5 rounded bg-[#F1F5F9] flex items-center justify-center text-[#475569]">
+                <Building2 className="w-3 h-3" />
+              </div>
+              <span className="font-semibold text-[#0F172A]">人口业务治理团队</span>
+            </div>
+            <button
+              onClick={() => setIsContactModalOpen(true)}
+              className="text-xs text-[#2563EB] hover:underline font-semibold cursor-pointer"
+            >
+              联系团队 →
+            </button>
+          </div>
+        </div>
+
+        <div className="h-px bg-[#E2E8F0]" />
+
+        {/* Section 4: CTAs */}
+        <div className="space-y-2 pt-1">
+          {/* Primary CTA: 查看相关资源 */}
+          <button
+            onClick={() => {
+              onExploreResourcesForObject?.('自然人');
+              addToast?.('info', '查看相关资源', '已在资源超市中筛选「自然人」的全部数据资产、指标与 API');
+            }}
+            className="w-full py-2 px-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded transition-colors cursor-pointer shadow-2xs flex items-center justify-center space-x-1.5"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>查看相关资源</span>
+          </button>
+
+          {/* Secondary CTA: 基于此对象找数 */}
+          <button
+            onClick={() => {
+              onFindDataWithObjectGoal?.('自然人');
+              addToast?.('info', '基于此对象找数', '已将「自然人」作为已知语义上下文载入目标找数');
+            }}
+            className="w-full py-2 px-4 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] border border-[#BFDBFE] text-xs font-bold rounded transition-colors cursor-pointer flex items-center justify-center space-x-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>基于此对象找数</span>
+          </button>
+
+          {/* Tertiary CTA: 进入知识网络 */}
+          <button
+            onClick={() => {
+              onNavigateToKnowledgeNetwork?.(objectId);
+              addToast?.('info', '知识网络', '已跳转至企业知识网络查看完整的自然人关系图谱与拓扑');
+            }}
+            className="w-full py-1.5 px-4 bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-[#475569] hover:text-[#0F172A] text-xs font-medium rounded transition-colors cursor-pointer flex items-center justify-center space-x-1.5"
+          >
+            <Network className="w-3.5 h-3.5 text-[#64748B]" />
+            <span>进入知识网络 →</span>
+          </button>
+        </div>
+
+      </aside>
+
+      {/* ========================================================= */}
+      {/* 4. ALL ATTRIBUTES DRAWER (全部属性抽屉)                     */}
       {/* ========================================================= */}
       {isAllAttributesDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-2xs animate-in fade-in duration-150">
-          <aside className="w-full max-w-xl bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
-            <div className="px-6 py-4 border-b border-[#E6EAF0] bg-[#FAFCFF] flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity animate-in fade-in duration-150">
+          <div
+            className="absolute inset-0"
+            onClick={() => setIsAllAttributesDrawerOpen(false)}
+          />
+
+          <div
+            className="relative w-full max-w-[560px] bg-white h-full shadow-2xl border-l border-[#E2E8F0] flex flex-col z-10 animate-in slide-in-from-right duration-200 text-[#0F172A]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-white">
               <div className="space-y-0.5">
                 <div className="flex items-center space-x-2">
-                  <h3 className="text-sm font-bold text-[#172033]">自然人 · 全部业务属性</h3>
-                  <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#EEF2FF] text-[#4F46E5] rounded">
+                  <h3 className="text-base font-bold text-[#0F172A]">自然人 · 全部业务属性</h3>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 bg-[#F5F3FF] text-[#7C3AED] rounded border border-[#DDD6FE]">
                     共 {ALL_ATTRIBUTES.length} 项
                   </span>
                 </div>
-                <p className="text-[11px] text-[#64748B]">企业业务语义模型中的全部已生效属性定义</p>
+                <p className="text-xs text-[#64748B]">企业业务语义模型中的全部已生效属性定义</p>
               </div>
 
               <button
                 onClick={() => setIsAllAttributesDrawerOpen(false)}
-                className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
+                className="p-1.5 rounded hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-3">
-              <div className="divide-y divide-[#EEF2F6] border border-[#E6EAF0] rounded-md overflow-hidden bg-white">
+            {/* Drawer Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-3 text-xs">
+              <div className="divide-y divide-[#F1F5F9] border border-[#E2E8F0] rounded overflow-hidden bg-white">
                 {ALL_ATTRIBUTES.map((attr) => (
                   <div key={attr.id} className="p-3.5 hover:bg-[#F8FAFC] transition-colors flex items-center justify-between gap-3">
                     <div className="space-y-1 flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
-                        <span className="text-xs font-bold text-[#172033]">{attr.name}</span>
+                        <span className="font-bold text-[#0F172A]">{attr.name}</span>
                         {attr.domainContext && (
                           <span className="text-[10px] px-1.5 py-0.2 bg-[#F1F5F9] text-[#64748B] rounded border border-[#E2E8F0]">
                             {attr.domainContext}
@@ -763,51 +810,72 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
               </div>
             </div>
 
-            <div className="p-4 border-t border-[#E6EAF0] bg-[#FAFCFF] flex justify-end">
+            {/* Drawer Footer */}
+            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end">
               <button
                 onClick={() => setIsAllAttributesDrawerOpen(false)}
-                className="px-4 py-2 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#334155] text-xs font-semibold rounded-md transition-colors cursor-pointer"
+                className="px-4 py-1.5 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#334155] text-xs font-bold rounded cursor-pointer transition-colors"
               >
                 关闭
               </button>
             </div>
-          </aside>
+          </div>
         </div>
       )}
 
       {/* ========================================================= */}
-      {/* 4. CONTACT TEAM MODAL                                     */}
+      {/* 5. CONTACT TEAM MODAL                                     */}
       {/* ========================================================= */}
       {isContactModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-lg border border-[#CBD5E1] shadow-2xl max-w-md w-full overflow-hidden">
-            <div className="px-6 py-4 bg-[#F8FAFC] border-b border-[#E6EAF0] flex items-center justify-between">
-              <h3 className="text-sm font-bold text-[#172033]">联系人口业务治理团队</h3>
-              <button onClick={() => setIsContactModalOpen(false)} className="p-1 rounded hover:bg-[#E2E8F0] text-[#64748B] cursor-pointer">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded shadow-2xl border border-[#E2E8F0] max-w-md w-full p-6 space-y-5 text-xs text-[#0F172A] animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-[#0F172A]">
+                  联系人口业务治理团队
+                </h3>
+                <p className="text-xs text-[#64748B]">
+                  自然人业务概念、语义属性与口径咨询
+                </p>
+              </div>
+              <button
+                onClick={() => setIsContactModalOpen(false)}
+                className="p-1 text-[#94A3B8] hover:text-[#0F172A] rounded transition-colors"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 text-xs text-[#475569]">
-              <div className="space-y-1">
-                <div className="font-semibold text-[#172033]">责任架构师</div>
-                <div>李工（企业人口数据主数据专家）· 企微 / 内部邮件：li.ming@semovix.corp</div>
+            <div className="space-y-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded p-4">
+              <div className="flex justify-between items-center">
+                <span className="text-[#64748B]">责任架构师</span>
+                <span className="font-bold text-[#0F172A]">李工（人口数据主数据专家）</span>
               </div>
-              <div className="space-y-1">
-                <div className="font-semibold text-[#172033]">业务口径咨询群</div>
-                <div>企微群：Semovix-人口业务对象治理与服务对接群</div>
+              <div className="flex justify-between items-center">
+                <span className="text-[#64748B]">企微 / 钉钉群</span>
+                <span className="font-mono font-bold text-[#2563EB]">#Semovix-人口业务对象治理群</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[#64748B]">联系邮箱</span>
+                <span className="font-mono text-[#0F172A]">li.ming@semovix.enterprise</span>
               </div>
             </div>
 
-            <div className="px-6 py-3.5 bg-[#F8FAFC] border-t border-[#E6EAF0] flex justify-end">
+            <div className="flex justify-end space-x-2 pt-2">
+              <button
+                onClick={() => setIsContactModalOpen(false)}
+                className="px-4 py-1.5 bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#475569] font-bold rounded cursor-pointer transition-colors"
+              >
+                关闭
+              </button>
               <button
                 onClick={() => {
                   setIsContactModalOpen(false);
-                  addToast?.('success', '已发送咨询提醒', '已向治理团队负责人发送业务口径咨询消息');
+                  addToast?.('success', '已发起企业通讯会话', '已在企业 IM 中拉起「人口业务对象治理」群聊');
                 }}
-                className="px-4 py-1.5 bg-[#2563EB] text-white text-xs font-bold rounded hover:bg-[#1D4ED8] transition-colors cursor-pointer"
+                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded cursor-pointer transition-colors"
               >
-                我知道了
+                发起企业协同
               </button>
             </div>
           </div>
