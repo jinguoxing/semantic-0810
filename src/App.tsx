@@ -1331,7 +1331,7 @@ export default function App() {
       />
 
       {/* Toast Feedback */}
-      <ToastContainer toasts={toasts} onDismiss={removeToast} />
+      <ToastContainer toasts={toasts} onDismiss={removeToast} bottomOffsetClassName={currentNav === 'access_review_detail' || viewTab === 'access_review_detail' ? 'bottom-[88px]' : 'bottom-5'} />
     </div>
     </AccessProvider>
   );

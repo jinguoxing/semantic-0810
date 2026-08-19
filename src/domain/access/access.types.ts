@@ -10,6 +10,7 @@ export type ResourceAccessState = 'AVAILABLE' | 'REQUESTABLE' | 'PENDING' | 'UNA
 export type TaskReadiness = 'WAITING' | 'READY' | 'DEGRADED' | 'BLOCKED';
 export type AccessOperation = 'QUERY' | 'EXPORT' | 'INVOKE' | 'SUBSCRIBE';
 export type AccessDecisionType = 'GRANT' | 'GRANT_WITH_LIMITS' | 'DENY';
+export type AccessPolicyProfile = 'PERSONAL_DATA' | 'BUSINESS_DATA' | 'API_SERVICE' | 'EXPORT_DATA' | 'SPECIAL_POPULATION';
 
 export interface AccessScope {
   geography?: { regionIds?: string[]; regionNames?: string[] };
@@ -25,6 +26,13 @@ export interface ProtectionRule {
 }
 
 export interface UsageRestriction { id: string; description: string; }
+
+export interface AccessFieldDetail {
+  businessName: string;
+  technicalName?: string;
+  treatment: 'ALLOW' | 'MASK' | 'EXCLUDE';
+  sensitivity?: string;
+}
 
 export interface EffectiveGrant {
   id: string;
@@ -55,6 +63,9 @@ export interface AccessRequest {
   reviewReason?: string;
   riskLevel?: 'LOW' | 'MEDIUM' | 'HIGH';
   requestedDurationDays?: number;
+  policyProfile?: AccessPolicyProfile;
+  resourceOwnerTeam?: string;
+  fieldDetails?: AccessFieldDetail[];
   submittedAt: string;
   updatedAt: string;
 }

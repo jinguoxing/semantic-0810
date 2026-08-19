@@ -11,11 +11,12 @@ export interface ToastMessage {
 interface ToastProps {
   toasts: ToastMessage[];
   onDismiss: (id: string) => void;
+  bottomOffsetClassName?: string;
 }
 
-export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
+export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss, bottomOffsetClassName }) => {
   return (
-    <div className="fixed bottom-5 right-5 z-[110] space-y-2 max-w-sm w-full">
+    <div className={`fixed right-5 z-[110] w-full max-w-sm space-y-2 ${bottomOffsetClassName ?? 'bottom-5'}`}>
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
       ))}
