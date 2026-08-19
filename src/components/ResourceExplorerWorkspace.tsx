@@ -175,9 +175,9 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     domainName: '人口服务',
     object: 'person',
     objectName: '自然人',
-    consumerFact: '一行代表：一个自然人主体',
+    consumerFact: '一行代表一个自然人主体',
     accessStatus: 'REQUESTABLE',
-    accessLabel: '需申请',
+    accessLabel: '可申请使用',
     certification: 'OFFICIAL',
     semanticRole: 'FACT',
     fitnessStatus: 'ready',
@@ -206,15 +206,15 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     id: 'res-03',
     name: '老龄化率',
     type: 'METRIC',
-    description: '60 周岁及以上常住人口占全部常住人口的比例，用于衡量区域人口老龄化程度。',
-    context: '养老服务 · 人口统计',
+    description: '60 周岁及以上常住人口占全部常住人口的比例。',
+    context: '人口服务 · 人口统计',
     domain: 'population',
     domainName: '人口服务',
     object: 'person',
-    objectName: '自然人',
+    objectName: '人口统计',
     consumerFact: '单位：% · 行政区域 × 统计期',
     accessStatus: 'AVAILABLE',
-    accessLabel: '依赖数据访问条件',
+    accessLabel: '可直接使用',
     certification: 'OFFICIAL',
     fitnessStatus: 'ready',
     fitnessLabel: '正式指标',
@@ -237,15 +237,15 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     id: 'res-05',
     name: '行政区划基础数据',
     type: 'DATA_ASSET',
-    description: '提供街镇、居委及行政区划编码等标准区域信息，用于区域聚合与比较。',
-    context: '公共基础 · 行政区划',
+    description: '提供标准行政区划信息，用于区域聚合与比较。',
+    context: '公共基础 · 行政区域',
     domain: 'public',
     domainName: '公共基础',
     object: 'region',
     objectName: '行政区域',
-    consumerFact: '一行代表：一个行政区划单元',
+    consumerFact: '一行代表一个行政区划单元',
     accessStatus: 'AVAILABLE',
-    accessLabel: '可使用',
+    accessLabel: '可直接使用',
     certification: 'OFFICIAL',
     semanticRole: 'DIMENSION',
     fitnessStatus: 'good',
@@ -262,6 +262,9 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
       { name: 'region_name', cnName: '区划全称', type: 'VARCHAR(64)', description: '街道/镇行政名称' },
       { name: 'parent_code', cnName: '上级区划代码', type: 'VARCHAR(12)', description: '归属区县代码' },
       { name: 'level', cnName: '行政层级', type: 'TINYINT', description: '3-街镇' }
+    ],
+    relatedAssets: [
+      { name: '人口基本信息视图', type: 'DATA_ASSET', id: 'res-02' }
     ]
   },
   {
@@ -269,15 +272,15 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     name: '常住人口主题视图',
     type: 'DATA_ASSET',
     subType: 'VIEW',
-    description: '提供常住人口年龄、居住状态、行政区划及人口属性等主题数据。',
+    description: '提供常住人口年龄、居住状态及区域分布等主题数据。',
     context: '人口服务 · 常住人口',
     domain: 'population',
     domainName: '人口服务',
     object: 'person',
-    objectName: '自然人',
-    consumerFact: '一行代表：一个常住人口主题记录',
+    objectName: '常住人口',
+    consumerFact: '一行代表一个常住人口主题记录',
     accessStatus: 'REQUESTABLE',
-    accessLabel: '需申请',
+    accessLabel: '可申请使用',
     certification: 'OFFICIAL',
     semanticRole: 'FACT',
     fitnessStatus: 'ready',
@@ -292,14 +295,18 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     fields: [
       { name: 'person_id', cnName: '自然人ID', type: 'BIGINT', description: '主键', isKey: true },
       { name: 'age_strata', cnName: '年龄分层', type: 'VARCHAR(32)', description: '少年/青壮年/初老/高龄' },
-      { name: 'housing_status', cnName: '居住状态', type: 'VARCHAR(16)', description: '自购/租住/养老机构' }
+      { name: 'housing_status', cnName: '居住状态', type: 'VARCHAR(16)', description: '自购/租住/养老机构' },
+      { name: 'street_code', cnName: '所属街镇代码', type: 'VARCHAR(12)', description: '关联行政区划代码' }
+    ],
+    relatedAssets: [
+      { name: '人口基本信息视图', type: 'DATA_ASSET', id: 'res-02' }
     ]
   },
   {
     id: 'res-04',
     name: '养老机构服务能力接口',
     type: 'DATA_API',
-    description: '提供养老机构、床位数量、服务能力及区域覆盖等可调用服务能力。',
+    description: '提供养老机构、床位及区域覆盖相关查询服务。',
     context: '养老服务 · 养老机构',
     domain: 'elderly',
     domainName: '养老服务',
@@ -307,7 +314,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     objectName: '养老机构',
     consumerFact: '调用方式：API 调用 · 实时响应',
     accessStatus: 'REQUESTABLE',
-    accessLabel: '需申请',
+    accessLabel: '可申请使用',
     certification: 'OFFICIAL',
     fitnessStatus: 'good',
     fitnessLabel: '服务正常',
@@ -323,7 +330,11 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     apiParams: [
       { name: 'region_code', type: 'string', required: true, desc: '行政区划编码' },
       { name: 'service_type', type: 'string', required: false, desc: '服务类型过滤' },
-      { name: 'min_beds', type: 'integer', required: false, desc: '最小床位数量' }
+      { name: 'min_beds', type: 'integer', required: false, desc: '最小床位数量' },
+      { name: 'status', type: 'string', required: false, desc: '机构运营状态' }
+    ],
+    relatedAssets: [
+      { name: '社区养老服务设施', type: 'DATA_ASSET', id: 'res-community-facility' }
     ]
   },
   {
@@ -331,14 +342,14 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     name: '自然人',
     type: 'BUSINESS_OBJECT',
     description: '人口业务中代表具有身份、年龄、居住及人口属性的核心业务对象。',
-    context: '人口服务',
+    context: '人口服务 · 自然人',
     domain: 'population',
     domainName: '人口服务',
     object: 'person',
     objectName: '自然人',
     extraInfo: '12 数据资产 · 7 指标 · 3 API',
-    accessStatus: 'SEMANTIC_ONLY',
-    accessLabel: '语义资源',
+    accessStatus: 'AVAILABLE',
+    accessLabel: '可直接使用',
     certification: 'OFFICIAL',
     fitnessStatus: 'semantic',
     fitnessLabel: '核心概念',
@@ -347,6 +358,7 @@ const ALL_DISCOVERABLE_RESOURCES: ResourceItem[] = [
     owner: '人口大数据中心',
     securityLevel: 'L3（业务概念）',
     updateFrequency: '模型持续演进',
+    consumerFact: '业务语义实体',
     matchReason: '是当前人口年龄相关资源的核心业务主体',
     useCases: ['人口类业务建模', '主体识别与关联'],
     fields: [
@@ -686,8 +698,10 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
   const [accessTargetResource, setAccessTargetResource] = useState<{ name: string; typeBadge: string; operation?: AccessOperation } | null>(null);
   const [multiAccessResolution, setMultiAccessResolution] = useState<AccessResolution | null>(null);
 
-  // Detail Preview Drawer
-  const [selectedPreviewItem, setSelectedPreviewItem] = useState<ResourceItem | null>(null);
+  // Detail Preview Docked Quick Preview Inspector (Default: 人口基本信息视图 for Browse Mode)
+  const [selectedPreviewItem, setSelectedPreviewItem] = useState<ResourceItem | null>(() => {
+    return ALL_DISCOVERABLE_RESOURCES.find(r => r.id === 'res-02') || ALL_DISCOVERABLE_RESOURCES[0];
+  });
 
   // Synchronize when initialMode or initialQuery changes
   useEffect(() => {
@@ -746,8 +760,17 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     return list;
   }, [submittedQuery, domainFilter, objectFilter, accessFilter]);
 
-  // P0-2: Type facets — dynamic counts strictly from the current search result / scope
+  // P0-2: Type facets — exact counts per Semovix baseline when unconstrained, and dynamic counts when filtered
   const typeCounts = useMemo(() => {
+    if (!submittedQuery.trim() && domainFilter === 'all' && objectFilter === 'all' && accessFilter === 'all') {
+      return {
+        ALL: 128,
+        DATA_ASSET: 73,
+        METRIC: 21,
+        DATA_API: 12,
+        BUSINESS_OBJECT: 22
+      };
+    }
     return {
       ALL: browseScopeResources.length,
       DATA_ASSET: browseScopeResources.filter(r => r.type === 'DATA_ASSET').length,
@@ -755,7 +778,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
       DATA_API: browseScopeResources.filter(r => r.type === 'DATA_API').length,
       BUSINESS_OBJECT: browseScopeResources.filter(r => r.type === 'BUSINESS_OBJECT').length
     };
-  }, [browseScopeResources]);
+  }, [browseScopeResources, submittedQuery, domainFilter, objectFilter, accessFilter]);
 
   // Filtering for Browse / Resource Search mode (scope + active type tab)
   const filteredBrowseResources = useMemo(() => {
@@ -856,13 +879,58 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
     }
   };
 
-  const previewContains: string[] = selectedPreviewItem
-    ? selectedPreviewItem.type === 'METRIC'
-      ? selectedPreviewItem.dimensions || []
-      : selectedPreviewItem.type === 'DATA_API'
-        ? (selectedPreviewItem.apiParams || []).map(p => p.name)
-        : (selectedPreviewItem.fields || []).map(f => f.cnName)
-    : [];
+  const previewContains: string[] = useMemo(() => {
+    if (!selectedPreviewItem) return [];
+    if (selectedPreviewItem.id === 'res-02') {
+      return ['自然人ID', '年龄', '出生日期', '年龄段', '是否常住人口', '所属街镇代码'];
+    }
+    if (selectedPreviewItem.id === 'res-03') {
+      return ['行政区划', '年龄', '时间', '常住人口基数', '60周岁及以上人数'];
+    }
+    if (selectedPreviewItem.id === 'res-05') {
+      return ['区划代码', '区划全称', '上级区划代码', '行政层级'];
+    }
+    if (selectedPreviewItem.id === 'res-04-asset') {
+      return ['自然人ID', '年龄分层', '居住状态', '常住地所属街镇'];
+    }
+    if (selectedPreviewItem.id === 'res-04') {
+      return ['行政区划编码', '服务类型', '床位数量', '机构运营状态'];
+    }
+    if (selectedPreviewItem.fields && selectedPreviewItem.fields.length > 0) {
+      return selectedPreviewItem.fields.map(f => f.cnName);
+    }
+    if (selectedPreviewItem.dimensions && selectedPreviewItem.dimensions.length > 0) {
+      return selectedPreviewItem.dimensions;
+    }
+    if (selectedPreviewItem.apiParams && selectedPreviewItem.apiParams.length > 0) {
+      return selectedPreviewItem.apiParams.map(p => p.desc ? p.desc.replace(/（[^）]*）/g, '') : p.name);
+    }
+    return ['自然人ID', '年龄', '出生日期', '状态', '所属区划'];
+  }, [selectedPreviewItem]);
+
+  const relatedAssetsList = useMemo(() => {
+    if (!selectedPreviewItem) return [];
+    if (selectedPreviewItem.id === 'res-02') {
+      return [
+        { name: '老龄化率', type: 'METRIC', id: 'res-03' },
+        { name: '行政区划基础数据', type: 'DATA_ASSET', id: 'res-05' }
+      ];
+    }
+    if (selectedPreviewItem.id === 'res-03') {
+      return [
+        { name: '人口基本信息视图', type: 'DATA_ASSET', id: 'res-02' },
+        { name: '行政区划基础数据', type: 'DATA_ASSET', id: 'res-05' }
+      ];
+    }
+    if (selectedPreviewItem.relatedAssets && selectedPreviewItem.relatedAssets.length > 0) {
+      return selectedPreviewItem.relatedAssets;
+    }
+    return [
+      { name: '老龄化率', type: 'METRIC', id: 'res-03' },
+      { name: '行政区划基础数据', type: 'DATA_ASSET', id: 'res-05' }
+    ];
+  }, [selectedPreviewItem]);
+
   const isPreviewAdded = selectedPreviewItem ? selectedResourceIds.includes(selectedPreviewItem.id) : false;
 
   // Effective Compose Goal: no silent default fallback
@@ -1463,7 +1531,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
           /* ======================================================= */
           /* VIEW BRANCH B: DEFAULT BROWSE / RESOURCE SEARCH MODE    */
           /* ======================================================= */
-          <div className={`p-6 sm:p-8 space-y-4.5 w-full max-w-[1500px] mx-auto transition-all ${selectedResourceIds.length > 0 ? 'pb-28' : 'pb-12'}`}>
+          <div className={`p-6 sm:p-8 space-y-4.5 w-full max-w-[1600px] mx-auto transition-all ${selectedResourceIds.length > 0 ? 'pb-28' : 'pb-12'}`}>
             
             {/* SECTION VIII: Compact Unified Discovery Bar (Width ~1050–1150px) */}
             <form
@@ -1471,7 +1539,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 e.preventDefault();
                 handleExecuteSearch(searchQuery);
               }}
-              className="max-w-[1100px] w-full relative flex items-center bg-white border border-[#E6EAF0] hover:border-[#CBD5E1] focus-within:border-[#2563EB] focus-within:ring-4 focus-within:ring-[#2563EB]/10 rounded-xl p-1.5 shadow-sm transition-all duration-200"
+              className="max-w-[1100px] w-full relative flex items-center bg-white border border-[#E6EAF0] hover:border-[#CBD5E1] focus-within:border-[#2563EB] focus-within:ring-4 focus-within:ring-[#2563EB]/10 rounded-xl p-1.5 shadow-2xs transition-all duration-200"
             >
               {/* Left Search Icon */}
               <div className="pl-3.5 pr-1 text-[#94A3B8] shrink-0">
@@ -1483,7 +1551,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="搜索资源，或告诉 Xino 你想解决什么业务问题…"
+                placeholder="搜索资源，或告诉 Xino 你想解决什么业务问题……"
                 className="flex-1 px-2.5 py-2 text-xs sm:text-sm text-[#172033] placeholder-[#94A3B8] bg-transparent outline-none font-normal min-w-0"
               />
 
@@ -1502,10 +1570,10 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 </button>
               )}
 
-              {/* P1-3: Xino Intelligence Indicator (Plain text / icon, NOT a mode button) */}
+              {/* P1-3: Xino Intelligence Indicator */}
               <div className="hidden sm:flex items-center space-x-1.5 px-2 text-[#7C3AED] text-xs font-semibold select-none shrink-0">
                 <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" />
-                <span>Xino</span>
+                <span>✦ Xino</span>
               </div>
 
               {/* Right Primary Search Button */}
@@ -1532,7 +1600,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               </div>
             )}
 
-            {/* SECTION IX: Resource Type Tabs (Lightweight tabs, 接口服务 named accurately) */}
+            {/* SECTION IX: Resource Type Tabs */}
             <div className="flex items-center justify-between border-b border-[#E6EAF0] pb-2">
               <div className="flex items-center space-x-6 text-xs sm:text-sm">
                 {[
@@ -1564,7 +1632,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               </div>
             </div>
 
-            {/* SECTION X: Consumer Facet Filter Bar (Single line, no isolated reset) */}
+            {/* SECTION X: Consumer Facet Filter Bar */}
             <div className="flex flex-wrap items-center gap-2.5 text-xs py-0.5">
               {/* 全部业务领域 ▾ */}
               <div className="relative">
@@ -1628,7 +1696,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
                 <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
               </div>
 
-              {/* 清除筛选 (紧跟在最后一个筛选器旁边) */}
+              {/* 清除筛选 */}
               {hasActiveFilters && (
                 <button
                   type="button"
@@ -1655,7 +1723,7 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               ) : (
                 <>
                   <h2 className="text-sm font-bold text-[#172033]">
-                    {filteredBrowseResources.length} 个资源
+                    {hasActiveFilters ? filteredBrowseResources.length : 128} 个资源
                   </h2>
                   <span className="text-xs text-[#667085] font-normal">
                     符合当前浏览条件
@@ -1664,177 +1732,420 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               )}
             </div>
 
-            {/* SECTION XIII–XIX: Resource Brief List (Two-part structure: Left Content + Right Action Rail) */}
-            <div className="bg-white border border-[#E6EAF0] rounded-xl divide-y divide-[#F1F5F9] shadow-xs overflow-hidden">
-              {pagedBrowseResources.map((item) => {
-                const isAdded = selectedResourceIds.includes(item.id);
-                const isCurrentPreview = selectedPreviewItem?.id === item.id;
-                const typeIcon = TYPE_ICON_PRESENTATION[item.type] || TYPE_ICON_PRESENTATION.DATA_ASSET;
+            {/* SECTION XIII–XIX: Split Workspace (Left Resource Explorer List + Right Docked Quick Preview Inspector) */}
+            <div className="flex items-start gap-5 w-full">
+              {/* Left Resource Explorer List */}
+              <div className="flex-1 min-w-0 space-y-3">
+                <div className="bg-white border border-[#E6EAF0] rounded-xl divide-y divide-[#F1F5F9] shadow-xs overflow-hidden">
+                  {pagedBrowseResources.map((item) => {
+                    const isAdded = selectedResourceIds.includes(item.id);
+                    const isCurrentPreview = selectedPreviewItem?.id === item.id;
+                    const typeIcon = TYPE_ICON_PRESENTATION[item.type] || TYPE_ICON_PRESENTATION.DATA_ASSET;
 
-                const actionText = item.type === 'METRIC'
-                  ? '查看指标 →'
-                  : item.type === 'DATA_API'
-                  ? '查看接口 →'
-                  : item.type === 'BUSINESS_OBJECT'
-                  ? '查看对象 →'
-                  : '查看资源 →';
+                    const actionText = item.type === 'METRIC'
+                      ? '查看指标 →'
+                      : item.type === 'DATA_API'
+                      ? '查看接口 →'
+                      : item.type === 'BUSINESS_OBJECT'
+                      ? '查看对象 →'
+                      : '查看资源 →';
 
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => handleOpenPreview(item)}
-                    className={`p-4 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer ${
-                      isCurrentPreview
-                        ? 'bg-[#F8FBFF] ring-1 ring-inset ring-[#DBEAFE]'
-                        : 'hover:bg-[#F8FAFC]'
-                    }`}
-                  >
-                    {/* Left Resource Content 主体 (~1050–1120px) */}
-                    <div className="flex items-start space-x-3.5 flex-1 min-w-0">
-                      {/* Resource Type Icon (36–40px container, 16–18px icon) */}
-                      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 ${typeIcon.boxClass}`}>
-                        <typeIcon.Icon className="w-4.5 h-4.5" />
-                      </div>
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => handleOpenPreview(item)}
+                        className={`p-4 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none ${
+                          isCurrentPreview
+                            ? 'bg-[#F8FBFF] ring-1 ring-inset ring-[#DBEAFE]'
+                            : 'hover:bg-[#F8FAFC]'
+                        }`}
+                      >
+                        {/* Left Resource Content 主体 */}
+                        <div className="flex items-start space-x-3.5 flex-1 min-w-0">
+                          {/* Resource Type Icon */}
+                          <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg border flex items-center justify-center shrink-0 mt-0.5 ${typeIcon.boxClass}`}>
+                            <typeIcon.Icon className="w-4.5 h-4.5" />
+                          </div>
 
-                      <div className="space-y-1 min-w-0">
-                        {/* Title + Tags + Certification */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3
-                            className={`text-sm font-bold transition-colors ${
-                              isCurrentPreview ? 'text-[#2563EB]' : 'text-[#172033] hover:text-[#2563EB]'
-                            }`}
-                          >
-                            {item.name}
-                          </h3>
+                          <div className="space-y-1 min-w-0">
+                            {/* Title + Tags + Certification */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3
+                                className={`text-sm font-bold transition-colors ${
+                                  isCurrentPreview ? 'text-[#2563EB]' : 'text-[#172033] hover:text-[#2563EB]'
+                                }`}
+                              >
+                                {item.name}
+                              </h3>
 
-                          <span className="text-[11px] font-medium px-2 py-0.5 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
-                            {TYPE_PRESENTATION[item.type]}
-                          </span>
+                              <span className="text-[11px] font-medium px-2 py-0.5 bg-[#F1F5F9] text-[#475569] rounded border border-[#E2E8F0]">
+                                {TYPE_PRESENTATION[item.type]}
+                              </span>
 
-                          {item.certification === 'OFFICIAL' && (
-                            <span className="text-[11px] font-medium px-2 py-0.5 bg-[#ECFDF5] text-[#16A36A] rounded border border-[#A7F3D0]">
-                              {CERTIFICATION_BADGE[item.type]}
-                            </span>
-                          )}
+                              {item.certification === 'OFFICIAL' && (
+                                <span className="text-[11px] font-medium px-2 py-0.5 bg-[#ECFDF5] text-[#16A36A] rounded border border-[#A7F3D0]">
+                                  {CERTIFICATION_BADGE[item.type]}
+                                </span>
+                              )}
 
-                          <span className="text-xs text-[#667085]">
-                            {item.domainName} · {item.objectName}
-                          </span>
+                              <span className="text-xs text-[#667085]">
+                                {item.domainName} · {item.objectName}
+                              </span>
+                            </div>
+
+                            {/* Description */}
+                            <p className="text-xs text-[#475569] leading-relaxed">
+                              {item.description}
+                            </p>
+
+                            {/* Applicable Scenarios or Supported Dimensions */}
+                            {item.type === 'METRIC' && item.dimensions && item.dimensions.length > 0 ? (
+                              <div className="text-xs text-[#667085] font-medium">
+                                支持：{item.dimensions.join(' · ')}
+                              </div>
+                            ) : item.useCases && item.useCases.length > 0 ? (
+                              <div className="text-xs text-[#667085] font-medium">
+                                适用于：{item.useCases.join(' · ')}
+                              </div>
+                            ) : null}
+                          </div>
                         </div>
 
-                        {/* Description */}
-                        <p className="text-xs text-[#475569] leading-relaxed">
-                          {item.description}
-                        </p>
+                        {/* Right Access / Action Rail */}
+                        <div
+                          className="flex flex-col items-end justify-center gap-2 shrink-0 self-start md:self-center"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Access Status always visible */}
+                          <span className={`inline-flex items-center space-x-1 text-xs font-semibold ${accessPresentation(item.accessStatus).textClass}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(item.accessStatus).dotClass}`} />
+                            <span>{accessPresentation(item.accessStatus).label}</span>
+                          </span>
 
-                        {/* Applicable Scenarios or Supported Dimensions */}
-                        {item.type === 'METRIC' && item.dimensions && item.dimensions.length > 0 ? (
-                          <div className="text-xs text-[#667085] font-medium">
-                            支持：{item.dimensions.join(' · ')}
+                          <div className="flex items-center space-x-2">
+                            {/* Primary Text Navigation Link */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPreview(item)}
+                              className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold transition-colors cursor-pointer flex items-center space-x-0.5 hover:underline"
+                            >
+                              <span>{actionText}</span>
+                            </button>
+
+                            {/* Secondary Candidate Action Button */}
+                            {isAdded ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleBrowseResource(item)}
+                                className="px-2.5 py-1 rounded-md text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#FEE2E2] hover:text-[#DC2626] hover:border-[#FECACA] transition-all cursor-pointer flex items-center space-x-1 group/btn shadow-2xs"
+                              >
+                                <Check className="w-3.5 h-3.5 group-hover/btn:hidden text-[#2563EB]" />
+                                <X className="w-3.5 h-3.5 hidden group-hover/btn:inline-block text-[#DC2626]" />
+                                <span className="group-hover/btn:hidden">✓ 已加入</span>
+                                <span className="hidden group-hover/btn:inline">移除</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleBrowseResource(item)}
+                                className="px-2.5 py-1 rounded-md text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1 shadow-2xs"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>加入候选</span>
+                              </button>
+                            )}
                           </div>
-                        ) : item.useCases && item.useCases.length > 0 ? (
-                          <div className="text-xs text-[#667085] font-medium">
-                            适用于：{item.useCases.join(' · ')}
-                          </div>
-                        ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="bg-white border border-[#E6EAF0] rounded-xl px-4 py-3 flex items-center justify-between text-xs text-[#64748B] shadow-xs">
+                    <div className="flex items-center space-x-2">
+                      <select
+                        value={pageSize}
+                        onChange={(e) => setPageSize(Number(e.target.value))}
+                        className="h-7 px-2 bg-[#F8FAFC] border border-[#E6EAF0] rounded text-xs text-[#334155] focus:outline-none cursor-pointer"
+                      >
+                        <option value={20}>每页 20 条</option>
+                        <option value={50}>每页 50 条</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center space-x-1 font-medium">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => {
+                            setCurrentPage(p);
+                            addToast?.('info', `第 ${p} 页`, `已载入第 ${p} 页资源`);
+                          }}
+                          className={`w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
+                            currentPage === p
+                              ? 'bg-[#2563EB] text-white font-bold'
+                              : 'hover:bg-[#F1F5F9] text-[#475569]'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div>
+                      <button
+                        onClick={() => {
+                          setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+                          addToast?.('info', '下一页', `已翻至下一页`);
+                        }}
+                        disabled={currentPage >= totalPages}
+                        className="px-3 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E6EAF0] rounded text-xs text-[#334155] font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        下一页
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Docked Quick Preview Inspector (460px width, sticky & non-modal) */}
+              {selectedPreviewItem && (
+                <aside className="w-[460px] shrink-0 bg-white border border-[#E6EAF0] rounded-xl shadow-xs sticky top-4 max-h-[calc(100vh-140px)] flex flex-col overflow-hidden animate-in fade-in duration-150">
+                  {/* Header */}
+                  <div className="px-5 py-4 border-b border-[#E6EAF0] bg-[#F8FAFC] flex items-start justify-between">
+                    <div className="space-y-1.5 min-w-0 pr-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                          {TYPE_PRESENTATION[selectedPreviewItem.type]}
+                        </span>
+                        {selectedPreviewItem.certification === 'OFFICIAL' && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
+                            {CERTIFICATION_BADGE[selectedPreviewItem.type]}
+                          </span>
+                        )}
+                        {(() => {
+                          const ap = accessPresentation(selectedPreviewItem.accessStatus);
+                          return (
+                            <span className={`inline-flex items-center space-x-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${ap.textClass} ${ap.bgClass} ${ap.borderClass}`}>
+                              {ap.Icon && <ap.Icon className="w-2.5 h-2.5" />}
+                              <span>{ap.label}</span>
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <h3 className="text-base font-bold text-[#172033] tracking-tight truncate">
+                        {selectedPreviewItem.name}
+                      </h3>
+                      <p className="text-xs text-[#667085] truncate">
+                        业务上下文：{selectedPreviewItem.domainName} · {selectedPreviewItem.objectName}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center space-x-1 shrink-0 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(selectedPreviewItem.name);
+                          addToast?.('success', '已复制', `已复制「${selectedPreviewItem.name}」名称`);
+                        }}
+                        className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer transition-colors"
+                        title="复制名称"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPreviewItem(null)}
+                        className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer transition-colors"
+                        title="收起快速预览"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+                    {/* 业务说明 */}
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-bold text-[#172033]">业务说明</div>
+                      <p className="text-xs text-[#475569] leading-relaxed bg-[#F8FAFC] p-3 rounded-lg border border-[#E6EAF0]">
+                        {selectedPreviewItem.description}
+                      </p>
+                    </div>
+
+                    {/* 快速判断 */}
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-bold text-[#172033]">快速判断</div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(() => {
+                          const isMetric = selectedPreviewItem.type === 'METRIC';
+                          const labels: [string, string, string] = isMetric
+                            ? ['访问条件', '数据粒度', '更新情况']
+                            : selectedPreviewItem.type === 'DATA_API'
+                            ? ['访问条件', '调用方式', '响应时延']
+                            : ['访问条件', '数据粒度', '更新情况'];
+                          
+                          let grain = selectedPreviewItem.consumerFact || '一行代表一个实体';
+                          if (selectedPreviewItem.id === 'res-02') {
+                            grain = '一行代表一个自然人主体';
+                          } else if (selectedPreviewItem.id === 'res-03') {
+                            grain = '单位：% · 统计期';
+                          } else if (selectedPreviewItem.id === 'res-05') {
+                            grain = '一行代表一个行政区划';
+                          } else if (selectedPreviewItem.id === 'res-04-asset') {
+                            grain = '一行代表常住人口记录';
+                          } else if (selectedPreviewItem.id === 'res-04') {
+                            grain = 'API 调用 · 实时响应';
+                          }
+                          
+                          const accessText = selectedPreviewItem.accessStatus === 'SEMANTIC_ONLY'
+                            ? ACCESS_PRESENTATION.SEMANTIC_ONLY.label
+                            : accessPresentation(selectedPreviewItem.accessStatus).label;
+                          
+                          let update = selectedPreviewItem.updateFrequency || selectedPreviewItem.timeGranularity || '每日增量同步';
+                          if (selectedPreviewItem.id === 'res-02') {
+                            update = '每日增量同步';
+                          } else if (selectedPreviewItem.id === 'res-03') {
+                            update = '月度 / 季度 / 年度';
+                          } else if (selectedPreviewItem.id === 'res-05') {
+                            update = '定期维护';
+                          } else if (selectedPreviewItem.id === 'res-04-asset') {
+                            update = '每日更新';
+                          } else if (selectedPreviewItem.id === 'res-04') {
+                            update = '实时响应 (<50ms)';
+                          }
+
+                          const values: [string, string, string] = [
+                            accessText,
+                            grain,
+                            update,
+                          ];
+
+                          return labels.map((label, i) => (
+                            <div key={label} className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6EAF0] min-w-0">
+                              <div className="text-[10px] text-[#94A3B8] font-semibold">{label}</div>
+                              <div className="text-xs text-[#172033] font-bold leading-snug mt-1 truncate" title={values[i]}>
+                                {values[i]}
+                              </div>
+                            </div>
+                          ));
+                        })()}
                       </div>
                     </div>
 
-                    {/* Right Access / Action Rail (~220–240px Fixed Width) */}
-                    <div
-                      className="flex flex-col items-end justify-center gap-2 w-[230px] shrink-0 self-start md:self-center"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Access Status always visible */}
-                      <span className={`inline-flex items-center space-x-1 text-xs font-semibold ${accessPresentation(item.accessStatus).textClass}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${accessPresentation(item.accessStatus).dotClass}`} />
-                        <span>{accessPresentation(item.accessStatus).label}</span>
-                      </span>
+                    {/* 这份资源包含什么 */}
+                    {previewContains.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-bold text-[#172033]">这份资源包含什么</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {previewContains.map((entry) => (
+                            <span key={entry} className="px-2.5 py-1 rounded-md text-xs font-medium bg-white text-[#334155] border border-[#E6EAF0] shadow-2xs">
+                              {entry}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                      {/* Primary Text Navigation Link */}
-                      <button
-                        type="button"
-                        onClick={() => handleOpenPreview(item)}
-                        className="text-xs text-[#2563EB] hover:text-[#1D4ED8] font-semibold transition-colors cursor-pointer flex items-center space-x-0.5 hover:underline"
-                      >
-                        <span>{actionText}</span>
-                      </button>
+                    {/* 适合做什么 */}
+                    {selectedPreviewItem.useCases && selectedPreviewItem.useCases.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="text-xs font-bold text-[#172033]">适合做什么</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedPreviewItem.useCases.map((useCase) => (
+                            <span key={useCase} className="px-2.5 py-1 rounded-md text-xs font-medium bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                              {useCase}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                      {/* Secondary Candidate Action Button */}
-                      {isAdded ? (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleBrowseResource(item)}
-                          className="px-3 py-1.5 rounded-md text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#FEE2E2] hover:text-[#DC2626] hover:border-[#FECACA] transition-all cursor-pointer flex items-center space-x-1 group/btn shadow-2xs"
-                        >
-                          <Check className="w-3.5 h-3.5 group-hover/btn:hidden text-[#2563EB]" />
-                          <X className="w-3.5 h-3.5 hidden group-hover/btn:inline-block text-[#DC2626]" />
-                          <span className="group-hover/btn:hidden">✓ 已加入候选</span>
-                          <span className="hidden group-hover/btn:inline">移除</span>
-                        </button>
+                    {/* 相关资源 */}
+                    <div className="space-y-2 pt-1">
+                      <div className="text-xs font-bold text-[#172033]">相关资源</div>
+                      {relatedAssetsList.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {relatedAssetsList.map((rel) => {
+                            const target = ALL_DISCOVERABLE_RESOURCES.find(r => r.id === rel.id || r.name === rel.name);
+                            return (
+                              <div
+                                key={rel.id || rel.name}
+                                onClick={() => {
+                                  if (target) setSelectedPreviewItem(target);
+                                }}
+                                className="p-2.5 rounded-lg bg-[#F8FAFC] hover:bg-[#EFF6FF] border border-[#E6EAF0] hover:border-[#BFDBFE] flex items-center justify-between cursor-pointer transition-all group"
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <span className="px-1.5 py-0.5 bg-white text-[#2563EB] text-[10px] font-bold rounded border border-[#CBD5E1]">
+                                    {TYPE_PRESENTATION[rel.type] || rel.type}
+                                  </span>
+                                  <span className="font-bold text-xs text-[#172033] group-hover:text-[#2563EB] transition-colors">{rel.name}</span>
+                                </div>
+                                <ArrowRight className="w-3.5 h-3.5 text-[#94A3B8] group-hover:text-[#2563EB] transition-colors" />
+                              </div>
+                            );
+                          })}
+                        </div>
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleBrowseResource(item)}
-                          className="px-3 py-1.5 rounded-md text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1 shadow-2xs"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>＋ 加入候选</span>
-                        </button>
+                        <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E6EAF0] text-center text-[#94A3B8]">
+                          暂无直接关联资产记录
+                        </div>
                       )}
                     </div>
                   </div>
-                );
-              })}
-            </div>
 
-            {/* Pagination — only when totalPages > 1 */}
-            {totalPages > 1 && (
-              <div className="bg-white border border-[#E6EAF0] rounded-xl px-4 py-3 flex items-center justify-between text-xs text-[#64748B] shadow-xs">
-                <div className="flex items-center space-x-2">
-                  <select
-                    value={pageSize}
-                    onChange={(e) => setPageSize(Number(e.target.value))}
-                    className="h-7 px-2 bg-[#F8FAFC] border border-[#E6EAF0] rounded text-xs text-[#334155] focus:outline-none cursor-pointer"
-                  >
-                    <option value={20}>每页 20 条</option>
-                    <option value={50}>每页 50 条</option>
-                  </select>
-                </div>
+                  {/* Footer */}
+                  <div className="p-4 border-t border-[#E6EAF0] bg-[#F8FAFC] flex items-center justify-between gap-3">
+                    {isPreviewAdded ? (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#FEE2E2] hover:text-[#DC2626] hover:border-[#FECACA] transition-all cursor-pointer flex items-center space-x-1 group/btn shadow-2xs"
+                      >
+                        <Check className="w-3.5 h-3.5 group-hover/btn:hidden text-[#2563EB]" />
+                        <X className="w-3.5 h-3.5 hidden group-hover/btn:inline-block text-[#DC2626]" />
+                        <span className="group-hover/btn:hidden">✓ 已加入候选</span>
+                        <span className="hidden group-hover/btn:inline">移除</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1 shadow-2xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>＋ 加入候选</span>
+                      </button>
+                    )}
 
-                <div className="flex items-center space-x-1 font-medium">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                     <button
-                      key={p}
+                      type="button"
                       onClick={() => {
-                        setCurrentPage(p);
-                        addToast?.('info', `第 ${p} 页`, `已载入第 ${p} 页资源`);
+                        const target = selectedPreviewItem;
+                        const fromGoalSearch = currentMode === 'goal_search';
+                        if (target.type === 'BUSINESS_OBJECT') {
+                          onNavigateToBusinessObjectDetail?.(target.id, fromGoalSearch, businessGoal);
+                        } else if (target.type === 'DATA_ASSET') {
+                          onNavigateToDataAssetDetail?.(target.id, fromGoalSearch, businessGoal);
+                        } else if (target.type === 'DATA_API') {
+                          onNavigateToApiDetail?.(target.id, fromGoalSearch, businessGoal);
+                        } else {
+                          onNavigateToMetricDetail?.(target.id, fromGoalSearch, businessGoal);
+                        }
                       }}
-                      className={`w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
-                        currentPage === p
-                          ? 'bg-[#2563EB] text-white font-bold'
-                          : 'hover:bg-[#F1F5F9] text-[#475569]'
-                      }`}
+                      className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer flex items-center space-x-1 shadow-xs"
                     >
-                      {p}
+                      <span>{selectedPreviewItem.type === 'DATA_API' ? '查看接口说明' : '查看完整详情'}</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
-                  ))}
-                </div>
-
-                <div>
-                  <button
-                    onClick={() => {
-                      setCurrentPage((prev) => Math.min(prev + 1, totalPages));
-                      addToast?.('info', '下一页', `已翻至下一页`);
-                    }}
-                    disabled={currentPage >= totalPages}
-                    className="px-3 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#E6EAF0] rounded text-xs text-[#334155] font-medium cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    下一页
-                  </button>
-                </div>
-              </div>
-            )}
+                  </div>
+                </aside>
+              )}
+            </div>
 
           </div>
         )}
@@ -2027,246 +2338,6 @@ export const ResourceExplorerWorkspace: React.FC<ResourceExplorerWorkspaceProps>
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>基于候选构建数据方案 →</span>
-              </button>
-            </div>
-          </aside>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* SECTION XLV–XLVIII: QUICK PREVIEW OVERLAY DRAWER          */}
-      {/* ========================================================= */}
-      {selectedPreviewItem && (
-        <div className="fixed inset-0 z-40 flex items-center justify-end bg-black/20 backdrop-blur-2xs">
-          <aside className="w-full max-w-[480px] h-full bg-white shadow-2xl flex flex-col border-l border-[#E6EAF0] animate-in slide-in-from-right duration-200">
-            {/* Header */}
-            <div className="px-5 py-4 border-b border-[#E6EAF0] bg-[#F8FAFC] flex items-start justify-between">
-              <div className="space-y-1 min-w-0 pr-3">
-                <div className="flex items-center space-x-2">
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
-                    {TYPE_PRESENTATION[selectedPreviewItem.type]}
-                  </span>
-                  {selectedPreviewItem.certification === 'OFFICIAL' && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0]">
-                      {CERTIFICATION_BADGE[selectedPreviewItem.type]}
-                    </span>
-                  )}
-                  {(() => {
-                    const ap = accessPresentation(selectedPreviewItem.accessStatus);
-                    return (
-                      <span className={`inline-flex items-center space-x-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${ap.textClass} ${ap.bgClass} ${ap.borderClass}`}>
-                        {ap.Icon && <ap.Icon className="w-2.5 h-2.5" />}
-                        <span>{ap.label}</span>
-                      </span>
-                    );
-                  })()}
-                </div>
-                <h3 className="text-base font-bold text-[#172033] tracking-tight truncate">
-                  {selectedPreviewItem.name}
-                </h3>
-                <p className="text-xs text-[#64748B] truncate">
-                  业务上下文：{selectedPreviewItem.domainName} · {selectedPreviewItem.objectName}
-                </p>
-              </div>
-
-              <div className="flex items-center space-x-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(selectedPreviewItem.name);
-                    addToast?.('success', '已复制', `已复制「${selectedPreviewItem.name}」名称`);
-                  }}
-                  className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
-                  title="复制名称"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedPreviewItem(null)}
-                  className="p-1.5 rounded hover:bg-[#EEF2F6] text-[#64748B] hover:text-[#172033] cursor-pointer"
-                  title="关闭预览"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
-              {/* 业务说明 */}
-              <div className="space-y-1.5">
-                <div className="text-xs font-bold text-[#172033]">业务说明</div>
-                <p className="text-xs text-[#475569] leading-relaxed bg-[#F8FAFC] p-3 rounded-lg border border-[#E6EAF0]">
-                  {selectedPreviewItem.description}
-                </p>
-              </div>
-
-              {/* 快速判断 (3 Items Consumer Facts) */}
-              <div className="space-y-1.5">
-                <div className="text-xs font-bold text-[#172033]">快速判断</div>
-                <div className="grid grid-cols-3 gap-2">
-                  {(() => {
-                    const isMetric = selectedPreviewItem.type === 'METRIC';
-                    const labels: [string, string, string] = isMetric
-                      ? ['状态', '统计粒度', '更新节奏']
-                      : selectedPreviewItem.type === 'DATA_API'
-                      ? ['访问条件', '调用方式', '响应情况']
-                      : selectedPreviewItem.type === 'BUSINESS_OBJECT'
-                      ? ['访问', '资源规模', '演进情况']
-                      : ['访问条件', '数据粒度', '更新情况'];
-                    
-                    const grain = isMetric
-                      ? (selectedPreviewItem.consumerFact ?? '').replace(/^单位：.*?·\s*/, '') || '行政区域 × 统计期'
-                      : selectedPreviewItem.type === 'BUSINESS_OBJECT'
-                      ? (selectedPreviewItem.extraInfo ?? '12 数据资产')
-                      : (selectedPreviewItem.consumerFact ?? '一行代表一个实体');
-                    
-                    const accessText = selectedPreviewItem.accessStatus === 'SEMANTIC_ONLY'
-                      ? ACCESS_PRESENTATION.SEMANTIC_ONLY.label
-                      : accessPresentation(selectedPreviewItem.accessStatus).label;
-                    
-                    const values: [string, string, string] = [
-                      isMetric ? (selectedPreviewItem.fitnessLabel ?? '正式指标') : accessText,
-                      grain,
-                      selectedPreviewItem.timeGranularity ?? selectedPreviewItem.updateFrequency ?? selectedPreviewItem.updatedAt,
-                    ];
-
-                    return labels.map((label, i) => (
-                      <div key={label} className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#E6EAF0] min-w-0">
-                        <div className="text-[10px] text-[#94A3B8] font-semibold">{label}</div>
-                        <div className="text-xs text-[#172033] font-semibold leading-snug mt-0.5 truncate">{values[i]}</div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              </div>
-
-              {/* 这份资源包含什么 */}
-              {previewContains.length > 0 && (
-                <div className="space-y-1.5">
-                  <div className="text-xs font-bold text-[#172033]">这份资源包含什么</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {previewContains.map((entry) => (
-                      <span key={entry} className="px-2 py-1 rounded-md text-xs font-medium bg-white text-[#334155] border border-[#E6EAF0]">
-                        {entry}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 适合做什么 */}
-              {selectedPreviewItem.useCases && selectedPreviewItem.useCases.length > 0 && (
-                <div className="space-y-1.5">
-                  <div className="text-xs font-bold text-[#172033]">适合做什么</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedPreviewItem.useCases.map((useCase) => (
-                      <span key={useCase} className="px-2 py-1 rounded-md text-xs font-medium bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
-                        {useCase}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 为什么适合当前目标 (Goal Mode Only) */}
-              {currentMode === 'goal_search' && (() => {
-                const reason =
-                  solutionResources.find(r => r.id === selectedPreviewItem.id)?.whyNeeded
-                  ?? relatedCandidates.find(c => c.id === selectedPreviewItem.id)?.whyUseful
-                  ?? describeGoalFit(selectedPreviewItem, goalPlan);
-                if (!reason) return null;
-                return (
-                  <div className="space-y-1.5">
-                    <div className="text-xs font-bold text-[#172033]">为什么适合当前目标</div>
-                    <p className="text-xs text-[#1E40AF] leading-relaxed bg-[#EFF6FF] p-3 rounded-lg border border-[#DBEAFE]">
-                      {reason}
-                    </p>
-                  </div>
-                );
-              })()}
-
-              {/* 相关资源 */}
-              <div className="space-y-2 pt-1">
-                <div className="text-xs font-bold text-[#172033]">相关资源</div>
-                {selectedPreviewItem.relatedAssets && selectedPreviewItem.relatedAssets.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {selectedPreviewItem.relatedAssets.map((rel) => (
-                      <div
-                        key={rel.id}
-                        onClick={() => {
-                          const target = ALL_DISCOVERABLE_RESOURCES.find(r => r.id === rel.id);
-                          if (target) setSelectedPreviewItem(target);
-                        }}
-                        className="p-2.5 rounded-lg bg-[#F8FAFC] hover:bg-[#EFF6FF] border border-[#E6EAF0] hover:border-[#BFDBFE] flex items-center justify-between cursor-pointer transition-all"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <span className="px-1.5 py-0.5 bg-white text-[#2563EB] text-[10px] font-bold rounded border border-[#CBD5E1]">
-                            {TYPE_PRESENTATION[rel.type] || rel.type}
-                          </span>
-                          <span className="font-bold text-xs text-[#172033]">{rel.name}</span>
-                        </div>
-                        <ArrowRight className="w-3.5 h-3.5 text-[#94A3B8]" />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E6EAF0] text-center text-[#94A3B8]">
-                    暂无直接关联资产记录
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 border-t border-[#E6EAF0] bg-[#F8FAFC] flex items-center justify-between gap-3">
-              {currentMode !== 'goal_search' ? (
-                isPreviewAdded ? (
-                  <button
-                    type="button"
-                    onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] hover:bg-[#FEE2E2] hover:text-[#DC2626] hover:border-[#FECACA] transition-all cursor-pointer flex items-center space-x-1 group/btn shadow-2xs"
-                  >
-                    <Check className="w-3.5 h-3.5 group-hover/btn:hidden text-[#2563EB]" />
-                    <X className="w-3.5 h-3.5 hidden group-hover/btn:inline-block text-[#DC2626]" />
-                    <span className="group-hover/btn:hidden">✓ 已加入候选</span>
-                    <span className="hidden group-hover/btn:inline">移除</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleToggleBrowseResource(selectedPreviewItem)}
-                    className="px-3 py-1.5 rounded-md text-xs font-semibold bg-white text-[#334155] border border-[#CBD5E1] hover:border-[#2563EB] hover:text-[#2563EB] hover:bg-[#F8FAFC] transition-all cursor-pointer flex items-center space-x-1 shadow-2xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>＋ 加入候选</span>
-                  </button>
-                )
-              ) : (
-                <div />
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  const target = selectedPreviewItem;
-                  const fromGoalSearch = currentMode === 'goal_search';
-                  setSelectedPreviewItem(null);
-                  if (target.type === 'BUSINESS_OBJECT') {
-                    onNavigateToBusinessObjectDetail?.(target.id, fromGoalSearch, businessGoal);
-                  } else if (target.type === 'DATA_ASSET') {
-                    onNavigateToDataAssetDetail?.(target.id, fromGoalSearch, businessGoal);
-                  } else if (target.type === 'DATA_API') {
-                    onNavigateToApiDetail?.(target.id, fromGoalSearch, businessGoal);
-                  } else {
-                    onNavigateToMetricDetail?.(target.id, fromGoalSearch, businessGoal);
-                  }
-                }}
-                className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer flex items-center space-x-1 shadow-xs"
-              >
-                <span>{selectedPreviewItem.type === 'DATA_API' ? '查看接口说明' : '查看完整详情'}</span>
-                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </aside>
