@@ -49,6 +49,8 @@ import { MultiResourceAccessRequestWorkspace } from './components/MultiResourceA
 import { MyAccessRequestsWorkspace } from './components/MyAccessRequestsWorkspace';
 import { DataApiDetailWorkspace } from './components/DataApiDetailWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
+import { AccessProvider } from './domain/access/access.store';
+import type { SolutionExecutionContext } from './domain/access/access.types';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData } from './types';
 
@@ -75,6 +77,8 @@ export default function App() {
   const [currentModule, setCurrentModule] = useState<string>('xino_partner');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isReanalyzing, setIsReanalyzing] = useState<boolean>(false);
+  const [selectedReviewRequestId, setSelectedReviewRequestId] = useState<string>('rev-001');
+  const [, setActiveExecutionContext] = useState<SolutionExecutionContext | null>(null);
 
   // Helper to trigger toast
   const addToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
@@ -401,6 +405,7 @@ export default function App() {
   };
 
   return (
+    <AccessProvider>
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#F8FAFC]">
       {/* Top Bar Header (64px) */}
       <Header
@@ -424,13 +429,14 @@ export default function App() {
       {/* Main Content View Switch */}
       {currentNav === 'access_review_detail' || viewTab === 'access_review_detail' ? (
         <AccessReviewDetailWorkspace
+          requestId={selectedReviewRequestId}
           addToast={addToast}
           onBackToQueue={() => {
             setCurrentNav('access_review');
             setViewTab('access_review');
             addToast('info', '访问审核队列', '已返回访问审核队列列表');
           }}
-          onDecisionComplete={(decisionType, resourceName) => {
+          onDecisionComplete={() => {
             setCurrentNav('access_review');
             setViewTab('access_review');
           }}
@@ -448,9 +454,10 @@ export default function App() {
         <AccessReviewWorkspace
           addToast={addToast}
           onOpenDetail={(reqId) => {
+            setSelectedReviewRequestId(reqId);
             setCurrentNav('access_review_detail');
             setViewTab('access_review_detail');
-            addToast('info', '进入单项审核', '已进入「人口基本信息视图」人工访问决策工作台');
+            addToast('info', '进入单项审核', '已进入资源访问人工决策工作台');
           }}
           onNavigateToDataMarket={() => {
             setCurrentNav('marketplace');
@@ -480,19 +487,19 @@ export default function App() {
             setViewTab('marketplace_resources');
             addToast('info', '资源浏览', '已返回数据服务超市 · 资源列表');
           }}
-          onNavigateToSolution={(solutionName) => {
-            setResourceSearchQuery(solutionName || '分析各街镇老龄化情况');
-            setCurrentNav('marketplace_resources');
-            setViewTab('marketplace_resources');
-            addToast('info', '返回数据方案', `已进入「${solutionName || '数据方案'}」配置与资源目录`);
+          onNavigateToSolution={(solutionId) => {
+            setCurrentNav('home');
+            setViewTab('home');
+            addToast('info', '调整数据方案', `已恢复数据方案上下文（${solutionId || '当前方案'}）。`);
           }}
-          onResumeAnalysisTask={(taskName, mode) => {
-            setCurrentNav('marketplace_resources');
-            setViewTab('marketplace_resources');
+          onResumeAnalysisTask={(taskId, solutionId, mode, context) => {
+            setActiveExecutionContext(context ?? { taskId, solutionId, goal: '恢复原分析任务', resourceIds: [], requiredResourceIds: [], grantIds: [] });
+            setCurrentNav('home');
+            setViewTab('home');
             addToast(
               mode === 'degraded' ? 'info' : 'success',
-              mode === 'degraded' ? '恢复受限分析' : '恢复分析任务',
-              `已载入「${taskName}」工作流，数据访问环境就绪`
+              mode === 'degraded' ? '按当前授权恢复任务' : '恢复分析任务',
+              '已恢复原分析任务及已授权的数据方案上下文。'
             );
           }}
           addToast={addToast}
@@ -1330,5 +1337,6 @@ export default function App() {
       {/* Toast Feedback */}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
     </div>
+    </AccessProvider>
   );
 }

@@ -71,7 +71,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
           
           <button
-            onClick={() => onSelectNav && onSelectNav('marketplace_resources')}
+            onClick={() => onSelectNav && onSelectNav('marketplace')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
               currentNav === 'marketplace' || currentNav === 'marketplace_resources' || currentNav === 'asset_detail' || currentNav === 'metric_detail' || currentNav === 'business_object_detail' || currentNav === 'api_detail' || currentNav === 'multi_resource_request' || currentNav === 'my_requests'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
@@ -166,6 +166,5 @@ export const Header: React.FC<HeaderProps> = ({
   );
 };
 ;
-
 
 
