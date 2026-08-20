@@ -77,11 +77,11 @@ export const MetricAuthoringChangeMode: React.FC<MetricAuthoringChangeModeProps>
   const [validationSteps, setValidationSteps] = useState<
     Array<{ name: string; status: 'waiting' | 'running' | 'passed' | 'failed' }>
   >([
-    { name: '计算依赖无循环冲突', status: 'waiting' },
-    { name: '业务含义与口径差异校验', status: 'waiting' },
+    { name: '业务定义完整', status: 'waiting' },
+    { name: '数据实现有效', status: 'waiting' },
     { name: '时间口径一致', status: 'waiting' },
-    { name: '分析维度兼容', status: 'waiting' },
-    { name: '底层数据实现可用', status: 'waiting' },
+    { name: '分析维度可安全使用', status: 'waiting' },
+    { name: '执行计划可生成', status: 'waiting' },
   ]);
 
   // Handle Save Draft
@@ -96,11 +96,11 @@ export const MetricAuthoringChangeMode: React.FC<MetricAuthoringChangeModeProps>
     setIsValidatingModalOpen(true);
     setValidationProgress(15);
     setValidationSteps([
-      { name: '计算依赖无循环冲突', status: 'running' },
-      { name: '业务含义与口径差异校验', status: 'waiting' },
+      { name: '业务定义完整', status: 'running' },
+      { name: '数据实现有效', status: 'waiting' },
       { name: '时间口径一致', status: 'waiting' },
-      { name: '分析维度兼容', status: 'waiting' },
-      { name: '底层数据实现可用', status: 'waiting' },
+      { name: '分析维度可安全使用', status: 'waiting' },
+      { name: '执行计划可生成', status: 'waiting' },
     ]);
 
     setTimeout(() => {

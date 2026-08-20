@@ -43,9 +43,10 @@ interface MetricItem {
   businessObject: string;
   calculationSummary: string;
   timeSemantics: string;
-  validationStatus: 'PASSED' | 'PENDING' | 'FAILED';
+  validationStatus: 'PASS' | 'UNVERIFIED' | 'FAIL';
   validationMessage?: string;
-  status: 'PUBLISHED' | 'DRAFT' | 'DEPRECATED';
+  status: 'EFFECTIVE' | 'DRAFT' | 'DEPRECATED';
+  aiReadiness: 'READY' | 'DEGRADED' | 'NOT_READY';
   owner: string;
   dimensionCount?: number;
 }
@@ -60,8 +61,9 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '订单',
     calculationSummary: 'SUM(order_amount)',
     timeSemantics: '支付时间 · 日',
-    validationStatus: 'PASSED',
-    status: 'PUBLISHED',
+    validationStatus: 'PASS',
+    status: 'EFFECTIVE',
+    aiReadiness: 'READY',
     owner: '交易分析与财务核算组',
     dimensionCount: 6,
   },
@@ -74,8 +76,9 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '自然人',
     calculationSummary: '老年人口数 ÷ 常住人口数',
     timeSemantics: '统计日期 · 月',
-    validationStatus: 'PASSED',
-    status: 'PUBLISHED',
+    validationStatus: 'PASS',
+    status: 'EFFECTIVE',
+    aiReadiness: 'READY',
     owner: '人口管理处',
     dimensionCount: 5,
   },
@@ -88,8 +91,9 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '服务工单',
     calculationSummary: '已办结工单数 ÷ 工单总数',
     timeSemantics: '办结时间 · 月',
-    validationStatus: 'PASSED',
-    status: 'PUBLISHED',
+    validationStatus: 'PASS',
+    status: 'EFFECTIVE',
+    aiReadiness: 'READY',
     owner: '热线管理处',
     dimensionCount: 4,
   },
@@ -102,8 +106,9 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '服务工单',
     calculationSummary: '工单处理总时长 ÷ 工单数',
     timeSemantics: '办结时间 · 月',
-    validationStatus: 'PENDING',
+    validationStatus: 'UNVERIFIED',
     status: 'DRAFT',
+    aiReadiness: 'NOT_READY',
     owner: '热线管理处',
   },
   {
@@ -115,8 +120,9 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '企业',
     calculationSummary: 'COUNT DISTINCT 企业ID',
     timeSemantics: '行为时间 · 月',
-    validationStatus: 'PASSED',
-    status: 'PUBLISHED',
+    validationStatus: 'PASS',
+    status: 'EFFECTIVE',
+    aiReadiness: 'READY',
     owner: '企业服务中心',
     dimensionCount: 6,
   },
@@ -129,8 +135,9 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '企业',
     calculationSummary: 'COUNT DISTINCT 企业ID',
     timeSemantics: '注册时间 · 月',
-    validationStatus: 'PASSED',
-    status: 'PUBLISHED',
+    validationStatus: 'PASS',
+    status: 'EFFECTIVE',
+    aiReadiness: 'READY',
     owner: '企业服务中心',
   },
   {
@@ -142,8 +149,9 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '客户',
     calculationSummary: '流失客户数 ÷ 活跃客户数',
     timeSemantics: '统计月份 · 月',
-    validationStatus: 'PENDING',
+    validationStatus: 'UNVERIFIED',
     status: 'DRAFT',
+    aiReadiness: 'NOT_READY',
     owner: '用户运营组',
   },
   {
@@ -155,8 +163,9 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '订单',
     calculationSummary: '销售额 ÷ 订单数',
     timeSemantics: '支付时间 · 日',
-    validationStatus: 'PASSED',
-    status: 'PUBLISHED',
+    validationStatus: 'PASS',
+    status: 'EFFECTIVE',
+    aiReadiness: 'READY',
     owner: '销售分析组',
     dimensionCount: 8,
   },
@@ -169,9 +178,10 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '服务工单',
     calculationSummary: '投诉工单数 ÷ 工单总数',
     timeSemantics: '受理时间 · 月',
-    validationStatus: 'FAILED',
+    validationStatus: 'FAIL',
     validationMessage: '时间字段 Binding 已失效，当前问数能力受限。',
     status: 'DRAFT',
+    aiReadiness: 'DEGRADED',
     owner: '运营质控组',
   },
   {
@@ -183,8 +193,9 @@ const MOCK_METRICS_DATA: MetricItem[] = [
     businessObject: '客户',
     calculationSummary: '复购客户数 ÷ 客户总数',
     timeSemantics: '统计月份 · 月',
-    validationStatus: 'PASSED',
-    status: 'PUBLISHED',
+    validationStatus: 'PASS',
+    status: 'EFFECTIVE',
+    aiReadiness: 'READY',
     owner: '用户运营组',
     dimensionCount: 3,
   },
@@ -218,7 +229,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
 
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'ALL' | 'PUBLISHED' | 'DRAFT' | 'DEPRECATED'>('PUBLISHED');
+  const [activeTab, setActiveTab] = useState<'ALL' | 'EFFECTIVE' | 'DRAFT' | 'DEPRECATED'>('EFFECTIVE');
 
   const [selectedDomain, setSelectedDomain] = useState<string>('ALL');
   const [selectedObject, setSelectedObject] = useState<string>('ALL');
@@ -250,7 +261,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
   const filteredMetrics = useMemo(() => {
     return MOCK_METRICS_DATA.filter((item) => {
       // 1. Tab filter
-      if (activeTab === 'PUBLISHED' && item.status !== 'PUBLISHED') return false;
+      if (activeTab === 'EFFECTIVE' && item.status !== 'EFFECTIVE') return false;
       if (activeTab === 'DRAFT' && item.status !== 'DRAFT') return false;
       if (activeTab === 'DEPRECATED' && item.status !== 'DEPRECATED') return false;
 
@@ -569,17 +580,17 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
             </button>
 
             <button
-              onClick={() => setActiveTab('PUBLISHED')}
+              onClick={() => setActiveTab('EFFECTIVE')}
               className={`pb-2.5 transition-all cursor-pointer flex items-center space-x-1.5 ${
-                activeTab === 'PUBLISHED'
+                activeTab === 'EFFECTIVE'
                   ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
                   : 'text-[#667085] hover:text-[#172033]'
               }`}
             >
-              <span>已发布</span>
+              <span>正式有效</span>
               <span
                 className={`px-1.5 py-0.2 rounded text-[11px] font-mono ${
-                  activeTab === 'PUBLISHED'
+                  activeTab === 'EFFECTIVE'
                     ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
                     : 'bg-[#F1F5F9] text-[#64748B]'
                 }`}
@@ -683,9 +694,9 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                   className="bg-transparent font-medium text-[#172033] focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">全部验证状态</option>
-                  <option value="PASSED">验证通过</option>
-                  <option value="PENDING">待验证</option>
-                  <option value="FAILED">验证失败</option>
+                  <option value="PASS">验证通过</option>
+                  <option value="UNVERIFIED">待验证</option>
+                  <option value="FAIL">验证失败</option>
                 </select>
               </div>
 
@@ -716,7 +727,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                   className="bg-transparent font-medium text-[#172033] focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">全部状态</option>
-                  <option value="PUBLISHED">已发布</option>
+                  <option value="EFFECTIVE">正式有效</option>
                   <option value="DRAFT">草稿</option>
                   <option value="DEPRECATED">已停用</option>
                 </select>
@@ -741,13 +752,14 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                 <thead>
                   <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#667085] font-semibold">
                     <th className="py-3 px-4 w-[18%]">指标</th>
-                    <th className="py-3 px-4 w-[24%]">业务定义</th>
-                    <th className="py-3 px-3 w-[10%]">业务对象</th>
-                    <th className="py-3 px-4 w-[16%]">计算摘要</th>
-                    <th className="py-3 px-3 w-[12%]">时间语义</th>
+                    <th className="py-3 px-4 w-[22%]">业务定义</th>
+                    <th className="py-3 px-3 w-[9%]">业务对象</th>
+                    <th className="py-3 px-4 w-[15%]">计算摘要</th>
+                    <th className="py-3 px-3 w-[11%]">时间语义</th>
                     <th className="py-3 px-3 w-[9%]">验证</th>
-                    <th className="py-3 px-3 w-[7%]">状态</th>
-                    <th className="py-3 px-3 w-[10%]">Owner</th>
+                    <th className="py-3 px-3 w-[8%]">状态</th>
+                    <th className="py-3 px-3 w-[8%]">AI 就绪</th>
+                    <th className="py-3 px-3 w-[8%]">Owner</th>
                     <th className="py-3 px-3 w-[4%] text-center">操作</th>
                   </tr>
                 </thead>
@@ -756,7 +768,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                 <tbody className="divide-y divide-[#EEF2F6]">
                   {filteredMetrics.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-[#667085]">
+                      <td colSpan={10} className="py-12 text-center text-[#667085]">
                         <div className="flex flex-col items-center justify-center space-y-2">
                           <BarChart3 className="w-8 h-8 text-[#CBD5E1]" />
                           <p className="text-sm font-medium text-[#172033]">未找到符合条件的指标</p>
@@ -829,14 +841,14 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                           {metric.timeSemantics}
                         </td>
 
-                        {/* 6. 验证 (通过绿色、待验证橙色、失败红色 + Tooltip 不直接破坏表格行高) */}
+                        {/* 6. 验证 (PASS: 验证通过、UNVERIFIED: 待验证、FAIL: 验证失败) */}
                         <td className="py-3.5 px-3">
-                          {metric.validationStatus === 'PASSED' ? (
+                          {metric.validationStatus === 'PASS' ? (
                             <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0] rounded text-[11px] font-medium">
                               <CheckCircle2 className="w-3 h-3 text-[#16A36A]" />
                               <span>验证通过</span>
                             </span>
-                          ) : metric.validationStatus === 'PENDING' ? (
+                          ) : metric.validationStatus === 'UNVERIFIED' ? (
                             <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A] rounded text-[11px] font-medium">
                               <AlertTriangle className="w-3 h-3 text-[#D97706]" />
                               <span>待验证</span>
@@ -859,11 +871,11 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                           )}
                         </td>
 
-                        {/* 7. 状态 (已发布 / 草稿 / 已停用) */}
+                        {/* 7. 状态 (EFFECTIVE: 正式有效 / DRAFT: 草稿 / DEPRECATED: 已停用) */}
                         <td className="py-3.5 px-3">
-                          {metric.status === 'PUBLISHED' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 bg-[#ECFDF5] text-[#16A36A] rounded text-[11px] font-medium">
-                              已发布
+                          {metric.status === 'EFFECTIVE' ? (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0] rounded text-[11px] font-medium">
+                              正式有效
                             </span>
                           ) : metric.status === 'DRAFT' ? (
                             <span className="inline-flex items-center px-2 py-0.5 bg-[#F8FAFC] text-[#667085] border border-[#E2E8F0] rounded text-[11px] font-medium">
@@ -876,12 +888,30 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                           )}
                         </td>
 
-                        {/* 8. Owner */}
+                        {/* 8. AI 就绪 (READY / DEGRADED / NOT_READY) */}
+                        <td className="py-3.5 px-3">
+                          {metric.aiReadiness === 'READY' ? (
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-[#F5F3FF] text-[#7C3AED] border border-[#DDD6FE] rounded text-[11px] font-medium">
+                              <span>✦</span>
+                              <span>AI 可用</span>
+                            </span>
+                          ) : metric.aiReadiness === 'DEGRADED' ? (
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A] rounded text-[11px] font-medium">
+                              <span>降级受限</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-[#F1F5F9] text-[#94A3B8] rounded text-[11px] font-medium">
+                              未就绪
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 9. Owner */}
                         <td className="py-3.5 px-3 text-[#334155] font-medium">
                           {metric.owner}
                         </td>
 
-                        {/* 9. 操作 (仅放 ... 按钮) */}
+                        {/* 10. 操作 (仅放 ... 按钮) */}
                         <td
                           className="py-3.5 px-3 text-center relative"
                           onClick={(e) => e.stopPropagation()}

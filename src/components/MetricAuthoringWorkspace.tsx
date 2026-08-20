@@ -132,15 +132,15 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
   const [isDependencyDrawerOpen, setIsDependencyDrawerOpen] = useState<boolean>(false);
   const [isValidatingModalOpen, setIsValidatingModalOpen] = useState<boolean>(false);
   const [validationProgress, setValidationProgress] = useState<number>(100);
-  // Validation check items (pure Chinese labels, 3-state without score)
+  // Validation check items (pure user-friendly Chinese labels, 3-state without score)
   const [validationSteps, setValidationSteps] = useState<
     Array<{ name: string; status: 'waiting' | 'running' | 'passed' | 'failed' }>
   >([
-    { name: '计算依赖无循环冲突', status: 'passed' },
-    { name: '计算粒度明确', status: 'passed' },
+    { name: '业务定义完整', status: 'passed' },
+    { name: '数据实现有效', status: 'passed' },
     { name: '时间口径一致', status: 'passed' },
-    { name: '分析维度兼容', status: 'passed' },
-    { name: '底层数据实现可用', status: 'passed' },
+    { name: '分析维度可安全使用', status: 'passed' },
+    { name: '执行计划可生成', status: 'passed' },
   ]);
 
   // Adjust Drawer Temp State
@@ -238,11 +238,11 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
     setIsValidatingModalOpen(true);
     setValidationProgress(10);
     setValidationSteps([
-      { name: '计算依赖无循环冲突', status: 'running' },
-      { name: '计算粒度明确', status: 'waiting' },
+      { name: '业务定义完整', status: 'running' },
+      { name: '数据实现有效', status: 'waiting' },
       { name: '时间口径一致', status: 'waiting' },
-      { name: '分析维度兼容', status: 'waiting' },
-      { name: '底层数据实现可用', status: 'waiting' },
+      { name: '分析维度可安全使用', status: 'waiting' },
+      { name: '执行计划可生成', status: 'waiting' },
     ]);
 
     setTimeout(() => {
@@ -1982,26 +1982,26 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                         {/* Check 1 */}
                         <div className="p-2.5 bg-[#FAFCFF] border border-[#E2E8F0] rounded-md space-y-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-[#172033]">计算依赖无循环冲突</span>
+                            <span className="text-xs font-bold text-[#172033]">业务定义完整</span>
                             <span className="text-[10px] font-bold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7]">
                               通过
                             </span>
                           </div>
                           <p className="text-[11px] text-[#667085] leading-relaxed">
-                            依赖闭环无冲突，已映射「有效订单」业务规则与 SUM 聚合。
+                            业务对象、度量意图与关键规则明确，依赖闭环无冲突。
                           </p>
                         </div>
 
                         {/* Check 2 */}
                         <div className="p-2.5 bg-[#FAFCFF] border border-[#E2E8F0] rounded-md space-y-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-[#172033]">计算粒度明确</span>
+                            <span className="text-xs font-bold text-[#172033]">数据实现有效</span>
                             <span className="text-[10px] font-bold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7]">
                               通过
                             </span>
                           </div>
                           <p className="text-[11px] text-[#667085] leading-relaxed">
-                            粒度定义为「{businessObject}」，与交易事实模型严格对齐。
+                            物理表字段连通与过滤规则正常，粒度「{businessObject}」严格对齐。
                           </p>
                         </div>
 
@@ -2021,26 +2021,26 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                         {/* Check 4 */}
                         <div className="p-2.5 bg-[#FAFCFF] border border-[#E2E8F0] rounded-md space-y-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-[#172033]">分析维度兼容</span>
+                            <span className="text-xs font-bold text-[#172033]">分析维度可安全使用</span>
                             <span className="text-[10px] font-bold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7]">
                               通过
                             </span>
                           </div>
                           <p className="text-[11px] text-[#667085] leading-relaxed">
-                            渠道、商品分类、地区等分析维度下钻安全无漂移。
+                            维度关联路径均满足 N:1 关系，下钻分析安全无发散。
                           </p>
                         </div>
 
                         {/* Check 5 */}
                         <div className="p-2.5 bg-[#FAFCFF] border border-[#E2E8F0] rounded-md space-y-1">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-[#172033]">底层数据实现可用</span>
+                            <span className="text-xs font-bold text-[#172033]">执行计划可生成</span>
                             <span className="text-[10px] font-bold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7]">
                               通过
                             </span>
                           </div>
                           <p className="text-[11px] text-[#667085] leading-relaxed">
-                            物理表 dwd_order_fact_di 字段连通与过滤规则正常。
+                            Runtime 语义上下文可直接解析为下推执行算子。
                           </p>
                         </div>
                       </div>

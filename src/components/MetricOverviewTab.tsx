@@ -83,24 +83,24 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
         </p>
 
         {/* 核心元属性行 (Flat Inline Strip) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
           <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-lg space-y-1">
-            <span className="text-[11px] text-[#667085] block">业务对象</span>
+            <span className="text-[11px] text-[#667085] block">业务对象 (Business Object)</span>
             <button
               type="button"
               onClick={() => onNavigateToBusinessObject?.('bo_order')}
               className="font-bold text-[#2563EB] hover:text-[#1D4ED8] hover:underline inline-flex items-center space-x-1 cursor-pointer"
             >
               <ShoppingBag className="w-3.5 h-3.5 mr-0.5" />
-              <span>订单 (Order)</span>
+              <span>{metricName === '有效订单金额' ? '订单 (Order)' : '自然人 (Person)'}</span>
               <ChevronRight className="w-3 h-3 ml-0.5" />
             </button>
           </div>
 
           <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-lg space-y-1">
-            <span className="text-[11px] text-[#667085] block">限定业务规则</span>
+            <span className="text-[11px] text-[#667085] block">限定业务规则 (Business Rule)</span>
             <div className="flex items-center space-x-1.5">
-              <span className="font-bold text-[#172033]">有效订单规则</span>
+              <span className="font-bold text-[#172033]">{metricName === '有效订单金额' ? '有效订单 = 支付成功且未退款' : '老龄化率 = 60周岁及以上常住人口'}</span>
               <button
                 type="button"
                 onClick={onOpenBusinessRuleDrawer}
@@ -110,10 +110,31 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
               </button>
             </div>
           </div>
+        </div>
 
-          <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-lg space-y-1">
-            <span className="text-[11px] text-[#667085] block">业务适用域</span>
-            <span className="font-bold text-[#172033] inline-block">电商交易 · 销售与财务核算</span>
+        {/* Applicable Context (适用上下文) */}
+        <div className="pt-2">
+          <div className="text-[11px] font-bold text-[#475569] uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+            <span className="w-1.5 h-3 bg-[#2563EB] rounded-xs" />
+            <span>适用上下文 (Applicable Scope)</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+            <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-0.5">
+              <div className="text-[10px] text-[#64748B] font-bold">业务域</div>
+              <div className="font-bold text-[#0F172A]">{metricName === '有效订单金额' ? '交易分析' : '人口服务'}</div>
+            </div>
+            <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-0.5">
+              <div className="text-[10px] text-[#64748B] font-bold">业务场景</div>
+              <div className="font-bold text-[#0F172A]">{metricName === '有效订单金额' ? '订单经营分析' : '人口结构分析'}</div>
+            </div>
+            <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-0.5">
+              <div className="text-[10px] text-[#64748B] font-bold">统计范围</div>
+              <div className="font-bold text-[#0F172A]">{metricName === '有效订单金额' ? '有效订单' : '有效常住人口'}</div>
+            </div>
+            <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-0.5">
+              <div className="text-[10px] text-[#64748B] font-bold">组织/实体</div>
+              <div className="font-bold text-[#0F172A]">{metricName === '有效订单金额' ? '销售业务与财务核算' : '全域自然人'}</div>
+            </div>
           </div>
         </div>
       </section>

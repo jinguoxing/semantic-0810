@@ -268,24 +268,65 @@ export interface MetricBinding {
   status: "VALID" | "SUSPENDED" | "OUTDATED";
 }
 
+export type MetricStatus = "DRAFT" | "EFFECTIVE" | "DEPRECATED";
+export type MetricValidationStatus = "PASS" | "UNVERIFIED" | "FAIL";
+export type MetricAIReadiness = "READY" | "DEGRADED" | "NOT_READY";
+
 export interface Metric {
   id: string;
   name: string;
   enName?: string;
   definition: string;
+
+  // Business Meaning
   businessObject: string;
+
+  // Applicable Context
   scope: MetricScope;
+
+  // Measurement
   measurement: MetricMeasurement;
   grain: string;
+
+  // Time
   timeSemantics: MetricTimeSemantics;
+
+  // Analysis
   dimensions: string[];
+
+  // Dependencies
   dependencies?: MetricDependency[];
+
+  // Execution
   binding?: MetricBinding;
+
+  // Trust
   provenance?: MetricProvenance;
-  status: "DRAFT" | "VALIDATED" | "PUBLISHED" | "DEPRECATED";
+
+  // Lifecycle
+  status: MetricStatus;
+  validationStatus?: MetricValidationStatus;
+  aiReadiness?: MetricAIReadiness;
   version: string;
-  validationStatus?: "PASS" | "UNVERIFIED" | "FAIL";
   changeReason?: string;
+}
+
+// Runtime Resolution Contract (Step 11)
+export interface MetricExecutionContext {
+  metricId: string;
+  metricVersion: string;
+  scope?: MetricScope;
+  dimensions?: string[];
+  timeContext?: {
+    timeGrain?: "DAY" | "MONTH" | "QUARTER" | "YEAR";
+    startDate?: string;
+    endDate?: string;
+  };
+  filters?: Array<{
+    field: string;
+    operator: "=" | "!=" | ">" | "<" | ">=" | "<=" | "IN" | "LIKE";
+    value: any;
+  }>;
 }
 
 
