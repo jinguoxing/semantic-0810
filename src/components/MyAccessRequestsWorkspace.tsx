@@ -12,11 +12,11 @@ export interface MyAccessRequestsWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
-const readiness: Record<TaskReadiness, { label: string; className: string; Icon: typeof Clock }> = {
-  WAITING: { label: '等待所需资源', className: 'border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]', Icon: Clock },
-  READY: { label: '可继续', className: 'border-[#A7F3D0] bg-[#ECFDF5] text-[#15803D]', Icon: CheckCircle2 },
-  DEGRADED: { label: '受限可继续', className: 'border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]', Icon: AlertTriangle },
-  BLOCKED: { label: '暂无法继续', className: 'border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C]', Icon: ShieldAlert },
+const readiness: Record<TaskReadiness, { label: string; textClass: string; Icon: typeof Clock }> = {
+  WAITING: { label: '等待所需资源', textClass: 'text-[#B45309]', Icon: Clock },
+  READY: { label: '可继续', textClass: 'text-[#15803D]', Icon: CheckCircle2 },
+  DEGRADED: { label: '受限可继续', textClass: 'text-[#B45309]', Icon: AlertTriangle },
+  BLOCKED: { label: '暂无法继续', textClass: 'text-[#B91C1C]', Icon: ShieldAlert },
 };
 const stateColor: Record<ResourceRequestViewModel['accessState'], string> = { GRANTED: 'text-[#15803D]', PROCESSING: 'text-[#B45309]', DENIED: 'text-[#B91C1C]', EXPIRED: 'text-[#64748B]' };
 
@@ -77,29 +77,26 @@ export const MyAccessRequestsWorkspace: React.FC<MyAccessRequestsWorkspaceProps>
         return <article key={item.id} className="overflow-hidden rounded-lg border border-[#E6EAF0] bg-white">
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-base font-bold">{item.taskTitle}</h2>
-                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold ${style.className}`}>
-                  <Icon className="h-3.5 w-3.5" />{style.label}
-                </span>
-              </div>
+              <h2 className="text-base font-bold">{item.taskTitle}</h2>
               <p className="text-xs text-[#667085]">{item.purposeDescription}</p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#667085]">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#98A2B3]">
                 <span>{item.source}</span><span>提交：{item.submittedTime}</span><span>更新：{item.updatedTime}</span>
               </div>
-              <div className="grid gap-3 rounded bg-[#F8FAFC] px-3 py-2 text-xs sm:grid-cols-[1fr_auto]">
+              <div className="grid gap-3 rounded bg-[#F8FAFC] px-3 py-2 text-xs sm:grid-cols-[auto_1fr]">
+                <div className="sm:min-w-[132px]">
+                  <span className="text-[#98A2B3]">当前任务</span>
+                  <div className={`mt-0.5 inline-flex items-center gap-1 font-bold ${style.textClass}`}>
+                    <Icon className="h-3.5 w-3.5" />{style.label}
+                  </div>
+                </div>
                 <div>
                   <span className="text-[#98A2B3]">访问进展</span>
                   <div className="mt-0.5 font-semibold text-[#334155]">{item.accessProgress}</div>
                 </div>
-                <div className="sm:min-w-[132px] sm:text-right">
-                  <span className="text-[#98A2B3]">当前任务</span>
-                  <div className="mt-0.5 font-bold text-[#172033]">{style.label}</div>
-                </div>
               </div>
               <p className="text-xs text-[#475569]">{item.taskReadinessNote}</p>
               {item.taskReadiness === 'DEGRADED' && item.limitations && <div className="space-y-1 rounded border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2 text-xs text-[#713F12]">
-                <div><strong>当前授权仍可支持：</strong>{item.limitations.canDo.join(' · ')}</div>
+                <div><strong>当前授权仍支持：</strong>{item.limitations.canDo.join(' · ')}</div>
                 <div><strong>当前限制：</strong>{item.limitations.restricted.join(' · ')}</div>
               </div>}
             </div>

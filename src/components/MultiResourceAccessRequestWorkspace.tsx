@@ -20,7 +20,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAccessStore } from '../domain/access/access.store';
-import type { AccessRequest, AccessSubmission } from '../domain/access/access.types';
+import type { AccessFieldDetail, AccessPolicyProfile, AccessRequest, AccessSubmission } from '../domain/access/access.types';
+import { SUBTYPE_PRESENTATION, TYPE_PRESENTATION } from './resourcePresentation';
 
 export interface MultiResourceAccessRequestWorkspaceProps {
   onBackToSolution?: () => void;
@@ -45,6 +46,8 @@ interface ResourceItemRequest {
   techFields: string[];
   scopeNote: string;
   isExcluded: boolean;
+  policyProfile: AccessPolicyProfile;
+  fieldDetails: AccessFieldDetail[];
 }
 
 export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRequestWorkspaceProps> = ({
@@ -63,7 +66,7 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
     {
       id: 'res-pop-view',
       name: '人口基本信息视图',
-      typeBadge: 'DATA ASSET · VIEW',
+      typeBadge: `${TYPE_PRESENTATION.DATA_ASSET} · ${SUBTYPE_PRESENTATION.VIEW}`,
       categoryBadge: '核心数据',
       description: '提供人口年龄、出生信息、常住状态与所属行政区域等基础信息。',
       capability: '查询数据',
@@ -75,11 +78,20 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
       techFields: ['age', 'birth_date', 'resident_status', 'region_code'],
       scopeNote: '缺少身份与联系方式字段不在本次建议申请范围内。',
       isExcluded: false,
+      policyProfile: 'PERSONAL_DATA',
+      fieldDetails: [
+        { businessName: '年龄与出生信息', technicalName: 'age_birth_info', treatment: 'ALLOW' },
+        { businessName: '常住状态', technicalName: 'resident_status', treatment: 'ALLOW' },
+        { businessName: '行政区域', technicalName: 'administrative_region', treatment: 'ALLOW' },
+        { businessName: '姓名', technicalName: 'person_name', treatment: 'MASK', sensitivity: '直接标识信息' },
+        { businessName: '身份证号', technicalName: 'id_card_no', treatment: 'EXCLUDE', sensitivity: '敏感身份信息' },
+        { businessName: '联系方式', technicalName: 'mobile_phone', treatment: 'EXCLUDE', sensitivity: '联系方式' },
+      ],
     },
     {
       id: 'res-elderly-care',
       name: '养老机构基本信息',
-      typeBadge: 'DATA ASSET',
+      typeBadge: TYPE_PRESENTATION.DATA_ASSET,
       categoryBadge: '补充数据',
       description: '提供养老机构的位置、床位规模与服务能力等基础信息。',
       capability: '查询数据',
@@ -91,6 +103,12 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
       techFields: ['org_name', 'address', 'location_geo', 'bed_count', 'service_types', 'operational_status'],
       scopeNote: '运营人员薪资与内部财务账目不在本次申请范围内。',
       isExcluded: false,
+      policyProfile: 'BUSINESS_DATA',
+      fieldDetails: [
+        { businessName: '机构位置', technicalName: 'org_address', treatment: 'ALLOW' },
+        { businessName: '床位规模', technicalName: 'bed_count', treatment: 'ALLOW' },
+        { businessName: '服务能力', technicalName: 'service_types', treatment: 'ALLOW' },
+      ],
     },
   ]);
 
@@ -193,6 +211,8 @@ export const MultiResourceAccessRequestWorkspace: React.FC<MultiResourceAccessRe
       reviewReason: resource.protectionSummary,
       riskLevel: isAutoDecisionResource(resource) ? 'LOW' : 'MEDIUM',
       requestedDurationDays: durationDays,
+      policyProfile: resource.policyProfile,
+      fieldDetails: resource.fieldDetails,
       submittedAt,
       updatedAt: submittedAt,
     }));

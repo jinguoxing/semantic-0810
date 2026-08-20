@@ -39,7 +39,7 @@ const readinessInfo = (readiness: TaskReadiness): [string, string, string, MyAcc
   if (readiness === 'WAITING') return ['等待所需资源', '当前仍有必要资源等待人工处理，完整任务暂不能继续。', '查看进度', 'check_progress'];
   if (readiness === 'READY') return ['可继续', '当前获批范围已满足原分析任务所需的数据能力。', '继续分析', 'resume'];
   if (readiness === 'DEGRADED') return ['受限可继续', '当前授权可支持部分任务目标，敏感或非必要范围已被收敛。', '按当前授权继续', 'resume_degraded'];
-  return ['暂无法继续', '必要资源未获授权，请调整数据方案或重新申请必要范围。', '调整数据方案', 'adjust_plan'];
+  return ['暂无法继续', '当前所需核心资源尚未获得访问权限，可调整数据方案或重新申请必要范围。', '调整数据方案', 'adjust_plan'];
 };
 
 function grantFor(request: AccessRequest, grants: EffectiveGrant[]) { return grants.find((grant) => grant.requestId === request.id && grant.state === 'ACTIVE'); }
@@ -63,7 +63,13 @@ function toSubmissionView(submission: AccessSubmission, requests: AccessRequest[
   const granted = requests.filter((request) => request.state === 'GRANTED' || request.state === 'GRANTED_WITH_LIMITS').length;
   const processing = requests.filter((request) => request.state === 'SUBMITTED' || request.state === 'PENDING_REVIEW').length;
   const denied = requests.filter((request) => request.state === 'DENIED').length;
-  return { id: submission.id, taskId: submission.taskId, solutionId: submission.solutionId, taskTitle: submission.taskTitle, typeTag: '数据方案申请', purposeDescription: submission.purpose, source: submission.source, submittedTime: dateLabel(submission.createdAt), updatedTime: dateLabel(submission.updatedAt), createdAt: submission.createdAt, updatedAt: submission.updatedAt, accessProgress: processing ? `${granted} 项已授权 · ${processing} 项处理中` : denied ? `${granted} 项已授权 · ${denied} 项未授权` : `${granted} 项已授权`, taskReadiness: readiness, taskReadinessLabel, taskReadinessNote, primaryAction: { label: primaryLabel, actionType: primaryAction }, secondaryActions: readiness === 'DEGRADED' ? [{ label: '查看限制', actionType: 'view_limits' }] : readiness === 'BLOCKED' ? [{ label: '重新申请必要范围', actionType: 'reapply_necessary' }] : [{ label: '查看申请详情', actionType: 'view_submission_detail' }], requests: requests.map((request) => toRequestView(request, grants)), limitations: readiness === 'DEGRADED' ? { canDo: ['在已授权区域内进行趋势分析', '使用已核定的非敏感字段'], restricted: ['直接标识信息已脱敏', '数据导出不可用'], reason: '最终授权范围根据最小必要和受保护数据使用策略进行了收敛。' } : undefined };
+  const activeGrants = requests.map((request) => grantFor(request, grants)).filter((grant): grant is EffectiveGrant => Boolean(grant));
+  const grantedFields = [...new Set(activeGrants.flatMap((grant) => grant.scope.fields ?? []))];
+  const missingFields = [...new Set(requests.flatMap((request) => request.requestedScope.fields ?? []).filter((field) => !grantedFields.includes(field)))];
+  const restrictionNotes = [...new Set(activeGrants.flatMap((grant) => grant.restrictions.map((item) => item.description)))];
+  const degradedCanDo = grantedFields.length ? grantedFields : ['在已授权范围内继续在线分析'];
+  const degradedRestricted = [...missingFields.map((field) => `${field}暂不可用`), ...restrictionNotes];
+  return { id: submission.id, taskId: submission.taskId, solutionId: submission.solutionId, taskTitle: submission.taskTitle, typeTag: '数据方案申请', purposeDescription: submission.purpose, source: submission.source, submittedTime: dateLabel(submission.createdAt), updatedTime: dateLabel(submission.updatedAt), createdAt: submission.createdAt, updatedAt: submission.updatedAt, accessProgress: processing ? `${granted} 项已授权 · ${processing} 项等待处理` : denied ? `${granted} 项已授权 · ${denied} 项未授权` : `${granted} 项已授权`, taskReadiness: readiness, taskReadinessLabel, taskReadinessNote, primaryAction: { label: primaryLabel, actionType: primaryAction }, secondaryActions: readiness === 'DEGRADED' ? [{ label: '查看限制', actionType: 'view_limits' }] : readiness === 'BLOCKED' ? [{ label: '重新申请必要范围', actionType: 'reapply_necessary' }] : [{ label: '查看申请详情', actionType: 'view_submission_detail' }], requests: requests.map((request) => toRequestView(request, grants)), limitations: readiness === 'DEGRADED' ? { canDo: degradedCanDo, restricted: degradedRestricted.length ? degradedRestricted : ['部分申请范围暂不可用'], reason: '最终授权范围根据最小必要和受保护数据使用策略进行了收敛。' } : undefined };
 }
 
 export function useMyAccessSubmissions(): MyAccessSubmissionViewModel[] {
