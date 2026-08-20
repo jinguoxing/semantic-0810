@@ -50,6 +50,20 @@ interface MetricItem {
 
 const MOCK_METRICS_DATA: MetricItem[] = [
   {
+    id: 'met_valid_order_amount',
+    name: '有效订单金额',
+    enName: 'Valid Order Amount',
+    domain: '交易分析',
+    definition: '满足“有效订单”业务规则的订单金额合计，用于衡量一定统计周期内形成的有效订单交易规模。',
+    businessObject: '订单',
+    calculationSummary: 'SUM(order_amount)',
+    timeSemantics: '支付时间 · 日',
+    validationStatus: 'PASSED',
+    status: 'PUBLISHED',
+    owner: '交易分析与财务核算组',
+    dimensionCount: 6,
+  },
+  {
     id: 'met_001',
     name: '老龄化率',
     enName: 'Aging Ratio',
@@ -176,6 +190,7 @@ const MOCK_METRICS_DATA: MetricItem[] = [
 
 interface MetricRegistryWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
+  onNavigateToMetricDetail?: (metricId: string) => void;
   onNavigateToBusinessObject?: () => void;
   onNavigateToDataStandards?: () => void;
   onNavigateToDataSemantics?: () => void;
@@ -186,6 +201,7 @@ interface MetricRegistryWorkspaceProps {
 
 export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = ({
   addToast,
+  onNavigateToMetricDetail,
   onNavigateToBusinessObject,
   onNavigateToDataStandards,
   onNavigateToDataSemantics,
@@ -368,34 +384,42 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
               />
             </button>
 
-            {/* 二级展开项: 业务对象 / 指标 */}
+            {/* 二级展开项: 业务对象 / 指标 / 数据语义 / 数据标准 */}
             {semanticsExpanded && (
-              <div className="mt-1 pl-4 space-y-0.5 border-l-2 border-[#DBEAFE] ml-4">
-                {/* 业务对象 */}
+              <div className="mt-1.5 pl-3 space-y-1 border-l-2 border-[#DBEAFE] ml-3.5">
+                {/* 业务对象 (Amber 风格) */}
                 <button
                   onClick={() => {
                     setActiveSubNav('objects');
                     onNavigateToBusinessObject?.();
                   }}
-                  className={`w-full px-3 py-1.5 rounded-md flex items-center space-x-2 transition-all text-left cursor-pointer ${
+                  className={`w-full px-2.5 py-1.5 rounded-lg flex items-center space-x-2.5 transition-all text-left group cursor-pointer ${
                     activeSubNav === 'objects'
-                      ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
-                      : 'text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]'
+                      ? 'bg-[#FFFBEB] text-[#B45309] font-bold border border-[#FDE68A]'
+                      : 'text-[#475569] hover:bg-[#FFFBEB]/70 hover:text-[#92400E]'
                   }`}
                 >
-                  <FolderTree className="w-3.5 h-3.5" />
-                  <span>业务对象</span>
+                  <div className="w-5 h-5 rounded-md bg-[#FEF3C7] border border-[#FDE68A] flex items-center justify-center text-[#D97706] shrink-0">
+                    <FolderTree className="w-3 h-3 text-[#D97706]" />
+                  </div>
+                  <span className="text-xs">业务对象</span>
                 </button>
 
-                {/* 指标 (当前高亮) */}
+                {/* 指标 (Purple 风格) */}
                 <button
                   onClick={() => {
                     setActiveSubNav('metrics');
                   }}
-                  className={`w-full px-3 py-1.5 rounded-md flex items-center space-x-2 transition-all text-left cursor-pointer bg-[#2563EB] text-white font-bold shadow-2xs`}
+                  className={`w-full px-2.5 py-1.5 rounded-lg flex items-center space-x-2.5 transition-all text-left group cursor-pointer ${
+                    activeSubNav === 'metrics'
+                      ? 'bg-[#F5F3FF] text-[#6D28D9] font-bold border border-[#DDD6FE]'
+                      : 'text-[#475569] hover:bg-[#F5F3FF]/70 hover:text-[#5B21B6]'
+                  }`}
                 >
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  <span>指标</span>
+                  <div className="w-5 h-5 rounded-md bg-[#EDE9FE] border border-[#DDD6FE] flex items-center justify-center text-[#7C3AED] shrink-0">
+                    <BarChart3 className="w-3 h-3 text-[#7C3AED]" />
+                  </div>
+                  <span className="text-xs">指标</span>
                 </button>
               </div>
             )}
@@ -865,11 +889,15 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                               <button
                                 onClick={() => {
                                   setActionMenuOpenId(null);
-                                  setSelectedMetricForDetail(metric);
+                                  if (onNavigateToMetricDetail) {
+                                    onNavigateToMetricDetail(metric.id);
+                                  } else {
+                                    setSelectedMetricForDetail(metric);
+                                  }
                                 }}
-                                className="w-full px-3 py-1.5 text-[#334155] hover:bg-[#F8FAFC] hover:text-[#2563EB] flex items-center space-x-2 text-left"
+                                className="w-full px-3 py-1.5 text-[#334155] hover:bg-[#EFF6FF] hover:text-[#2563EB] flex items-center space-x-2 text-left font-medium"
                               >
-                                <span>查看详情</span>
+                                <span>查看事实详情页</span>
                               </button>
                               <button
                                 onClick={() => {
@@ -1032,22 +1060,38 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
             </div>
 
             {/* Drawer Footer Actions */}
-            <div className="p-4 border-t border-[#E6EAF0] bg-white flex items-center justify-end space-x-2.5">
-              <button
-                onClick={() => setSelectedMetricForDetail(null)}
-                className="px-3.5 py-1.5 border border-[#E6EAF0] text-[#334155] hover:bg-[#F8FAFC] rounded-md font-medium"
-              >
-                关闭
-              </button>
+            <div className="p-4 border-t border-[#E6EAF0] bg-white flex items-center justify-between">
               <button
                 onClick={() => {
+                  const id = selectedMetricForDetail.id;
                   setSelectedMetricForDetail(null);
-                  addToast?.('success', '发起变更', `已打开「${selectedMetricForDetail.name}」的口径变更申请工单`);
+                  if (onNavigateToMetricDetail) {
+                    onNavigateToMetricDetail(id);
+                  }
                 }}
-                className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md font-bold"
+                className="px-3 py-1.5 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] rounded-md font-semibold text-xs flex items-center space-x-1.5 cursor-pointer transition-colors"
               >
-                发起口径变更
+                <span>进入完整事实详情页</span>
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setSelectedMetricForDetail(null)}
+                  className="px-3.5 py-1.5 border border-[#E6EAF0] text-[#334155] hover:bg-[#F8FAFC] rounded-md font-medium text-xs cursor-pointer"
+                >
+                  关闭
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedMetricForDetail(null);
+                    addToast?.('success', '发起变更', `已打开「${selectedMetricForDetail.name}」的口径变更申请工单`);
+                  }}
+                  className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md font-bold text-xs cursor-pointer"
+                >
+                  发起口径变更
+                </button>
+              </div>
             </div>
           </div>
         </div>

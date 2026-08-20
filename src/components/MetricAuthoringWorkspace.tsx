@@ -40,8 +40,11 @@ import {
   Cpu,
   CornerDownRight
 } from 'lucide-react';
+import { DataBindingDrawer } from './DataBindingDrawer';
+import { MetricAuthoringChangeMode } from './MetricAuthoringChangeMode';
 
 interface MetricAuthoringWorkspaceProps {
+  initialMode?: 'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'change_draft';
   onBackToRegistry?: () => void;
   onNavigateToBusinessObject?: () => void;
   onNavigateToDataStandards?: () => void;
@@ -53,6 +56,7 @@ interface MetricAuthoringWorkspaceProps {
 }
 
 export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> = ({
+  initialMode = 'draft',
   onBackToRegistry,
   onNavigateToBusinessObject,
   onNavigateToDataStandards,
@@ -67,7 +71,8 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
   // - 'blank': Blank Create · 初始定义状态 ("从空白开始定义")
   // - 'constructing': In-place AI draft generation animation
   // - 'draft': AI Draft Ready (Full Metric Draft with validation & confirmation lifecycle)
-  const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft'>('ai_prompt');
+  // - 'change_draft': Metric Authoring · Change Mode (Semovix Metric Authoring Change Mode V1.2)
+  const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'change_draft'>(initialMode);
 
   // Blank Create Form States (Initially empty to represent real initial state)
   const [blankMetricName, setBlankMetricName] = useState<string>('');
@@ -83,7 +88,7 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
 
   // AI Prompt mode natural language text
   const [aiIntentText, setAiIntentText] = useState<string>(
-    '创建“老龄化率”，定义为 60 周岁及以上常住人口占全部常住人口的比例，用于衡量区域人口老龄化程度。'
+    '创建“有效订单金额”，定义为满足“有效订单”业务规则的订单金额合计，用于衡量一定统计周期内形成的有效订单交易规模。'
   );
 
   // Construction sequence progress
@@ -102,38 +107,39 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
   // Workspace States for Draft Ready:
   // - 'DRAFT_READY': AI Create · Draft Ready
   // - 'VALIDATING': Running verification
-  // - 'VALIDATION_PASSED': Ready for Owner Confirm
+  // - 'VALIDATION_PASSED': Ready for Owner Confirm (Validation PASS)
   // - 'NEEDS_CONFIRM': Needs business confirmation
   // - 'DECISION_REQUIRED': Conflict resolution required
   const [workspaceState, setWorkspaceState] = useState<
     'DRAFT_READY' | 'VALIDATING' | 'VALIDATION_PASSED' | 'NEEDS_CONFIRM' | 'DECISION_REQUIRED'
-  >('DRAFT_READY');
+  >('VALIDATION_PASSED');
 
-  // Editable Draft Data for the Full Metric Draft
-  const [metricName, setMetricName] = useState('老龄化率');
+  // Editable Draft Data for the Full Metric Draft: 有效订单金额
+  const [metricName, setMetricName] = useState('有效订单金额');
   const [businessDefinition, setBusinessDefinition] = useState(
-    '指定统计范围和统计时点下，60 周岁及以上常住人口占全部常住人口的比例，用于衡量区域人口老龄化程度。'
+    '满足“有效订单”业务规则的订单金额合计，用于衡量一定统计周期内形成的有效订单交易规模。'
   );
-  const [businessObject, setBusinessObject] = useState('自然人');
-  const [scopeText, setScopeText] = useState('人口服务 · 人口结构分析 · 有效常住人口 · 上海市');
-  const [timeSemanticsText, setTimeSemanticsText] = useState('快照 · 统计日期');
-  const [timeGrains, setTimeGrains] = useState<string[]>(['月', '季', '年']);
-  const [dimensions, setDimensions] = useState<string[]>(['街镇', '性别', '户籍类型']);
+  const [businessObject, setBusinessObject] = useState('订单');
+  const [scopeText, setScopeText] = useState('订单业务 · 交易分析');
+  const [timeSemanticsText, setTimeSemanticsText] = useState('支付时间');
+  const [timeGrains, setTimeGrains] = useState<string[]>(['日', '月', '季', '年']);
+  const [dimensions, setDimensions] = useState<string[]>(['渠道', '商品分类', '地区']);
   const [isSaved, setIsSaved] = useState(true);
 
   // Modals & Drawers in Draft Ready State
+  const [isDataBindingDrawerOpen, setIsDataBindingDrawerOpen] = useState<boolean>(false);
   const [isAdjustDrawerOpen, setIsAdjustDrawerOpen] = useState<null | 'meaning' | 'scope' | 'time_dim'>(null);
   const [isDependencyDrawerOpen, setIsDependencyDrawerOpen] = useState<boolean>(false);
   const [isValidatingModalOpen, setIsValidatingModalOpen] = useState<boolean>(false);
-  const [validationProgress, setValidationProgress] = useState<number>(0);
+  const [validationProgress, setValidationProgress] = useState<number>(100);
   const [validationSteps, setValidationSteps] = useState<
     Array<{ name: string; status: 'waiting' | 'running' | 'passed' | 'failed' }>
   >([
-    { name: '计算依赖拓扑与循环依赖检测', status: 'waiting' },
-    { name: '基础粒度对齐 (Grain Alignment)', status: 'waiting' },
-    { name: '时间语义一致性 (Temporal Consistency)', status: 'waiting' },
-    { name: '可分析维度兼容性校验', status: 'waiting' },
-    { name: '底层数据资产物理 Binding 探活', status: 'waiting' },
+    { name: '计算依赖拓扑与循环依赖检测', status: 'passed' },
+    { name: '基础粒度对齐 (Grain Alignment)', status: 'passed' },
+    { name: '时间语义一致性 (Temporal Consistency)', status: 'passed' },
+    { name: '可分析维度兼容性校验', status: 'passed' },
+    { name: '底层数据资产物理 Binding 探活', status: 'passed' },
   ]);
 
   // Adjust Drawer Temp State
@@ -319,6 +325,22 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
   const isScopeSpecified = Boolean(blankBusinessDomain || blankBusinessScenario || blankStatisticalScope);
   const canStartConstructing = isMeaningReady;
 
+  // If authoringMode is change_draft, render the dedicated Change Mode workspace
+  if (authoringMode === 'change_draft') {
+    return (
+      <MetricAuthoringChangeMode
+        onBackToRegistry={onBackToRegistry}
+        onNavigateToBusinessObject={onNavigateToBusinessObject}
+        onNavigateToDataStandards={onNavigateToDataStandards}
+        onNavigateToDataSemantics={onNavigateToDataSemantics}
+        onNavigateToDataAssets={onNavigateToDataAssets}
+        onNavigateToMarketplace={onNavigateToMarketplace}
+        onNavigateToHome={onNavigateToHome}
+        addToast={addToast}
+      />
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#F7F9FC] text-[#172033] font-sans antialiased select-none overflow-hidden">
       
@@ -460,20 +482,25 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                 业务语义
               </div>
               
+              {/* 业务对象 (Amber 风格) */}
               <button
                 onClick={onNavigateToBusinessObject}
-                className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-xs font-medium text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors cursor-pointer"
+                className="w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#475569] hover:bg-[#FFFBEB]/70 hover:text-[#92400E] transition-colors cursor-pointer group"
               >
-                <Activity className="w-4 h-4 text-[#64748B]" />
+                <div className="w-5 h-5 rounded-md bg-[#FEF3C7] border border-[#FDE68A] flex items-center justify-center text-[#D97706] shrink-0">
+                  <FolderTree className="w-3 h-3 text-[#D97706]" />
+                </div>
                 <span>业务对象</span>
               </button>
 
-              {/* 指标 · 当前高亮 */}
+              {/* 指标 · 当前高亮 (Purple 风格) */}
               <button
                 onClick={onBackToRegistry}
-                className="w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-xs font-bold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] transition-colors cursor-pointer shadow-2xs"
+                className="w-full flex items-center space-x-2.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#F5F3FF] text-[#6D28D9] border border-[#DDD6FE] transition-colors cursor-pointer shadow-2xs group"
               >
-                <BarChart3 className="w-4 h-4 text-[#2563EB]" />
+                <div className="w-5 h-5 rounded-md bg-[#EDE9FE] border border-[#DDD6FE] flex items-center justify-center text-[#7C3AED] shrink-0">
+                  <BarChart3 className="w-3 h-3 text-[#7C3AED]" />
+                </div>
                 <span>指标</span>
               </button>
             </div>
@@ -1351,17 +1378,25 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
 
                       <div>
                         <div className="text-[11px] text-[#667085]">度量方式</div>
-                        <div className="font-semibold text-[#172033] mt-0.5">比例 (%)</div>
+                        <div className="font-semibold text-[#172033] mt-0.5">
+                          {metricName === '有效订单金额' ? '金额求和 (SUM)' : '比例 (%)'}
+                        </div>
                       </div>
 
                       <div>
                         <div className="text-[11px] text-[#667085]">核心业务概念</div>
-                        <div className="font-semibold text-[#172033] mt-0.5">老年人口 / 常住人口</div>
+                        <div className="font-semibold text-[#172033] mt-0.5">
+                          {metricName === '有效订单金额' ? '订单金额 / 有效订单' : '老年人口 / 常住人口'}
+                        </div>
                       </div>
 
                       <div>
                         <div className="text-[11px] text-[#667085]">业务目的</div>
-                        <div className="font-semibold text-[#172033] mt-0.5">衡量区域人口老龄化程度</div>
+                        <div className="font-semibold text-[#172033] mt-0.5">
+                          {metricName === '有效订单金额'
+                            ? '衡量一定统计周期内形成的有效订单交易规模'
+                            : '衡量区域人口老龄化程度'}
+                        </div>
                       </div>
                     </div>
 
@@ -1393,7 +1428,7 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
             </div>
 
             {/* --------------------------------------------------- */}
-            {/* COLUMN 2: MIDDLE MAIN METRIC DRAFT (800px)         */}
+            {/* COLUMN 2: MIDDLE MAIN METRIC DRAFT                 */}
             {/* --------------------------------------------------- */}
             <div className="flex-1 overflow-y-auto p-6 flex justify-center">
               <div className="w-full max-w-[800px] space-y-6">
@@ -1494,48 +1529,82 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                         计算关系公式
                       </div>
                       <div className="text-base sm:text-lg font-extrabold text-[#172033] tracking-tight py-1">
-                        {metricName} = 老年人口数 ÷ 常住人口数 × 100%
+                        {metricName === '有效订单金额'
+                          ? '有效订单金额 = SUM(订单金额)'
+                          : `${metricName} = 老年人口数 ÷ 常住人口数 × 100%`}
                       </div>
                     </div>
 
-                    {/* Formal Metric Dependencies */}
+                    {/* Formal Metric / Business Rule Dependencies */}
                     <div className="space-y-2">
                       <div className="text-[11px] font-semibold text-[#667085]">
-                        依赖正式指标
+                        {metricName === '有效订单金额' ? '业务限定与度量规则' : '依赖正式指标'}
                       </div>
                       
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-                        <div className="p-3 bg-white border border-[#E2E8F0] rounded-md flex items-center justify-between shadow-2xs">
-                          <div className="space-y-0.5">
-                            <div className="text-xs font-bold text-[#172033]">
-                              老年人口数
+                      {metricName === '有效订单金额' ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                          <div className="p-3 bg-white border border-[#E2E8F0] rounded-md flex items-center justify-between shadow-2xs">
+                            <div className="space-y-0.5">
+                              <div className="text-xs font-bold text-[#172033]">
+                                有效订单
+                              </div>
+                              <div className="text-[11px] text-[#667085]">
+                                正式业务规则 · 排除退款与取消
+                              </div>
                             </div>
-                            <div className="text-[11px] text-[#667085]">
-                              60岁及以上常住人口总数
-                            </div>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
+                              正式规则
+                            </span>
                           </div>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
-                            正式有效
-                          </span>
-                        </div>
 
-                        <div className="p-3 bg-white border border-[#E2E8F0] rounded-md flex items-center justify-between shadow-2xs">
-                          <div className="space-y-0.5">
-                            <div className="text-xs font-bold text-[#172033]">
-                              常住人口数
+                          <div className="p-3 bg-white border border-[#E2E8F0] rounded-md flex items-center justify-between shadow-2xs">
+                            <div className="space-y-0.5">
+                              <div className="text-xs font-bold text-[#172033]">
+                                订单金额
+                              </div>
+                              <div className="text-[11px] text-[#667085]">
+                                聚合：SUM · 数据标准度量
+                              </div>
                             </div>
-                            <div className="text-[11px] text-[#667085]">
-                              辖区内全部有效常住人口
-                            </div>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
+                              标准度量
+                            </span>
                           </div>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
-                            正式有效
-                          </span>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                          <div className="p-3 bg-white border border-[#E2E8F0] rounded-md flex items-center justify-between shadow-2xs">
+                            <div className="space-y-0.5">
+                              <div className="text-xs font-bold text-[#172033]">
+                                老年人口数
+                              </div>
+                              <div className="text-[11px] text-[#667085]">
+                                60岁及以上常住人口总数
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
+                              正式有效
+                            </span>
+                          </div>
+
+                          <div className="p-3 bg-white border border-[#E2E8F0] rounded-md flex items-center justify-between shadow-2xs">
+                            <div className="space-y-0.5">
+                              <div className="text-xs font-bold text-[#172033]">
+                                常住人口数
+                              </div>
+                              <div className="text-[11px] text-[#667085]">
+                                辖区内全部有效常住人口
+                              </div>
+                            </div>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
+                              正式有效
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       <p className="text-[11px] text-[#667085] pt-0.5">
-                        复用当前正式指标，无需重新定义底层统计口径。
+                        复用当前正式业务语义与数据标准，无需重新定义底层统计口径。
                       </p>
                     </div>
 
@@ -1543,10 +1612,10 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                     <div className="pt-2 border-t border-[#EEF2F6] flex items-center justify-between text-xs">
                       <div className="flex items-center space-x-2 text-[#475569]">
                         <span className="font-semibold text-[#172033]">度量特征：</span>
-                        <span>比例 · 人口统计快照 · %</span>
+                        <span>{metricName === '有效订单金额' ? '金额合计 · 交易事实 · 元' : '比例 · 人口统计快照 · %'}</span>
                       </div>
                       <div className="text-[11px] text-[#94A3B8]">
-                        基础粒度：人 / 统计期
+                        基础粒度：{businessObject}
                       </div>
                     </div>
                   </div>
@@ -1601,38 +1670,45 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                     </div>
 
                     <p className="text-[11px] text-[#667085] pt-1">
-                      当前依赖指标支持以上分析范围。
+                      当前数据实现支持以上分析范围。
                     </p>
                   </div>
 
                   <hr className="border-[#EEF2F6] mx-6" />
 
                   {/* 2.6 数据实现 */}
-                  <div className="p-6 space-y-3">
+                  <div className={`p-6 space-y-3 transition-colors ${isDataBindingDrawerOpen ? 'bg-[#F8FAFC]' : ''}`}>
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-bold text-[#667085] tracking-wider uppercase">
                         数据实现
                       </h3>
                       <button
-                        onClick={() => setIsDependencyDrawerOpen(true)}
-                        className="text-xs font-semibold text-[#2563EB] hover:text-[#1D4ED8] hover:underline cursor-pointer flex items-center space-x-1"
+                        onClick={() => {
+                          setIsDataBindingDrawerOpen(true);
+                          if (addToast) addToast('info', '查看完整实现', '已在右侧检查面板载入「有效订单金额」数据实现');
+                        }}
+                        className={`text-xs font-semibold hover:underline cursor-pointer flex items-center space-x-1 ${
+                          isDataBindingDrawerOpen ? 'text-[#2563EB] font-bold underline' : 'text-[#2563EB]'
+                        }`}
                       >
-                        <span>查看依赖实现 →</span>
+                        <span>查看完整实现 →</span>
                       </button>
                     </div>
 
                     <div className="space-y-1.5">
                       <div className="flex items-center space-x-2.5">
                         <span className="text-xs font-bold text-[#172033]">
-                          基于 2 个正式指标的数据实现
+                          {metricName === '有效订单金额' ? '订单事实数据 (dwd_order_fact_di)' : '基于 2 个正式指标的数据实现'}
                         </span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7] flex items-center space-x-1">
                           <Check className="w-2.5 h-2.5" />
-                          <span>Binding 正常</span>
+                          <span>数据实现可验证</span>
                         </span>
                       </div>
                       <div className="text-xs text-[#667085]">
-                        老年人口数 · 常住人口数
+                        {metricName === '有效订单金额'
+                          ? '来源：订单业务系统 · 粒度：订单 · 时间：支付时间'
+                          : '老年人口数 · 常住人口数'}
                       </div>
                     </div>
                   </div>
@@ -1649,25 +1725,46 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                       <div>
                         <span className="text-[#667085] mr-2">来源：</span>
                         <span className="font-semibold text-[#172033]">
-                          Semovix AI 辅助构建 · 人口服务中心 · 张敏
+                          {metricName === '有效订单金额'
+                            ? 'Semovix AI 辅助构建 · 交易分析组 · 王超'
+                            : 'Semovix AI 辅助构建 · 人口服务中心 · 张敏'}
                         </span>
                       </div>
 
                       <div className="flex items-start space-x-2">
                         <span className="text-[#667085] shrink-0 mt-0.5">依据：</span>
                         <div className="flex flex-wrap gap-1.5">
-                          <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
-                            《人口统计业务规范》
-                          </span>
-                          <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
-                            老年人口数
-                          </span>
-                          <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
-                            常住人口数
-                          </span>
-                          <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
-                            业务对象 · 自然人
-                          </span>
+                          {metricName === '有效订单金额' ? (
+                            <>
+                              <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
+                                《电商交易业务规范》
+                              </span>
+                              <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
+                                业务规则 · 有效订单
+                              </span>
+                              <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
+                                业务对象 · 订单
+                              </span>
+                              <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
+                                数据标准 · 订单金额
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
+                                《人口统计业务规范》
+                              </span>
+                              <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
+                                老年人口数
+                              </span>
+                              <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
+                                常住人口数
+                              </span>
+                              <span className="px-2 py-0.5 bg-[#F8FAFC] text-[#475569] border border-[#E2E8F0] rounded text-[11px]">
+                                业务对象 · 自然人
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1679,143 +1776,287 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
             </div>
 
             {/* --------------------------------------------------- */}
-            {/* COLUMN 3: RIGHT READINESS & VALIDATION ACTION (310px)*/}
+            {/* COLUMN 3: RIGHT DOCKED DATA BINDING DRAWER / READINESS */}
             {/* --------------------------------------------------- */}
-            <div className="w-[310px] border-l border-[#E6EAF0] bg-white flex flex-col shrink-0 overflow-y-auto">
-              <div className="p-5 space-y-6 flex-1 flex flex-col justify-between">
-                
-                <div className="space-y-5">
-                  <div>
-                    <h2 className="text-sm font-bold text-[#172033]">
-                      指标准备情况
-                    </h2>
-                    <div className="text-xs text-[#667085] mt-0.5">
-                      草稿完整性
-                    </div>
-                  </div>
-
-                  <div className="space-y-3.5">
-                    <div className="flex items-start space-x-2.5">
-                      <div className="w-4 h-4 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
-                        <Check className="w-2.5 h-2.5 text-[#16A36A]" />
-                      </div>
+            {isDataBindingDrawerOpen ? (
+              <DataBindingDrawer
+                isOpen={isDataBindingDrawerOpen}
+                onClose={() => setIsDataBindingDrawerOpen(false)}
+                onAdjustBinding={() => {
+                  if (workspaceState === 'VALIDATION_PASSED') {
+                    setWorkspaceState('DRAFT_READY');
+                  }
+                  if (addToast) addToast('info', '调整数据绑定', '数据绑定已更新，验证状态已重置，请重新运行验证');
+                }}
+                onViewDataAsset={(assetName) => {
+                  if (addToast) addToast('info', '查看数据资产', `已定位数据资产「${assetName}」`);
+                }}
+                onViewBusinessRule={(ruleName) => {
+                  if (addToast) addToast('info', '查看规则实现', `已打开「${ruleName}」正式业务规则定义`);
+                }}
+                addToast={addToast}
+              />
+            ) : (
+              <div className="w-[330px] border-l border-[#E6EAF0] bg-white flex flex-col shrink-0 overflow-y-auto">
+                <div className="p-5 space-y-5 flex-1 flex flex-col justify-between">
+                  
+                  {workspaceState === 'VALIDATION_PASSED' ? (
+                    /* --------------------------------------------------- */
+                    /* VALIDATION PASS STATE (Right Column)                */
+                    /* --------------------------------------------------- */
+                    <div className="space-y-4">
+                      {/* Header & Status */}
                       <div>
-                        <div className="text-xs font-bold text-[#172033]">
-                          定义已完整
+                        <div className="flex items-center space-x-2">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7] tracking-wider uppercase">
+                            Validation PASS
+                          </span>
                         </div>
-                        <div className="text-[11px] text-[#667085] mt-0.5">
-                          业务含义和适用范围已明确
+                        <h2 className="text-sm font-bold text-[#172033] mt-1.5 flex items-center space-x-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-[#16A36A]" />
+                          <span>系统验证通过</span>
+                        </h2>
+                        <p className="text-[11px] text-[#667085] mt-1 leading-relaxed">
+                          当前 Metric Draft 已通过系统验证，业务定义、数据实现和执行路径均具备进入正式生效的条件。
+                        </p>
+                      </div>
+
+                      {/* 5 Validation Checks Checklist */}
+                      <div className="space-y-2 pt-1 border-t border-[#EEF2F6]">
+                        <div className="text-[11px] font-bold text-[#667085] tracking-wider uppercase">
+                          验证通过项
                         </div>
+
+                        {/* Check 1 */}
+                        <div className="p-2.5 bg-[#FAFCFF] border border-[#E2E8F0] rounded-md space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#172033]">计算依赖与拓扑</span>
+                            <span className="text-[10px] font-bold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7]">
+                              PASS
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#667085] leading-relaxed">
+                            依赖闭环无冲突，已映射「有效订单」业务规则与 SUM 聚合。
+                          </p>
+                        </div>
+
+                        {/* Check 2 */}
+                        <div className="p-2.5 bg-[#FAFCFF] border border-[#E2E8F0] rounded-md space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#172033]">基础粒度对齐</span>
+                            <span className="text-[10px] font-bold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7]">
+                              PASS
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#667085] leading-relaxed">
+                            粒度定义为「订单」，与交易事实模型严格对齐。
+                          </p>
+                        </div>
+
+                        {/* Check 3 */}
+                        <div className="p-2.5 bg-[#FAFCFF] border border-[#E2E8F0] rounded-md space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#172033]">时间语义一致性</span>
+                            <span className="text-[10px] font-bold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7]">
+                              PASS
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#667085] leading-relaxed">
+                            事实时间为「支付时间」，支持 日 / 月 / 季 / 年 周期。
+                          </p>
+                        </div>
+
+                        {/* Check 4 */}
+                        <div className="p-2.5 bg-[#FAFCFF] border border-[#E2E8F0] rounded-md space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#172033]">分析维度兼容性</span>
+                            <span className="text-[10px] font-bold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7]">
+                              PASS
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#667085] leading-relaxed">
+                            渠道、商品分类、地区 3 维下钻安全无漂移。
+                          </p>
+                        </div>
+
+                        {/* Check 5 */}
+                        <div className="p-2.5 bg-[#FAFCFF] border border-[#E2E8F0] rounded-md space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#172033]">数据实现 Binding 探活</span>
+                            <span className="text-[10px] font-bold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7]">
+                              PASS
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#667085] leading-relaxed">
+                            物理表 dwd_order_fact_di 字段连通与过滤规则正常。
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Owner Confirmation Section */}
+                      <div className="p-3.5 bg-[#F8FAFC] border border-[#CBD5E1] rounded-md space-y-2">
+                        <div className="flex items-center space-x-1.5">
+                          <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
+                          <div className="text-xs font-bold text-[#0F172A]">
+                            Metric Owner 确认
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-[#475569] leading-relaxed">
+                          Semovix 已完成技术语义与底层验证。请作为责任 Owner 确认指标口径符合业务预期并承担生效责任。
+                        </p>
+                        <div className="text-[11px] text-[#64748B] pt-1 border-t border-[#E2E8F0] flex items-center justify-between">
+                          <span>责任 Owner：</span>
+                          <span className="font-bold text-[#0F172A]">交易分析组 · 王超</span>
+                        </div>
+                      </div>
+
+                      <div className="text-[10.5px] text-[#94A3B8] leading-relaxed">
+                        注意：Validation PASS ≠ 正式生效。确认生效后将正式发布至指标注册表并对全域 AI 问数与 BI 分析开放。
                       </div>
                     </div>
-
-                    <div className="flex items-start space-x-2.5">
-                      <div className="w-4 h-4 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
-                        <Check className="w-2.5 h-2.5 text-[#16A36A]" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-[#172033]">
-                          计算已完整
-                        </div>
-                        <div className="text-[11px] text-[#667085] mt-0.5">
-                          计算关系、粒度与时间语义已明确
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start space-x-2.5">
-                      <div className="w-4 h-4 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
-                        <Check className="w-2.5 h-2.5 text-[#16A36A]" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-[#172033]">
-                          分析范围已确定
-                        </div>
-                        <div className="text-[11px] text-[#667085] mt-0.5">
-                          所需分析维度已明确
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start space-x-2.5">
-                      <div className="w-4 h-4 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
-                        <Check className="w-2.5 h-2.5 text-[#16A36A]" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-[#172033]">
-                          数据实现已就绪
-                        </div>
-                        <div className="text-[11px] text-[#667085] mt-0.5">
-                          依赖与 Data Binding 可以进入验证
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {workspaceState === 'DRAFT_READY' && (
-                    <div className="p-3.5 bg-[#F0FDF4] border border-[#DCFCE7] rounded-md space-y-1.5">
-                      <div className="flex items-center space-x-2">
-                        <CheckCircle2 className="w-4 h-4 text-[#16A36A]" />
-                        <span className="text-xs font-bold text-[#166534]">
-                          已具备验证条件
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[#15803D] leading-relaxed">
-                        当前指标草稿定义完整，未发现阻断级业务问题，可以进入正式验证。
-                      </p>
-                    </div>
-                  )}
-
-                  {workspaceState === 'VALIDATION_PASSED' && (
-                    <div className="p-3.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md space-y-1.5">
-                      <div className="flex items-center space-x-2">
-                        <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
-                        <span className="text-xs font-bold text-[#1E40AF]">
-                          已具备生效条件
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[#1D4ED8] leading-relaxed">
-                        已通过全项语义安全证明。确认生效后将正式发布至指标注册表。
-                      </p>
-                      <div className="text-[11px] text-[#475569] pt-1">
-                        责任 Owner：<span className="font-bold text-[#0F172A]">人口服务中心 · 张敏</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2 pt-4 border-t border-[#EEF2F6]">
-                  {workspaceState === 'DRAFT_READY' ? (
-                    <>
-                      <button
-                        onClick={handleRunValidation}
-                        className="w-full py-2.5 px-4 bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white font-bold rounded-md shadow-sm transition-all cursor-pointer flex items-center justify-center space-x-2 text-xs"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>运行验证</span>
-                      </button>
-                      <p className="text-[11px] text-[#667085] leading-relaxed text-center">
-                        将验证计算依赖、粒度、时间语义、分析范围与数据实现。
-                      </p>
-                    </>
                   ) : (
-                    <>
-                      <button
-                        onClick={handleConfirmEffective}
-                        className="w-full py-2.5 px-4 bg-[#16A36A] hover:bg-[#15803D] text-white font-bold rounded-md shadow-sm transition-all cursor-pointer flex items-center justify-center space-x-2 text-xs"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>确认生效</span>
-                      </button>
-                      <p className="text-[11px] text-[#667085] leading-relaxed text-center">
-                        将使「{metricName}」作为正式指标生效并分发给问数与分析工具。
-                      </p>
-                    </>
-                  )}
-                </div>
+                    /* --------------------------------------------------- */
+                    /* DRAFT READY STATE (Right Column)                    */
+                    /* --------------------------------------------------- */
+                    <div className="space-y-5">
+                      <div>
+                        <h2 className="text-sm font-bold text-[#172033]">
+                          指标准备情况
+                        </h2>
+                        <div className="text-xs text-[#667085] mt-0.5">
+                          草稿完整性检查
+                        </div>
+                      </div>
 
+                      <div className="space-y-3.5">
+                        <div className="flex items-start space-x-2.5">
+                          <div className="w-4 h-4 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
+                            <Check className="w-2.5 h-2.5 text-[#16A36A]" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-[#172033]">
+                              定义已完整
+                            </div>
+                            <div className="text-[11px] text-[#667085] mt-0.5">
+                              业务含义和适用范围已明确
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-2.5">
+                          <div className="w-4 h-4 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
+                            <Check className="w-2.5 h-2.5 text-[#16A36A]" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-[#172033]">
+                              计算已完整
+                            </div>
+                            <div className="text-[11px] text-[#667085] mt-0.5">
+                              计算关系、粒度与时间语义已明确
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-2.5">
+                          <div className="w-4 h-4 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
+                            <Check className="w-2.5 h-2.5 text-[#16A36A]" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-[#172033]">
+                              分析范围已确定
+                            </div>
+                            <div className="text-[11px] text-[#667085] mt-0.5">
+                              所需分析维度已明确
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-2.5">
+                          <div className="w-4 h-4 rounded-full bg-[#F0FDF4] border border-[#DCFCE7] flex items-center justify-center shrink-0 mt-0.5">
+                            <Check className="w-2.5 h-2.5 text-[#16A36A]" />
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold text-[#172033]">
+                              数据实现已就绪
+                            </div>
+                            <div className="text-[11px] text-[#667085] mt-0.5 flex items-center justify-between">
+                              <span>依赖与 Data Binding 可以进入验证</span>
+                            </div>
+                            <button
+                              onClick={() => setIsDataBindingDrawerOpen(true)}
+                              className="mt-1 text-[11px] font-semibold text-[#2563EB] hover:underline cursor-pointer flex items-center space-x-1"
+                            >
+                              <span>打开数据实现检查面板 →</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 bg-[#F0FDF4] border border-[#DCFCE7] rounded-md space-y-1.5">
+                        <div className="flex items-center space-x-2">
+                          <CheckCircle2 className="w-4 h-4 text-[#16A36A]" />
+                          <span className="text-xs font-bold text-[#166534]">
+                            已具备验证条件
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#15803D] leading-relaxed">
+                          当前指标草稿定义完整，未发现阻断级业务问题，可以进入正式验证。
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bottom Action Area */}
+                  <div className="space-y-2 pt-4 border-t border-[#EEF2F6]">
+                    {workspaceState === 'VALIDATION_PASSED' ? (
+                      <>
+                        <button
+                          onClick={handleConfirmEffective}
+                          className="w-full py-2.5 px-4 bg-[#16A36A] hover:bg-[#15803D] text-white font-bold rounded-md shadow-sm transition-all cursor-pointer flex items-center justify-center space-x-2 text-xs"
+                        >
+                          <Check className="w-4 h-4 stroke-[3]" />
+                          <span>确认生效</span>
+                        </button>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            onClick={handleRunValidation}
+                            className="py-1.5 px-2 bg-white hover:bg-[#F8FAFC] text-[#475569] border border-[#CBD5E1] rounded text-[11px] font-semibold transition-colors cursor-pointer flex items-center justify-center space-x-1"
+                          >
+                            <Play className="w-3 h-3 fill-current" />
+                            <span>重新验证</span>
+                          </button>
+                          <button
+                            onClick={() => setIsDataBindingDrawerOpen(true)}
+                            className="py-1.5 px-2 bg-white hover:bg-[#F8FAFC] text-[#2563EB] border border-[#BFDBFE] rounded text-[11px] font-semibold transition-colors cursor-pointer flex items-center justify-center space-x-1"
+                          >
+                            <span>查看数据实现</span>
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-[#667085] leading-relaxed text-center pt-1">
+                          将使「{metricName}」作为正式指标生效并分发给问数与分析工具。
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={handleRunValidation}
+                          className="w-full py-2.5 px-4 bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white font-bold rounded-md shadow-sm transition-all cursor-pointer flex items-center justify-center space-x-2 text-xs"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>运行验证</span>
+                        </button>
+                        <p className="text-[11px] text-[#667085] leading-relaxed text-center">
+                          将验证计算依赖、粒度、时间语义、分析范围与数据实现。
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                </div>
               </div>
-            </div>
+            )}
 
           </div>
         )}
@@ -1923,8 +2164,13 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                     const parsed = tempDimensions.split(/[、,，]/).map(s => s.trim()).filter(Boolean);
                     if (parsed.length > 0) setDimensions(parsed);
                   }
+                  if (workspaceState === 'VALIDATION_PASSED') {
+                    setWorkspaceState('DRAFT_READY');
+                  }
                   setIsAdjustDrawerOpen(null);
-                  if (addToast) addToast('success', '已更新指标草稿', '指标口径调整已即时生效并同步完整性检查');
+                  if (addToast) {
+                    addToast('info', '草稿已修改', '指标草稿已更新，验证状态已重置，请重新运行系统验证');
+                  }
                 }}
                 className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-semibold rounded-md transition-colors cursor-pointer text-xs shadow-2xs"
               >
