@@ -77,11 +77,11 @@ export const MetricAuthoringChangeMode: React.FC<MetricAuthoringChangeModeProps>
   const [validationSteps, setValidationSteps] = useState<
     Array<{ name: string; status: 'waiting' | 'running' | 'passed' | 'failed' }>
   >([
-    { name: '计算依赖拓扑与变更循环检测', status: 'waiting' },
-    { name: '业务规则 Semantic Diff 校验', status: 'waiting' },
-    { name: '时间语义一致性 (Temporal Consistency)', status: 'waiting' },
-    { name: '可分析维度兼容性校验', status: 'waiting' },
-    { name: '底层数据资产物理 Binding 探活', status: 'waiting' },
+    { name: '计算依赖无循环冲突', status: 'waiting' },
+    { name: '业务含义与口径差异校验', status: 'waiting' },
+    { name: '时间口径一致', status: 'waiting' },
+    { name: '分析维度兼容', status: 'waiting' },
+    { name: '底层数据实现可用', status: 'waiting' },
   ]);
 
   // Handle Save Draft
@@ -96,11 +96,11 @@ export const MetricAuthoringChangeMode: React.FC<MetricAuthoringChangeModeProps>
     setIsValidatingModalOpen(true);
     setValidationProgress(15);
     setValidationSteps([
-      { name: '计算依赖拓扑与变更循环检测', status: 'running' },
-      { name: '业务规则 Semantic Diff 校验', status: 'waiting' },
-      { name: '时间语义一致性 (Temporal Consistency)', status: 'waiting' },
-      { name: '可分析维度兼容性校验', status: 'waiting' },
-      { name: '底层数据资产物理 Binding 探活', status: 'waiting' },
+      { name: '计算依赖无循环冲突', status: 'running' },
+      { name: '业务含义与口径差异校验', status: 'waiting' },
+      { name: '时间口径一致', status: 'waiting' },
+      { name: '分析维度兼容', status: 'waiting' },
+      { name: '底层数据实现可用', status: 'waiting' },
     ]);
 
     setTimeout(() => {

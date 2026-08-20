@@ -29,8 +29,10 @@ import {
   X,
   TrendingUp,
   Cpu,
-  Check
+  Check,
+  Download
 } from 'lucide-react';
+import { ImportExistingMetricDrawer } from './ImportExistingMetricDrawer';
 
 interface MetricItem {
   id: string;
@@ -230,6 +232,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
   // Detail Modal / Drawer state
   const [selectedMetricForDetail, setSelectedMetricForDetail] = useState<MetricItem | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [isImportDrawerOpen, setIsImportDrawerOpen] = useState<boolean>(false);
 
   // New Metric Form State
   const [newMetricForm, setNewMetricForm] = useState({
@@ -501,20 +504,30 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
               </p>
             </div>
 
-            {/* Only ONE Primary Button: 新建指标 */}
-            <button
-              onClick={() => {
-                if (onNavigateToCreateMetric) {
-                  onNavigateToCreateMetric();
-                } else {
-                  setIsCreateModalOpen(true);
-                }
-              }}
-              className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-all shadow-2xs flex items-center space-x-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>新建指标</span>
-            </button>
+            {/* Actions: 导入已有指标 + 新建指标 */}
+            <div className="flex items-center space-x-2.5">
+              <button
+                onClick={() => setIsImportDrawerOpen(true)}
+                className="px-3.5 py-2 bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-[#334155] text-xs font-semibold rounded-md transition-all shadow-2xs flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-[#64748B]" />
+                <span>导入已有指标</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (onNavigateToCreateMetric) {
+                    onNavigateToCreateMetric();
+                  } else {
+                    setIsCreateModalOpen(true);
+                  }
+                }}
+                className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-all shadow-2xs flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>新建指标</span>
+              </button>
+            </div>
           </div>
 
           {/* 3. Search Bar: Width approx 56% */}
@@ -1254,6 +1267,21 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
           </div>
         </div>
       )}
+
+      {/* ========================================================= */}
+      {/* IMPORT EXISTING METRIC DRAWER                             */}
+      {/* ========================================================= */}
+      <ImportExistingMetricDrawer
+        isOpen={isImportDrawerOpen}
+        onClose={() => setIsImportDrawerOpen(false)}
+        onImportMetric={(candidate) => {
+          setIsImportDrawerOpen(false);
+          if (onNavigateToCreateMetric) {
+            onNavigateToCreateMetric();
+          }
+        }}
+        addToast={addToast}
+      />
     </div>
   );
 };

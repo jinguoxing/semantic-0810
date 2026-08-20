@@ -198,5 +198,96 @@ export interface DataAssetItem {
   updatedAt: string;
 }
 
+// ==========================================
+// Semovix AI Native Metric V1.2 Domain Models
+// ==========================================
+
+export interface MetricScope {
+  businessDomain?: string;
+  organization?: string;
+  geography?: string;
+  scenario?: string;
+  entityScope?: string;
+}
+
+export interface MetricMeasurement {
+  measureName: string;
+  aggregation: "SUM" | "COUNT" | "COUNT_DISTINCT" | "AVG";
+  baseGrain: string;
+  unit?: string;
+}
+
+export interface MetricTimeSemantics {
+  type: "SNAPSHOT" | "PERIOD" | "FLOW" | "CUMULATIVE";
+  businessTime: string;
+  defaultGranularity: "DAY" | "MONTH" | "QUARTER" | "YEAR";
+}
+
+export interface MetricDependency {
+  metricId: string;
+  metricName?: string;
+  role: "NUMERATOR" | "DENOMINATOR" | "COMPONENT";
+  version: string;
+  status?: "Effective" | "Draft" | "Deprecated";
+  compatibility?: {
+    scope: boolean;
+    grain: boolean;
+    time: boolean;
+  };
+}
+
+export interface MetricProvenance {
+  source: "AI_AUTHORING" | "IMPORT" | "MANUAL";
+  owner: string;
+  evidence: string[];
+}
+
+export interface GrainMapping {
+  businessObject: string;
+  physicalGrainField: string;
+  matchStatus: "VALID" | "UNMATCHED";
+}
+
+export interface DimensionRelationshipPath {
+  sourceObject: string;
+  relationship: "N:1" | "1:1" | "1:N";
+  targetObject: string;
+  dimensionName: string;
+}
+
+export interface MetricBinding {
+  dataAssetId: string;
+  dataAssetName: string;
+  tableName: string;
+  measureField: string;
+  businessRuleFilter?: string;
+  timeField: string;
+  grainMapping: GrainMapping;
+  dimensionPaths: DimensionRelationshipPath[];
+  bindingVersion: string;
+  status: "VALID" | "SUSPENDED" | "OUTDATED";
+}
+
+export interface Metric {
+  id: string;
+  name: string;
+  enName?: string;
+  definition: string;
+  businessObject: string;
+  scope: MetricScope;
+  measurement: MetricMeasurement;
+  grain: string;
+  timeSemantics: MetricTimeSemantics;
+  dimensions: string[];
+  dependencies?: MetricDependency[];
+  binding?: MetricBinding;
+  provenance?: MetricProvenance;
+  status: "DRAFT" | "VALIDATED" | "PUBLISHED" | "DEPRECATED";
+  version: string;
+  validationStatus?: "PASS" | "UNVERIFIED" | "FAIL";
+  changeReason?: string;
+}
+
+
 
 
