@@ -64,7 +64,11 @@ export const AccessReviewDetailWorkspace: React.FC<AccessReviewDetailWorkspacePr
       ? { label: '中等风险', className: 'border-[#FDE68A] bg-[#FFFBEB] text-[#B45309]' }
       : { label: '低风险', className: 'border-[#BBF7D0] bg-[#F0FDF4] text-[#15803D]' };
   const policyLabel = request.policyProfile === 'PERSONAL_DATA' ? '个人信息' : request.policyProfile === 'API_SERVICE' ? '服务调用' : request.policyProfile === 'EXPORT_DATA' ? '受控导出' : request.policyProfile === 'SPECIAL_POPULATION' ? '重点人群' : '业务数据';
-  const accessLabel = request.policyProfile === 'API_SERVICE' ? '调用能力' : request.policyProfile === 'EXPORT_DATA' ? '导出范围' : '允许访问';
+  const scopeLabels = request.policyProfile === 'API_SERVICE'
+    ? { scope: '调用范围', duration: '调用期限', protections: '访问控制', fields: '调用能力' }
+    : request.policyProfile === 'EXPORT_DATA'
+      ? { scope: '导出范围', duration: '有效期', protections: '文件保护', fields: '导出内容' }
+      : { scope: '允许范围', duration: '期限', protections: '保护措施', fields: '允许访问' };
   const exportControl = request.operation === 'EXPORT' ? '仅允许在受控运行环境内导出' : '不允许';
   const customProtections: ProtectionRule[] = protectionPolicy === 'strict'
     ? [...recommendation.protections, { id: `${request.id}-strict-audit`, type: 'AUDIT', description: '启用加强审计与异常访问告警' }]
@@ -145,11 +149,11 @@ export const AccessReviewDetailWorkspace: React.FC<AccessReviewDetailWorkspacePr
                 <div className="mb-3 flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#2563EB]" /><div><div className="text-[11px] font-bold text-[#2563EB]">系统建议</div><h2 className="text-base font-bold">{recommendation.recommendation === 'GRANT_WITH_LIMITS' ? '附带限制授权' : recommendation.recommendation === 'GRANT' ? '建议授权' : '建议不授权'}</h2></div></div>
                 <p className="mb-3 text-xs leading-relaxed text-[#475569]">{recommendation.summary}</p>
                 <div className="grid gap-3 border-t border-[#EEF2F6] pt-3 text-xs sm:grid-cols-2">
-                  <div><div className="text-[#98A2B3]">范围</div><div className="mt-1 font-semibold">{scope}</div></div>
-                  <div><div className="text-[#98A2B3]">期限</div><div className="mt-1 font-semibold">{request.requestedDurationDays ?? 90} 天</div></div>
-                  <div><div className="text-[#98A2B3]">{accessLabel}</div><div className="mt-1">{requestedFields.join('、') || '申请范围内能力'}</div></div>
-                  <div><div className="text-[#98A2B3]">保护</div><div className="mt-1">{recommendation.protections.map((item) => item.description).join('；')}</div></div>
-                  <div className="sm:col-span-2 rounded bg-[#F8FAFC] p-3"><div className="text-[#98A2B3]">限制</div><div className="mt-1">{recommendation.restrictions.map((item) => item.description).join('；')}</div></div>
+                  <div><div className="text-[#98A2B3]">{scopeLabels.scope}</div><div className="mt-1 font-semibold">{scope}</div></div>
+                  <div><div className="text-[#98A2B3]">{scopeLabels.fields}</div><div className="mt-1">{requestedFields.join('、') || '申请范围内能力'}</div></div>
+                  <div><div className="text-[#98A2B3]">{scopeLabels.duration}</div><div className="mt-1 font-semibold">{request.requestedDurationDays ?? 90} 天</div></div>
+                  <div><div className="text-[#98A2B3]">{scopeLabels.protections}</div><div className="mt-1">{recommendation.protections.map((item) => item.description).join('；')}</div></div>
+                  <div className="sm:col-span-2 rounded bg-[#F8FAFC] p-3"><div className="text-[#98A2B3]">使用限制</div><div className="mt-1">{recommendation.restrictions.map((item) => item.description).join('；')}</div></div>
                 </div>
                 <div className="mt-4 border-t border-[#EEF2F6] pt-3 text-xs"><div className="mb-2 font-bold">为什么这样建议</div>{recommendation.evidence.slice(0, 3).map((item) => <div key={item.type} className="mt-1 text-[#475569]">✓ {item.description}</div>)}</div>
               </section>
