@@ -21,185 +21,722 @@ import {
   Bot,
   ChevronDown,
   ChevronRight,
-  ExternalLink,
-  Filter,
-  ArrowUpDown,
-  Calendar,
-  User,
   X,
-  TrendingUp,
-  Cpu,
-  Check,
-  Download
+  Download,
+  AlertCircle,
+  Link2Off,
+  GitMerge,
+  Split,
+  FileQuestion,
+  Zap,
+  Cpu
 } from 'lucide-react';
 import { ImportExistingMetricDrawer } from './ImportExistingMetricDrawer';
+import { RuntimeMetricResolutionStudio } from './RuntimeMetricResolutionStudio';
+import {
+  Metric,
+  MetricRegistryRowVM,
+  MetricPendingActionType,
+  MetricDraftInitialData,
+  ExistingMetricCandidate
+} from '../types';
 
-interface MetricItem {
-  id: string;
-  name: string;
-  enName: string;
-  domain: string;
-  definition: string;
-  businessObject: string;
-  calculationSummary: string;
-  timeSemantics: string;
-  validationStatus: 'PASS' | 'UNVERIFIED' | 'FAIL';
-  validationMessage?: string;
-  status: 'EFFECTIVE' | 'DRAFT' | 'DEPRECATED';
-  aiReadiness: 'READY' | 'DEGRADED' | 'NOT_READY';
-  owner: string;
-  dimensionCount?: number;
-}
-
-const MOCK_METRICS_DATA: MetricItem[] = [
+// =========================================================
+// Domain Source of Truth: Standard Semovix V1.2 Metric List
+// =========================================================
+const MOCK_DOMAIN_METRICS: Metric[] = [
   {
     id: 'met_valid_order_amount',
     name: '有效订单金额',
     enName: 'Valid Order Amount',
-    domain: '交易分析',
     definition: '满足“有效订单”业务规则的订单金额合计，用于衡量一定统计周期内形成的有效订单交易规模。',
     businessObject: '订单',
-    calculationSummary: 'SUM(order_amount)',
-    timeSemantics: '支付时间 · 日',
-    validationStatus: 'PASS',
+    scope: {
+      businessDomain: '交易分析',
+      organization: '电商零售业务线',
+      scenario: '线上全渠道交易分析',
+      entityScope: '全量交易订单',
+    },
+    measurement: {
+      measureName: 'order_amount',
+      aggregation: 'SUM',
+      baseGrain: '订单',
+      unit: '元',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '支付时间',
+      defaultGranularity: 'DAY',
+    },
+    dimensions: ['渠道', '商品分类', '地区', '客户等级', '支付方式', '店铺'],
+    binding: {
+      dataAssetId: 'asset_01',
+      dataAssetName: '全渠道订单支付明细表',
+      tableName: 'dwd_order_pay_detail_di',
+      measureField: 'pay_amount',
+      businessRuleFilter: 'order_status = 2 AND pay_status = 1 AND is_refund = 0',
+      timeField: 'pay_time',
+      grainMapping: {
+        businessObject: '订单',
+        physicalGrainField: 'order_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.2.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '交易分析与财务核算组',
+      evidence: ['业务规则评审纪要', '数仓事实模型'],
+    },
     status: 'EFFECTIVE',
+    validationStatus: 'PASS',
     aiReadiness: 'READY',
-    owner: '交易分析与财务核算组',
-    dimensionCount: 6,
+    version: 'v1.2.0',
   },
   {
     id: 'met_001',
     name: '老龄化率',
     enName: 'Aging Ratio',
-    domain: '人口服务',
-    definition: '60岁及以上常住人口占全部常住人口的比例',
+    definition: '60岁及以上常住人口占全部常住人口的比例，用于衡量区域人口老龄化程度与公共养老服务资源承载力。',
     businessObject: '自然人',
-    calculationSummary: '老年人口数 ÷ 常住人口数',
-    timeSemantics: '统计日期 · 月',
-    validationStatus: 'PASS',
+    scope: {
+      businessDomain: '人口服务',
+      organization: '民政与人口发展处',
+      scenario: '老龄化态势监测',
+      entityScope: '常住人口全量基数',
+    },
+    measurement: {
+      measureName: 'aging_ratio',
+      aggregation: 'AVG',
+      baseGrain: '自然人',
+      unit: '%',
+    },
+    timeSemantics: {
+      type: 'SNAPSHOT',
+      businessTime: '统计日期',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['行政区划', '户籍类型', '年龄段', '性别', '居住社区'],
+    binding: {
+      dataAssetId: 'asset_pop_01',
+      dataAssetName: '全员常住人口基础信息表',
+      tableName: 'dwd_pop_resident_base_df',
+      measureField: 'age',
+      businessRuleFilter: 'resident_status = 1 AND age >= 60',
+      timeField: 'stat_date',
+      grainMapping: {
+        businessObject: '自然人',
+        physicalGrainField: 'citizen_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.1.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '人口管理处',
+      evidence: ['七普数据标准口径'],
+    },
     status: 'EFFECTIVE',
+    validationStatus: 'PASS',
     aiReadiness: 'READY',
-    owner: '人口管理处',
-    dimensionCount: 5,
+    version: 'v1.1.0',
   },
   {
     id: 'met_002',
     name: '工单办结率',
     enName: 'Ticket Closure Rate',
-    domain: '公共服务',
-    definition: '统计周期内已办结工单占全部工单的比例',
+    definition: '统计周期内已办结工单占全部服务工单的比例，衡量公共政务热线与服务工单履约效能。',
     businessObject: '服务工单',
-    calculationSummary: '已办结工单数 ÷ 工单总数',
-    timeSemantics: '办结时间 · 月',
-    validationStatus: 'PASS',
+    scope: {
+      businessDomain: '公共服务',
+      organization: '政务热线管理中心',
+      scenario: '12345热线服务质效',
+    },
+    measurement: {
+      measureName: 'ticket_closure_rate',
+      aggregation: 'AVG',
+      baseGrain: '服务工单',
+      unit: '%',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '办结时间',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['工单类型', '承办部门', '紧急程度', '诉求渠道'],
+    binding: {
+      dataAssetId: 'asset_ticket_01',
+      dataAssetName: '热线工单全生命周期处理表',
+      tableName: 'dwd_hotline_ticket_df',
+      measureField: 'is_closed',
+      timeField: 'finish_time',
+      grainMapping: {
+        businessObject: '服务工单',
+        physicalGrainField: 'ticket_no',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.0.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'IMPORT',
+      owner: '热线管理处',
+      evidence: [],
+    },
     status: 'EFFECTIVE',
+    validationStatus: 'PASS',
     aiReadiness: 'READY',
-    owner: '热线管理处',
-    dimensionCount: 4,
+    version: 'v1.0.0',
   },
   {
     id: 'met_003',
     name: '平均工单处理时长',
     enName: 'Average Ticket Processing Time',
-    domain: '公共服务',
-    definition: '统计周期内工单从受理到办结的平均处理时长',
+    definition: '统计周期内工单从受理到办结的平均处理时长（小时）。',
     businessObject: '服务工单',
-    calculationSummary: '工单处理总时长 ÷ 工单数',
-    timeSemantics: '办结时间 · 月',
-    validationStatus: 'UNVERIFIED',
+    scope: {
+      businessDomain: '公共服务',
+      scenario: '12345热线时效',
+    },
+    measurement: {
+      measureName: 'duration_hours',
+      aggregation: 'AVG',
+      baseGrain: '服务工单',
+      unit: '小时',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '办结时间',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['工单类型', '承办部门'],
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '热线管理处',
+      evidence: [],
+    },
     status: 'DRAFT',
+    validationStatus: 'UNVERIFIED',
     aiReadiness: 'NOT_READY',
-    owner: '热线管理处',
+    version: 'v0.9.0',
   },
   {
     id: 'met_004',
     name: '月活企业数',
     enName: 'Monthly Active Enterprises',
-    domain: '企业服务',
-    definition: '统计月内发生有效业务行为的企业数量',
+    definition: '统计月内发生有效业务行为（如申报、开票、办事）的企业数量。',
     businessObject: '企业',
-    calculationSummary: 'COUNT DISTINCT 企业ID',
-    timeSemantics: '行为时间 · 月',
-    validationStatus: 'PASS',
+    scope: {
+      businessDomain: '企业服务',
+      scenario: '园区与企业服务活跃度',
+    },
+    measurement: {
+      measureName: 'enterprise_id',
+      aggregation: 'COUNT_DISTINCT',
+      baseGrain: '企业',
+      unit: '家',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '行为时间',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['行业分类', '注册资本规模', '园区片区', '纳税信用等级', '上市状态', '企业类型'],
+    binding: {
+      dataAssetId: 'asset_ent_01',
+      dataAssetName: '企业经营活动月度宽表',
+      tableName: 'dws_enterprise_active_monthly',
+      measureField: 'ent_id',
+      timeField: 'active_month',
+      grainMapping: {
+        businessObject: '企业',
+        physicalGrainField: 'ent_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.0.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'MANUAL',
+      owner: '企业服务中心',
+      evidence: [],
+    },
     status: 'EFFECTIVE',
+    validationStatus: 'PASS',
     aiReadiness: 'READY',
-    owner: '企业服务中心',
-    dimensionCount: 6,
+    version: 'v1.0.0',
   },
   {
     id: 'met_005',
     name: '新增企业数',
     enName: 'New Enterprise Count',
-    domain: '企业服务',
-    definition: '统计周期内新注册企业数量',
+    definition: '统计周期内新注册成立的企业法人数量。',
     businessObject: '企业',
-    calculationSummary: 'COUNT DISTINCT 企业ID',
-    timeSemantics: '注册时间 · 月',
-    validationStatus: 'PASS',
+    scope: {
+      businessDomain: '企业服务',
+      scenario: '企业注册增量监测',
+    },
+    measurement: {
+      measureName: 'enterprise_id',
+      aggregation: 'COUNT_DISTINCT',
+      baseGrain: '企业',
+      unit: '家',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '注册时间',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['行业分类', '所属行政区', '登记机关'],
+    binding: {
+      dataAssetId: 'asset_ent_reg',
+      dataAssetName: '企业注册登记信息表',
+      tableName: 'dwd_enterprise_register_df',
+      measureField: 'corp_id',
+      timeField: 'reg_date',
+      grainMapping: {
+        businessObject: '企业',
+        physicalGrainField: 'corp_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.0.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'IMPORT',
+      owner: '企业服务中心',
+      evidence: [],
+    },
     status: 'EFFECTIVE',
+    validationStatus: 'PASS',
     aiReadiness: 'READY',
-    owner: '企业服务中心',
+    version: 'v1.0.0',
   },
   {
     id: 'met_006',
     name: '客户流失率',
     enName: 'Customer Churn Rate',
-    domain: '客户运营',
-    definition: '统计周期内流失客户占活跃客户的比例',
+    definition: '统计周期内超过90天无活跃购买行为的客户占期初活跃客户的比例。',
     businessObject: '客户',
-    calculationSummary: '流失客户数 ÷ 活跃客户数',
-    timeSemantics: '统计月份 · 月',
-    validationStatus: 'UNVERIFIED',
+    scope: {
+      businessDomain: '客户运营',
+      scenario: '零售电商客户留存',
+    },
+    measurement: {
+      measureName: 'churn_rate',
+      aggregation: 'AVG',
+      baseGrain: '客户',
+      unit: '%',
+    },
+    timeSemantics: {
+      type: 'PERIOD',
+      businessTime: '统计月份',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['会员等级', '首购渠道'],
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '用户运营组',
+      evidence: [],
+    },
     status: 'DRAFT',
+    validationStatus: 'UNVERIFIED',
     aiReadiness: 'NOT_READY',
-    owner: '用户运营组',
+    version: 'v0.8.0',
   },
   {
     id: 'met_007',
     name: '客单价',
     enName: 'Average Order Value',
-    domain: '销售分析',
-    definition: '统计周期内平均每笔订单金额',
+    definition: '统计周期内平均每笔成交订单的结算金额。',
     businessObject: '订单',
-    calculationSummary: '销售额 ÷ 订单数',
-    timeSemantics: '支付时间 · 日',
-    validationStatus: 'PASS',
+    scope: {
+      businessDomain: '销售分析',
+      scenario: '零售销售价值',
+    },
+    measurement: {
+      measureName: 'order_amount',
+      aggregation: 'AVG',
+      baseGrain: '订单',
+      unit: '元',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '支付时间',
+      defaultGranularity: 'DAY',
+    },
+    dimensions: ['渠道', '商品分类', '地区', '客户等级', '促销类型', '支付方式', '门店', '终端'],
+    binding: {
+      dataAssetId: 'asset_01',
+      dataAssetName: '全渠道订单支付明细表',
+      tableName: 'dwd_order_pay_detail_di',
+      measureField: 'pay_amount',
+      timeField: 'pay_time',
+      grainMapping: {
+        businessObject: '订单',
+        physicalGrainField: 'order_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.3.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '销售分析组',
+      evidence: [],
+    },
     status: 'EFFECTIVE',
+    validationStatus: 'PASS',
     aiReadiness: 'READY',
-    owner: '销售分析组',
-    dimensionCount: 8,
+    version: 'v1.3.0',
   },
+  // =========================================================
+  // Semantic Status (EFFECTIVE) != Execution Health (INVALID)
+  // 投诉率：业务定义正式在役，但数据底层时间字段重命名引发 Binding 失效
+  // =========================================================
   {
     id: 'met_008',
     name: '投诉率',
     enName: 'Complaint Rate',
-    domain: '公共服务',
-    definition: '统计周期内投诉工单占全部服务工单的比例',
+    definition: '统计周期内投诉性质工单占全部受理服务工单的比例，用于评价服务质量风险。',
     businessObject: '服务工单',
-    calculationSummary: '投诉工单数 ÷ 工单总数',
-    timeSemantics: '受理时间 · 月',
-    validationStatus: 'FAIL',
-    validationMessage: '时间字段 Binding 已失效，当前问数能力受限。',
-    status: 'DRAFT',
-    aiReadiness: 'DEGRADED',
-    owner: '运营质控组',
+    scope: {
+      businessDomain: '公共服务',
+      scenario: '12345热线质控与工单投诉率监控',
+    },
+    measurement: {
+      measureName: 'complaint_rate',
+      aggregation: 'AVG',
+      baseGrain: '服务工单',
+      unit: '%',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '受理时间',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['工单类型', '承办部门'],
+    binding: {
+      dataAssetId: 'asset_ticket_legacy',
+      dataAssetName: '热线质控工单事实表',
+      tableName: 'dwd_hotline_complaint_df',
+      measureField: 'is_complaint',
+      timeField: 'invalid_accept_time_col', // Broken time binding
+      grainMapping: {
+        businessObject: '服务工单',
+        physicalGrainField: 'ticket_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.0.0',
+      health: 'INVALID',
+    },
+    provenance: {
+      source: 'IMPORT',
+      owner: '运营质控组',
+      evidence: ['质控考核指标标准'],
+    },
+    status: 'EFFECTIVE', // Formal business status is EFFECTIVE!
+    validationStatus: 'FAIL', // Validation fails due to broken binding
+    aiReadiness: 'DEGRADED', // NL-to-SQL degraded
+    changeReason: '时间字段 Binding 已失效（底层字段 rename 未同步），物理层时间口径无法对齐。',
+    version: 'v1.1.0',
   },
   {
     id: 'met_009',
     name: '复购率',
     enName: 'Repurchase Rate',
-    domain: '客户运营',
-    definition: '统计周期内产生复购客户占全部客户的比例',
+    definition: '统计周期内产生2次及以上购买行为的客户占全体购买客户的比例。',
     businessObject: '客户',
-    calculationSummary: '复购客户数 ÷ 客户总数',
-    timeSemantics: '统计月份 · 月',
-    validationStatus: 'PASS',
+    scope: {
+      businessDomain: '客户运营',
+      scenario: '会员精细化运营',
+    },
+    measurement: {
+      measureName: 'repurchase_rate',
+      aggregation: 'AVG',
+      baseGrain: '客户',
+      unit: '%',
+    },
+    timeSemantics: {
+      type: 'PERIOD',
+      businessTime: '统计月份',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['会员等级', '地域', '首购渠道'],
+    binding: {
+      dataAssetId: 'asset_repurchase_01',
+      dataAssetName: '客户复购分析宽表',
+      tableName: 'dws_customer_repurchase_monthly',
+      measureField: 'is_repurchase',
+      timeField: 'stat_month',
+      grainMapping: {
+        businessObject: '客户',
+        physicalGrainField: 'cust_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.2.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '用户运营组',
+      evidence: [],
+    },
     status: 'EFFECTIVE',
+    validationStatus: 'PASS',
     aiReadiness: 'READY',
-    owner: '用户运营组',
-    dimensionCount: 3,
+    version: 'v1.2.0',
+  },
+  // Additional items for Pending Attention scenarios
+  {
+    id: 'met_010',
+    name: '日活客户数',
+    enName: 'Daily Active Customers',
+    definition: '单日登录或产生交互行为的唯一客户数量。',
+    businessObject: '客户',
+    scope: {
+      businessDomain: '客户运营',
+      scenario: '客户大盘日常活跃监测',
+    },
+    measurement: {
+      measureName: 'customer_id',
+      aggregation: 'COUNT_DISTINCT',
+      baseGrain: '客户',
+      unit: '人',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '活跃时间',
+      defaultGranularity: 'DAY',
+    },
+    dimensions: ['终端类型', '渠道', '城市'],
+    binding: {
+      dataAssetId: 'asset_cust_log',
+      dataAssetName: '用户行为日志汇总表',
+      tableName: 'dws_user_daily_active_df',
+      measureField: 'user_id',
+      timeField: 'log_date',
+      grainMapping: {
+        businessObject: '客户',
+        physicalGrainField: 'user_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.0.0',
+      health: 'DEGRADED',
+    },
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '用户运营组',
+      evidence: [],
+    },
+    status: 'EFFECTIVE',
+    validationStatus: 'UNVERIFIED',
+    aiReadiness: 'DEGRADED',
+    changeReason: '检测到与「APP端日活跃用户」存在定义重叠冲突，需确认业务范围边界。',
+    version: 'v1.0.0',
+  },
+  {
+    id: 'met_011',
+    name: '区域销售总额',
+    enName: 'Regional Gross Sales',
+    definition: '按各大区归属统计的已发货销售总金额。',
+    businessObject: '订单',
+    scope: {
+      businessDomain: '销售分析',
+      scenario: '区域销售考核',
+    },
+    measurement: {
+      measureName: 'regional_sales',
+      aggregation: 'SUM',
+      baseGrain: '订单',
+      unit: '元',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '发货时间',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['销售大区', '省份', '城市', '产品线'],
+    binding: {
+      dataAssetId: 'asset_sales_02',
+      dataAssetName: '区域销售业绩明细表',
+      tableName: 'dws_sales_regional_monthly',
+      measureField: 'shipped_amount',
+      timeField: 'ship_date',
+      grainMapping: {
+        businessObject: '订单',
+        physicalGrainField: 'order_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.0.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'MANUAL',
+      owner: '销售分析组',
+      evidence: [],
+    },
+    status: 'EFFECTIVE',
+    validationStatus: 'PASS',
+    aiReadiness: 'DEGRADED',
+    changeReason: '华东大区与总部存在 2 个场景派生口径差异，建议收敛合并。',
+    version: 'v1.0.0',
+  },
+  {
+    id: 'met_012',
+    name: '跨境退款金额',
+    enName: 'Cross-border Refund Amount',
+    definition: '跨境电商交易产生的退款总额（含汇率折算）。',
+    businessObject: '订单',
+    scope: {
+      businessDomain: '交易分析',
+      scenario: '跨境逆向交易结算',
+    },
+    measurement: {
+      measureName: 'refund_amount',
+      aggregation: 'SUM',
+      baseGrain: '订单',
+      unit: '元',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '退款审核时间',
+      defaultGranularity: 'DAY',
+    },
+    dimensions: ['国家/地区', '支付币种', '退款原因'],
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '交易分析与财务核算组',
+      evidence: [],
+    },
+    status: 'DRAFT',
+    validationStatus: 'UNVERIFIED',
+    aiReadiness: 'NOT_READY',
+    changeReason: '缺少汇率折算规则与关税退还 Scope 约束定义。',
+    version: 'v0.5.0',
+  },
+  {
+    id: 'met_013',
+    name: '存量历史订单笔数',
+    enName: 'Legacy Historical Order Count',
+    definition: '旧版电商系统迁移前的历史订单总笔数（已归档，不再参与实时运营分析）。',
+    businessObject: '订单',
+    scope: {
+      businessDomain: '交易分析',
+      scenario: '历史归档系统核对',
+    },
+    measurement: {
+      measureName: 'order_id',
+      aggregation: 'COUNT',
+      baseGrain: '订单',
+      unit: '笔',
+    },
+    timeSemantics: {
+      type: 'FLOW',
+      businessTime: '下单时间',
+      defaultGranularity: 'YEAR',
+    },
+    dimensions: ['历史渠道', '归档年份'],
+    provenance: {
+      source: 'IMPORT',
+      owner: '交易分析与财务核算组',
+      evidence: [],
+    },
+    status: 'DEPRECATED',
+    validationStatus: 'PASS',
+    aiReadiness: 'NOT_READY',
+    changeReason: '业务系统升级，该口径已由统一中台订单指标替代。',
+    version: 'v0.3.0',
   },
 ];
+
+// =========================================================
+// Projection Function: Metric (Domain) -> MetricRegistryRowVM (View)
+// =========================================================
+export function projectMetricToRowVM(metric: Metric): MetricRegistryRowVM {
+  let calcSummary = '';
+  if (metric.measurement.aggregation === 'SUM') {
+    calcSummary = `SUM(${metric.measurement.measureName})`;
+  } else if (metric.measurement.aggregation === 'COUNT_DISTINCT') {
+    calcSummary = `COUNT DISTINCT ${metric.measurement.measureName}`;
+  } else if (metric.measurement.aggregation === 'COUNT') {
+    calcSummary = `COUNT(${metric.measurement.measureName})`;
+  } else if (metric.measurement.aggregation === 'AVG') {
+    calcSummary = `AVG(${metric.measurement.measureName})`;
+  } else {
+    calcSummary = metric.measurement.measureName;
+  }
+
+  if (metric.id === 'met_001') calcSummary = '老年人口数 ÷ 常住人口数';
+  if (metric.id === 'met_002') calcSummary = '已办结工单数 ÷ 工单总数';
+  if (metric.id === 'met_007') calcSummary = '销售额 ÷ 订单数';
+  if (metric.id === 'met_008') calcSummary = '投诉工单数 ÷ 工单总数';
+  if (metric.id === 'met_009') calcSummary = '复购客户数 ÷ 客户总数';
+
+  const timeGrainMap: Record<string, string> = {
+    DAY: '日',
+    MONTH: '月',
+    QUARTER: '季',
+    YEAR: '年',
+  };
+  const timeSemanticsStr = `${metric.timeSemantics.businessTime} · ${
+    timeGrainMap[metric.timeSemantics.defaultGranularity] || '月'
+  }`;
+
+  // Deduce Pending Action Type & Description
+  let pendingActionType: MetricPendingActionType | undefined = undefined;
+  let pendingActionDesc = '';
+
+  if (metric.id === 'met_008' || metric.binding?.health === 'INVALID') {
+    pendingActionType = 'BINDING_ISSUE';
+    pendingActionDesc = '时间字段 Binding 已失效，物理层时间口径需重新映射';
+  } else if (metric.id === 'met_010') {
+    pendingActionType = 'CONFLICT';
+    pendingActionDesc = '与「APP端日活跃用户」存在定义重叠冲突';
+  } else if (metric.id === 'met_011') {
+    pendingActionType = 'CONTEXT_VARIANT';
+    pendingActionDesc = '大区与总部存在场景派生口径，建议收敛合并';
+  } else if (metric.id === 'met_012') {
+    pendingActionType = 'MISSING_MEANING';
+    pendingActionDesc = '缺少汇率折算规则与关税退还约束定义';
+  } else if (metric.binding?.health === 'DEGRADED') {
+    pendingActionType = 'BINDING_ISSUE';
+    pendingActionDesc = '执行层数据绑定存在降级或依赖变动';
+  }
+
+  return {
+    id: metric.id,
+    name: metric.name,
+    enName: metric.enName || metric.id,
+    domain: metric.scope.businessDomain || '未分类',
+    definition: metric.definition,
+    businessObject: metric.businessObject,
+    calculationSummary: calcSummary,
+    timeSemantics: timeSemanticsStr,
+    validationStatus: metric.validationStatus || 'UNVERIFIED',
+    validationMessage: metric.changeReason || undefined,
+    status: metric.status,
+    bindingHealth: metric.binding?.health || 'HEALTHY',
+    aiReadiness: metric.aiReadiness || 'NOT_READY',
+    owner: metric.provenance?.owner || '未分配',
+    dimensionCount: metric.dimensions?.length || 0,
+    pendingActionType,
+    pendingActionDesc,
+    originalMetric: metric,
+  };
+}
 
 interface MetricRegistryWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
@@ -209,7 +746,10 @@ interface MetricRegistryWorkspaceProps {
   onNavigateToDataSemantics?: () => void;
   onNavigateToDataAssets?: () => void;
   onNavigateToHome?: () => void;
-  onNavigateToCreateMetric?: () => void;
+  onNavigateToCreateMetric?: (
+    mode?: 'ai_prompt' | 'blank' | 'draft' | 'imported_draft' | 'change_draft',
+    initialDraftData?: MetricDraftInitialData
+  ) => void;
 }
 
 export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = ({
@@ -229,7 +769,9 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
 
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'ALL' | 'EFFECTIVE' | 'DRAFT' | 'DEPRECATED'>('EFFECTIVE');
+
+  // Frozen IA Work Views: 全部指标 (ALL) | 待处理 (ATTENTION) | 草稿 (DRAFT)
+  const [activeTab, setActiveTab] = useState<'ALL' | 'ATTENTION' | 'DRAFT'>('ALL');
 
   const [selectedDomain, setSelectedDomain] = useState<string>('ALL');
   const [selectedObject, setSelectedObject] = useState<string>('ALL');
@@ -237,35 +779,54 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
   const [selectedOwner, setSelectedOwner] = useState<string>('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
 
-  // Active Menu action row
+  // Action Menu open row
   const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
 
   // Detail Modal / Drawer state
-  const [selectedMetricForDetail, setSelectedMetricForDetail] = useState<MetricItem | null>(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [selectedMetricForDetail, setSelectedMetricForDetail] = useState<MetricRegistryRowVM | null>(null);
   const [isImportDrawerOpen, setIsImportDrawerOpen] = useState<boolean>(false);
+  const [isRuntimeModalOpen, setIsRuntimeModalOpen] = useState<boolean>(false);
+  const [runtimeMetricId, setRuntimeMetricId] = useState<string>('met_valid_order_amount');
+  const [runtimeMetricName, setRuntimeMetricName] = useState<string>('有效订单金额');
 
-  // New Metric Form State
-  const [newMetricForm, setNewMetricForm] = useState({
-    name: '',
-    enName: '',
-    domain: '公共服务',
-    businessObject: '服务工单',
-    definition: '',
-    calculationSummary: '',
-    timeSemantics: '统计日期 · 月',
-    owner: '运营质控组',
-  });
+  // Projected Rows from Domain Source of Truth
+  const allMetricRows = useMemo(() => {
+    return MOCK_DOMAIN_METRICS.map(projectMetricToRowVM);
+  }, []);
+
+  // Counts for Frozen IA Tabs
+  const tabCounts = useMemo(() => {
+    const totalCount = allMetricRows.length;
+    const attentionCount = allMetricRows.filter(
+      (m) =>
+        m.pendingActionType != null ||
+        m.validationStatus === 'FAIL' ||
+        m.bindingHealth === 'INVALID' ||
+        m.bindingHealth === 'DEGRADED' ||
+        (m.status === 'EFFECTIVE' && m.aiReadiness !== 'READY')
+    ).length;
+    const draftCount = allMetricRows.filter((m) => m.status === 'DRAFT').length;
+
+    return { totalCount, attentionCount, draftCount };
+  }, [allMetricRows]);
 
   // Filtered dataset
   const filteredMetrics = useMemo(() => {
-    return MOCK_METRICS_DATA.filter((item) => {
-      // 1. Tab filter
-      if (activeTab === 'EFFECTIVE' && item.status !== 'EFFECTIVE') return false;
-      if (activeTab === 'DRAFT' && item.status !== 'DRAFT') return false;
-      if (activeTab === 'DEPRECATED' && item.status !== 'DEPRECATED') return false;
+    return allMetricRows.filter((item) => {
+      // 1. Frozen IA Tab filter
+      if (activeTab === 'ATTENTION') {
+        const isAttentionItem =
+          item.pendingActionType != null ||
+          item.validationStatus === 'FAIL' ||
+          item.bindingHealth === 'INVALID' ||
+          item.bindingHealth === 'DEGRADED' ||
+          (item.status === 'EFFECTIVE' && item.aiReadiness !== 'READY');
+        if (!isAttentionItem) return false;
+      } else if (activeTab === 'DRAFT') {
+        if (item.status !== 'DRAFT') return false;
+      }
 
-      // 2. Search query (Metric name, English name, definition, businessObject)
+      // 2. Search query (Metric name, English name, definition, businessObject, calculationSummary)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchName = item.name.toLowerCase().includes(q);
@@ -288,6 +849,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
       return true;
     });
   }, [
+    allMetricRows,
     activeTab,
     searchQuery,
     selectedDomain,
@@ -307,14 +869,48 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
     addToast?.('info', '筛选已重置', '已恢复默认展示状态');
   };
 
-  const handleCreateMetric = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMetricForm.name.trim()) {
-      addToast?.('error', '请填写指标名称', '指标名称为必填项');
-      return;
+  // Helper renderer for Attention Badge
+  const renderAttentionBadge = (type?: MetricPendingActionType) => {
+    if (!type) return null;
+    switch (type) {
+      case 'BINDING_ISSUE':
+        return (
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA]">
+            <Link2Off className="w-3 h-3 text-[#DC2626]" />
+            <span>Binding 失效</span>
+          </span>
+        );
+      case 'CONFLICT':
+        return (
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#FAF5FF] text-[#7E22CE] border border-[#E9D5FF]">
+            <GitMerge className="w-3 h-3 text-[#7E22CE]" />
+            <span>口径语义冲突</span>
+          </span>
+        );
+      case 'CONTEXT_VARIANT':
+        return (
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+            <Split className="w-3 h-3 text-[#2563EB]" />
+            <span>场景派生待收敛</span>
+          </span>
+        );
+      case 'MISSING_MEANING':
+        return (
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]">
+            <FileQuestion className="w-3 h-3 text-[#D97706]" />
+            <span>缺失核心语义</span>
+          </span>
+        );
+      case 'HIGH_IMPACT_CHANGE':
+        return (
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#FFF1F2] text-[#E11D48] border border-[#FECDD3]">
+            <Zap className="w-3 h-3 text-[#E11D48]" />
+            <span>高影响变更</span>
+          </span>
+        );
+      default:
+        return null;
     }
-    setIsCreateModalOpen(false);
-    addToast?.('success', '指标创建成功', `已成功新建指标「${newMetricForm.name}」，Xino 正在自动执行语义绑定推导与验证`);
   };
 
   return (
@@ -398,7 +994,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
               />
             </button>
 
-            {/* 二级展开项: 业务对象 / 指标 / 数据语义 / 数据标准 */}
+            {/* 二级展开项: 业务对象 / 指标 */}
             {semanticsExpanded && (
               <div className="mt-1.5 pl-3 space-y-1 border-l-2 border-[#DBEAFE] ml-3.5">
                 {/* 业务对象 (Amber 风格) */}
@@ -473,7 +1069,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
           </button>
         </div>
 
-        {/* Left Bottom Light Branding: AI Partner: Xino｜犀诺 */}
+        {/* Left Bottom Light Branding */}
         <div className="p-3.5 border-t border-[#EEF2F6] bg-[#F8FAFC]">
           <div className="flex items-center space-x-2 text-[11px] text-[#667085]">
             <div className="w-4 h-4 rounded-full bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB]">
@@ -515,8 +1111,21 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
               </p>
             </div>
 
-            {/* Actions: 导入已有指标 + 新建指标 */}
+            {/* Actions: 运行时解析验证 + 导入已有指标 + 新建指标 (Unified Route to Metric Authoring) */}
             <div className="flex items-center space-x-2.5">
+              <button
+                onClick={() => {
+                  setRuntimeMetricId('met_valid_order_amount');
+                  setRuntimeMetricName('有效订单金额');
+                  setIsRuntimeModalOpen(true);
+                }}
+                className="px-3.5 py-2 bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-[#1D4ED8] text-xs font-bold rounded-md transition-all shadow-2xs flex items-center space-x-1.5 cursor-pointer"
+                title="验证 User Question → Metric Resolution → Context Validation → Binding Resolution → Execution Plan"
+              >
+                <Cpu className="w-3.5 h-3.5 text-[#2563EB]" />
+                <span>运行时解析验证</span>
+              </button>
+
               <button
                 onClick={() => setIsImportDrawerOpen(true)}
                 className="px-3.5 py-2 bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-[#334155] text-xs font-semibold rounded-md transition-all shadow-2xs flex items-center space-x-1.5 cursor-pointer"
@@ -527,11 +1136,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
 
               <button
                 onClick={() => {
-                  if (onNavigateToCreateMetric) {
-                    onNavigateToCreateMetric();
-                  } else {
-                    setIsCreateModalOpen(true);
-                  }
+                  onNavigateToCreateMetric?.('draft');
                 }}
                 className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-all shadow-2xs flex items-center space-x-1.5 cursor-pointer"
               >
@@ -563,7 +1168,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
             </div>
           </div>
 
-          {/* 4. Tabs: 全部 128 | 已发布 108 | 草稿 12 | 已停用 8 */}
+          {/* 4. Frozen IA Tabs: 全部指标 | 待处理 | 草稿 */}
           <div className="mt-4 flex items-center space-x-6 border-b border-[#EEF2F6] text-xs font-medium">
             <button
               onClick={() => setActiveTab('ALL')}
@@ -573,29 +1178,42 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                   : 'text-[#667085] hover:text-[#172033]'
               }`}
             >
-              <span>全部</span>
-              <span className="px-1.5 py-0.2 rounded text-[11px] bg-[#F1F5F9] text-[#64748B] font-mono">
-                128
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('EFFECTIVE')}
-              className={`pb-2.5 transition-all cursor-pointer flex items-center space-x-1.5 ${
-                activeTab === 'EFFECTIVE'
-                  ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
-                  : 'text-[#667085] hover:text-[#172033]'
-              }`}
-            >
-              <span>正式有效</span>
+              <span>全部指标</span>
               <span
                 className={`px-1.5 py-0.2 rounded text-[11px] font-mono ${
-                  activeTab === 'EFFECTIVE'
+                  activeTab === 'ALL'
                     ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
                     : 'bg-[#F1F5F9] text-[#64748B]'
                 }`}
               >
-                108
+                {tabCounts.totalCount}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('ATTENTION')}
+              className={`pb-2.5 transition-all cursor-pointer flex items-center space-x-1.5 ${
+                activeTab === 'ATTENTION'
+                  ? 'text-[#DC2626] font-bold border-b-2 border-[#DC2626]'
+                  : 'text-[#667085] hover:text-[#172033]'
+              }`}
+            >
+              <div className="flex items-center space-x-1">
+                <span>待处理</span>
+                {tabCounts.attentionCount > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626] inline-block" />
+                )}
+              </div>
+              <span
+                className={`px-1.5 py-0.2 rounded text-[11px] font-mono ${
+                  activeTab === 'ATTENTION'
+                    ? 'bg-[#FEF2F2] text-[#DC2626] font-bold'
+                    : tabCounts.attentionCount > 0
+                    ? 'bg-[#FEF2F2] text-[#DC2626]'
+                    : 'bg-[#F1F5F9] text-[#64748B]'
+                }`}
+              >
+                {tabCounts.attentionCount}
               </span>
             </button>
 
@@ -608,22 +1226,14 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
               }`}
             >
               <span>草稿</span>
-              <span className="px-1.5 py-0.2 rounded text-[11px] bg-[#F1F5F9] text-[#64748B] font-mono">
-                12
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('DEPRECATED')}
-              className={`pb-2.5 transition-all cursor-pointer flex items-center space-x-1.5 ${
-                activeTab === 'DEPRECATED'
-                  ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
-                  : 'text-[#667085] hover:text-[#172033]'
-              }`}
-            >
-              <span>已停用</span>
-              <span className="px-1.5 py-0.2 rounded text-[11px] bg-[#F1F5F9] text-[#64748B] font-mono">
-                8
+              <span
+                className={`px-1.5 py-0.2 rounded text-[11px] font-mono ${
+                  activeTab === 'DRAFT'
+                    ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
+                    : 'bg-[#F1F5F9] text-[#64748B]'
+                }`}
+              >
+                {tabCounts.draftCount}
               </span>
             </button>
           </div>
@@ -639,12 +1249,19 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
             <div className="flex items-center space-x-2">
               <span className="text-[#7C3AED] font-bold text-sm">✦</span>
               <span>
-                AI 正在持续校验 <strong className="font-semibold text-[#172033]">108</strong> 个已发布指标的业务语义与数据实现，其中{' '}
-                <span className="text-[#E45454] font-semibold">12</span> 项需要关注。
+                AI 正在持续校验 <strong className="font-semibold text-[#172033]">{tabCounts.totalCount}</strong> 个指标的业务语义与数据实现，其中{' '}
+                <button
+                  onClick={() => setActiveTab('ATTENTION')}
+                  className="text-[#DC2626] font-bold hover:underline cursor-pointer inline-flex items-center space-x-0.5"
+                >
+                  <span>{tabCounts.attentionCount} 项需要处理</span>
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+                （包含 Binding 异常、口径冲突与场景派生待收敛）。
               </span>
             </div>
             <div className="text-[#94A3B8] text-[11px] font-mono">
-              最近一次检查：10 分钟前
+              Semovix V1.2 实时治理引擎 · 最近检查：2 分钟前
             </div>
           </div>
 
@@ -660,6 +1277,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                   className="bg-transparent font-medium text-[#172033] focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">全部业务域</option>
+                  <option value="交易分析">交易分析</option>
                   <option value="人口服务">人口服务</option>
                   <option value="公共服务">公共服务</option>
                   <option value="企业服务">企业服务</option>
@@ -677,11 +1295,11 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                   className="bg-transparent font-medium text-[#172033] focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">全部业务对象</option>
+                  <option value="订单">订单</option>
                   <option value="自然人">自然人</option>
                   <option value="服务工单">服务工单</option>
                   <option value="企业">企业</option>
                   <option value="客户">客户</option>
-                  <option value="订单">订单</option>
                 </select>
               </div>
 
@@ -709,6 +1327,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                   className="bg-transparent font-medium text-[#172033] focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">全部责任主体</option>
+                  <option value="交易分析与财务核算组">交易分析与财务核算组</option>
                   <option value="人口管理处">人口管理处</option>
                   <option value="热线管理处">热线管理处</option>
                   <option value="企业服务中心">企业服务中心</option>
@@ -718,23 +1337,23 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                 </select>
               </div>
 
-              {/* Filter 5: 状态 */}
+              {/* Filter 5: 状态 (DEPRECATED is available here) */}
               <div className="flex items-center space-x-1.5 bg-[#F8FAFC] border border-[#E6EAF0] px-2.5 py-1 rounded-md">
-                <span className="text-[#667085]">状态:</span>
+                <span className="text-[#667085]">指标状态:</span>
                 <select
                   value={selectedStatusFilter}
                   onChange={(e) => setSelectedStatusFilter(e.target.value)}
                   className="bg-transparent font-medium text-[#172033] focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">全部状态</option>
-                  <option value="EFFECTIVE">正式有效</option>
-                  <option value="DRAFT">草稿</option>
-                  <option value="DEPRECATED">已停用</option>
+                  <option value="EFFECTIVE">正式有效 (EFFECTIVE)</option>
+                  <option value="DRAFT">草稿 (DRAFT)</option>
+                  <option value="DEPRECATED">已停用 (DEPRECATED)</option>
                 </select>
               </div>
             </div>
 
-            {/* Reset Button (Light text button on far right) */}
+            {/* Reset Button */}
             <button
               onClick={handleResetFilters}
               className="text-xs text-[#667085] hover:text-[#2563EB] flex items-center space-x-1 font-medium transition-colors cursor-pointer"
@@ -748,16 +1367,16 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
           <div className="bg-white border border-[#E6EAF0] rounded-md shadow-2xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
-                {/* Table Header: No Index Column */}
+                {/* Table Header */}
                 <thead>
                   <tr className="bg-[#F8FAFC] border-b border-[#E6EAF0] text-[#667085] font-semibold">
-                    <th className="py-3 px-4 w-[18%]">指标</th>
-                    <th className="py-3 px-4 w-[22%]">业务定义</th>
+                    <th className="py-3 px-4 w-[20%]">指标</th>
+                    <th className="py-3 px-4 w-[22%]">业务语义定义</th>
                     <th className="py-3 px-3 w-[9%]">业务对象</th>
-                    <th className="py-3 px-4 w-[15%]">计算摘要</th>
+                    <th className="py-3 px-4 w-[14%]">计算摘要</th>
                     <th className="py-3 px-3 w-[11%]">时间语义</th>
-                    <th className="py-3 px-3 w-[9%]">验证</th>
-                    <th className="py-3 px-3 w-[8%]">状态</th>
+                    <th className="py-3 px-3 w-[9%]">验证状态</th>
+                    <th className="py-3 px-3 w-[8%]">生命周期</th>
                     <th className="py-3 px-3 w-[8%]">AI 就绪</th>
                     <th className="py-3 px-3 w-[8%]">Owner</th>
                     <th className="py-3 px-3 w-[4%] text-center">操作</th>
@@ -775,7 +1394,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                           <p className="text-xs text-[#94A3B8]">请尝试调整筛选条件或搜索关键词</p>
                           <button
                             onClick={handleResetFilters}
-                            className="mt-2 px-3 py-1.5 bg-[#EFF6FF] text-[#2563EB] text-xs font-bold rounded-md hover:bg-[#DBEAFE] transition-colors"
+                            className="mt-2 px-3 py-1.5 bg-[#EFF6FF] text-[#2563EB] text-xs font-bold rounded-md hover:bg-[#DBEAFE] transition-colors cursor-pointer"
                           >
                             重置全部筛选
                           </button>
@@ -789,27 +1408,31 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                         onClick={() => setSelectedMetricForDetail(metric)}
                         className="hover:bg-[#F8FAFC] transition-colors cursor-pointer group"
                       >
-                        {/* 1. 指标 (业务域轻量标签 + 中文名称字重高 + 英文名称更小更浅 + 个别维度辅助) */}
+                        {/* 1. 指标 (业务域轻量标签 + 中文名称 + 英文标识 + 待处理提醒) */}
                         <td className="py-3.5 px-4">
                           <div className="flex flex-col space-y-0.5">
-                            {/* Domain badge */}
-                            <div>
+                            {/* Domain badge & Attention Badge */}
+                            <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                               <span className="text-[10px] text-[#667085] bg-[#F1F5F9] px-1.5 py-0.2 rounded font-medium border border-[#E2E8F0]">
                                 {metric.domain}
                               </span>
+                              {renderAttentionBadge(metric.pendingActionType)}
                             </div>
+
                             {/* Main Chinese Name */}
                             <div className="flex items-center space-x-1.5 pt-0.5">
                               <span className="font-bold text-sm text-[#172033] group-hover:text-[#2563EB] transition-colors">
                                 {metric.name}
                               </span>
                             </div>
+
                             {/* Sub English Name */}
                             <span className="text-[11px] text-[#667085] italic font-normal">
                               {metric.enName}
                             </span>
+
                             {/* Optional secondary dimension badge */}
-                            {metric.dimensionCount && (
+                            {metric.dimensionCount > 0 && (
                               <div className="pt-0.5">
                                 <span className="text-[10px] text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded font-medium">
                                   {metric.dimensionCount} 个分析维度
@@ -819,9 +1442,9 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                           </div>
                         </td>
 
-                        {/* 2. 业务定义 */}
+                        {/* 2. 业务语义定义 */}
                         <td className="py-3.5 px-4 text-[#334155] leading-relaxed">
-                          {metric.definition}
+                          <p className="line-clamp-2">{metric.definition}</p>
                         </td>
 
                         {/* 3. 业务对象 */}
@@ -836,12 +1459,12 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                           {metric.calculationSummary}
                         </td>
 
-                        {/* 5. 时间语义 (业务时间字段 · 默认时间粒度) */}
+                        {/* 5. 时间语义 */}
                         <td className="py-3.5 px-3 text-[#334155] text-xs">
                           {metric.timeSemantics}
                         </td>
 
-                        {/* 6. 验证 (PASS: 验证通过、UNVERIFIED: 待验证、FAIL: 验证失败) */}
+                        {/* 6. 验证状态 (PASS / UNVERIFIED / FAIL) */}
                         <td className="py-3.5 px-3">
                           {metric.validationStatus === 'PASS' ? (
                             <span className="inline-flex items-center space-x-1 px-2 py-0.5 bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0] rounded text-[11px] font-medium">
@@ -863,7 +1486,8 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                                 <Info className="w-3.5 h-3.5" />
                               </div>
                               {/* Hover Tooltip */}
-                              <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover/tip:block z-30 w-56 bg-[#1E293B] text-white text-[11px] rounded p-2 shadow-lg leading-snug">
+                              <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover/tip:block z-30 w-60 bg-[#1E293B] text-white text-[11px] rounded p-2.5 shadow-lg leading-snug">
+                                <div className="font-bold text-[#FCA5A5] mb-1">校验异常原因</div>
                                 {metric.validationMessage || '时间字段 Binding 已失效，当前问数能力受限。'}
                                 <div className="absolute top-full left-3 -mt-1 border-4 border-transparent border-t-[#1E293B]" />
                               </div>
@@ -871,7 +1495,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                           )}
                         </td>
 
-                        {/* 7. 状态 (EFFECTIVE: 正式有效 / DRAFT: 草稿 / DEPRECATED: 已停用) */}
+                        {/* 7. 生命周期状态 (EFFECTIVE / DRAFT / DEPRECATED) */}
                         <td className="py-3.5 px-3">
                           {metric.status === 'EFFECTIVE' ? (
                             <span className="inline-flex items-center px-2 py-0.5 bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0] rounded text-[11px] font-medium">
@@ -911,7 +1535,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                           {metric.owner}
                         </td>
 
-                        {/* 10. 操作 (仅放 ... 按钮) */}
+                        {/* 10. 操作 */}
                         <td
                           className="py-3.5 px-3 text-center relative"
                           onClick={(e) => e.stopPropagation()}
@@ -938,16 +1562,17 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                                     setSelectedMetricForDetail(metric);
                                   }
                                 }}
-                                className="w-full px-3 py-1.5 text-[#334155] hover:bg-[#EFF6FF] hover:text-[#2563EB] flex items-center space-x-2 text-left font-medium"
+                                className="w-full px-3 py-1.5 text-[#334155] hover:bg-[#EFF6FF] hover:text-[#2563EB] flex items-center space-x-2 text-left font-medium cursor-pointer"
                               >
                                 <span>查看事实详情页</span>
                               </button>
                               <button
                                 onClick={() => {
                                   setActionMenuOpenId(null);
-                                  addToast?.('info', '发起变更', `已为「${metric.name}」创建变更申请草稿`);
+                                  onNavigateToCreateMetric?.('change_draft');
+                                  addToast?.('info', '发起口径变更', `已为「${metric.name}」创建变更申请草稿空间`);
                                 }}
-                                className="w-full px-3 py-1.5 text-[#334155] hover:bg-[#F8FAFC] hover:text-[#2563EB] flex items-center space-x-2 text-left"
+                                className="w-full px-3 py-1.5 text-[#334155] hover:bg-[#F8FAFC] hover:text-[#2563EB] flex items-center space-x-2 text-left cursor-pointer"
                               >
                                 <span>发起变更</span>
                               </button>
@@ -956,7 +1581,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                                   setActionMenuOpenId(null);
                                   addToast?.('success', '语义重新校验', `Xino 已针对「${metric.name}」触发物理表与计算引擎 Binding 校验`);
                                 }}
-                                className="w-full px-3 py-1.5 text-[#334155] hover:bg-[#F8FAFC] hover:text-[#2563EB] flex items-center space-x-2 text-left"
+                                className="w-full px-3 py-1.5 text-[#334155] hover:bg-[#F8FAFC] hover:text-[#2563EB] flex items-center space-x-2 text-left cursor-pointer"
                               >
                                 <span>重新校验</span>
                               </button>
@@ -966,7 +1591,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                                   setActionMenuOpenId(null);
                                   addToast?.('info', '导出定义', `已导出「${metric.name}」的标准语义 JSON/YAML 描述`);
                                 }}
-                                className="w-full px-3 py-1.5 text-[#64748B] hover:bg-[#F8FAFC] text-left"
+                                className="w-full px-3 py-1.5 text-[#64748B] hover:bg-[#F8FAFC] text-left cursor-pointer"
                               >
                                 <span>导出定义</span>
                               </button>
@@ -984,12 +1609,12 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
             <div className="p-3 border-t border-[#E6EAF0] bg-[#F8FAFC] flex items-center justify-between text-xs text-[#667085]">
               <div>
                 共展示 <span className="font-semibold text-[#172033] font-mono">{filteredMetrics.length}</span> 项指标
-                {filteredMetrics.length < MOCK_METRICS_DATA.length && (
-                  <span className="text-[#94A3B8] ml-1.5">（已从全部 {MOCK_METRICS_DATA.length} 项中过滤）</span>
+                {filteredMetrics.length < allMetricRows.length && (
+                  <span className="text-[#94A3B8] ml-1.5">（已从全部 {allMetricRows.length} 项中过滤）</span>
                 )}
               </div>
               <div className="flex items-center space-x-4">
-                <span className="text-[11px] text-[#667085]">Semovix 语义智能持续校验服务运行中</span>
+                <span className="text-[11px] text-[#667085]">Semovix V1.2 语义智能持续校验服务运行中</span>
               </div>
             </div>
           </div>
@@ -997,7 +1622,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
       </main>
 
       {/* ========================================================= */}
-      {/* METRIC DETAIL DRAWER / MODAL                              */}
+      {/* METRIC DETAIL DRAWER                                      */}
       {/* ========================================================= */}
       {selectedMetricForDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/30 backdrop-blur-2xs">
@@ -1019,7 +1644,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
               </div>
               <button
                 onClick={() => setSelectedMetricForDetail(null)}
-                className="p-1.5 rounded-md hover:bg-[#E2E8F0] text-[#64748B] hover:text-[#172033]"
+                className="p-1.5 rounded-md hover:bg-[#E2E8F0] text-[#64748B] hover:text-[#172033] cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1027,15 +1652,19 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
 
             {/* Drawer Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
-              {/* Validation Alert if Failed */}
-              {selectedMetricForDetail.validationStatus === 'FAILED' && (
+              {/* Validation / Binding Alert if Issue Exists */}
+              {selectedMetricForDetail.validationStatus === 'FAIL' && (
                 <div className="p-3 bg-[#FEF2F2] border border-[#FECACA] rounded-md text-[#E45454] space-y-1">
                   <div className="flex items-center space-x-1.5 font-bold">
                     <XCircle className="w-4 h-4 text-[#E45454]" />
-                    <span>校验异常告警</span>
+                    <span>执行层绑定校验异常</span>
                   </div>
                   <p className="text-[11px] leading-relaxed text-[#991B1B]">
-                    {selectedMetricForDetail.validationMessage}
+                    {selectedMetricForDetail.validationMessage ||
+                      '时间字段 Binding 已失效（底层字段 rename 未同步），物理层时间口径无法对齐。'}
+                  </p>
+                  <p className="text-[10px] text-[#7F1D1D] pt-0.5">
+                    💡 提示：该指标业务定义（Semantic Status）依然保持正式有效，仅需重新对齐物理层执行绑定。
                   </p>
                 </div>
               )}
@@ -1077,9 +1706,39 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                     </span>
                   </div>
                   <div className="flex items-center justify-between p-2.5">
-                    <span className="text-[#667085]">生命周期状态</span>
-                    <span className="font-medium text-[#16A36A]">
-                      {selectedMetricForDetail.status === 'PUBLISHED' ? '已正式发布' : selectedMetricForDetail.status === 'DRAFT' ? '草稿' : '已停用'}
+                    <span className="text-[#667085]">业务语义生命周期</span>
+                    <span
+                      className={`font-medium px-2 py-0.5 rounded text-[11px] ${
+                        selectedMetricForDetail.status === 'EFFECTIVE'
+                          ? 'bg-[#ECFDF5] text-[#16A36A]'
+                          : selectedMetricForDetail.status === 'DRAFT'
+                          ? 'bg-[#F1F5F9] text-[#475569]'
+                          : 'bg-[#FEF2F2] text-[#DC2626]'
+                      }`}
+                    >
+                      {selectedMetricForDetail.status === 'EFFECTIVE'
+                        ? '正式有效 (EFFECTIVE)'
+                        : selectedMetricForDetail.status === 'DRAFT'
+                        ? '草稿 (DRAFT)'
+                        : '已停用 (DEPRECATED)'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5">
+                    <span className="text-[#667085]">执行层 Binding 健康度</span>
+                    <span
+                      className={`font-medium px-2 py-0.5 rounded text-[11px] ${
+                        selectedMetricForDetail.bindingHealth === 'HEALTHY'
+                          ? 'bg-[#ECFDF5] text-[#16A36A]'
+                          : selectedMetricForDetail.bindingHealth === 'DEGRADED'
+                          ? 'bg-[#FFFBEB] text-[#D97706]'
+                          : 'bg-[#FEF2F2] text-[#DC2626]'
+                      }`}
+                    >
+                      {selectedMetricForDetail.bindingHealth === 'HEALTHY'
+                        ? '正常 (HEALTHY)'
+                        : selectedMetricForDetail.bindingHealth === 'DEGRADED'
+                        ? '降级 (DEGRADED)'
+                        : '失效 (INVALID)'}
                     </span>
                   </div>
                 </div>
@@ -1092,12 +1751,16 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                   <span>Xino 语义实现绑定与血缘</span>
                 </div>
                 <p className="text-[11px] text-[#334155] leading-relaxed">
-                  该指标已绑定至公共基础模型与实时数仓中间层，支持自然语言问数（NL-to-SQL）与多维交叉分析。
+                  {selectedMetricForDetail.originalMetric.binding
+                    ? `已绑定物理表「${selectedMetricForDetail.originalMetric.binding.tableName}」，度量字段为「${selectedMetricForDetail.originalMetric.binding.measureField}」。`
+                    : '当前指标尚未完成物理表绑定，处于语义草稿阶段。'}
                 </p>
                 <div className="pt-1 flex items-center space-x-2 text-[11px]">
-                  <span className="text-[#059669] font-medium">✓ 字段级血缘已贯通</span>
+                  <span className="text-[#059669] font-medium">✓ 语义对象对齐</span>
                   <span className="text-[#64748B]">·</span>
-                  <span className="text-[#059669] font-medium">✓ 口径一致性 100%</span>
+                  <span className="text-[#059669] font-medium">
+                    {selectedMetricForDetail.dimensionCount} 个维度路径
+                  </span>
                 </div>
               </div>
             </div>
@@ -1128,7 +1791,8 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                 <button
                   onClick={() => {
                     setSelectedMetricForDetail(null);
-                    addToast?.('success', '发起变更', `已打开「${selectedMetricForDetail.name}」的口径变更申请工单`);
+                    onNavigateToCreateMetric?.('change_draft');
+                    addToast?.('info', '发起口径变更', `已打开「${selectedMetricForDetail.name}」的变更草稿空间`);
                   }}
                   className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md font-bold text-xs cursor-pointer"
                 >
@@ -1141,164 +1805,6 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
       )}
 
       {/* ========================================================= */}
-      {/* CREATE METRIC MODAL (AI-assisted Metric Authoring)        */}
-      {/* ========================================================= */}
-      {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-2xs p-4">
-          <div className="w-full max-w-xl bg-white rounded-lg shadow-xl border border-[#E6EAF0] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-[#E6EAF0] flex items-center justify-between bg-[#F8FAFC]">
-              <div>
-                <h3 className="text-base font-bold text-[#172033]">
-                  新建业务指标
-                </h3>
-                <p className="text-xs text-[#667085] mt-0.5">
-                  输入指标业务定义与计算口径，Xino 将辅助推导时间语义与物理实现绑定
-                </p>
-              </div>
-              <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="p-1 text-[#94A3B8] hover:text-[#172033]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Form Body */}
-            <form onSubmit={handleCreateMetric} className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-[#172033] mb-1">
-                    指标名称 (中文) <span className="text-[#E45454]">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="例如：办结满意率"
-                    value={newMetricForm.name}
-                    onChange={(e) => setNewMetricForm({ ...newMetricForm, name: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-[#E6EAF0] rounded-md focus:ring-1 focus:ring-[#2563EB] focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-[#172033] mb-1">
-                    英文标识 (English Name)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="例如：Satisfaction Rate"
-                    value={newMetricForm.enName}
-                    onChange={(e) => setNewMetricForm({ ...newMetricForm, enName: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-[#E6EAF0] rounded-md focus:ring-1 focus:ring-[#2563EB] focus:outline-none font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-[#172033] mb-1">
-                    所属业务域
-                  </label>
-                  <select
-                    value={newMetricForm.domain}
-                    onChange={(e) => setNewMetricForm({ ...newMetricForm, domain: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-[#E6EAF0] rounded-md focus:ring-1 focus:ring-[#2563EB] focus:outline-none bg-white"
-                  >
-                    <option value="公共服务">公共服务</option>
-                    <option value="人口服务">人口服务</option>
-                    <option value="企业服务">企业服务</option>
-                    <option value="客户运营">客户运营</option>
-                    <option value="销售分析">销售分析</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-[#172033] mb-1">
-                    衡量业务对象
-                  </label>
-                  <select
-                    value={newMetricForm.businessObject}
-                    onChange={(e) => setNewMetricForm({ ...newMetricForm, businessObject: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-[#E6EAF0] rounded-md focus:ring-1 focus:ring-[#2563EB] focus:outline-none bg-white"
-                  >
-                    <option value="服务工单">服务工单</option>
-                    <option value="自然人">自然人</option>
-                    <option value="企业">企业</option>
-                    <option value="客户">客户</option>
-                    <option value="订单">订单</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-[#172033] mb-1">
-                  业务定义与口径说明
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="清晰描述该指标衡量的实际业务场景与口径边界…"
-                  value={newMetricForm.definition}
-                  onChange={(e) => setNewMetricForm({ ...newMetricForm, definition: e.target.value })}
-                  className="w-full px-3 py-1.5 border border-[#E6EAF0] rounded-md focus:ring-1 focus:ring-[#2563EB] focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-bold text-[#172033] mb-1">
-                    计算摘要 / 聚合公式
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="例如：满意工单数 ÷ 评价总工单数"
-                    value={newMetricForm.calculationSummary}
-                    onChange={(e) => setNewMetricForm({ ...newMetricForm, calculationSummary: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-[#E6EAF0] rounded-md focus:ring-1 focus:ring-[#2563EB] focus:outline-none font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-[#172033] mb-1">
-                    时间语义 (业务时间 · 粒度)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="例如：评价时间 · 月"
-                    value={newMetricForm.timeSemantics}
-                    onChange={(e) => setNewMetricForm({ ...newMetricForm, timeSemantics: e.target.value })}
-                    className="w-full px-3 py-1.5 border border-[#E6EAF0] rounded-md focus:ring-1 focus:ring-[#2563EB] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md flex items-center space-x-2 text-xs text-[#1E40AF]">
-                <Sparkles className="w-4 h-4 text-[#2563EB] shrink-0" />
-                <span>保存后，Xino 将自动挂载到语义治理图谱中，并启动物理表 Binding 校验。</span>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="pt-2 border-t border-[#EEF2F6] flex items-center justify-end space-x-2.5">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="px-3.5 py-1.5 border border-[#E6EAF0] text-[#334155] hover:bg-[#F8FAFC] rounded-md font-medium"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-md shadow-2xs"
-                >
-                  确认新建
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
       {/* IMPORT EXISTING METRIC DRAWER                             */}
       {/* ========================================================= */}
       <ImportExistingMetricDrawer
@@ -1306,12 +1812,57 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
         onClose={() => setIsImportDrawerOpen(false)}
         onImportMetric={(candidate) => {
           setIsImportDrawerOpen(false);
+          const initialDraftData: MetricDraftInitialData = {
+            metricName: candidate.suggestedName,
+            businessDefinition:
+              candidate.suggestedDefinition ||
+              `基于存量口径「${candidate.originalName}」结构化形成的业务指标定义。`,
+            businessObject: candidate.suggestedBusinessObject,
+            scopeText: candidate.suggestedScope,
+            timeSemanticsText: candidate.suggestedTime,
+            timeGrains: ['日', '月', '季', '年'],
+            dimensions: candidate.suggestedDimensions || ['渠道', '业务线', '区域'],
+            aggregation: candidate.suggestedAggregation || 'SUM',
+            measureField: candidate.suggestedMeasureField,
+            businessRuleFilter: candidate.suggestedFilter,
+            tableName: candidate.suggestedTableName,
+            timeField: candidate.suggestedTimeField,
+            importSource: {
+              sourceType: candidate.sourceType,
+              sourceName: candidate.sourceName,
+              sourceLocation: candidate.sourceLocation,
+              originalName: candidate.originalName,
+              originalExpression: candidate.originalExpression,
+              parseStatus: candidate.parseStatus,
+              supplementNeeds: candidate.supplementNeeds,
+            },
+          };
           if (onNavigateToCreateMetric) {
-            onNavigateToCreateMetric();
+            onNavigateToCreateMetric('imported_draft', initialDraftData);
           }
         }}
         addToast={addToast}
       />
+
+      {/* ========================================================= */}
+      {/* RUNTIME METRIC RESOLUTION STUDIO (运行时解析验证)          */}
+      {/* ========================================================= */}
+      {isRuntimeModalOpen && (
+        <RuntimeMetricResolutionStudio
+          isOpen={isRuntimeModalOpen}
+          onClose={() => setIsRuntimeModalOpen(false)}
+          initialMetricId={runtimeMetricId}
+          initialMetricName={runtimeMetricName}
+          initialQuestion={
+            runtimeMetricId === 'met_008'
+              ? '查询上季度华南地区客户投诉率'
+              : runtimeMetricId === 'met_004'
+              ? '按街道统计近3个月高龄独居老人帮扶覆盖率'
+              : '查看今年华东地区各渠道有效订单金额'
+          }
+          addToast={addToast}
+        />
+      )}
     </div>
   );
 };

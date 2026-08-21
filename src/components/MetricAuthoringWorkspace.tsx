@@ -42,9 +42,11 @@ import {
 } from 'lucide-react';
 import { DataBindingDrawer } from './DataBindingDrawer';
 import { MetricAuthoringChangeMode } from './MetricAuthoringChangeMode';
+import { MetricDraftInitialData } from '../types';
 
 interface MetricAuthoringWorkspaceProps {
-  initialMode?: 'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'change_draft';
+  initialMode?: 'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft';
+  initialDraftData?: MetricDraftInitialData;
   onBackToRegistry?: () => void;
   onNavigateToBusinessObject?: () => void;
   onNavigateToDataStandards?: () => void;
@@ -57,6 +59,7 @@ interface MetricAuthoringWorkspaceProps {
 
 export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> = ({
   initialMode = 'draft',
+  initialDraftData,
   onBackToRegistry,
   onNavigateToBusinessObject,
   onNavigateToDataStandards,
@@ -71,8 +74,11 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
   // - 'blank': Blank Create · 初始定义状态 ("从空白开始定义")
   // - 'constructing': In-place AI draft generation animation
   // - 'draft': AI Draft Ready (Full Metric Draft with validation & confirmation lifecycle)
+  // - 'imported_draft': Metric Imported from Existing System (Semovix V1.2 Imported Metric Draft)
   // - 'change_draft': Metric Authoring · Change Mode (Semovix Metric Authoring Change Mode V1.2)
-  const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'change_draft'>(initialMode);
+  const [authoringMode, setAuthoringMode] = useState<
+    'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'
+  >(initialMode);
 
   // Blank Create Form States (Initially empty to represent real initial state)
   const [blankMetricName, setBlankMetricName] = useState<string>('');
@@ -105,25 +111,34 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
   ];
 
   // Workspace States for Draft Ready:
-  // - 'DRAFT_READY': AI Create · Draft Ready
+  // - 'DRAFT_READY': AI Create · Draft Ready (Default state awaiting explicit validation)
   // - 'VALIDATING': Running verification
   // - 'VALIDATION_PASSED': Ready for Owner Confirm (Validation PASS)
   // - 'NEEDS_CONFIRM': Needs business confirmation
   // - 'DECISION_REQUIRED': Conflict resolution required
   const [workspaceState, setWorkspaceState] = useState<
     'DRAFT_READY' | 'VALIDATING' | 'VALIDATION_PASSED' | 'NEEDS_CONFIRM' | 'DECISION_REQUIRED'
-  >('VALIDATION_PASSED');
+  >('DRAFT_READY');
 
-  // Editable Draft Data for the Full Metric Draft: 有效订单金额
-  const [metricName, setMetricName] = useState('有效订单金额');
+  // Editable Draft Data for the Full Metric Draft
+  const [metricName, setMetricName] = useState(initialDraftData?.metricName || '有效订单金额');
   const [businessDefinition, setBusinessDefinition] = useState(
-    '满足“有效订单”业务规则的订单金额合计，用于衡量一定统计周期内形成的有效订单交易规模。'
+    initialDraftData?.businessDefinition ||
+      '满足“有效订单”业务规则的订单金额合计，用于衡量一定统计周期内形成的有效订单交易规模。'
   );
-  const [businessObject, setBusinessObject] = useState('订单');
-  const [scopeText, setScopeText] = useState('订单业务 · 交易分析');
-  const [timeSemanticsText, setTimeSemanticsText] = useState('支付时间');
-  const [timeGrains, setTimeGrains] = useState<string[]>(['日', '月', '季', '年']);
-  const [dimensions, setDimensions] = useState<string[]>(['渠道', '商品分类', '地区']);
+  const [businessObject, setBusinessObject] = useState(initialDraftData?.businessObject || '订单');
+  const [scopeText, setScopeText] = useState(initialDraftData?.scopeText || '订单业务 · 交易分析');
+  const [timeSemanticsText, setTimeSemanticsText] = useState(initialDraftData?.timeSemanticsText || '支付时间');
+  const [timeGrains, setTimeGrains] = useState<string[]>(initialDraftData?.timeGrains || ['日', '月', '季', '年']);
+  const [dimensions, setDimensions] = useState<string[]>(initialDraftData?.dimensions || ['渠道', '商品分类', '地区']);
+  const [importSourceInfo, setImportSourceInfo] = useState<MetricDraftInitialData['importSource'] | null>(
+    initialDraftData?.importSource || null
+  );
+  const [boundTable, setBoundTable] = useState<string>(initialDraftData?.tableName || 'dwd_order_pay_detail_di');
+  const [boundMeasureField, setBoundMeasureField] = useState<string>(initialDraftData?.measureField || 'pay_amount');
+  const [boundFilter, setBoundFilter] = useState<string>(
+    initialDraftData?.businessRuleFilter || 'order_status IN (2, 3, 4) AND is_refund = 0'
+  );
   const [isSaved, setIsSaved] = useState(true);
 
   // Modals & Drawers in Draft Ready State
@@ -131,16 +146,16 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
   const [isAdjustDrawerOpen, setIsAdjustDrawerOpen] = useState<null | 'meaning' | 'scope' | 'time_dim'>(null);
   const [isDependencyDrawerOpen, setIsDependencyDrawerOpen] = useState<boolean>(false);
   const [isValidatingModalOpen, setIsValidatingModalOpen] = useState<boolean>(false);
-  const [validationProgress, setValidationProgress] = useState<number>(100);
+  const [validationProgress, setValidationProgress] = useState<number>(0);
   // Validation check items (pure user-friendly Chinese labels, 3-state without score)
   const [validationSteps, setValidationSteps] = useState<
     Array<{ name: string; status: 'waiting' | 'running' | 'passed' | 'failed' }>
   >([
-    { name: '业务定义完整', status: 'passed' },
-    { name: '数据实现有效', status: 'passed' },
-    { name: '时间口径一致', status: 'passed' },
-    { name: '分析维度可安全使用', status: 'passed' },
-    { name: '执行计划可生成', status: 'passed' },
+    { name: '业务定义完整', status: 'waiting' },
+    { name: '数据实现有效', status: 'waiting' },
+    { name: '时间口径一致', status: 'waiting' },
+    { name: '分析维度可安全使用', status: 'waiting' },
+    { name: '执行计划可生成', status: 'waiting' },
   ]);
 
   // Adjust Drawer Temp State
@@ -314,7 +329,11 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
 
   const handleConfirmEffective = () => {
     if (addToast) {
-      addToast('success', '指标已确认生效', `「${metricName}」已进入正式指标库，可供全域问数与分析消费`);
+      addToast(
+        'success',
+        '指标已确认生效',
+        `「${metricName}」已在当前适用范围内正式生效，可供符合 Scope、权限和运行时校验条件的找数、问数与分析使用。`
+      );
     }
     if (onBackToRegistry) {
       onBackToRegistry();
@@ -366,21 +385,33 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
               指标
             </button>
             <span className="text-[#CBD5E1]">/</span>
-            <span className="text-[#172033] font-semibold">创建指标</span>
+            <span className="text-[#172033] font-semibold">
+              {authoringMode === 'imported_draft' ? '导入指标草稿' : '创建指标'}
+            </span>
           </nav>
 
           {/* Title & Lightweight Status */}
           <div className="flex items-center space-x-3 pt-0.5">
             <h1 className="text-lg font-bold text-[#172033] tracking-tight">
-              {authoringMode === 'draft' ? `创建指标 · ${metricName}` : '创建指标'}
+              {authoringMode === 'imported_draft'
+                ? `存量指标导入 · ${metricName}`
+                : authoringMode === 'draft'
+                ? `创建指标 · ${metricName}`
+                : '创建指标'}
             </h1>
             
-            {/* Lightweight Status Badge: 草稿 */}
-            <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
-              草稿
-            </span>
+            {/* Lightweight Status Badge */}
+            {authoringMode === 'imported_draft' ? (
+              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                存量导入草稿
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
+                草稿
+              </span>
+            )}
 
-            {authoringMode === 'draft' && workspaceState === 'VALIDATION_PASSED' && (
+            {(authoringMode === 'draft' || authoringMode === 'imported_draft') && workspaceState === 'VALIDATION_PASSED' && (
               <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7] flex items-center space-x-1">
                 <Check className="w-3 h-3 text-[#16A36A]" />
                 <span>验证通过</span>
@@ -1362,51 +1393,100 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                     </p>
                   </div>
 
-                  {/* 1.2 AI 理解 */}
-                  <div className="pt-4 border-t border-[#EEF2F6] space-y-3">
-                    <div className="flex items-center space-x-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-[#6366F1]" />
-                      <h3 className="text-xs font-bold text-[#172033]">
-                        AI 语义解析结果
-                      </h3>
-                    </div>
-
-                    <div className="space-y-2 text-xs">
-                      <div>
-                        <div className="text-[11px] text-[#667085]">业务对象</div>
-                        <div className="font-semibold text-[#172033] mt-0.5">{businessObject}</div>
+                  {/* 1.2 存量来源追溯 (If imported) */}
+                  {importSourceInfo ? (
+                    <div className="pt-4 border-t border-[#EEF2F6] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-1.5">
+                          <Database className="w-3.5 h-3.5 text-[#2563EB]" />
+                          <h3 className="text-xs font-bold text-[#172033]">
+                            存量口径追溯
+                          </h3>
+                        </div>
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-white border border-[#CBD5E1] text-[#475569]">
+                          {importSourceInfo.sourceType}
+                        </span>
                       </div>
 
-                      <div>
-                        <div className="text-[11px] text-[#667085]">度量方式</div>
-                        <div className="font-semibold text-[#172033] mt-0.5">
-                          {metricName === '有效订单金额' ? '金额求和 (SUM)' : '比例 (%)'}
+                      <div className="space-y-2 text-xs">
+                        <div>
+                          <div className="text-[11px] text-[#64748B]">来源系统与定位</div>
+                          <div className="font-semibold text-[#0F172A] mt-0.5">{importSourceInfo.sourceName}</div>
+                          <div className="text-[10px] font-mono text-[#64748B] mt-0.5 truncate">{importSourceInfo.sourceLocation}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-[11px] text-[#64748B]">原存量表达式</div>
+                          <div className="p-2 bg-white rounded border border-[#E2E8F0] font-mono text-[11px] text-[#334155] break-all mt-0.5">
+                            {importSourceInfo.originalExpression}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[11px] text-[#64748B]">逆向解析状态</div>
+                          <div className="mt-1">
+                            {importSourceInfo.parseStatus === 'COMPLETE' ? (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
+                                <CheckCircle2 className="w-3 h-3 text-[#16A36A]" />
+                                <span>要素完整已自动映射</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]">
+                                <AlertCircle className="w-3 h-3 text-[#D97706]" />
+                                <span>待补充：{importSourceInfo.supplementNeeds?.join(' / ')}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* 1.2 AI 理解 (Normal create flow) */
+                    <div className="pt-4 border-t border-[#EEF2F6] space-y-3">
+                      <div className="flex items-center space-x-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#6366F1]" />
+                        <h3 className="text-xs font-bold text-[#172033]">
+                          AI 语义解析结果
+                        </h3>
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        <div>
+                          <div className="text-[11px] text-[#667085]">业务对象</div>
+                          <div className="font-semibold text-[#172033] mt-0.5">{businessObject}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-[11px] text-[#667085]">度量方式</div>
+                          <div className="font-semibold text-[#172033] mt-0.5">
+                            {metricName === '有效订单金额' ? '金额求和 (SUM)' : '比例 (%)'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[11px] text-[#667085]">核心业务概念</div>
+                          <div className="font-semibold text-[#172033] mt-0.5">
+                            {metricName === '有效订单金额' ? '订单金额 / 有效订单' : '老年人口 / 常住人口'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="text-[11px] text-[#667085]">业务目的</div>
+                          <div className="font-semibold text-[#172033] mt-0.5">
+                            {metricName === '有效订单金额'
+                              ? '衡量一定统计周期内形成的有效订单交易规模'
+                              : '衡量区域人口老龄化程度'}
+                          </div>
                         </div>
                       </div>
 
-                      <div>
-                        <div className="text-[11px] text-[#667085]">核心业务概念</div>
-                        <div className="font-semibold text-[#172033] mt-0.5">
-                          {metricName === '有效订单金额' ? '订单金额 / 有效订单' : '老年人口 / 常住人口'}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-[11px] text-[#667085]">业务目的</div>
-                        <div className="font-semibold text-[#172033] mt-0.5">
-                          {metricName === '有效订单金额'
-                            ? '衡量一定统计周期内形成的有效订单交易规模'
-                            : '衡量区域人口老龄化程度'}
-                        </div>
+                      {/* Light hint */}
+                      <div className="pt-2 text-[11px] text-[#166534] bg-[#F0FDF4] p-2 rounded border border-[#DCFCE7] flex items-center space-x-1.5">
+                        <Check className="w-3 h-3 text-[#16A36A] shrink-0" />
+                        <span>已关联现有业务语义与正式指标</span>
                       </div>
                     </div>
-
-                    {/* Light hint */}
-                    <div className="pt-2 text-[11px] text-[#166534] bg-[#F0FDF4] p-2 rounded border border-[#DCFCE7] flex items-center space-x-1.5">
-                      <Check className="w-3 h-3 text-[#16A36A] shrink-0" />
-                      <span>已关联现有业务语义与正式指标</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* 1.3 Bottom Return to Blank Create */}
@@ -1443,22 +1523,24 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                       </div>
                       <div>
                         <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">
-                          Semovix 理解与构建摘要
+                          {importSourceInfo ? '存量口径逆向解析与 Semovix V1.2 构建摘要' : 'Semovix 理解与构建摘要'}
                         </h2>
                         <p className="text-[11px] text-[#64748B] mt-0.5">
-                          基于业务意图自动推导业务对象、计算方式、关键规则与待确认项
+                          {importSourceInfo
+                            ? `已完成对「${importSourceInfo.originalName}」的逆向语义结构化推导与资产映射`
+                            : '基于业务意图自动推导业务对象、计算方式、关键规则与待确认项'}
                         </p>
                       </div>
                     </div>
                     <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white text-[#2563EB] border border-[#BFDBFE] shadow-2xs">
-                      AI Native Draft V1.2
+                      {importSourceInfo ? 'Imported Draft V1.2' : 'AI Native Draft V1.2'}
                     </span>
                   </div>
 
                   <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-[#FAFBFD]">
                     <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
                       <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
-                        你希望衡量
+                        标准化业务指标
                       </div>
                       <div className="text-sm font-bold text-[#0F172A]">
                         {metricName}
@@ -1473,7 +1555,7 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
                         计算方式与聚合
                       </div>
                       <div className="text-sm font-bold text-[#0F172A]">
-                        {metricName === '有效订单金额' ? '有效订单金额 SUM' : '比例计算 (老年人口数 ÷ 常住人口数)'}
+                        {boundMeasureField ? `${boundMeasureField} (SUM/AVG)` : `${metricName} SUM`}
                       </div>
                       <div className="text-[11px] text-[#64748B]">
                         基础计算粒度：<span className="font-semibold text-[#0F172A]">{businessObject}</span>
@@ -1482,12 +1564,10 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
 
                     <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
                       <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
-                        关键业务规则
+                        业务范围与过滤规则
                       </div>
-                      <div className="text-xs font-semibold text-[#0F172A]">
-                        {metricName === '有效订单金额'
-                          ? '有效订单 = 支付成功且未退款'
-                          : '老龄化率 = 年龄 ≥ 60 周岁常住人口'}
+                      <div className="text-xs font-semibold text-[#0F172A] truncate">
+                        {boundFilter || scopeText}
                       </div>
                       <div className="text-[11px] text-[#16A36A] flex items-center space-x-1">
                         <Check className="w-3 h-3" />
@@ -1497,12 +1577,10 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
 
                     <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
                       <div className="text-[11px] font-bold text-[#64748B] uppercase tracking-wider">
-                        需要确认项
+                        推荐数据绑定
                       </div>
-                      <div className="text-xs font-semibold text-[#0F172A]">
-                        {metricName === '有效订单金额'
-                          ? '以「支付时间」作为默认业务时间，支持 日/月/季/年'
-                          : '以「统计时点」作为快照时间'}
+                      <div className="text-xs font-mono font-semibold text-[#0F172A] truncate">
+                        {boundTable}
                       </div>
                       <div className="text-[11px] text-[#2563EB] flex items-center space-x-1">
                         <Info className="w-3 h-3" />

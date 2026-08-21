@@ -218,9 +218,23 @@ export interface MetricMeasurement {
 }
 
 export interface MetricTimeSemantics {
-  type: "SNAPSHOT" | "PERIOD" | "FLOW" | "CUMULATIVE";
+  type: "POINT_IN_TIME" | "SNAPSHOT" | "PERIOD" | "FLOW" | "CUMULATIVE";
   businessTime: string;
   defaultGranularity: "DAY" | "MONTH" | "QUARTER" | "YEAR";
+}
+
+export type MetricStatus = "DRAFT" | "EFFECTIVE" | "DEPRECATED";
+export type MetricValidationStatus = "PASS" | "UNVERIFIED" | "FAIL";
+export type MetricAIReadiness = "READY" | "DEGRADED" | "NOT_READY";
+
+export interface MetricDependencyCompatibility {
+  scope: boolean;
+  grain: boolean;
+  time: boolean;
+  dimension: boolean;
+  version: boolean;
+  dimensionCompatibility?: boolean;
+  versionCompatibility?: boolean;
 }
 
 export interface MetricDependency {
@@ -228,12 +242,8 @@ export interface MetricDependency {
   metricName?: string;
   role: "NUMERATOR" | "DENOMINATOR" | "COMPONENT";
   version: string;
-  status?: "Effective" | "Draft" | "Deprecated";
-  compatibility?: {
-    scope: boolean;
-    grain: boolean;
-    time: boolean;
-  };
+  status?: MetricStatus;
+  compatibility?: MetricDependencyCompatibility;
 }
 
 export interface MetricProvenance {
@@ -248,12 +258,20 @@ export interface GrainMapping {
   matchStatus: "VALID" | "UNMATCHED";
 }
 
+export type RelationshipCardinality = "1:1" | "N:1" | "1:N" | "N:N";
+export type RelationshipPathValidationStatus = "SAFE" | "UNVERIFIED" | "UNSAFE";
+
 export interface DimensionRelationshipPath {
   sourceObject: string;
-  relationship: "N:1" | "1:1" | "1:N";
+  cardinality: RelationshipCardinality;
+  /** @deprecated use cardinality instead */
+  relationship?: "N:1" | "1:1" | "1:N" | "N:N";
   targetObject: string;
   dimensionName: string;
+  validationStatus: RelationshipPathValidationStatus;
 }
+
+export type MetricBindingHealth = "HEALTHY" | "DEGRADED" | "INVALID";
 
 export interface MetricBinding {
   dataAssetId: string;
@@ -265,12 +283,10 @@ export interface MetricBinding {
   grainMapping: GrainMapping;
   dimensionPaths: DimensionRelationshipPath[];
   bindingVersion: string;
-  status: "VALID" | "SUSPENDED" | "OUTDATED";
+  health: MetricBindingHealth;
+  /** @deprecated use health instead */
+  status?: "VALID" | "SUSPENDED" | "OUTDATED";
 }
-
-export type MetricStatus = "DRAFT" | "EFFECTIVE" | "DEPRECATED";
-export type MetricValidationStatus = "PASS" | "UNVERIFIED" | "FAIL";
-export type MetricAIReadiness = "READY" | "DEGRADED" | "NOT_READY";
 
 export interface Metric {
   id: string;
@@ -286,7 +302,6 @@ export interface Metric {
 
   // Measurement
   measurement: MetricMeasurement;
-  grain: string;
 
   // Time
   timeSemantics: MetricTimeSemantics;
@@ -311,22 +326,251 @@ export interface Metric {
   changeReason?: string;
 }
 
-// Runtime Resolution Contract (Step 11)
+export type MetricPendingActionType =
+  | 'BINDING_ISSUE'
+  | 'CONFLICT'
+  | 'CONTEXT_VARIANT'
+  | 'MISSING_MEANING'
+  | 'HIGH_IMPACT_CHANGE';
+
+export interface MetricRegistryRowVM {
+  id: string;
+  name: string;
+  enName: string;
+  domain: string;
+  definition: string;
+  businessObject: string;
+  calculationSummary: string;
+  timeSemantics: string;
+  validationStatus: MetricValidationStatus;
+  validationMessage?: string;
+  status: MetricStatus;
+  bindingHealth?: MetricBindingHealth;
+  aiReadiness: MetricAIReadiness;
+  owner: string;
+  dimensionCount: number;
+  pendingActionType?: MetricPendingActionType;
+  pendingActionDesc?: string;
+  originalMetric: Metric;
+}
+
+// Runtime Resolution Contract (Step 11 & Complete Runtime Pipeline)
 export interface MetricExecutionContext {
-  metricId: string;
-  metricVersion: string;
+  metricId?: string;
+  metricName?: string;
+  metricVersion?: string;
+  question?: string;
   scope?: MetricScope;
   dimensions?: string[];
   timeContext?: {
     timeGrain?: "DAY" | "MONTH" | "QUARTER" | "YEAR";
     startDate?: string;
     endDate?: string;
+    relativePeriod?: string;
   };
   filters?: Array<{
     field: string;
     operator: "=" | "!=" | ">" | "<" | ">=" | "<=" | "IN" | "LIKE";
     value: any;
+    label?: string;
   }>;
+  callerContext?: {
+    userId: string;
+    userRole: string;
+    department: string;
+    hasApproval: boolean;
+    allowedScopes?: string[];
+  };
+}
+
+export interface ValidatedDimension {
+  name: string;
+  attr: string;
+  isValid: boolean;
+  pathType: 'DIRECT' | 'RELATIONSHIP' | 'INVALID';
+  sourceField: string;
+  sourceTable: string;
+  targetTable?: string;
+  joinCondition?: string;
+  relationshipPath?: string[];
+  securityStatus: 'SAFE' | 'BLOCKED_BY_POLICY' | 'RESTRICTED';
+  reason?: string;
+}
+
+export interface ResolvedTimeMapping {
+  timeSemanticType: 'FLOW' | 'POINT_IN_TIME' | 'INTERVAL';
+  timeColumn: string;
+  timeColumnComment: string;
+  requestedGrain: 'DAY' | 'MONTH' | 'QUARTER' | 'YEAR';
+  relativePeriodText?: string;
+  startDate?: string;
+  endDate?: string;
+  truncSqlExpression: string;
+  timeFilterExpression: string;
+  isAligned: boolean;
+}
+
+export interface ResolvedBinding {
+  status: 'HEALTHY' | 'BROKEN' | 'MISSING' | 'PERMISSION_REQUIRED';
+  dataAssetId: string;
+  dataAssetName: string;
+  tableName: string;
+  sourceSystem: string;
+  baseGrain: string;
+  measureField: string;
+  measureFieldType: string;
+  aggregation: 'SUM' | 'COUNT' | 'COUNT_DISTINCT' | 'AVG';
+  businessRuleFilter: string;
+  ruleSummary: string;
+}
+
+export interface ResolvedFilters {
+  combinedFilterClause: string;
+  businessRuleFilters: Array<{
+    expression: string;
+    description: string;
+    mandatory: boolean;
+  }>;
+  userContextFilters: Array<{
+    field: string;
+    operator: string;
+    value: any;
+    label?: string;
+  }>;
+  securityRowLevelFilters: Array<{
+    expression: string;
+    reason: string;
+  }>;
+}
+
+export interface PermissionRequirements {
+  hasAccess: boolean;
+  requiredAssetIds: string[];
+  requiredSensitivityLevel: 'L1_PUBLIC' | 'L2_INTERNAL' | 'L3_RESTRICTED' | 'L4_CONFIDENTIAL';
+  userPermissionLevel: string;
+  requiresApproval: boolean;
+  maskedFields: string[];
+  auditLogRequired: boolean;
+}
+
+export interface ExecutionPlanStep {
+  stepNumber: number;
+  title: string;
+  operation: string;
+  detail: string;
+  targetEngine?: string;
+}
+
+export interface ExecutionPlan {
+  executionEngine: 'PRESTO_TRINO' | 'CLICKHOUSE' | 'SPARK_SQL' | 'POSTGRESQL';
+  grainLevel: string;
+  steps: ExecutionPlanStep[];
+  generatedSql: string;
+  safetyGuarantees: string[];
+  estimatedCost: {
+    rowsScanned: string;
+    latencyEstimate: string;
+    cacheHit: boolean;
+  };
+}
+
+export interface EvidenceRefs {
+  ruleStandardDoc: string;
+  dataGovernanceSpec: string;
+  activeVersionLineage: string;
+  verifiedBy: string;
+  verifiedAt: string;
+  semanticIntegrityScore: number;
+}
+
+export interface PipelineStageResult {
+  stageId: 'INTENT' | 'METRIC_RESOLUTION' | 'CONTEXT_VALIDATION' | 'BINDING_RESOLUTION' | 'EXECUTION_PLAN';
+  stageName: string;
+  status: 'PASSED' | 'WARNING' | 'FAILED';
+  durationMs: number;
+  summary: string;
+  details?: Record<string, any>;
+}
+
+export interface ResolvedMetricExecution {
+  resolutionId: string;
+  timestamp: string;
+  status: 'READY_TO_EXECUTE' | 'BLOCKED_BY_SCOPE' | 'BLOCKED_BY_BINDING' | 'BLOCKED_BY_PERMISSION' | 'AMBIGUOUS' | 'DEGRADED';
+  inputContext: MetricExecutionContext;
+  metric: {
+    id: string;
+    name: string;
+    enName: string;
+    domain: string;
+    businessObject: string;
+    definition: string;
+  };
+  resolvedVersion: string;
+  resolvedBinding: ResolvedBinding;
+  validatedDimensions: ValidatedDimension[];
+  resolvedTimeMapping: ResolvedTimeMapping;
+  resolvedFilters: ResolvedFilters;
+  permissionRequirements: PermissionRequirements;
+  executionPlan: ExecutionPlan;
+  evidenceRefs: EvidenceRefs;
+  pipelineStages: PipelineStageResult[];
+  diagnostics: Array<{
+    level: 'INFO' | 'WARNING' | 'ERROR';
+    code: string;
+    message: string;
+    remediation?: string;
+  }>;
+}
+
+export type CandidateParseStatus = 'COMPLETE' | 'NEEDS_SUPPLEMENT';
+
+export interface ExistingMetricCandidate {
+  id: string;
+  sourceType: 'BI_REPORT' | 'ETL_SCRIPT' | 'DATA_WAREHOUSE';
+  sourceName: string;
+  sourceLocation: string;
+  originalName: string;
+  originalExpression: string;
+  suggestedName: string;
+  suggestedDomain: string;
+  suggestedBusinessObject: string;
+  suggestedScope: string;
+  suggestedGrain: string;
+  suggestedTime: string;
+  suggestedDefinition?: string;
+  suggestedAggregation?: 'SUM' | 'COUNT' | 'COUNT_DISTINCT' | 'AVG';
+  suggestedMeasureField?: string;
+  suggestedFilter?: string;
+  suggestedTimeField?: string;
+  suggestedTableName?: string;
+  suggestedDataAssetName?: string;
+  suggestedDimensions?: string[];
+  parseStatus: CandidateParseStatus;
+  supplementNeeds?: string[];
+}
+
+export interface MetricDraftInitialData {
+  metricName?: string;
+  businessDefinition?: string;
+  businessObject?: string;
+  scopeText?: string;
+  timeSemanticsText?: string;
+  timeGrains?: string[];
+  dimensions?: string[];
+  aggregation?: 'SUM' | 'COUNT' | 'COUNT_DISTINCT' | 'AVG';
+  measureField?: string;
+  businessRuleFilter?: string;
+  tableName?: string;
+  timeField?: string;
+  importSource?: {
+    sourceType: 'BI_REPORT' | 'ETL_SCRIPT' | 'DATA_WAREHOUSE';
+    sourceName: string;
+    sourceLocation: string;
+    originalName: string;
+    originalExpression: string;
+    parseStatus: CandidateParseStatus;
+    supplementNeeds?: string[];
+  };
 }
 
 

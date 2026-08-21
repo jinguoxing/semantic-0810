@@ -57,6 +57,7 @@ import { DataBindingDrawer } from './DataBindingDrawer';
 import { BusinessRuleDetailDrawer } from './BusinessRuleDetailDrawer';
 import { MetricDataBindingTab } from './MetricDataBindingTab';
 import { MetricOverviewTab } from './MetricOverviewTab';
+import { RuntimeMetricResolutionStudio } from './RuntimeMetricResolutionStudio';
 
 export interface MetricDetailWorkspaceProps {
   metricId?: string;
@@ -106,6 +107,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
   const [isModifyDraftModalOpen, setIsModifyDraftModalOpen] = useState<boolean>(false);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState<boolean>(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState<boolean>(false);
+  const [isRuntimeModalOpen, setIsRuntimeModalOpen] = useState<boolean>(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
   const [isDimensionDetailOpen, setIsDimensionDetailOpen] = useState<string | null>(null);
   const [isDataBindingDrawerOpen, setIsDataBindingDrawerOpen] = useState<boolean>(false);
@@ -372,7 +374,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
               </div>
             </div>
 
-            {/* 右侧操作区 (问这个指标 + 用于分析 + 发起修改 + More) */}
+            {/* 右侧操作区 (问这个指标 + 运行时解析验证 + 用于分析 + 发起修改 + More) */}
             <div className="flex items-center space-x-2.5 shrink-0 self-start pt-1">
               <button
                 type="button"
@@ -387,6 +389,16 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>问这个指标</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsRuntimeModalOpen(true)}
+                className="px-3.5 py-2 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] hover:bg-[#DBEAFE] text-xs font-bold text-[#1D4ED8] shadow-2xs flex items-center space-x-1.5 transition-colors cursor-pointer"
+                title="验证 User Question → Metric Resolution → Context Validation → Binding Resolution → Execution Plan"
+              >
+                <Cpu className="w-3.5 h-3.5 text-[#2563EB]" />
+                <span>运行时解析验证</span>
               </button>
 
               <button
@@ -516,6 +528,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                 onNavigateToVersionsTab={() => setActiveTab('evidence_versions')}
                 onOpenBusinessRuleDrawer={() => setIsBusinessRuleDrawerOpen(true)}
                 onOpenDataBindingDrawer={() => setIsDataBindingDrawerOpen(true)}
+                onOpenRuntimeResolution={() => setIsRuntimeModalOpen(true)}
                 onSelectDimension={(dimName) => setIsDimensionDetailOpen(dimName)}
                 addToast={addToast}
               />
@@ -529,6 +542,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                 metricName="有效订单金额"
                 onOpenDataBindingDrawer={() => setIsDataBindingDrawerOpen(true)}
                 onOpenBusinessRuleDrawer={() => setIsBusinessRuleDrawerOpen(true)}
+                onOpenRuntimeResolution={() => setIsRuntimeModalOpen(true)}
                 onNavigateToDataAssetDetail={onNavigateToDataAssetDetail}
                 onNavigateToVersionsTab={() => setActiveTab('evidence_versions')}
                 addToast={addToast}
@@ -855,6 +869,20 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
         ruleName="有效订单"
         addToast={addToast}
       />
+
+      {/* ========================================================= */}
+      {/* 弹窗 7: Runtime Metric Resolution Studio (运行时解析工作台) */}
+      {/* ========================================================= */}
+      {isRuntimeModalOpen && (
+        <RuntimeMetricResolutionStudio
+          isOpen={isRuntimeModalOpen}
+          onClose={() => setIsRuntimeModalOpen(false)}
+          initialMetricId={metricId}
+          initialMetricName="有效订单金额"
+          initialQuestion="查看今年华东地区各渠道有效订单金额"
+          addToast={addToast}
+        />
+      )}
 
     </div>
   );
