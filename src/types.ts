@@ -495,7 +495,7 @@ export interface PipelineStageResult {
 export interface ResolvedMetricExecution {
   resolutionId: string;
   timestamp: string;
-  status: 'READY_TO_EXECUTE' | 'BLOCKED_BY_SCOPE' | 'BLOCKED_BY_BINDING' | 'BLOCKED_BY_PERMISSION' | 'AMBIGUOUS' | 'DEGRADED';
+  status: 'READY_TO_EXECUTE' | 'BLOCKED_BY_SCOPE' | 'BLOCKED_BY_CONTEXT' | 'BLOCKED_BY_BINDING' | 'BLOCKED_BY_PERMISSION' | 'AMBIGUOUS' | 'DEGRADED';
   inputContext: MetricExecutionContext;
   metric: {
     id: string;

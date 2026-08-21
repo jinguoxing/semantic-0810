@@ -35,7 +35,6 @@ interface MetricOverviewTabProps {
   onNavigateToVersionsTab?: () => void;
   onOpenBusinessRuleDrawer?: () => void;
   onOpenDataBindingDrawer?: () => void;
-  onOpenRuntimeResolution?: () => void;
   onSelectDimension?: (dimName: string) => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
@@ -47,7 +46,6 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
   onNavigateToVersionsTab,
   onOpenBusinessRuleDrawer,
   onOpenDataBindingDrawer,
-  onOpenRuntimeResolution,
   onSelectDimension,
   addToast
 }) => {
@@ -416,27 +414,17 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
         </div>
 
         {/* AI 可用声明条带 */}
-        <div className="p-3.5 bg-[#F5F3FF] border border-[#DDD6FE] rounded-lg text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-start space-x-2.5">
-            <Sparkles className="w-4 h-4 text-[#7C3AED] shrink-0 mt-0.5" />
-            <div className="space-y-0.5 text-[#5B21B6]">
-              <div className="font-bold flex items-center space-x-2">
-                <span>✦ AI 可用已就绪</span>
-                <span className="text-[10px] font-semibold bg-white/70 px-1.5 py-0.2 rounded text-[#6D28D9]">语义完整度 100%</span>
-              </div>
-              <div className="text-[11px] text-[#6D28D9] leading-relaxed">
-                当前指标语义结构完整、数据映射明确、拓扑路径安全，Semovix AI 可安全用于找数、问数、归因分析及多维下钻。
-              </div>
+        <div className="p-3 bg-[#F5F3FF] border border-[#DDD6FE] rounded-lg text-xs flex items-start space-x-2.5">
+          <Sparkles className="w-4 h-4 text-[#7C3AED] shrink-0 mt-0.5" />
+          <div className="space-y-0.5 text-[#5B21B6]">
+            <div className="font-bold flex items-center space-x-2">
+              <span>✦ AI 可用已就绪</span>
+              <span className="text-[10px] font-semibold bg-white/70 px-1.5 py-0.2 rounded text-[#6D28D9]">语义完整度 100%</span>
+            </div>
+            <div className="text-[11px] text-[#6D28D9] leading-relaxed">
+              当前指标语义结构完整、数据映射明确、拓扑路径安全，Semovix AI 可安全用于找数、问数、归因分析及多维下钻。
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onOpenRuntimeResolution}
-            className="px-3 py-1.5 rounded-lg bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold shrink-0 transition-colors shadow-2xs flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>验证运行时解析 →</span>
-          </button>
         </div>
       </section>
 

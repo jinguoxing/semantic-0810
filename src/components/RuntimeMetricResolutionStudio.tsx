@@ -46,30 +46,44 @@ const PRESET_TEST_CASES = [
   {
     id: 'case_01',
     title: '查看今年华东地区各渠道有效订单金额',
-    tag: '电商全链路 · 多跳关系路径',
+    tag: 'READY_TO_EXECUTE · 全链路就绪',
     query: '查看今年华东地区各渠道有效订单金额',
-    desc: '覆盖直接维度、跨表安全关系维度、连续流时态对齐与业务规则强过滤'
+    desc: '全项通过：标准指标、合法业务范围、安全拓扑维度、健康物理绑定与合法权限'
   },
   {
     id: 'case_02',
-    title: '分析去年各街镇老龄化率与老年人口分布',
-    tag: '人口治理 · 快照时态',
-    query: '分析去年各街镇老龄化率与老年人口分布',
-    desc: '人口自然人主体、行政区划直接映射、统计日期快照语义'
+    title: '跨业务域查询未授权范围订单数据',
+    tag: 'BLOCKED_BY_SCOPE · 范围不匹配',
+    query: '跨业务域查询未授权范围订单数据',
+    desc: '阻断模拟：业务范围跨域超出指标定义范围，触发 BLOCKED_BY_SCOPE'
   },
   {
     id: 'case_03',
-    title: '统计上个月工单投诉率 (模拟绑定异常检测)',
-    tag: '异常检测 · 阻断预警',
-    query: '统计上个月工单投诉率',
-    desc: '物理字段变更触发运行时 BLOCKED_BY_BINDING 阻断与修复指引'
+    title: '按天气运势和宇宙能量统计有效订单',
+    tag: 'BLOCKED_BY_CONTEXT · 维度非法',
+    query: '按天气运势和宇宙能量统计本月有效订单',
+    desc: '阻断模拟：请求维度在语义拓扑中不存在映射路径，触发 BLOCKED_BY_CONTEXT'
   },
   {
     id: 'case_04',
-    title: '按商品分类和支付方式统计本月营收',
-    tag: '多维聚合 · 直接映射',
-    query: '按商品分类和支付方式统计本月营收',
-    desc: '多维度组合聚合、按日分桶截断、100% 完整度就绪'
+    title: '统计上个月工单投诉率 (底层字段变更)',
+    tag: 'BLOCKED_BY_BINDING · 物理绑定异常',
+    query: '统计上个月工单投诉率',
+    desc: '阻断模拟：物理字段变更（ticket_type 改名），触发 BLOCKED_BY_BINDING'
+  },
+  {
+    id: 'case_05',
+    title: '未授权用户匿名查询核心交易数据',
+    tag: 'BLOCKED_BY_PERMISSION · 权限未授权',
+    query: '未授权用户匿名查询核心交易订单金额',
+    desc: '阻断模拟：当前用户缺少资产访问审批权限，触发 BLOCKED_BY_PERMISSION'
+  },
+  {
+    id: 'case_06',
+    title: '模糊查询未知名词概念数据',
+    tag: 'AMBIGUOUS · 指标歧义',
+    query: '模糊查询一些未知名词概念数据',
+    desc: '阻断模拟：提问未唯一定位到已发布的标准指标定义，触发 AMBIGUOUS'
   }
 ];
 
@@ -340,10 +354,18 @@ export const RuntimeMetricResolutionStudio: React.FC<RuntimeMetricResolutionStud
 
             {/* Resolution Status Indicator */}
             <div className="flex items-center space-x-2 text-xs">
-              <span className="text-[#64748B] font-medium">解析结果：</span>
+              <span className="text-[#64748B] font-medium">契约状态：</span>
               <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${
                 resolutionResult.status === 'READY_TO_EXECUTE'
                   ? 'bg-[#DCFCE7] text-[#166534] border border-[#BBF7D0]'
+                  : resolutionResult.status === 'AMBIGUOUS'
+                  ? 'bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]'
+                  : resolutionResult.status === 'BLOCKED_BY_SCOPE'
+                  ? 'bg-[#F3E8FF] text-[#6B21A8] border border-[#E9D5FF]'
+                  : resolutionResult.status === 'BLOCKED_BY_CONTEXT'
+                  ? 'bg-[#FFEDD5] text-[#9A3412] border border-[#FED7AA]'
+                  : resolutionResult.status === 'BLOCKED_BY_PERMISSION'
+                  ? 'bg-[#FFE4E6] text-[#9F1239] border border-[#FECDD3]'
                   : 'bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]'
               }`}>
                 {resolutionResult.status === 'READY_TO_EXECUTE' ? (
@@ -351,10 +373,30 @@ export const RuntimeMetricResolutionStudio: React.FC<RuntimeMetricResolutionStud
                     <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-[#16A36A]" />
                     READY_TO_EXECUTE (就绪可执行)
                   </>
+                ) : resolutionResult.status === 'AMBIGUOUS' ? (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 mr-1 text-[#D97706]" />
+                    AMBIGUOUS (指标意图歧义)
+                  </>
+                ) : resolutionResult.status === 'BLOCKED_BY_SCOPE' ? (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 mr-1 text-[#9333EA]" />
+                    BLOCKED_BY_SCOPE (业务范围不匹配)
+                  </>
+                ) : resolutionResult.status === 'BLOCKED_BY_CONTEXT' ? (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 mr-1 text-[#EA580C]" />
+                    BLOCKED_BY_CONTEXT (维度/时态不合法)
+                  </>
+                ) : resolutionResult.status === 'BLOCKED_BY_PERMISSION' ? (
+                  <>
+                    <AlertTriangle className="w-3.5 h-3.5 mr-1 text-[#E11D48]" />
+                    BLOCKED_BY_PERMISSION (数据权限不足)
+                  </>
                 ) : (
                   <>
                     <AlertTriangle className="w-3.5 h-3.5 mr-1 text-[#DC2626]" />
-                    {resolutionResult.status} (已阻断)
+                    BLOCKED_BY_BINDING (物理绑定异常)
                   </>
                 )}
               </span>
@@ -686,16 +728,25 @@ export const RuntimeMetricResolutionStudio: React.FC<RuntimeMetricResolutionStud
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
                       <span className="text-[11px] font-bold text-[#64748B]">访问权限校验结果</span>
-                      <div className="font-bold text-[#16A36A] flex items-center space-x-1">
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>调用者权限充足 (L3_INTERNAL_ANALYST)</span>
-                      </div>
+                      {resolutionResult.permissionRequirements.hasAccess ? (
+                        <div className="font-bold text-[#16A36A] flex items-center space-x-1">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>权限校验通过 ({resolutionResult.permissionRequirements.userPermissionLevel})</span>
+                        </div>
+                      ) : (
+                        <div className="font-bold text-[#DC2626] flex items-center space-x-1">
+                          <AlertTriangle className="w-4 h-4" />
+                          <span>权限拦截 ({resolutionResult.permissionRequirements.userPermissionLevel})</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
                       <span className="text-[11px] font-bold text-[#64748B]">动态字段掩码脱敏</span>
                       <div className="font-mono text-xs text-[#0F172A]">
-                        {resolutionResult.permissionRequirements.maskedFields.join(', ')}
+                        {resolutionResult.permissionRequirements.maskedFields.length > 0
+                          ? resolutionResult.permissionRequirements.maskedFields.join(', ')
+                          : '无敏感字段脱敏'}
                       </div>
                     </div>
                   </div>

@@ -24,7 +24,6 @@ interface MetricDataBindingTabProps {
   metricName?: string;
   onOpenDataBindingDrawer?: () => void;
   onOpenBusinessRuleDrawer?: () => void;
-  onOpenRuntimeResolution?: () => void;
   onNavigateToDataAssetDetail?: (assetId: string) => void;
   onNavigateToVersionsTab?: () => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
@@ -34,7 +33,6 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
   metricName = '有效订单金额',
   onOpenDataBindingDrawer,
   onOpenBusinessRuleDrawer,
-  onOpenRuntimeResolution,
   onNavigateToDataAssetDetail,
   onNavigateToVersionsTab,
   addToast
@@ -475,25 +473,14 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
         </div>
 
         {/* 浅绿色通栏说明条 */}
-        <div className="p-3.5 bg-[#F0FDF4] border border-[#DCFCE7] rounded-lg text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-start space-x-2.5">
-            <CheckCircle2 className="w-4 h-4 text-[#16A36A] shrink-0 mt-0.5" />
-            <div className="space-y-0.5 text-[#166534]">
-              <div className="font-bold">当前数据实现正常</div>
-              <div className="text-[11px] text-[#15803D] leading-relaxed">
-                当前 Metric 可以继续用于找数、问数和分析；具体查询会根据 Scope、维度、时间与权限进行端到端运行时解析与安全 SQL 编译。
-              </div>
+        <div className="p-3 bg-[#F0FDF4] border border-[#DCFCE7] rounded-lg text-xs flex items-start space-x-2.5">
+          <CheckCircle2 className="w-4 h-4 text-[#16A36A] shrink-0 mt-0.5" />
+          <div className="space-y-0.5 text-[#166534]">
+            <div className="font-bold">当前数据实现正常</div>
+            <div className="text-[11px] text-[#15803D] leading-relaxed">
+              当前 Metric 可以继续用于找数、问数和分析；具体查询仍会根据 Scope、维度、时间和权限进行运行时验证。
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={onOpenRuntimeResolution}
-            className="px-3.5 py-1.5 rounded-lg bg-[#16A36A] hover:bg-[#15803D] text-white text-xs font-bold shrink-0 transition-colors shadow-2xs flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>执行运行时解析测试 →</span>
-          </button>
         </div>
 
         {/* 底部轻量链接 */}
