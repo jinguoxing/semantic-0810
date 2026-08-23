@@ -38,6 +38,7 @@ import { StandardCheckWorkspace } from './components/StandardCheckWorkspace';
 import { StandardCheckIssueDetailWorkspace } from './components/StandardCheckIssueDetailWorkspace';
 import { StandardDetailWorkspace } from './components/StandardDetailWorkspace';
 import { MetricRegistryWorkspace } from './components/MetricRegistryWorkspace';
+import { metricRegistryService } from './data/metricRegistryData';
 import { MetricAuthoringWorkspace } from './components/MetricAuthoringWorkspace';
 import { MetricDetailWorkspace } from './components/MetricDetailWorkspace';
 import { BusinessObjectDetailWorkspace } from './components/BusinessObjectDetailWorkspace';
@@ -52,17 +53,20 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { AccessProvider } from './domain/access/access.store';
 import type { SolutionExecutionContext } from './domain/access/access.types';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
-import { FieldItem, CompleteFieldGovernanceData } from './types';
+import { FieldItem, CompleteFieldGovernanceData, MetricDraftInitialData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace_resources');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace_resources');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace_resources');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace_resources');
+  const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
+  const [authoringInitialDraft, setAuthoringInitialDraft] = useState<MetricDraftInitialData | undefined>(undefined);
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
   // Facet entry from Discover — BROWSE with a pre-applied type/domain/object
   // filter; cleared on every text-query entry (query wins the mode in REW).
   const [resourceBrowseFilters, setResourceBrowseFilters] = useState<BrowseEntryFilters | undefined>(undefined);
   const [assetDetailContext, setAssetDetailContext] = useState<{ assetId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ assetId: 'res-02', fromGoalSearch: false, goalQuery: '' });
   const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'res-03', fromGoalSearch: false, goalQuery: '' });
+  const [selectedChangeMetricId, setSelectedChangeMetricId] = useState<string>('met_001');
   const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_person', fromGoalSearch: false, goalQuery: '' });
   const [apiDetailContext, setApiDetailContext] = useState<{ apiId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ apiId: 'res-04', fromGoalSearch: false, goalQuery: '' });
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
@@ -651,6 +655,11 @@ export default function App() {
           metricId={metricDetailContext.metricId}
           fromGoalSearch={metricDetailContext.fromGoalSearch}
           goalQuery={metricDetailContext.goalQuery}
+          onBackToRegistry={() => {
+            setCurrentNav('metrics');
+            setViewTab('metrics');
+            addToast('info', '指标列表', '已返回 Metric Registry 统一指标管理视图');
+          }}
           onBackToResources={() => {
             setCurrentNav('marketplace_resources');
             setViewTab('marketplace_resources');
@@ -678,6 +687,21 @@ export default function App() {
             setViewTab('business_object_detail');
             addToast('info', '业务对象详情', '已载入「自然人」正式业务对象详情');
           }}
+          onNavigateToDataAssets={() => {
+            setCurrentNav('assets');
+            setViewTab('assets');
+            addToast('info', '数据资产目录', '已切换至企业数据资产全景目录');
+          }}
+          onNavigateToDataStandards={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+            addToast('info', '数据标准', '已切换至数据标准与值域列表');
+          }}
+          onNavigateToHome={() => {
+            setCurrentNav('home');
+            setViewTab('home');
+            addToast('info', 'AI 工作台', '已进入 Xino AI 协同工作台');
+          }}
           onNavigateToApiDetail={(apiId) => {
             setApiDetailContext({ apiId: apiId || 'res-04', fromGoalSearch: false, goalQuery: '' });
             setCurrentNav('api_detail');
@@ -696,7 +720,63 @@ export default function App() {
             setViewTab('marketplace_resources');
             addToast('info', '围绕此指标找数据', `已在资源超市中筛选与「${metricName}」相关的指标与数据集`);
           }}
+          onNavigateToModifyDraft={(metricId) => {
+            const effId = metricId || metricDetailContext.metricId || 'met_001';
+            setSelectedChangeMetricId(effId);
+            const foundMetric = metricRegistryService.getMetricById(effId) || 
+                                (effId === 'res-03' ? metricRegistryService.getMetricById('met_001') : null);
+            const metricName = foundMetric ? foundMetric.name : '指标';
+            setCurrentNav('metric_change_draft');
+            setViewTab('metric_change_draft');
+            addToast('info', '修改指标', `已进入「${metricName}」修改草稿（Change Mode）`);
+          }}
           addToast={addToast}
+        />
+      ) : currentNav === 'metric_change_draft' || viewTab === 'metric_change_draft' ? (
+        <MetricAuthoringWorkspace
+          initialMode="change_draft"
+          targetMetricId={selectedChangeMetricId}
+          addToast={addToast}
+          onNavigateToMetricDetail={(metricId) => {
+            setMetricDetailContext({ metricId: metricId || selectedChangeMetricId, fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('metric_detail');
+            setViewTab('metric_detail');
+          }}
+          onBackToRegistry={() => {
+            setCurrentNav('metrics');
+            setViewTab('metrics');
+            addToast('info', '返回指标注册表', '已返回 Metric Registry 统一指标管理视图');
+          }}
+          onNavigateToBusinessObject={() => {
+            setCurrentNav('governance');
+            setViewTab('discovery');
+            addToast('info', '业务对象工作台', '已切换至业务对象发现与建模视图');
+          }}
+          onNavigateToDataStandards={() => {
+            setCurrentNav('data_standards');
+            setViewTab('data_standards');
+            addToast('info', '数据标准目录', '已切换至数据标准与值域列表');
+          }}
+          onNavigateToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '数据语义工作台', '已切换至数据语义队列工作台');
+          }}
+          onNavigateToDataAssets={() => {
+            setCurrentNav('assets');
+            setViewTab('assets');
+            addToast('info', '数据资产目录', '已切换至企业数据资产全景目录');
+          }}
+          onNavigateToMarketplace={() => {
+            setCurrentNav('marketplace');
+            setViewTab('marketplace');
+            addToast('info', '服务超市', '已进入数据服务超市 · 发现首页');
+          }}
+          onNavigateToHome={() => {
+            setCurrentNav('home');
+            setViewTab('home');
+            addToast('info', 'AI 工作台', '已进入 Xino AI 协同工作台');
+          }}
         />
       ) : currentNav === 'marketplace' || viewTab === 'marketplace' ? (
         <DataServiceMarketplaceWorkspace
@@ -761,6 +841,8 @@ export default function App() {
         />
       ) : currentNav === 'create_metric' || viewTab === 'create_metric' ? (
         <MetricAuthoringWorkspace
+          initialMode={authoringMode}
+          initialDraftData={authoringInitialDraft}
           addToast={addToast}
           onBackToRegistry={() => {
             setCurrentNav('metrics');
@@ -801,10 +883,33 @@ export default function App() {
       ) : currentNav === 'metrics' || viewTab === 'metrics' ? (
         <MetricRegistryWorkspace
           addToast={addToast}
-          onNavigateToCreateMetric={() => {
+          onNavigateToMetricDetail={(metricId) => {
+            setMetricDetailContext({ metricId: metricId || 'res-03', fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('metric_detail');
+            setViewTab('metric_detail');
+            addToast('info', '指标详情', '已载入「老年人口数」正式指标事实详情页');
+          }}
+          onNavigateToCreateMetric={(mode, draftData, targetMetricId) => {
+            if (mode === 'change_draft') {
+              const effId = targetMetricId || 'met_001';
+              setSelectedChangeMetricId(effId);
+              const foundMetric = metricRegistryService.getMetricById(effId) || 
+                                  (effId === 'res-03' ? metricRegistryService.getMetricById('met_001') : null);
+              const metricName = foundMetric ? foundMetric.name : '指标';
+              setCurrentNav('metric_change_draft');
+              setViewTab('metric_change_draft');
+              addToast('info', '修改指标', `已进入「${metricName}」修改草稿（Change Mode）`);
+              return;
+            }
+            setAuthoringMode(mode || 'ai_prompt');
+            setAuthoringInitialDraft(draftData);
             setCurrentNav('create_metric');
             setViewTab('create_metric');
-            addToast('info', '创建指标', '已进入 Metric Authoring Workspace 创建老龄化率指标草稿');
+            if (mode === 'imported_draft' && draftData) {
+              addToast('info', '存量指标导入', `已载入「${draftData.metricName}」存量解析草稿空间`);
+            } else {
+              addToast('info', '创建指标', '已进入 AI 引导式指标创建工作台');
+            }
           }}
           onNavigateToBusinessObject={() => {
             setCurrentNav('governance');

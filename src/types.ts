@@ -198,5 +198,394 @@ export interface DataAssetItem {
   updatedAt: string;
 }
 
+// ==========================================
+// Semovix AI Native Metric V1.2 Domain Models
+// ==========================================
+
+export interface MetricScope {
+  businessDomain?: string;
+  organization?: string;
+  geography?: string;
+  scenario?: string;
+  entityScope?: string;
+}
+
+export interface MetricMeasurement {
+  measureName: string;
+  aggregation: "SUM" | "COUNT" | "COUNT_DISTINCT" | "AVG";
+  baseGrain: string;
+  unit?: string;
+  formula?: string;
+}
+
+export interface MetricTimeSemantics {
+  type: "POINT_IN_TIME" | "SNAPSHOT" | "PERIOD" | "FLOW" | "CUMULATIVE";
+  businessTime: string;
+  defaultGranularity: "DAY" | "MONTH" | "QUARTER" | "YEAR";
+  supportedGranularities?: Array<"DAY" | "MONTH" | "QUARTER" | "YEAR">;
+}
+
+export type MetricStatus = "DRAFT" | "EFFECTIVE" | "DEPRECATED";
+export type MetricValidationStatus = "PASS" | "UNVERIFIED" | "FAIL";
+export type MetricAIReadiness = "READY" | "DEGRADED" | "NOT_READY";
+
+export interface MetricDependencyCompatibility {
+  scope: boolean;
+  grain: boolean;
+  time: boolean;
+  dimension: boolean;
+  version: boolean;
+}
+
+export interface MetricDependency {
+  metricId: string;
+  metricName?: string;
+  role: "NUMERATOR" | "DENOMINATOR" | "COMPONENT";
+  version: string;
+  status?: MetricStatus;
+  compatibility?: MetricDependencyCompatibility;
+}
+
+export interface MetricProvenance {
+  source: "AI_AUTHORING" | "IMPORT" | "MANUAL";
+  owner: string;
+  evidence: string[];
+}
+
+export interface GrainMapping {
+  businessObject: string;
+  physicalGrainField: string;
+  matchStatus: "VALID" | "UNMATCHED";
+}
+
+export type RelationshipCardinality = "1:1" | "N:1" | "1:N" | "N:N";
+export type RelationshipPathValidationStatus = "SAFE" | "UNVERIFIED" | "UNSAFE";
+
+export interface DimensionRelationshipPath {
+  sourceObject: string;
+  cardinality: RelationshipCardinality;
+  targetObject: string;
+  dimensionName: string;
+  validationStatus: RelationshipPathValidationStatus;
+}
+
+export type MetricBindingHealth = "HEALTHY" | "DEGRADED" | "INVALID";
+
+export interface MetricBinding {
+  dataAssetId: string;
+  dataAssetName: string;
+  tableName: string;
+  measureField: string;
+  businessRuleFilter?: string;
+  timeField: string;
+  grainMapping: GrainMapping;
+  dimensionPaths: DimensionRelationshipPath[];
+  bindingVersion: string;
+  health: MetricBindingHealth;
+}
+
+export interface Metric {
+  id: string;
+  name: string;
+  enName?: string;
+  definition: string;
+
+  // Business Meaning
+  businessObject: string;
+
+  // Applicable Context
+  scope: MetricScope;
+
+  // Measurement
+  measurement: MetricMeasurement;
+
+  // Time
+  timeSemantics: MetricTimeSemantics;
+
+  // Analysis
+  dimensions: string[];
+
+  // Dependencies
+  dependencies?: MetricDependency[];
+
+  // Execution
+  binding?: MetricBinding;
+
+  // Trust
+  provenance?: MetricProvenance;
+
+  // Lifecycle
+  status: MetricStatus;
+  validationStatus?: MetricValidationStatus;
+  aiReadiness?: MetricAIReadiness;
+  version: string;
+  changeReason?: string;
+}
+
+export type MetricPendingActionType =
+  | 'BINDING_ISSUE'
+  | 'CONFLICT'
+  | 'CONTEXT_VARIANT'
+  | 'MISSING_MEANING'
+  | 'HIGH_IMPACT_CHANGE';
+
+export interface MetricRegistryRowVM {
+  id: string;
+  name: string;
+  enName: string;
+  domain: string;
+  scopeSummary?: string;
+  definition: string;
+  businessObject: string;
+  calculationSummary: string;
+  timeSemantics: string;
+  validationStatus: MetricValidationStatus;
+  validationMessage?: string;
+  status: MetricStatus;
+  bindingHealth?: MetricBindingHealth;
+  aiReadiness: MetricAIReadiness;
+  owner: string;
+  dimensionCount: number;
+  pendingActionType?: MetricPendingActionType;
+  pendingActionDesc?: string;
+  originalMetric: Metric;
+}
+
+// Runtime Resolution Contract (Step 11 & Complete Runtime Pipeline)
+export interface MetricExecutionContext {
+  metricId?: string;
+  metricName?: string;
+  metricVersion?: string;
+  question?: string;
+  scope?: MetricScope;
+  dimensions?: string[];
+  timeContext?: {
+    timeGrain?: "DAY" | "MONTH" | "QUARTER" | "YEAR";
+    startDate?: string;
+    endDate?: string;
+    relativePeriod?: string;
+  };
+  filters?: Array<{
+    field: string;
+    operator: "=" | "!=" | ">" | "<" | ">=" | "<=" | "IN" | "LIKE";
+    value: any;
+    label?: string;
+  }>;
+  callerContext?: {
+    userId: string;
+    userRole: string;
+    department: string;
+    hasApproval: boolean;
+    allowedScopes?: string[];
+  };
+}
+
+export interface ValidatedDimension {
+  name: string;
+  attr: string;
+  isValid: boolean;
+  pathType: 'DIRECT' | 'RELATIONSHIP' | 'INVALID';
+  sourceField: string;
+  sourceTable: string;
+  targetTable?: string;
+  joinCondition?: string;
+  relationshipPath?: string[];
+  securityStatus: 'SAFE' | 'BLOCKED_BY_POLICY' | 'RESTRICTED';
+  reason?: string;
+}
+
+export interface ResolvedTimeMapping {
+  timeSemanticType: 'FLOW' | 'POINT_IN_TIME' | 'INTERVAL';
+  timeColumn: string;
+  timeColumnComment: string;
+  requestedGrain: 'DAY' | 'MONTH' | 'QUARTER' | 'YEAR';
+  relativePeriodText?: string;
+  startDate?: string;
+  endDate?: string;
+  truncSqlExpression: string;
+  timeFilterExpression: string;
+  isAligned: boolean;
+}
+
+export interface ResolvedBinding {
+  status: 'HEALTHY' | 'BROKEN' | 'MISSING' | 'PERMISSION_REQUIRED';
+  dataAssetId: string;
+  dataAssetName: string;
+  tableName: string;
+  sourceSystem: string;
+  baseGrain: string;
+  measureField: string;
+  measureFieldType: string;
+  aggregation: 'SUM' | 'COUNT' | 'COUNT_DISTINCT' | 'AVG';
+  businessRuleFilter: string;
+  ruleSummary: string;
+}
+
+export interface ResolvedFilters {
+  combinedFilterClause: string;
+  businessRuleFilters: Array<{
+    expression: string;
+    description: string;
+    mandatory: boolean;
+  }>;
+  userContextFilters: Array<{
+    field: string;
+    operator: string;
+    value: any;
+    label?: string;
+  }>;
+  securityRowLevelFilters: Array<{
+    expression: string;
+    reason: string;
+  }>;
+}
+
+export interface PermissionRequirements {
+  hasAccess: boolean;
+  requiredAssetIds: string[];
+  requiredSensitivityLevel: 'L1_PUBLIC' | 'L2_INTERNAL' | 'L3_RESTRICTED' | 'L4_CONFIDENTIAL';
+  userPermissionLevel: string;
+  requiresApproval: boolean;
+  maskedFields: string[];
+  auditLogRequired: boolean;
+}
+
+export interface ExecutionPlanStep {
+  stepNumber: number;
+  title: string;
+  operation: string;
+  detail: string;
+  targetEngine?: string;
+}
+
+export interface ExecutionPlan {
+  executionEngine: 'PRESTO_TRINO' | 'CLICKHOUSE' | 'SPARK_SQL' | 'POSTGRESQL';
+  grainLevel: string;
+  steps: ExecutionPlanStep[];
+  generatedSql: string;
+  safetyGuarantees: string[];
+  estimatedCost: {
+    rowsScanned: string;
+    latencyEstimate: string;
+    cacheHit: boolean;
+  };
+}
+
+export interface EvidenceRefs {
+  ruleStandardDoc: string;
+  dataGovernanceSpec: string;
+  activeVersionLineage: string;
+  confirmedBy: string;
+  confirmedAt: string;
+  currentEffectiveVersion: string;
+}
+
+export interface PipelineStageResult {
+  stageId: 'INTENT' | 'METRIC_RESOLUTION' | 'DEPENDENCY_RESOLUTION' | 'CONTEXT_VALIDATION' | 'BINDING_RESOLUTION' | 'EXECUTION_PLAN';
+  stageName: string;
+  status: 'PASSED' | 'WARNING' | 'FAILED';
+  durationMs: number;
+  summary: string;
+  details?: Record<string, any>;
+}
+
+export interface ResolvedDependencyExecution {
+  metricId: string;
+  metricName: string;
+  role: "NUMERATOR" | "DENOMINATOR" | "COMPONENT";
+  version: string;
+  targetMetric?: Metric;
+  compatibility: MetricDependencyCompatibility;
+  isCompatible: boolean;
+  subqueryAlias: string;
+  measureExpression: string;
+  filterExpression?: string;
+}
+
+export interface ResolvedMetricExecution {
+  resolutionId: string;
+  timestamp: string;
+  status: 'READY_TO_EXECUTE' | 'BLOCKED_BY_SCOPE' | 'BLOCKED_BY_CONTEXT' | 'BLOCKED_BY_BINDING' | 'BLOCKED_BY_PERMISSION' | 'AMBIGUOUS' | 'DEGRADED';
+  inputContext: MetricExecutionContext;
+  metric: {
+    id: string;
+    name: string;
+    enName: string;
+    domain: string;
+    businessObject: string;
+    definition: string;
+  };
+  isComposite?: boolean;
+  compositionFormula?: string;
+  dependenciesExecution?: ResolvedDependencyExecution[];
+  resolvedVersion: string;
+  resolvedBinding: ResolvedBinding;
+  validatedDimensions: ValidatedDimension[];
+  resolvedTimeMapping: ResolvedTimeMapping;
+  resolvedFilters: ResolvedFilters;
+  permissionRequirements: PermissionRequirements;
+  executionPlan: ExecutionPlan;
+  evidenceRefs: EvidenceRefs;
+  pipelineStages: PipelineStageResult[];
+  diagnostics: Array<{
+    level: 'INFO' | 'WARNING' | 'ERROR';
+    code: string;
+    message: string;
+    remediation?: string;
+  }>;
+}
+
+export type CandidateParseStatus = 'COMPLETE' | 'NEEDS_SUPPLEMENT';
+
+export interface ExistingMetricCandidate {
+  id: string;
+  sourceType: 'BI_REPORT' | 'ETL_SCRIPT' | 'DATA_WAREHOUSE';
+  sourceName: string;
+  sourceLocation: string;
+  originalName: string;
+  originalExpression: string;
+  suggestedName: string;
+  suggestedDomain: string;
+  suggestedBusinessObject: string;
+  suggestedScope: string;
+  suggestedGrain: string;
+  suggestedTime: string;
+  suggestedDefinition?: string;
+  suggestedAggregation?: 'SUM' | 'COUNT' | 'COUNT_DISTINCT' | 'AVG';
+  suggestedMeasureField?: string;
+  suggestedFilter?: string;
+  suggestedTimeField?: string;
+  suggestedTableName?: string;
+  suggestedDataAssetName?: string;
+  suggestedDimensions?: string[];
+  parseStatus: CandidateParseStatus;
+  supplementNeeds?: string[];
+}
+
+export interface MetricDraftInitialData {
+  metricName?: string;
+  businessDefinition?: string;
+  businessObject?: string;
+  scopeText?: string;
+  timeSemanticsText?: string;
+  timeGrains?: string[];
+  dimensions?: string[];
+  aggregation?: 'SUM' | 'COUNT' | 'COUNT_DISTINCT' | 'AVG';
+  measureField?: string;
+  businessRuleFilter?: string;
+  tableName?: string;
+  timeField?: string;
+  importSource?: {
+    sourceType: 'BI_REPORT' | 'ETL_SCRIPT' | 'DATA_WAREHOUSE';
+    sourceName: string;
+    sourceLocation: string;
+    originalName: string;
+    originalExpression: string;
+    parseStatus: CandidateParseStatus;
+    supplementNeeds?: string[];
+  };
+}
+
+
 
 
