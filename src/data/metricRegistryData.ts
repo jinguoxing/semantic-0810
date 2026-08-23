@@ -59,7 +59,7 @@ export const CANONICAL_DOMAIN_METRICS: Metric[] = [
     id: 'met_001',
     name: '老龄化率',
     enName: 'Aging Ratio',
-    definition: '60岁及以上常住人口占全部常住人口的比例，用于衡量区域人口老龄化程度与公共养老服务资源承载力。',
+    definition: '60岁及以上常住人口占全部常住人口的比例（老年人口数 ÷ 常住人口数 × 100%），用于衡量区域人口老龄化程度与公共养老服务资源承载力。',
     businessObject: '自然人',
     scope: {
       businessDomain: '人口服务',
@@ -79,11 +79,91 @@ export const CANONICAL_DOMAIN_METRICS: Metric[] = [
       defaultGranularity: 'MONTH',
     },
     dimensions: ['行政区划', '户籍类型', '年龄段', '性别', '居住社区'],
+    dependencies: [
+      {
+        metricId: 'met_elderly_population',
+        metricName: '老年人口数',
+        role: 'NUMERATOR',
+        version: 'v1.1.0',
+        status: 'EFFECTIVE',
+        compatibility: {
+          scope: true,
+          grain: true,
+          time: true,
+          dimension: true,
+          version: true,
+        },
+      },
+      {
+        metricId: 'met_resident_population',
+        metricName: '常住人口数',
+        role: 'DENOMINATOR',
+        version: 'v1.1.0',
+        status: 'EFFECTIVE',
+        compatibility: {
+          scope: true,
+          grain: true,
+          time: true,
+          dimension: true,
+          version: true,
+        },
+      },
+    ],
     binding: {
       dataAssetId: 'asset_pop_01',
       dataAssetName: '全员常住人口基础信息表',
       tableName: 'dwd_pop_resident_base_df',
-      measureField: 'age',
+      measureField: 'citizen_id',
+      businessRuleFilter: 'resident_status = 1',
+      timeField: 'stat_date',
+      grainMapping: {
+        businessObject: '自然人',
+        physicalGrainField: 'citizen_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.1.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '人口管理处',
+      evidence: ['七普数据标准口径', '复合衍生指标计算规范'],
+    },
+    status: 'EFFECTIVE',
+    validationStatus: 'PASS',
+    aiReadiness: 'READY',
+    version: 'v1.1.0',
+  },
+  {
+    id: 'met_elderly_population',
+    name: '老年人口数',
+    enName: 'Elderly Population',
+    definition: '统计周期内在辖区内居住满半年且年龄达到或超过60周岁的常住人口总数。',
+    businessObject: '自然人',
+    scope: {
+      businessDomain: '人口服务',
+      organization: '民政与人口发展处',
+      scenario: '老龄化态势监测',
+      entityScope: '常住人口 60 岁及以上群体',
+    },
+    measurement: {
+      measureName: 'elderly_pop_count',
+      aggregation: 'COUNT_DISTINCT',
+      baseGrain: '自然人',
+      unit: '人',
+    },
+    timeSemantics: {
+      type: 'SNAPSHOT',
+      businessTime: '统计日期',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['行政区划', '户籍类型', '年龄段', '性别', '居住社区'],
+    binding: {
+      dataAssetId: 'asset_pop_01',
+      dataAssetName: '全员常住人口基础信息表',
+      tableName: 'dwd_pop_resident_base_df',
+      measureField: 'citizen_id',
       businessRuleFilter: 'resident_status = 1 AND age >= 60',
       timeField: 'stat_date',
       grainMapping: {
@@ -98,7 +178,57 @@ export const CANONICAL_DOMAIN_METRICS: Metric[] = [
     provenance: {
       source: 'AI_AUTHORING',
       owner: '人口管理处',
-      evidence: ['七普数据标准口径'],
+      evidence: ['七普老龄化统计标准'],
+    },
+    status: 'EFFECTIVE',
+    validationStatus: 'PASS',
+    aiReadiness: 'READY',
+    version: 'v1.1.0',
+  },
+  {
+    id: 'met_resident_population',
+    name: '常住人口数',
+    enName: 'Resident Population',
+    definition: '统计周期内在辖区内实际居住满半年及以上的全部人口总数，作为人口资源承载力基数。',
+    businessObject: '自然人',
+    scope: {
+      businessDomain: '人口服务',
+      organization: '民政与人口发展处',
+      scenario: '人口底数摸排',
+      entityScope: '常住人口全量基数',
+    },
+    measurement: {
+      measureName: 'resident_pop_count',
+      aggregation: 'COUNT_DISTINCT',
+      baseGrain: '自然人',
+      unit: '人',
+    },
+    timeSemantics: {
+      type: 'SNAPSHOT',
+      businessTime: '统计日期',
+      defaultGranularity: 'MONTH',
+    },
+    dimensions: ['行政区划', '户籍类型', '年龄段', '性别', '居住社区'],
+    binding: {
+      dataAssetId: 'asset_pop_01',
+      dataAssetName: '全员常住人口基础信息表',
+      tableName: 'dwd_pop_resident_base_df',
+      measureField: 'citizen_id',
+      businessRuleFilter: 'resident_status = 1',
+      timeField: 'stat_date',
+      grainMapping: {
+        businessObject: '自然人',
+        physicalGrainField: 'citizen_id',
+        matchStatus: 'VALID',
+      },
+      dimensionPaths: [],
+      bindingVersion: 'v1.1.0',
+      health: 'HEALTHY',
+    },
+    provenance: {
+      source: 'AI_AUTHORING',
+      owner: '人口管理处',
+      evidence: ['七普常住人口口径'],
     },
     status: 'EFFECTIVE',
     validationStatus: 'PASS',
@@ -546,7 +676,7 @@ export const CANONICAL_DOMAIN_METRICS: Metric[] = [
     status: 'EFFECTIVE',
     validationStatus: 'PASS',
     aiReadiness: 'DEGRADED',
-    changeReason: '华东大区与总部存在 2 个场景派生口径差异，建议收敛合并。',
+    changeReason: '大区与总部存在不同业务场景口径，请确认是否按 Applicable Scope 区分并明确命名。',
     version: 'v1.0.0',
   },
   {
@@ -667,8 +797,14 @@ export const metricRegistryService = {
     if (exactNameMatch) return exactNameMatch;
 
     // 2. Semantic Intent Key Phrases (Mapped directly to registry IDs)
-    if (q.includes('老龄化') || q.includes('老年人口') || q.includes('老人') || q.includes('养老')) {
-      return this.getMetricById('met_001'); // 老龄化率
+    if (q.includes('老龄化率') || q.includes('老龄化') || q.includes('养老比例')) {
+      return this.getMetricById('met_001'); // 老龄化率 (复合指标)
+    }
+    if (q.includes('老年人口') || q.includes('老人总数') || q.includes('60岁以上人口')) {
+      return this.getMetricById('met_elderly_population'); // 老年人口数 (分子)
+    }
+    if (q.includes('常住人口') || q.includes('常住人口数') || q.includes('常住基数')) {
+      return this.getMetricById('met_resident_population'); // 常住人口数 (分母)
     }
     if (q.includes('投诉') || q.includes('工单投诉') || q.includes('投诉率')) {
       return this.getMetricById('met_008'); // 投诉率

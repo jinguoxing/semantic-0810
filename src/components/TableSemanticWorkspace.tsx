@@ -66,7 +66,7 @@ export const TableSemanticWorkspace: React.FC<TableSemanticWorkspaceProps> = ({
           : decision1Choice === 'status_change'
           ? '一次工单状态变化'
           : customGrainInput || '自定义理解';
-      addToast('success', '已确认记录粒度', `表达语义已更新为【${choiceLabel}】，关联模型与指标层自动生效`);
+      addToast('success', '已确认记录粒度', `表达语义已更新为【${choiceLabel}】，已同步至关联模型与指标层`);
     }
   };
 

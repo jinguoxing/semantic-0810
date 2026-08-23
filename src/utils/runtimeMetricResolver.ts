@@ -8,7 +8,9 @@ import {
   PermissionRequirements,
   ExecutionPlan,
   EvidenceRefs,
-  PipelineStageResult
+  PipelineStageResult,
+  ResolvedDependencyExecution,
+  MetricDependencyCompatibility
 } from '../types';
 import { metricRegistryService } from '../data/metricRegistryData';
 
@@ -359,8 +361,93 @@ export function resolveMetricExecution(context: MetricExecutionContext): Resolve
   });
 
   // =========================================================================
-  // Stage 3: Context & Semantic Validation (Dimensions & Time)
+  // Stage 2.5: Metric Dependency Resolution & 5D Compatibility Check
   // =========================================================================
+  const isComposite = Boolean(metric?.dependencies && metric.dependencies.length > 0);
+  const resolvedDependencies: ResolvedDependencyExecution[] = [];
+  let allDependenciesCompatible = true;
+  let compositionFormula = '';
+
+  if (metric && isComposite && metric.dependencies) {
+    const numDep = metric.dependencies.find(d => d.role === 'NUMERATOR');
+    const denDep = metric.dependencies.find(d => d.role === 'DENOMINATOR');
+    compositionFormula = numDep && denDep
+      ? `[${numDep.metricName || numDep.metricId}] ÷ [${denDep.metricName || denDep.metricId}] × 100%`
+      : metric.dependencies.map(d => `[${d.metricName || d.metricId}] (${d.role})`).join(' ⊕ ');
+
+    metric.dependencies.forEach(dep => {
+      const depMetric = metricRegistryService.getMetricById(dep.metricId);
+      
+      const isDepFound = Boolean(depMetric);
+      const isScopeCompat = Boolean(depMetric && (
+        depMetric.scope.businessDomain === metric.scope.businessDomain ||
+        depMetric.scope.entityScope === metric.scope.entityScope
+      ));
+      const isGrainCompat = Boolean(depMetric && depMetric.measurement.baseGrain === metric.measurement.baseGrain);
+      const isTimeCompat = Boolean(depMetric && (
+        depMetric.timeSemantics.type === metric.timeSemantics.type ||
+        (depMetric.timeSemantics.defaultGranularity === metric.timeSemantics.defaultGranularity)
+      ));
+      const isDimCompat = Boolean(depMetric && requestedDims.every(d => 
+        depMetric.dimensions.includes(d) || ['渠道', '地区', '行政区划', '居住社区', '性别', '年龄段', '户籍类型', '工单类型', '承办部门'].includes(d)
+      ));
+      const isVerCompat = Boolean(depMetric && depMetric.status === 'EFFECTIVE');
+
+      const compatibility: MetricDependencyCompatibility = {
+        scope: isScopeCompat,
+        grain: isGrainCompat,
+        time: isTimeCompat,
+        dimension: isDimCompat,
+        version: isVerCompat
+      };
+
+      const isCompatible = isDepFound && isScopeCompat && isGrainCompat && isTimeCompat && isDimCompat && isVerCompat;
+      if (!isCompatible) {
+        allDependenciesCompatible = false;
+        diagnostics.push({
+          level: 'ERROR',
+          code: 'DEPENDENCY_INCOMPATIBLE',
+          message: `依赖指标「${dep.metricName || dep.metricId}」与父级复合指标在 [${!isScopeCompat ? 'Scope ' : ''}${!isGrainCompat ? 'Grain ' : ''}${!isTimeCompat ? 'Time ' : ''}${!isDimCompat ? 'Dimension ' : ''}${!isVerCompat ? 'Version' : ''}] 维度存在不兼容`,
+          remediation: `请检查依赖指标「${dep.metricId}」的发布状态与时间/维度颗粒度对齐规则`
+        });
+      }
+
+      const subqueryAlias = dep.role === 'NUMERATOR' ? 'numerator_metric' : dep.role === 'DENOMINATOR' ? 'denominator_metric' : 'component_metric';
+      const measureExpr = depMetric?.measurement.aggregation === 'COUNT_DISTINCT'
+        ? `COUNT(DISTINCT CASE WHEN ${depMetric.binding?.businessRuleFilter || '1=1'} THEN ${depMetric.binding?.tableName || 'dwd_fact'}.${depMetric.binding?.measureField || 'id'} END)`
+        : depMetric?.measurement.aggregation === 'SUM'
+        ? `SUM(CASE WHEN ${depMetric?.binding?.businessRuleFilter || '1=1'} THEN ${depMetric?.binding?.tableName || 'dwd_fact'}.${depMetric?.binding?.measureField || 'id'} ELSE 0 END)`
+        : `AVG(${depMetric?.binding?.tableName || 'dwd_fact'}.${depMetric?.binding?.measureField || 'id'})`;
+
+      resolvedDependencies.push({
+        metricId: dep.metricId,
+        metricName: dep.metricName || depMetric?.name || dep.metricId,
+        role: dep.role,
+        version: dep.version,
+        targetMetric: depMetric,
+        compatibility,
+        isCompatible,
+        subqueryAlias,
+        measureExpression: measureExpr,
+        filterExpression: depMetric?.binding?.businessRuleFilter
+      });
+    });
+
+    pipelineStages.push({
+      stageId: 'DEPENDENCY_RESOLUTION',
+      stageName: '2.1 复合指标依赖解析与 5 维兼容性验证 (Dependency Resolution & 5D Compatibility)',
+      status: allDependenciesCompatible ? 'PASSED' : 'FAILED',
+      durationMs: 24,
+      summary: allDependenciesCompatible
+        ? `成功递归解析 ${resolvedDependencies.length} 个基础依赖指标（分子/分母），5 维原子兼容性校验全部通过（Scope/Grain/Time/Dimension/Version: 100% 对齐）`
+        : `依赖指标兼容性校验失败：存在 ${resolvedDependencies.filter(d => !d.isCompatible).length} 个不兼容的子指标定义`,
+      details: {
+        isComposite: true,
+        compositionFormula,
+        resolvedDependencies
+      }
+    });
+  }
   const validatedDimensions: ValidatedDimension[] = [];
   let hasInvalidDimensions = false;
 
@@ -574,7 +661,7 @@ export function resolveMetricExecution(context: MetricExecutionContext): Resolve
     }
   } else if (metric) {
     resolvedBinding = {
-      status: 'NOT_CONFIGURED',
+      status: 'MISSING',
       dataAssetId: 'unbound_asset',
       dataAssetName: '未配置物理数据绑定',
       tableName: 'unbound_table',
@@ -719,7 +806,7 @@ export function resolveMetricExecution(context: MetricExecutionContext): Resolve
     finalStatus = 'AMBIGUOUS';
   } else if (!isScopeValid) {
     finalStatus = 'BLOCKED_BY_SCOPE';
-  } else if (!isContextValid) {
+  } else if (!isContextValid || (isComposite && !allDependenciesCompatible)) {
     finalStatus = 'BLOCKED_BY_CONTEXT';
   } else if (!isBindingHealthy) {
     finalStatus = 'BLOCKED_BY_BINDING';
@@ -748,7 +835,16 @@ export function resolveMetricExecution(context: MetricExecutionContext): Resolve
     }
   });
 
-  if (resolvedBinding.aggregation === 'COUNT_DISTINCT') {
+  const numDep = resolvedDependencies.find(d => d.role === 'NUMERATOR');
+  const denDep = resolvedDependencies.find(d => d.role === 'DENOMINATOR');
+
+  if (isComposite && numDep && denDep) {
+    selectParts.push(`ROUND(
+        100.0 * COUNT(DISTINCT CASE WHEN ${numDep.filterExpression || '1=1'} THEN ${resolvedBinding.tableName}.${resolvedBinding.measureField} END)
+        / NULLIF(COUNT(DISTINCT CASE WHEN ${denDep.filterExpression || '1=1'} THEN ${resolvedBinding.tableName}.${resolvedBinding.measureField} END), 0),
+        2
+    ) AS ${metricMeta.enName}`);
+  } else if (resolvedBinding.aggregation === 'COUNT_DISTINCT') {
     selectParts.push(`COUNT(DISTINCT ${resolvedBinding.tableName}.${resolvedBinding.measureField}) AS ${metricMeta.enName}`);
   } else if (resolvedBinding.aggregation === 'SUM') {
     selectParts.push(`SUM(${resolvedBinding.tableName}.${resolvedBinding.measureField}) AS ${metricMeta.enName}`);
@@ -777,7 +873,7 @@ export function resolveMetricExecution(context: MetricExecutionContext): Resolve
 
   const generatedSql = finalStatus === 'READY_TO_EXECUTE' ? `-- ========================================================
 -- Semovix Runtime Generated Semantic Execution Query
--- Metric: ${metricMeta.name} (${metricMeta.id})
+-- Metric: ${metricMeta.name} (${metricMeta.id})${isComposite ? `\n-- Type: COMPOSITE (Composite Derivative Metric)\n-- Formula: ${compositionFormula}\n-- Dependencies: ${resolvedDependencies.map(d => `${d.metricName} [${d.role}] (5D Compatible: ✓)`).join(', ')}` : ''}
 -- Version: ${resolvedVersion}
 -- Time Semantics: ${resolvedTimeMapping.timeColumnComment} (${targetGrain})
 -- Generated At: ${timestamp}
@@ -813,27 +909,51 @@ LIMIT 1000;` : `-- ========================================================
         detail: `读取 ${resolvedBinding.tableName}，下推时间谓词 [${resolvedTimeMapping.startDate} ~ ${resolvedTimeMapping.endDate}]`,
         targetEngine: 'Distributed Connector'
       },
-      {
-        stepNumber: 2,
-        title: '嵌入语义业务过滤规则 (Apply Semantic Filter)',
-        operation: 'FILTER_PUSHDOWN',
-        detail: `强制执行业务口径限定: (${resolvedBinding.businessRuleFilter}) 以及租户隔离规则`,
-        targetEngine: 'Compute Node'
-      },
-      ...(hasRelationshipDim ? [{
-        stepNumber: 3,
-        title: '安全拓扑多跳关联 (Safe Relationship Join)',
-        operation: 'HASH_JOIN',
-        detail: `沿验证拓扑路径关联维度属性表（无扇出膨胀风险）`,
-        targetEngine: 'Hash Join Operator'
-      }] : []),
-      {
-        stepNumber: hasRelationshipDim ? 4 : 3,
-        title: '时态分桶与维度聚合 (Temporal & Dimensional Aggregation)',
-        operation: 'STREAMING_AGGREGATION',
-        detail: `按 [time_slice, ${validatedDimensions.filter(d => d.isValid).map(d => d.name).join(', ')}] 进行 ${resolvedBinding.aggregation} 汇总结算`,
-        targetEngine: 'Presto Trino Aggregator'
-      }
+      ...(isComposite && numDep && denDep ? [
+        {
+          stepNumber: 2,
+          title: `解析分子指标依赖: ${numDep.metricName}`,
+          operation: 'NUMERATOR_EVALUATION',
+          detail: `条件谓词下推: (${numDep.filterExpression})，聚合度量: ${resolvedBinding.measureField} (COUNT_DISTINCT)`,
+          targetEngine: 'Sub-metric Evaluator'
+        },
+        {
+          stepNumber: 3,
+          title: `解析分母指标依赖: ${denDep.metricName}`,
+          operation: 'DENOMINATOR_EVALUATION',
+          detail: `条件谓词下推: (${denDep.filterExpression})，聚合度量: ${resolvedBinding.measureField} (COUNT_DISTINCT)`,
+          targetEngine: 'Sub-metric Evaluator'
+        },
+        {
+          stepNumber: 4,
+          title: '复合算子合成与零除保护 (Composite Ratio & Zero-Division Guard)',
+          operation: 'COMPOSITE_AGGREGATION',
+          detail: `计算公式: ROUND(100.0 * numerator / NULLIF(denominator, 0), 2)，嵌入 5 维原子兼容性安全约束`,
+          targetEngine: 'Presto Trino Aggregator'
+        }
+      ] : [
+        {
+          stepNumber: 2,
+          title: '嵌入语义业务过滤规则 (Apply Semantic Filter)',
+          operation: 'FILTER_PUSHDOWN',
+          detail: `强制执行业务口径限定: (${resolvedBinding.businessRuleFilter}) 以及租户隔离规则`,
+          targetEngine: 'Compute Node'
+        },
+        ...(hasRelationshipDim ? [{
+          stepNumber: 3,
+          title: '安全拓扑多跳关联 (Safe Relationship Join)',
+          operation: 'HASH_JOIN',
+          detail: `沿验证拓扑路径关联维度属性表（无扇出膨胀风险）`,
+          targetEngine: 'Hash Join Operator'
+        }] : []),
+        {
+          stepNumber: hasRelationshipDim ? 4 : 3,
+          title: '时态分桶与维度聚合 (Temporal & Dimensional Aggregation)',
+          operation: 'STREAMING_AGGREGATION',
+          detail: `按 [time_slice, ${validatedDimensions.filter(d => d.isValid).map(d => d.name).join(', ')}] 进行 ${resolvedBinding.aggregation} 汇总结算`,
+          targetEngine: 'Presto Trino Aggregator'
+        }
+      ])
     ] : [
       {
         stepNumber: 1,
@@ -845,24 +965,24 @@ LIMIT 1000;` : `-- ========================================================
     ],
     generatedSql,
     safetyGuarantees: [
-      '✓ 严格执行 5 阶段运行时语义校验（意图 → 定位 → 维度/时态 → 物理绑定/权限 → 执行计划）',
-      '✓ 聚合状态多维判定：涵盖指标歧义、范围不匹配、维度非法、绑定异常与权限不足',
+      '✓ 严格执行 5 阶段运行时语义校验（意图 → 定位 → 依赖解析与 5 维兼容性 → 维度/时态 → 物理绑定/权限 → 执行计划）',
+      '✓ 聚合状态多维判定：涵盖指标歧义、范围不匹配、依赖不兼容、维度非法、绑定异常与权限不足',
       '✓ 包含租户隔离与字段掩码脱敏，符合数据合规基线'
     ],
     estimatedCost: {
-      rowsScanned: finalStatus === 'READY_TO_EXECUTE' ? '约 42.5 万行' : '0 行 (执行已阻断)',
-      latencyEstimate: finalStatus === 'READY_TO_EXECUTE' ? '< 280ms' : '0ms (拦截)',
+      rowsScanned: finalStatus === 'READY_TO_EXECUTE' ? (isComposite ? '约 128.6 万行 (常住人口全量基数)' : '约 42.5 万行') : '0 行 (执行已阻断)',
+      latencyEstimate: finalStatus === 'READY_TO_EXECUTE' ? (isComposite ? '< 340ms' : '< 280ms') : '0ms (拦截)',
       cacheHit: false
     }
   };
 
   const evidenceRefs: EvidenceRefs = {
-    ruleStandardDoc: '《企业电商交易业务数据治理规范》第 4.2 条',
+    ruleStandardDoc: isComposite ? '《七普人口服务数据治理规范》第 3.1 条 (复合衍生指标标准)' : '《企业电商交易业务数据治理规范》第 4.2 条',
     dataGovernanceSpec: 'Semovix Data Contract Spec v2.1 (Verified)',
-    activeVersionLineage: `${metricMeta.name} -> v1.0 -> v1.1 -> ${resolvedVersion}`,
-    verifiedBy: 'AI Governance Validator & Data Owner (张维)',
-    verifiedAt: '2026-08-15 14:30:00 (自动生效)',
-    semanticIntegrityScore: finalStatus === 'READY_TO_EXECUTE' ? 100 : 45
+    activeVersionLineage: isComposite ? `${metricMeta.name} -> Dependencies [${resolvedDependencies.map(d => d.metricName).join(', ')}] -> ${resolvedVersion}` : `${metricMeta.name} -> v1.0 -> v1.1 -> ${resolvedVersion}`,
+    confirmedBy: 'Data Owner (张维)',
+    confirmedAt: '2026-08-15 14:30:00',
+    currentEffectiveVersion: resolvedVersion
   };
 
   pipelineStages.push({
@@ -887,6 +1007,9 @@ LIMIT 1000;` : `-- ========================================================
     status: finalStatus,
     inputContext: context,
     metric: metricMeta,
+    isComposite,
+    compositionFormula,
+    dependenciesExecution: isComposite ? resolvedDependencies : undefined,
     resolvedVersion,
     resolvedBinding,
     validatedDimensions,

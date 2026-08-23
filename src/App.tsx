@@ -54,7 +54,7 @@ import { FieldItem, CompleteFieldGovernanceData, MetricDraftInitialData } from '
 export default function App() {
   const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
   const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
-  const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('draft');
+  const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
   const [authoringInitialDraft, setAuthoringInitialDraft] = useState<MetricDraftInitialData | undefined>(undefined);
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
   const [assetDetailContext, setAssetDetailContext] = useState<{ assetId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ assetId: 'res-02', fromGoalSearch: false, goalQuery: '' });
@@ -867,14 +867,14 @@ export default function App() {
             addToast('info', '指标详情', '已载入「老年人口数」正式指标事实详情页');
           }}
           onNavigateToCreateMetric={(mode, draftData) => {
-            setAuthoringMode(mode || 'draft');
+            setAuthoringMode(mode || 'ai_prompt');
             setAuthoringInitialDraft(draftData);
             setCurrentNav('create_metric');
             setViewTab('create_metric');
             if (mode === 'imported_draft' && draftData) {
               addToast('info', '存量指标导入', `已载入「${draftData.metricName}」存量解析草稿空间`);
             } else {
-              addToast('info', '创建指标', '已进入 Metric Authoring Workspace 创建老龄化率指标草稿');
+              addToast('info', '创建指标', '已进入 AI 引导式指标创建工作台');
             }
           }}
           onNavigateToBusinessObject={() => {

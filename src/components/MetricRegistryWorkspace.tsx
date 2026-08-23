@@ -89,7 +89,7 @@ export function projectMetricToRowVM(metric: Metric): MetricRegistryRowVM {
     pendingActionDesc = '与「APP端日活跃用户」存在定义重叠冲突';
   } else if (metric.id === 'met_011') {
     pendingActionType = 'CONTEXT_VARIANT';
-    pendingActionDesc = '大区与总部存在场景派生口径，建议收敛合并';
+    pendingActionDesc = '大区与总部存在不同业务场景口径，请确认是否按 Applicable Scope 区分并明确命名';
   } else if (metric.id === 'met_012') {
     pendingActionType = 'MISSING_MEANING';
     pendingActionDesc = '缺少汇率折算规则与关税退还约束定义';
@@ -270,7 +270,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
         return (
           <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
             <Split className="w-3 h-3 text-[#2563EB]" />
-            <span>场景派生待收敛</span>
+            <span>场景口径待确认</span>
           </span>
         );
       case 'MISSING_MEANING':
@@ -502,7 +502,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
 
               <button
                 onClick={() => {
-                  onNavigateToCreateMetric?.('draft');
+                  onNavigateToCreateMetric?.('ai_prompt');
                 }}
                 className="px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-all shadow-2xs flex items-center space-x-1.5 cursor-pointer"
               >
@@ -623,7 +623,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                   <span>{tabCounts.attentionCount} 项需要处理</span>
                   <ChevronRight className="w-3 h-3" />
                 </button>
-                （包含 Binding 异常、口径冲突与场景派生待收敛）。
+                （包含 Binding 异常、口径冲突与场景口径待确认）。
               </span>
             </div>
             <div className="text-[#94A3B8] text-[11px] font-mono">

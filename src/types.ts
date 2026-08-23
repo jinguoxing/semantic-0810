@@ -233,8 +233,6 @@ export interface MetricDependencyCompatibility {
   time: boolean;
   dimension: boolean;
   version: boolean;
-  dimensionCompatibility?: boolean;
-  versionCompatibility?: boolean;
 }
 
 export interface MetricDependency {
@@ -264,8 +262,6 @@ export type RelationshipPathValidationStatus = "SAFE" | "UNVERIFIED" | "UNSAFE";
 export interface DimensionRelationshipPath {
   sourceObject: string;
   cardinality: RelationshipCardinality;
-  /** @deprecated use cardinality instead */
-  relationship?: "N:1" | "1:1" | "1:N" | "N:N";
   targetObject: string;
   dimensionName: string;
   validationStatus: RelationshipPathValidationStatus;
@@ -284,8 +280,6 @@ export interface MetricBinding {
   dimensionPaths: DimensionRelationshipPath[];
   bindingVersion: string;
   health: MetricBindingHealth;
-  /** @deprecated use health instead */
-  status?: "VALID" | "SUSPENDED" | "OUTDATED";
 }
 
 export interface Metric {
@@ -478,18 +472,31 @@ export interface EvidenceRefs {
   ruleStandardDoc: string;
   dataGovernanceSpec: string;
   activeVersionLineage: string;
-  verifiedBy: string;
-  verifiedAt: string;
-  semanticIntegrityScore: number;
+  confirmedBy: string;
+  confirmedAt: string;
+  currentEffectiveVersion: string;
 }
 
 export interface PipelineStageResult {
-  stageId: 'INTENT' | 'METRIC_RESOLUTION' | 'CONTEXT_VALIDATION' | 'BINDING_RESOLUTION' | 'EXECUTION_PLAN';
+  stageId: 'INTENT' | 'METRIC_RESOLUTION' | 'DEPENDENCY_RESOLUTION' | 'CONTEXT_VALIDATION' | 'BINDING_RESOLUTION' | 'EXECUTION_PLAN';
   stageName: string;
   status: 'PASSED' | 'WARNING' | 'FAILED';
   durationMs: number;
   summary: string;
   details?: Record<string, any>;
+}
+
+export interface ResolvedDependencyExecution {
+  metricId: string;
+  metricName: string;
+  role: "NUMERATOR" | "DENOMINATOR" | "COMPONENT";
+  version: string;
+  targetMetric?: Metric;
+  compatibility: MetricDependencyCompatibility;
+  isCompatible: boolean;
+  subqueryAlias: string;
+  measureExpression: string;
+  filterExpression?: string;
 }
 
 export interface ResolvedMetricExecution {
@@ -505,6 +512,9 @@ export interface ResolvedMetricExecution {
     businessObject: string;
     definition: string;
   };
+  isComposite?: boolean;
+  compositionFormula?: string;
+  dependenciesExecution?: ResolvedDependencyExecution[];
   resolvedVersion: string;
   resolvedBinding: ResolvedBinding;
   validatedDimensions: ValidatedDimension[];

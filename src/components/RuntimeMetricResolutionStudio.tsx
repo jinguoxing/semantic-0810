@@ -84,6 +84,13 @@ const PRESET_TEST_CASES = [
     tag: 'AMBIGUOUS · 指标歧义',
     query: '模糊查询一些未知名词概念数据',
     desc: '阻断模拟：提问未唯一定位到已发布的标准指标定义，触发 AMBIGUOUS'
+  },
+  {
+    id: 'case_07',
+    title: '按性别统计今年各月老龄化率 (复合指标依赖解析)',
+    tag: 'DEPENDENCY_RESOLVED · 复合指标',
+    query: '按性别统计今年各月老龄化率',
+    desc: '复合依赖解析：递归解析「老年人口数(分子)」与「常住人口数(分母)」，执行 5 维兼容性验证与 Safe SQL 算子合成'
   }
 ];
 
@@ -458,6 +465,99 @@ export const RuntimeMetricResolutionStudio: React.FC<RuntimeMetricResolutionStud
                   </div>
                 </div>
 
+                {/* Composite Metric Dependency Graph & 5D Compatibility Matrix */}
+                {resolutionResult.isComposite && resolutionResult.dependenciesExecution && (
+                  <div className="bg-white border border-[#BFDBFE] bg-linear-to-b from-[#F0F9FF] to-white rounded-xl p-5 space-y-4 shadow-xs">
+                    <div className="flex items-center justify-between border-b border-[#DBEAFE] pb-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-7 h-7 rounded-lg bg-[#2563EB]/10 flex items-center justify-center text-[#2563EB]">
+                          <Layers className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-[#0F172A] flex items-center space-x-2">
+                            <span>复合指标依赖执行链路 (Metric Dependencies Execution Graph)</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                              COMPOSITE DERIVATION
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#64748B] mt-0.5 font-mono">
+                            公式表达式：{resolutionResult.compositionFormula}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-1.5 text-[11px] font-bold text-[#16A36A] bg-[#DCFCE7] px-2.5 py-1 rounded-md border border-[#BBF7D0]">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>5 维原子兼容性校验通过</span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {resolutionResult.dependenciesExecution.map((dep) => (
+                        <div
+                          key={dep.metricId}
+                          className="p-3.5 bg-white border border-[#E2E8F0] rounded-xl space-y-2.5 shadow-2xs"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                dep.role === 'NUMERATOR'
+                                  ? 'bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]'
+                                  : dep.role === 'DENOMINATOR'
+                                  ? 'bg-[#F5F3FF] text-[#7C3AED] border border-[#DDD6FE]'
+                                  : 'bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]'
+                              }`}>
+                                {dep.role === 'NUMERATOR' ? '分子 (NUMERATOR)' : dep.role === 'DENOMINATOR' ? '分母 (DENOMINATOR)' : '组件 (COMPONENT)'}
+                              </span>
+                              <span className="font-bold text-xs text-[#0F172A]">
+                                {dep.metricName}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono text-[#64748B]">
+                              {dep.version}
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] text-[#64748B] space-y-1 bg-[#F8FAFC] p-2.5 rounded-lg border border-[#F1F5F9] font-mono">
+                            <div className="text-[#334155]">
+                              <span className="text-[#94A3B8]">度量表达式：</span>{dep.measureExpression}
+                            </div>
+                            {dep.filterExpression && (
+                              <div className="text-[#334155]">
+                                <span className="text-[#94A3B8]">业务规则过滤：</span>{dep.filterExpression}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 5-Dimensional Atomic Compatibility Badges */}
+                          <div className="space-y-1.5 pt-1">
+                            <div className="text-[10px] font-bold text-[#64748B] flex items-center justify-between">
+                              <span>5 维原子兼容性验证矩阵：</span>
+                              <span className="text-emerald-700 font-bold">100% 兼容</span>
+                            </div>
+                            <div className="grid grid-cols-5 gap-1.5 text-center text-[10px] font-semibold">
+                              <div className={`py-1 rounded border ${dep.compatibility.scope ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                Scope {dep.compatibility.scope ? '✓' : '✗'}
+                              </div>
+                              <div className={`py-1 rounded border ${dep.compatibility.grain ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                Grain {dep.compatibility.grain ? '✓' : '✗'}
+                              </div>
+                              <div className={`py-1 rounded border ${dep.compatibility.time ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                Time {dep.compatibility.time ? '✓' : '✗'}
+                              </div>
+                              <div className={`py-1 rounded border ${dep.compatibility.dimension ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                Dim {dep.compatibility.dimension ? '✓' : '✗'}
+                              </div>
+                              <div className={`py-1 rounded border ${dep.compatibility.version ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                Ver {dep.compatibility.version ? '✓' : '✗'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Operator Execution Flow */}
                 <div className="bg-white border border-[#E2E8F0] rounded-xl p-5 space-y-3 shadow-2xs">
                   <div className="text-xs font-bold text-[#0F172A] flex items-center justify-between">
@@ -767,7 +867,7 @@ export const RuntimeMetricResolutionStudio: React.FC<RuntimeMetricResolutionStud
                       <h3 className="text-xs font-bold text-[#0F172A]">规范依据与可信追溯 (Evidence & Governance Lineage)</h3>
                     </div>
                     <span className="text-[11px] font-bold text-[#166534] bg-[#DCFCE7] px-2 py-0.5 rounded border border-[#BBF7D0]">
-                      语义可信度 {resolutionResult.evidenceRefs.semanticIntegrityScore}%
+                      当前生效版本: {resolutionResult.evidenceRefs.currentEffectiveVersion}
                     </span>
                   </div>
 
@@ -785,8 +885,8 @@ export const RuntimeMetricResolutionStudio: React.FC<RuntimeMetricResolutionStud
                       <div className="font-mono text-xs text-[#2563EB] font-bold">{resolutionResult.evidenceRefs.activeVersionLineage}</div>
                     </div>
                     <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
-                      <span className="text-[11px] font-bold text-[#64748B]">验证责任人与时间</span>
-                      <div className="text-xs text-[#0F172A]">{resolutionResult.evidenceRefs.verifiedBy} ｜ {resolutionResult.evidenceRefs.verifiedAt}</div>
+                      <span className="text-[11px] font-bold text-[#64748B]">确认责任人与生效时间 (Owner Confirm)</span>
+                      <div className="text-xs text-[#0F172A]">{resolutionResult.evidenceRefs.confirmedBy} ｜ {resolutionResult.evidenceRefs.confirmedAt}</div>
                     </div>
                   </div>
                 </div>

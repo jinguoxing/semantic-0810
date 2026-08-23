@@ -58,7 +58,7 @@ interface MetricAuthoringWorkspaceProps {
 }
 
 export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> = ({
-  initialMode = 'draft',
+  initialMode = 'ai_prompt',
   initialDraftData,
   onBackToRegistry,
   onNavigateToBusinessObject,
