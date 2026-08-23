@@ -17,11 +17,14 @@ import {
   Tag,
   MapPin,
   GitFork,
-  CheckCircle
+  CheckCircle,
+  FileCode2
 } from 'lucide-react';
+import { Metric, MetricBinding } from '../types';
 
 interface MetricDataBindingTabProps {
-  metricName?: string;
+  metric: Metric;
+  binding?: MetricBinding;
   onOpenDataBindingDrawer?: () => void;
   onOpenBusinessRuleDrawer?: () => void;
   onNavigateToDataAssetDetail?: (assetId: string) => void;
@@ -30,13 +33,32 @@ interface MetricDataBindingTabProps {
 }
 
 export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
-  metricName = '有效订单金额',
+  metric,
+  binding: propBinding,
   onOpenDataBindingDrawer,
   onOpenBusinessRuleDrawer,
   onNavigateToDataAssetDetail,
   onNavigateToVersionsTab,
   addToast
 }) => {
+  const binding = propBinding || metric.binding;
+  const name = metric.name;
+  const businessObject = metric.businessObject;
+  const dataAssetName = binding?.dataAssetName || `${businessObject}事实数据资产`;
+  const tableName = binding?.tableName || `dwd_${metric.id}_df`;
+  const dataAssetId = binding?.dataAssetId || 'asset_01';
+  const measureField = binding?.measureField || metric.measurement?.measureName || 'measure_val';
+  const aggregation = metric.measurement?.aggregation || 'SUM';
+  const businessRuleFilter = binding?.businessRuleFilter || '';
+  const baseGrain = metric.measurement?.baseGrain || businessObject;
+  const physicalGrainField = binding?.grainMapping?.physicalGrainField || 'id';
+  const businessTime = metric.timeSemantics?.businessTime || '业务时间';
+  const timeField = binding?.timeField || 'stat_time';
+  const isComposite = Boolean(metric.dependencies && metric.dependencies.length > 0);
+  const numerator = metric.dependencies?.find(d => d.role === 'NUMERATOR');
+  const denominator = metric.dependencies?.find(d => d.role === 'DENOMINATOR');
+  const bindingHealth = binding?.health || 'HEALTHY';
+
   return (
     <div className="w-full bg-white rounded-xl border border-[#E6EAF0] p-6 sm:p-8 space-y-7 font-sans antialiased text-[#172033] shadow-2xs">
 
@@ -62,28 +84,44 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
 
         {/* 业务描述 */}
         <p className="text-xs text-[#334155] leading-relaxed">
-          当前指标基于“订单事实数据”，以订单为基础粒度，对订单金额进行 SUM 聚合，并通过正式“有效订单”业务规则限定统计范围。
+          {isComposite ? (
+            `当前指标为复合衍生指标，由分子指标「${numerator?.metricName || '分子'}」与分母指标「${denominator?.metricName || '分母'}」组合计算，依托基础事实模型与严格 5 维相容性对齐执行零除保护安全计算。`
+          ) : businessRuleFilter ? (
+            `当前指标基于“${dataAssetName}”，以${baseGrain}为基础粒度，对度量字段（${measureField}）进行 ${aggregation} 聚合，并通过业务过滤规则（${businessRuleFilter}）限定统计范围。`
+          ) : (
+            `当前指标基于“${dataAssetName}”，以${baseGrain}为基础粒度，对度量字段（${measureField}）进行 ${aggregation} 聚合计算。`
+          )}
         </p>
 
-        {/* Fact Summary 条带 (Flat Inline Fact Strip，紧凑通栏，非孤立卡片) */}
+        {/* Fact Summary 条带 (Flat Inline Fact Strip) */}
         <div className="bg-[#F8FAFC] border border-[#EEF2F6] rounded-lg px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
           <div>
             <span className="text-[#667085] block text-[11px]">数据来源</span>
-            <span className="font-semibold text-[#172033] mt-0.5 inline-block">订单事实数据</span>
+            <span className="font-semibold text-[#172033] mt-0.5 inline-block truncate max-w-[140px]" title={dataAssetName}>
+              {dataAssetName}
+            </span>
           </div>
           <div>
             <span className="text-[#667085] block text-[11px]">基础粒度</span>
-            <span className="font-semibold text-[#172033] mt-0.5 inline-block">订单 (`order_id`)</span>
+            <span className="font-semibold text-[#172033] mt-0.5 inline-block">
+              {baseGrain} (`{physicalGrainField}`)
+            </span>
           </div>
           <div>
             <span className="text-[#667085] block text-[11px]">默认业务时间</span>
-            <span className="font-semibold text-[#172033] mt-0.5 inline-block">支付时间 (`paid_time`)</span>
+            <span className="font-semibold text-[#172033] mt-0.5 inline-block">
+              {businessTime} (`{timeField}`)
+            </span>
           </div>
           <div>
             <span className="text-[#667085] block text-[11px]">实现状态</span>
-            <span className="font-semibold text-[#16A36A] flex items-center space-x-1 mt-0.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-              <span>数据实现正常</span>
+            <span className={`font-semibold flex items-center space-x-1 mt-0.5 ${
+              bindingHealth === 'HEALTHY' ? 'text-[#16A36A]' : bindingHealth === 'DEGRADED' ? 'text-[#D97706]' : 'text-[#DC2626]'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                bindingHealth === 'HEALTHY' ? 'bg-[#16A36A]' : bindingHealth === 'DEGRADED' ? 'bg-[#D97706]' : 'bg-[#DC2626]'
+              }`} />
+              <span>{bindingHealth === 'HEALTHY' ? '数据实现正常' : bindingHealth === 'DEGRADED' ? '实现降级' : '实现异常'}</span>
             </span>
           </div>
         </div>
@@ -104,7 +142,7 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => onNavigateToDataAssetDetail?.('res-order-fact')}
+            onClick={() => onNavigateToDataAssetDetail?.(dataAssetId)}
             className="text-xs font-semibold text-[#2563EB] hover:text-[#1D4ED8] hover:underline flex items-center space-x-1 cursor-pointer transition-colors"
           >
             <span>查看数据资产 →</span>
@@ -118,24 +156,32 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
               <Database className="w-4 h-4" />
             </div>
             <div className="space-y-0.5 min-w-0">
-              <div className="flex items-center space-x-2">
-                <span className="font-bold text-[#172033] text-xs">订单事实数据</span>
+              <div className="flex items-center space-x-2 flex-wrap">
+                <span className="font-bold text-[#172033] text-xs">{dataAssetName}</span>
                 <span className="font-mono text-[10px] text-[#667085] bg-white px-1.5 py-0.5 rounded border border-[#E2E8F0]">
-                  Data Asset · Table
+                  {tableName}
                 </span>
               </div>
               <div className="flex items-center space-x-3 text-[#667085] text-[11px]">
-                <span>来源系统：<span className="text-[#334155] font-medium">订单业务系统</span></span>
+                <span>业务域：<span className="text-[#334155] font-medium">{metric.scope?.businessDomain || '业务域'}</span></span>
                 <span>·</span>
-                <span>业务对象：<span className="text-[#334155] font-medium">订单</span></span>
+                <span>业务对象：<span className="text-[#334155] font-medium">{businessObject}</span></span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center space-x-2 self-start sm:self-auto shrink-0">
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A] mr-1" />
-              当前可用
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${
+              bindingHealth === 'HEALTHY' 
+                ? 'bg-[#F0FDF4] text-[#16A36A] border-[#DCFCE7]' 
+                : bindingHealth === 'DEGRADED'
+                ? 'bg-[#FFFBEB] text-[#D97706] border-[#FEF3C7]'
+                : 'bg-[#FEF2F2] text-[#DC2626] border-[#FEE2E2]'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full mr-1 ${
+                bindingHealth === 'HEALTHY' ? 'bg-[#16A36A]' : bindingHealth === 'DEGRADED' ? 'bg-[#D97706]' : 'bg-[#DC2626]'
+              }`} />
+              {bindingHealth === 'HEALTHY' ? '当前可用' : bindingHealth === 'DEGRADED' ? '降级运行' : '不可用'}
             </span>
           </div>
         </div>
@@ -166,70 +212,104 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
             </thead>
             <tbody className="divide-y divide-[#EEF2F6] text-[#172033]">
               
-              {/* Row 1: 订单金额 */}
+              {isComposite ? (
+                <>
+                  <tr className="hover:bg-[#F8FAFC] transition-colors">
+                    <td className="py-2.5 px-4 font-bold text-[#172033]">
+                      分子指标 ({numerator?.metricName || '分子'})
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <span className="font-mono text-xs bg-[#EFF6FF] text-[#2563EB] px-1.5 py-0.5 rounded border border-[#BFDBFE]">
+                        {numerator?.metricId} ({numerator?.version || 'v1.0.0'})
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 font-semibold text-[#2563EB]">
+                      NUMERATOR 分子
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-[#F8FAFC] transition-colors">
+                    <td className="py-2.5 px-4 font-bold text-[#172033]">
+                      分母指标 ({denominator?.metricName || '分母'})
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <span className="font-mono text-xs bg-[#F0FDF4] text-[#16A36A] px-1.5 py-0.5 rounded border border-[#BBF7D0]">
+                        {denominator?.metricId} ({denominator?.version || 'v1.0.0'})
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 font-semibold text-[#16A36A]">
+                      DENOMINATOR 分母 (Zero-Division Safe)
+                    </td>
+                  </tr>
+                </>
+              ) : (
+                <tr className="hover:bg-[#F8FAFC] transition-colors">
+                  <td className="py-2.5 px-4 font-bold text-[#172033]">
+                    度量字段 ({metric.measurement?.measureName || '度量'})
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <span className="font-mono text-xs bg-[#F1F5F9] text-[#0F172A] px-1.5 py-0.5 rounded border border-[#E2E8F0]">
+                      {tableName}.{measureField}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-4 font-semibold text-[#2563EB]">
+                    {aggregation} 聚合
+                  </td>
+                </tr>
+              )}
+
+              {/* Row: 业务限定规则 */}
+              {businessRuleFilter && (
+                <tr className="hover:bg-[#F8FAFC] transition-colors">
+                  <td className="py-2.5 px-4 font-bold text-[#172033]">
+                    业务限定规则
+                  </td>
+                  <td className="py-2.5 px-4">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono text-xs bg-[#F8FAFC] text-[#334155] px-1.5 py-0.5 rounded border border-[#E2E8F0]">
+                        {businessRuleFilter}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={onOpenBusinessRuleDrawer}
+                        className="text-[11px] font-semibold text-[#2563EB] hover:text-[#1D4ED8] hover:underline cursor-pointer flex items-center space-x-0.5"
+                      >
+                        <span>详情 →</span>
+                      </button>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-4 text-[#475569]">
+                    统计范围限定
+                  </td>
+                </tr>
+              )}
+
+              {/* Row: 基础粒度 */}
               <tr className="hover:bg-[#F8FAFC] transition-colors">
                 <td className="py-2.5 px-4 font-bold text-[#172033]">
-                  订单金额
+                  基础粒度 ({baseGrain})
                 </td>
                 <td className="py-2.5 px-4">
                   <span className="font-mono text-xs bg-[#F1F5F9] text-[#0F172A] px-1.5 py-0.5 rounded border border-[#E2E8F0]">
-                    order_amount
+                    {tableName}.{physicalGrainField}
                   </span>
                 </td>
-                <td className="py-2.5 px-4 font-semibold text-[#2563EB]">
-                  SUM 聚合
-                </td>
-              </tr>
-
-              {/* Row 2: 有效订单 */}
-              <tr className="hover:bg-[#F8FAFC] transition-colors">
-                <td className="py-2.5 px-4 font-bold text-[#172033]">
-                  有效订单
-                </td>
-                <td className="py-2.5 px-4">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-medium text-[#172033]">正式业务规则</span>
-                    <button
-                      type="button"
-                      onClick={onOpenBusinessRuleDrawer}
-                      className="text-[11px] font-semibold text-[#2563EB] hover:text-[#1D4ED8] hover:underline cursor-pointer flex items-center space-x-0.5"
-                    >
-                      <span>查看规则实现 →</span>
-                    </button>
-                  </div>
-                </td>
                 <td className="py-2.5 px-4 text-[#475569]">
-                  统计范围限定
+                  主键粒度对齐
                 </td>
               </tr>
 
-              {/* Row 3: 订单 */}
+              {/* Row: 业务时间 */}
               <tr className="hover:bg-[#F8FAFC] transition-colors">
                 <td className="py-2.5 px-4 font-bold text-[#172033]">
-                  订单
+                  业务时间 ({businessTime})
                 </td>
                 <td className="py-2.5 px-4">
                   <span className="font-mono text-xs bg-[#F1F5F9] text-[#0F172A] px-1.5 py-0.5 rounded border border-[#E2E8F0]">
-                    order_id
+                    {tableName}.{timeField}
                   </span>
                 </td>
                 <td className="py-2.5 px-4 text-[#475569]">
-                  基础粒度
-                </td>
-              </tr>
-
-              {/* Row 4: 支付时间 */}
-              <tr className="hover:bg-[#F8FAFC] transition-colors">
-                <td className="py-2.5 px-4 font-bold text-[#172033]">
-                  支付时间
-                </td>
-                <td className="py-2.5 px-4">
-                  <span className="font-mono text-xs bg-[#F1F5F9] text-[#0F172A] px-1.5 py-0.5 rounded border border-[#E2E8F0]">
-                    paid_time
-                  </span>
-                </td>
-                <td className="py-2.5 px-4 text-[#475569]">
-                  默认业务时间
+                  默认时态字段
                 </td>
               </tr>
 
@@ -251,7 +331,6 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
           </h2>
         </div>
 
-        {/* 2-column Compact Layout without heavy card borders */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           
           {/* 左: 基础粒度 */}
@@ -268,15 +347,15 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
 
             <div className="flex items-baseline space-x-2">
               <span className="text-base font-bold text-[#172033]">
-                订单
+                {baseGrain}
               </span>
               <span className="font-mono text-[11px] text-[#475569] bg-white px-1.5 py-0.5 rounded border border-[#E2E8F0]">
-                order_id
+                {physicalGrainField}
               </span>
             </div>
 
             <p className="text-[11px] text-[#475569] leading-relaxed">
-              每个订单作为一次基础业务事实参与计算。
+              每个{baseGrain}主键记录（`{physicalGrainField}`）作为基础物理粒度参与计算，保证聚合无重复计算风险。
             </p>
           </div>
 
@@ -287,29 +366,41 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
                 默认业务时间
               </span>
               <span className="text-[11px] text-[#475569]">
-                时间语义：<span className="font-semibold text-[#172033]">交易发生时间</span>
+                字段：<span className="font-semibold font-mono text-[#172033]">{timeField}</span>
               </span>
             </div>
 
             <div className="flex items-baseline space-x-2">
               <span className="text-base font-bold text-[#172033]">
-                支付时间
+                {businessTime}
               </span>
               <span className="font-mono text-[11px] text-[#475569] bg-white px-1.5 py-0.5 rounded border border-[#E2E8F0]">
-                paid_time
+                {metric.timeSemantics?.type === 'FLOW'
+                  ? 'FLOW (连续流量)'
+                  : metric.timeSemantics?.type === 'SNAPSHOT'
+                  ? 'SNAPSHOT (时点快照)'
+                  : 'PERIOD (期间时段)'}
               </span>
             </div>
 
             <div className="flex items-center space-x-1.5 pt-0.5">
               <span className="text-[11px] text-[#667085]">支持聚合：</span>
-              {['日', '月', '季', '年'].map((grain) => (
-                <span
-                  key={grain}
-                  className="px-1.5 py-0.2 bg-white border border-[#CBD5E1] rounded text-[10px] font-semibold text-[#334155]"
-                >
-                  {grain}
-                </span>
-              ))}
+              {['DAY', 'MONTH', 'QUARTER', 'YEAR'].map((grainKey) => {
+                const label = grainKey === 'DAY' ? '日' : grainKey === 'MONTH' ? '月' : grainKey === 'QUARTER' ? '季' : '年';
+                const isDefault = (metric.timeSemantics?.defaultGranularity || 'MONTH') === grainKey;
+                return (
+                  <span
+                    key={grainKey}
+                    className={`px-1.5 py-0.2 rounded text-[10px] font-semibold ${
+                      isDefault 
+                        ? 'bg-[#EFF6FF] border border-[#BFDBFE] text-[#2563EB]' 
+                        : 'bg-white border border-[#CBD5E1] text-[#334155]'
+                    }`}
+                  >
+                    {label}
+                  </span>
+                );
+              })}
             </div>
           </div>
 
@@ -330,97 +421,46 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
         </div>
 
         <div className="border border-[#EEF2F6] rounded-lg overflow-hidden divide-y divide-[#EEF2F6] text-xs">
-          
-          {/* 维度 1: 渠道 */}
-          <div className="p-3.5 bg-white hover:bg-[#FAFCFF] flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-6 h-6 rounded bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center font-bold text-xs shrink-0">
-                <Tag className="w-3.5 h-3.5" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-1.5">
-                  <span className="font-bold text-[#172033]">渠道</span>
-                  <span className="text-[#667085] text-[11px]">（订单.渠道）</span>
-                </div>
-                <div className="text-[11px] text-[#475569] mt-0.5">
-                  数据映射：<span className="font-mono font-medium text-[#0F172A]">channel_code</span> · <span className="text-[#16A36A] font-medium">直接映射</span>
-                </div>
-              </div>
+          {(!metric.dimensions || metric.dimensions.length === 0) ? (
+            <div className="p-4 text-center text-xs text-[#94A3B8]">
+              暂未配置限定分析维度
             </div>
-
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7] self-start sm:self-auto">
-              <Check className="w-3 h-3 mr-0.5" />
-              可用
-            </span>
-          </div>
-
-          {/* 维度 2: 商品分类 */}
-          <div className="p-3.5 bg-white hover:bg-[#FAFCFF] flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-6 h-6 rounded bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center font-bold text-xs shrink-0">
-                <Layers className="w-3.5 h-3.5" />
-              </div>
-              <div>
-                <div className="flex items-center space-x-1.5">
-                  <span className="font-bold text-[#172033]">商品分类</span>
-                  <span className="text-[#667085] text-[11px]">（订单.商品分类）</span>
-                </div>
-                <div className="text-[11px] text-[#475569] mt-0.5">
-                  数据映射：<span className="font-mono font-medium text-[#0F172A]">product_category</span> · <span className="text-[#16A36A] font-medium">直接映射</span>
-                </div>
-              </div>
-            </div>
-
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7] self-start sm:self-auto">
-              <Check className="w-3 h-3 mr-0.5" />
-              可用
-            </span>
-          </div>
-
-          {/* 维度 3: 地区 (跨对象关联) */}
-          <div className="p-3.5 bg-white hover:bg-[#FAFCFF] space-y-2.5 transition-colors">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-6 h-6 rounded bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center font-bold text-xs shrink-0">
-                  <MapPin className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <div className="flex items-center space-x-1.5">
-                    <span className="font-bold text-[#172033]">地区</span>
-                    <span className="text-[#667085] text-[11px]">（客户.所属地区 · 跨对象分析）</span>
+          ) : (
+            metric.dimensions.map((dimName, idx) => {
+              const customPath = binding?.dimensionPaths?.find(p => p.dimensionName === dimName);
+              return (
+                <div key={idx} className="p-3.5 bg-white hover:bg-[#FAFCFF] flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-6 h-6 rounded bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center font-bold text-xs shrink-0">
+                      <Tag className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-bold text-[#172033]">{dimName}</span>
+                        <span className="text-[#667085] text-[11px]">（{businessObject}.{dimName}）</span>
+                      </div>
+                      <div className="text-[11px] text-[#475569] mt-0.5">
+                        {customPath ? (
+                          <>
+                            数据路径：<span className="font-medium text-[#0F172A]">{customPath.sourceObject} → ({customPath.cardinality}) → {customPath.targetObject}</span> · <span className="text-[#16A36A] font-medium">{customPath.validationStatus === 'SAFE' ? '安全无分叉' : '关联已验证'}</span>
+                          </>
+                        ) : (
+                          <>
+                            数据映射：<span className="font-mono font-medium text-[#0F172A]">{dimName.toLowerCase()}_code</span> · <span className="text-[#16A36A] font-medium">直接映射 · 路径已确认</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-[#475569] mt-0.5">
-                    结果映射：<span className="font-mono font-medium text-[#0F172A]">region_id</span> · 关系路径已确认
-                  </div>
+
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7] self-start sm:self-auto">
+                    <Check className="w-3 h-3 mr-0.5" />
+                    可用
+                  </span>
                 </div>
-              </div>
-
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7] self-start sm:self-auto">
-                <Check className="w-3 h-3 mr-0.5" />
-                关系路径已确认
-              </span>
-            </div>
-
-            {/* 安全拓扑关联路径 (Dense Horizontal Stepper) */}
-            <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-md px-3 py-2 flex items-center flex-wrap gap-2 text-xs">
-              <span className="text-[11px] text-[#667085] font-semibold">安全关联路径：</span>
-              <span className="px-2 py-0.5 bg-white border border-[#CBD5E1] rounded text-[11px] font-bold text-[#172033]">
-                订单
-              </span>
-              <span className="text-[10px] font-mono text-[#2563EB] font-semibold">── N:1 ──→</span>
-              <span className="px-2 py-0.5 bg-white border border-[#CBD5E1] rounded text-[11px] font-bold text-[#172033]">
-                客户
-              </span>
-              <span className="text-[10px] font-mono text-[#2563EB] font-semibold">── N:1 ──→</span>
-              <span className="px-2 py-0.5 bg-white border border-[#CBD5E1] rounded text-[11px] font-bold text-[#172033]">
-                行政区域
-              </span>
-              <span className="text-[10px] text-[#667085] ml-auto">
-                (无笛卡尔积风险)
-              </span>
-            </div>
-          </div>
-
+              );
+            })
+          )}
         </div>
       </section>
 
@@ -503,3 +543,4 @@ export const MetricDataBindingTab: React.FC<MetricDataBindingTabProps> = ({
     </div>
   );
 };
+

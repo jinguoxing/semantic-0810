@@ -50,12 +50,15 @@ import {
   Home,
   Compass,
   Box,
-  Layers3
+  Layers3,
+  ShoppingBag
 } from 'lucide-react';
 import { DataBindingDrawer } from './DataBindingDrawer';
 import { BusinessRuleDetailDrawer } from './BusinessRuleDetailDrawer';
 import { MetricDataBindingTab } from './MetricDataBindingTab';
 import { MetricOverviewTab } from './MetricOverviewTab';
+import { metricRegistryService } from '../data/metricRegistryData';
+import { Metric } from '../types';
 
 export interface MetricDetailWorkspaceProps {
   metricId?: string;
@@ -98,6 +101,12 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
   onNavigateToModifyDraft,
   addToast
 }) => {
+  // Resolve current metric dynamically from registry as Single Source of Truth
+  const metric: Metric = 
+    metricRegistryService.getMetricById(metricId) || 
+    metricRegistryService.getMetricById('met_valid_order_amount') || 
+    metricRegistryService.getAllMetrics()[0];
+
   // Main Tab State - default to Data Binding per user request
   const [activeTab, setActiveTab] = useState<'overview' | 'binding' | 'evidence_versions'>('binding');
 
@@ -105,13 +114,15 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
   const [isModifyDraftModalOpen, setIsModifyDraftModalOpen] = useState<boolean>(false);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState<boolean>(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState<boolean>(false);
+  const [isDeprecateModalOpen, setIsDeprecateModalOpen] = useState<boolean>(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
   const [isDimensionDetailOpen, setIsDimensionDetailOpen] = useState<string | null>(null);
   const [isDataBindingDrawerOpen, setIsDataBindingDrawerOpen] = useState<boolean>(false);
   const [isBusinessRuleDrawerOpen, setIsBusinessRuleDrawerOpen] = useState<boolean>(false);
+  const [currentMetricStatus, setCurrentMetricStatus] = useState<string>(metric.status || 'EFFECTIVE');
 
   // Draft description in Modify Modal
-  const [modifyReason, setModifyReason] = useState<string>('根据最新业务规则，优化有效订单的认定范围口径');
+  const [modifyReason, setModifyReason] = useState<string>(`根据最新业务规则，优化「${metric.name}」的认定范围口径与计算逻辑`);
 
   // Copy helper
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -125,19 +136,27 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
   const handleStartModifyDraft = () => {
     setIsModifyDraftModalOpen(false);
     if (onNavigateToModifyDraft) {
-      onNavigateToModifyDraft(metricId);
+      onNavigateToModifyDraft(metric.id);
     } else {
-      addToast?.('success', '已创建指标修改草稿', '已基于当前正式版本 v1.2 创建 v1.3 草稿副本，并进入版本演进治理流程');
+      addToast?.('success', '已创建指标修改草稿', `已基于当前正式版本 ${metric.version} 创建草稿副本，并进入版本演进治理流程`);
     }
   };
 
   const handleTriggerAnalysis = () => {
     setIsAnalysisModalOpen(false);
     if (onEnterAnalysis) {
-      onEnterAnalysis('老年人口数');
+      onEnterAnalysis(metric.name);
     } else {
-      addToast?.('success', '已载入 AI 分析工作台', '指标「老年人口数」已绑定当前分析会话');
+      addToast?.('success', '已载入 AI 分析工作台', `指标「${metric.name}」已绑定当前分析会话`);
     }
+  };
+
+  const getBoId = (bo: string) => {
+    if (bo === '自然人' || bo === '人口') return 'bo_person';
+    if (bo === '服务工单' || bo === '工单') return 'bo_ticket';
+    if (bo === '企业') return 'bo_corp';
+    if (bo === '客户') return 'bo_customer';
+    return 'bo_order';
   };
 
   return (
@@ -216,7 +235,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
             {/* 二级菜单 */}
             <div className="pl-4 pr-1 py-1 space-y-0.5 mt-0.5 border-l-2 border-[#BFDBFE] ml-4">
               <button
-                onClick={() => onNavigateToBusinessObject?.('bo_person')}
+                onClick={() => onNavigateToBusinessObject?.(getBoId(metric.businessObject))}
                 className="w-full px-2.5 py-1.5 rounded-md hover:bg-[#F1F5F9] text-left text-xs text-[#475569] flex items-center space-x-2 transition-colors cursor-pointer"
               >
                 <Users className="w-3.5 h-3.5 text-[#667085]" />
@@ -268,12 +287,12 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
           <div className="flex items-center space-x-2">
             <Building2 className="w-3.5 h-3.5 text-[#667085]" />
             <span className="text-xs font-semibold text-[#172033]">
-              人口管理局
+              {metric.scope?.organization || '企业数据治理委员会'}
             </span>
           </div>
           <div className="flex items-center space-x-1.5 text-[11px] text-[#667085]">
             <span className="text-[#7C3AED] font-bold">✦</span>
-            <span>AI Partner: Xino｜犀诺</span>
+            <span>AI Partner: Semovix Semantic Engine</span>
           </div>
         </div>
       </aside>
@@ -301,7 +320,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
             <span>指标</span>
           </button>
           <span>/</span>
-          <span className="text-[#172033] font-semibold">有效订单金额</span>
+          <span className="text-[#172033] font-semibold">{metric.name}</span>
         </div>
 
         {/* ======================================================= */}
@@ -315,29 +334,47 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
               {/* 主标题与轻量标签 */}
               <div className="flex items-center flex-wrap gap-2.5">
                 <h1 className="text-2xl font-bold text-[#172033] tracking-tight">
-                  有效订单金额
+                  {metric.name}
                 </h1>
                 <span className="text-xs text-[#667085] font-mono">
-                  Effective Order Amount
+                  {metric.enName || metric.measurement?.measureName}
                 </span>
 
                 {/* 3 个轻量标签 */}
                 <span className="px-2 py-0.5 text-xs font-semibold rounded-md bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
-                  电商交易
+                  {metric.scope?.businessDomain || '业务域'}
                 </span>
-                <span className="px-2 py-0.5 text-xs font-semibold rounded-md bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0] flex items-center space-x-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
-                  <span>正式有效</span>
+                <span className={`px-2 py-0.5 text-xs font-semibold rounded-md flex items-center space-x-1 ${
+                  currentMetricStatus === 'EFFECTIVE'
+                    ? 'bg-[#ECFDF5] text-[#16A36A] border border-[#A7F3D0]'
+                    : currentMetricStatus === 'DEPRECATED'
+                    ? 'bg-[#FEF2F2] text-[#DC2626] border border-[#FECACA]'
+                    : 'bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A]'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    currentMetricStatus === 'EFFECTIVE'
+                      ? 'bg-[#16A36A]'
+                      : currentMetricStatus === 'DEPRECATED'
+                      ? 'bg-[#DC2626]'
+                      : 'bg-[#D97706]'
+                  }`} />
+                  <span>
+                    {currentMetricStatus === 'EFFECTIVE'
+                      ? '当前正式有效'
+                      : currentMetricStatus === 'DEPRECATED'
+                      ? '已停用 (DEPRECATED)'
+                      : '草稿草拟'}
+                  </span>
                 </span>
                 <span className="px-2 py-0.5 text-xs font-semibold rounded-md bg-[#F5F3FF] text-[#7C3AED] border border-[#DDD6FE] flex items-center space-x-1">
                   <span>✦</span>
-                  <span>AI 可用</span>
+                  <span>{metric.aiReadiness === 'READY' ? 'AI 可用' : '未就绪'}</span>
                 </span>
               </div>
 
               {/* 正式定义说明 */}
               <p className="text-sm text-[#475569] leading-relaxed max-w-4xl font-normal">
-                满足“有效订单”业务规则的订单金额合计，用于衡量一定统计周期内形成的有效订单交易规模。
+                {metric.definition}
               </p>
 
               {/* 元信息行 */}
@@ -345,27 +382,27 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                 <div className="flex items-center space-x-1.5">
                   <span className="text-[#94A3B8]">业务对象：</span>
                   <button
-                    onClick={() => onNavigateToBusinessObject?.('bo_order')}
+                    onClick={() => onNavigateToBusinessObject?.(getBoId(metric.businessObject))}
                     className="font-medium text-[#172033] hover:text-[#2563EB] transition-colors cursor-pointer"
                   >
-                    订单
+                    {metric.businessObject}
                   </button>
                 </div>
 
                 <div className="flex items-center space-x-1.5">
                   <span className="text-[#94A3B8]">业务域：</span>
-                  <span className="font-medium text-[#172033]">电商交易</span>
+                  <span className="font-medium text-[#172033]">{metric.scope?.businessDomain}</span>
                 </div>
 
                 <div className="flex items-center space-x-1.5">
                   <span className="text-[#94A3B8]">Owner：</span>
-                  <span className="font-medium text-[#172033]">交易分析与财务核算组</span>
+                  <span className="font-medium text-[#172033]">{metric.provenance?.owner || '数据治理委员会'}</span>
                 </div>
 
                 <div className="flex items-center space-x-1.5">
                   <span className="text-[#94A3B8]">当前版本：</span>
                   <span className="font-mono font-semibold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
-                    v1.2
+                    {metric.version}
                   </span>
                 </div>
               </div>
@@ -377,9 +414,9 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                 type="button"
                 onClick={() => {
                   if (onEnterChatQuery) {
-                    onEnterChatQuery('有效订单金额');
+                    onEnterChatQuery(metric.name);
                   } else {
-                    addToast?.('info', '问这个指标', '已在 Xino 智能问数中绑定「有效订单金额」指标口径');
+                    addToast?.('info', '问这个指标', `已在智能问数中绑定「${metric.name}」指标口径`);
                   }
                 }}
                 className="px-4 py-2 rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-xs font-semibold shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
@@ -435,11 +472,11 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                     <button
                       onClick={() => {
                         setIsMoreMenuOpen(false);
-                        addToast?.('error', '权限限制', '停用正式已发布指标需提交企业数据治理委员会审批');
+                        setIsDeprecateModalOpen(true);
                       }}
-                      className="w-full px-3 py-2 text-left hover:bg-[#FEF2F2] text-[#E45454] flex items-center space-x-2 transition-colors cursor-pointer"
+                      className="w-full px-3 py-2 text-left hover:bg-[#FEF2F2] text-[#DC2626] flex items-center space-x-2 transition-colors cursor-pointer"
                     >
-                      <AlertTriangle className="w-3.5 h-3.5 text-[#E45454]" />
+                      <AlertTriangle className="w-3.5 h-3.5 text-[#DC2626]" />
                       <span>停用指标</span>
                     </button>
                   </div>
@@ -496,7 +533,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
             {/* Tabs 右侧极轻状态提示 */}
             <div className="hidden lg:flex items-center space-x-1.5 text-xs text-[#667085]">
               <span className="text-[#7C3AED] font-bold">✦</span>
-              <span>AI 持续验证中 · 当前未发现阻断问题</span>
+              <span>AI 语义对齐就绪 · 5维相容性校验通过</span>
             </div>
           </div>
         </div>
@@ -509,7 +546,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
 
             {activeTab === 'overview' && (
               <MetricOverviewTab
-                metricName="有效订单金额"
+                metric={metric}
                 onNavigateToBusinessObject={onNavigateToBusinessObject}
                 onNavigateToBindingTab={() => setActiveTab('binding')}
                 onNavigateToVersionsTab={() => setActiveTab('evidence_versions')}
@@ -525,7 +562,8 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
             {/* --------------------------------------------------------- */}
             {activeTab === 'binding' && (
               <MetricDataBindingTab
-                metricName="有效订单金额"
+                metric={metric}
+                binding={metric.binding}
                 onOpenDataBindingDrawer={() => setIsDataBindingDrawerOpen(true)}
                 onOpenBusinessRuleDrawer={() => setIsBusinessRuleDrawerOpen(true)}
                 onNavigateToDataAssetDetail={onNavigateToDataAssetDetail}
@@ -556,46 +594,50 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                 </div>
 
                 <div className="border border-[#EEF2F6] rounded-lg overflow-hidden divide-y divide-[#EEF2F6] text-xs">
-                  {/* v2.0 当前正式发布版本 */}
+                  {/* 当前正式有效版本 */}
                   <div className="p-4 bg-[#F8FAFC] space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <span className="font-bold text-xs text-[#172033]">v2.0 (当前正式发布版本)</span>
+                        <span className="font-bold text-xs text-[#172033]">{metric.version}（当前正式有效版本）</span>
                         <span className="px-2 py-0.2 rounded bg-[#2563EB] text-white text-[10px] font-bold">CURRENT</span>
                       </div>
-                      <span className="text-xs text-[#16A36A] font-semibold bg-[#F0FDF4] px-2 py-0.5 rounded border border-[#DCFCE7]">
-                        已生效执行中
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${
+                        currentMetricStatus === 'EFFECTIVE'
+                          ? 'text-[#16A36A] bg-[#F0FDF4] border-[#DCFCE7]'
+                          : currentMetricStatus === 'DEPRECATED'
+                          ? 'text-[#DC2626] bg-[#FEF2F2] border-[#FECACA]'
+                          : 'text-[#D97706] bg-[#FFFBEB] border-[#FDE68A]'
+                      }`}>
+                        {currentMetricStatus === 'EFFECTIVE' ? '已生效执行中' : currentMetricStatus === 'DEPRECATED' ? '已停用' : '草稿'}
                       </span>
                     </div>
                     <p className="text-xs text-[#475569] leading-relaxed">
-                      将“有效订单”业务规则升级为标准共享规则，排除已全额退款、作废订单及测试订单；新增地区跨对象拓扑关联安全路径。
+                      {metric.definition}
                     </p>
-                    <div className="text-[11px] text-[#667085] flex items-center space-x-3 pt-1">
-                      <span>发布人: 交易分析与财务核算组 · 李晨</span>
+                    <div className="text-[11px] text-[#667085] flex items-center space-x-3 pt-1 flex-wrap gap-y-1">
+                      <span>确认责任人: {metric.provenance?.owner || '指标归口责任人'}</span>
                       <span>·</span>
-                      <span>发布时间: 2026-06-15 14:30</span>
+                      <span>确认状态: Owner 确认生效</span>
                       <span>·</span>
-                      <span>依据制度: 《企业电商交易业务数据治理规范》第 4.2 条</span>
+                      <span>依据制度: {metric.provenance?.evidence?.[0] || '《企业业务数据治理规范》'}</span>
                     </div>
                   </div>
 
-                  {/* v1.0 历史版本 */}
+                  {/* 历史初始归档版本 */}
                   <div className="p-4 bg-white space-y-2 opacity-80">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
-                        <span className="font-bold text-xs text-[#172033]">v1.0 (历史已归档版本)</span>
+                        <span className="font-bold text-xs text-[#172033]">v1.0.0 (历史已归档版本)</span>
                       </div>
                       <span className="text-xs text-[#667085] bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0]">
                         已归档
                       </span>
                     </div>
                     <p className="text-xs text-[#667085] leading-relaxed">
-                      初始创建版本，直接基于原交易流水表粗粒度求和。
+                      初始创建版本，确立指标核心度量与基础粒度。
                     </p>
                     <div className="text-[11px] text-[#94A3B8] flex items-center space-x-3 pt-1">
-                      <span>发布人: 数据中心 · 王伟</span>
-                      <span>·</span>
-                      <span>发布时间: 2025-11-20</span>
+                      <span>归档人: {metric.provenance?.owner || '数据治理委员会'}</span>
                     </div>
                   </div>
                 </div>
@@ -617,7 +659,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
               <div className="flex items-center space-x-2">
                 <GitBranch className="w-4 h-4 text-[#2563EB]" />
                 <h3 className="text-sm font-bold text-[#172033]">
-                  发起指标修改
+                  发起指标修改 - {metric.name}
                 </h3>
               </div>
               <button
@@ -634,7 +676,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                 <span>语义治理规范约束：</span>
               </div>
               <p>
-                当前指标为 <strong>v1.2 已发布正式版本</strong>，受语义事实保护不可直接编辑。发起修改将基于当前定义创建 <strong>v1.3 草稿副本</strong>，并在审核发布后生效替换。
+                当前指标为 <strong>{metric.version} 当前正式有效版本</strong>，受语义事实保护不可直接编辑。发起修改将基于当前定义创建 <strong>新草稿副本</strong>，并在发布生效后完成版本演进。
               </p>
             </div>
 
@@ -664,7 +706,7 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                 onClick={handleStartModifyDraft}
                 className="px-4 py-1.5 rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold shadow-xs cursor-pointer"
               >
-                创建 v1.3 草稿版本
+                创建草稿版本
               </button>
             </div>
           </div>
@@ -693,15 +735,15 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
             </div>
 
             <p className="text-xs text-[#475569] leading-relaxed">
-              您即将把正式指标 <strong>「老年人口数」</strong> 载入 AI 协同分析工作台，您可以直接围绕该指标提问，例如：
+              您即将把正式指标 <strong>「{metric.name}」</strong> 载入 AI 协同分析工作台，您可以直接围绕该指标提问，例如：
             </p>
 
             <div className="space-y-1.5 text-xs">
               <div className="p-2 rounded bg-[#F8FAFC] border border-[#EEF2F6] text-[#2563EB] font-medium">
-                • 过去三年各街镇老年人口增长趋势如何？
+                • 过去三年各主要维度的「{metric.name}」增长趋势如何？
               </div>
               <div className="p-2 rounded bg-[#F8FAFC] border border-[#EEF2F6] text-[#2563EB] font-medium">
-                • 80 岁以上高龄老年人口的区域分布集中在哪些网格？
+                • 针对不同分类对「{metric.name}」进行多维下钻与结构占比分析
               </div>
             </div>
 
@@ -736,12 +778,12 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
               <div className="flex items-center space-x-2">
                 <History className="w-4 h-4 text-[#2563EB]" />
                 <h3 className="text-sm font-bold text-[#172033]">
-                  指标历史版本一览
+                  指标历史版本一览 - {metric.name}
                 </h3>
               </div>
               <button
                 onClick={() => setIsHistoryModalOpen(false)}
-                className="p-1 rounded-md hover:bg-[#F1F5F9] text-[#667085]"
+                className="p-1.5 rounded-md hover:bg-[#F1F5F9] text-[#667085]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -750,21 +792,21 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
             <div className="space-y-3 text-xs">
               <div className="p-3 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE]">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#172033]">v1.2 (当前版本)</span>
-                  <span className="text-[10px] text-[#2563EB] font-mono">2026-06-15 生效</span>
+                  <span className="font-bold text-[#172033]">{metric.version}（当前正式有效版本）</span>
+                  <span className="text-[10px] text-[#2563EB] font-mono">正式有效</span>
                 </div>
                 <p className="text-[11px] text-[#475569] mt-1">
-                  修正 60 周岁精确时间差算法，并规范 5 项分析维度。
+                  {metric.definition}
                 </p>
               </div>
 
               <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0]">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#667085]">v1.1</span>
-                  <span className="text-[10px] text-[#94A3B8] font-mono">2026-01-10 生效</span>
+                  <span className="font-bold text-[#667085]">v1.0.0 (历史初版)</span>
+                  <span className="text-[10px] text-[#94A3B8] font-mono">已归档</span>
                 </div>
                 <p className="text-[11px] text-[#667085] mt-1">
-                  初版人口业务统计口径。
+                  初版业务统计口径与事实基础。
                 </p>
               </div>
             </div>
@@ -806,12 +848,16 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                 <span className="font-semibold text-[#172033]">企业正式分析维度</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#EEF2F6]">
+                <span className="text-[#667085]">所属实体:</span>
+                <span className="font-semibold text-[#172033]">{metric.businessObject}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-[#EEF2F6]">
                 <span className="text-[#667085]">下钻支持:</span>
                 <span className="text-[#16A36A] font-semibold">支持逐级下钻</span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-[#667085]">验证状态:</span>
-                <span className="text-[#16A36A] font-semibold">🟢 已验证</span>
+                <span className="text-[#667085]">相容性状态:</span>
+                <span className="text-[#16A36A] font-semibold">🟢 5维相容性 PASS</span>
               </div>
             </div>
 
@@ -833,9 +879,10 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
           <DataBindingDrawer
             isOpen={isDataBindingDrawerOpen}
             onClose={() => setIsDataBindingDrawerOpen(false)}
+            metric={metric}
             onViewDataAsset={(assetName) => {
               setIsDataBindingDrawerOpen(false);
-              onNavigateToDataAssetDetail?.('res-order-fact');
+              onNavigateToDataAssetDetail?.(metric.binding?.dataAssetId || 'asset_01');
             }}
             onViewBusinessRule={(ruleName) => {
               setIsBusinessRuleDrawerOpen(true);
@@ -851,9 +898,72 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
       <BusinessRuleDetailDrawer
         isOpen={isBusinessRuleDrawerOpen}
         onClose={() => setIsBusinessRuleDrawerOpen(false)}
-        ruleName="有效订单"
+        ruleName={metric.name}
+        metric={metric}
         addToast={addToast}
       />
+
+      {/* ========================================================= */}
+      {/* 弹窗 7: 停用指标确认模态框 (遵循第25节：基础模型不硬编码委员会审批) */}
+      {/* ========================================================= */}
+      {isDeprecateModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl border border-[#E6EAF0] shadow-2xl max-w-md w-full p-6 space-y-4 animate-in fade-in-50 zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-[#EEF2F6]">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-[#DC2626]" />
+                <h3 className="text-sm font-bold text-[#172033]">
+                  确认停用指标 - {metric.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsDeprecateModalOpen(false)}
+                className="p-1 rounded-md hover:bg-[#F1F5F9] text-[#667085] cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-xs text-[#991B1B] space-y-1.5">
+              <div className="font-bold flex items-center space-x-1">
+                <span>⚠️ 影响与停用说明：</span>
+              </div>
+              <p className="leading-relaxed">
+                您即将停用「<strong>{metric.name}</strong>」（{metric.version} 当前正式有效版本）。停用后该指标状态将变更为「<strong>已停用（DEPRECATED）</strong>」，下游正在消费该口径的看板与 AI 问数将收到口径停用提示。
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] text-[11px] text-[#475569] space-y-1">
+              <div className="font-semibold text-[#172033]">治理规则生效说明：</div>
+              <p>
+                根据语义平台规范（第 25 节），基础模式下由指标归口责任人（Owner：{metric.provenance?.owner || '指标负责人'}）直接确认生效；若企业环境配置了组织级 Governance Policy，系统将按预设策略自动流转。
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-[#EEF2F6]">
+              <button
+                type="button"
+                onClick={() => setIsDeprecateModalOpen(false)}
+                className="px-3.5 py-1.5 rounded-lg border border-[#E2E8F0] hover:bg-[#F8FAFC] text-xs font-medium text-[#475569] cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeprecateModalOpen(false);
+                  setCurrentMetricStatus('DEPRECATED');
+                  metric.status = 'DEPRECATED';
+                  addToast?.('success', '指标已停用', `已将「${metric.name}」标记为已停用状态（DEPRECATED）`);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-semibold shadow-xs cursor-pointer"
+              >
+                确认停用
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

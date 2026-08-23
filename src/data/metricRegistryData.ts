@@ -639,6 +639,8 @@ export const CANONICAL_DOMAIN_METRICS: Metric[] = [
     businessObject: '订单',
     scope: {
       businessDomain: '销售分析',
+      geography: '华东大区',
+      organization: '区域销售考核组',
       scenario: '区域销售考核',
     },
     measurement: {
@@ -759,11 +761,25 @@ export const metricRegistryService = {
   },
 
   /**
-   * Lookup metric by exact ID
+   * Lookup metric by exact ID or common aliases/names
    */
   getMetricById(metricId?: string): Metric | undefined {
     if (!metricId) return undefined;
-    return CANONICAL_DOMAIN_METRICS.find(m => m.id === metricId);
+    const cleanId = metricId.trim();
+    if (cleanId === 'res-03') {
+      return CANONICAL_DOMAIN_METRICS.find(m => m.id === 'met_001');
+    }
+    const directMatch = CANONICAL_DOMAIN_METRICS.find(m => m.id === cleanId);
+    if (directMatch) return directMatch;
+
+    const nameMatch = CANONICAL_DOMAIN_METRICS.find(m => 
+      m.name === cleanId || 
+      m.enName?.toLowerCase() === cleanId.toLowerCase() ||
+      m.id.toLowerCase() === cleanId.toLowerCase()
+    );
+    if (nameMatch) return nameMatch;
+
+    return undefined;
   },
 
   /**

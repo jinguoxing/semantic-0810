@@ -215,12 +215,14 @@ export interface MetricMeasurement {
   aggregation: "SUM" | "COUNT" | "COUNT_DISTINCT" | "AVG";
   baseGrain: string;
   unit?: string;
+  formula?: string;
 }
 
 export interface MetricTimeSemantics {
   type: "POINT_IN_TIME" | "SNAPSHOT" | "PERIOD" | "FLOW" | "CUMULATIVE";
   businessTime: string;
   defaultGranularity: "DAY" | "MONTH" | "QUARTER" | "YEAR";
+  supportedGranularities?: Array<"DAY" | "MONTH" | "QUARTER" | "YEAR">;
 }
 
 export type MetricStatus = "DRAFT" | "EFFECTIVE" | "DEPRECATED";
@@ -332,6 +334,7 @@ export interface MetricRegistryRowVM {
   name: string;
   enName: string;
   domain: string;
+  scopeSummary?: string;
   definition: string;
   businessObject: string;
   calculationSummary: string;

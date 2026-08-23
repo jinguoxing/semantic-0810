@@ -38,6 +38,7 @@ import { StandardCheckWorkspace } from './components/StandardCheckWorkspace';
 import { StandardCheckIssueDetailWorkspace } from './components/StandardCheckIssueDetailWorkspace';
 import { StandardDetailWorkspace } from './components/StandardDetailWorkspace';
 import { MetricRegistryWorkspace } from './components/MetricRegistryWorkspace';
+import { metricRegistryService } from './data/metricRegistryData';
 import { MetricAuthoringWorkspace } from './components/MetricAuthoringWorkspace';
 import { MetricDetailWorkspace } from './components/MetricDetailWorkspace';
 import { BusinessObjectDetailWorkspace } from './components/BusinessObjectDetailWorkspace';
@@ -59,6 +60,7 @@ export default function App() {
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
   const [assetDetailContext, setAssetDetailContext] = useState<{ assetId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ assetId: 'res-02', fromGoalSearch: false, goalQuery: '' });
   const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'res-03', fromGoalSearch: false, goalQuery: '' });
+  const [selectedChangeMetricId, setSelectedChangeMetricId] = useState<string>('met_001');
   const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_person', fromGoalSearch: false, goalQuery: '' });
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
@@ -704,16 +706,27 @@ export default function App() {
             addToast('info', '围绕此指标找数据', `已在资源超市中筛选与「${metricName}」相关的指标与数据集`);
           }}
           onNavigateToModifyDraft={(metricId) => {
+            const effId = metricId || metricDetailContext.metricId || 'met_001';
+            setSelectedChangeMetricId(effId);
+            const foundMetric = metricRegistryService.getMetricById(effId) || 
+                                (effId === 'res-03' ? metricRegistryService.getMetricById('met_001') : null);
+            const metricName = foundMetric ? foundMetric.name : '指标';
             setCurrentNav('metric_change_draft');
             setViewTab('metric_change_draft');
-            addToast('info', '修改指标', '已进入 Metric Authoring Change Mode（有效订单金额 v1.3 修改草稿）');
+            addToast('info', '修改指标', `已进入「${metricName}」修改草稿（Change Mode）`);
           }}
           addToast={addToast}
         />
       ) : currentNav === 'metric_change_draft' || viewTab === 'metric_change_draft' ? (
         <MetricAuthoringWorkspace
           initialMode="change_draft"
+          targetMetricId={selectedChangeMetricId}
           addToast={addToast}
+          onNavigateToMetricDetail={(metricId) => {
+            setMetricDetailContext({ metricId: metricId || selectedChangeMetricId, fromGoalSearch: false, goalQuery: '' });
+            setCurrentNav('metric_detail');
+            setViewTab('metric_detail');
+          }}
           onBackToRegistry={() => {
             setCurrentNav('metrics');
             setViewTab('metrics');
@@ -866,7 +879,18 @@ export default function App() {
             setViewTab('metric_detail');
             addToast('info', '指标详情', '已载入「老年人口数」正式指标事实详情页');
           }}
-          onNavigateToCreateMetric={(mode, draftData) => {
+          onNavigateToCreateMetric={(mode, draftData, targetMetricId) => {
+            if (mode === 'change_draft') {
+              const effId = targetMetricId || 'met_001';
+              setSelectedChangeMetricId(effId);
+              const foundMetric = metricRegistryService.getMetricById(effId) || 
+                                  (effId === 'res-03' ? metricRegistryService.getMetricById('met_001') : null);
+              const metricName = foundMetric ? foundMetric.name : '指标';
+              setCurrentNav('metric_change_draft');
+              setViewTab('metric_change_draft');
+              addToast('info', '修改指标', `已进入「${metricName}」修改草稿（Change Mode）`);
+              return;
+            }
             setAuthoringMode(mode || 'ai_prompt');
             setAuthoringInitialDraft(draftData);
             setCurrentNav('create_metric');

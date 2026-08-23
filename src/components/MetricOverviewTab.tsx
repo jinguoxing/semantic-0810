@@ -25,11 +25,14 @@ import {
   TrendingUp,
   FolderTree,
   BarChart3,
-  Copy
+  Copy,
+  Users,
+  FileCode2
 } from 'lucide-react';
+import { Metric } from '../types';
 
 interface MetricOverviewTabProps {
-  metricName?: string;
+  metric: Metric;
   onNavigateToBusinessObject?: (boId: string) => void;
   onNavigateToBindingTab?: () => void;
   onNavigateToVersionsTab?: () => void;
@@ -40,7 +43,7 @@ interface MetricOverviewTabProps {
 }
 
 export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
-  metricName = '有效订单金额',
+  metric,
   onNavigateToBusinessObject,
   onNavigateToBindingTab,
   onNavigateToVersionsTab,
@@ -49,6 +52,39 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
   onSelectDimension,
   addToast
 }) => {
+  const name = metric.name;
+  const definition = metric.definition;
+  const businessObject = metric.businessObject;
+  const businessDomain = metric.scope?.businessDomain || '业务域';
+  const scenario = metric.scope?.scenario || '业务分析';
+  const entityScope = metric.scope?.entityScope || '全量基数';
+  const organization = metric.scope?.organization || '数据管理责任组';
+  const measureName = metric.measurement?.measureName || 'measure_value';
+  const aggregation = metric.measurement?.aggregation || 'SUM';
+  const baseGrain = metric.measurement?.baseGrain || businessObject;
+  const unit = metric.measurement?.unit || '';
+  const businessTime = metric.timeSemantics?.businessTime || '业务时间';
+  const timeType = metric.timeSemantics?.type === 'FLOW'
+    ? '连续流量时间语义 (Flow Time)'
+    : metric.timeSemantics?.type === 'SNAPSHOT'
+    ? '时点快照时间语义 (Snapshot Time)'
+    : '时段期间时间语义 (Period Time)';
+  const granularity = metric.timeSemantics?.defaultGranularity || 'MONTH';
+
+  // Helper for business object id
+  const getBoId = (bo: string) => {
+    if (bo === '自然人' || bo === '人口') return 'bo_person';
+    if (bo === '服务工单' || bo === '工单') return 'bo_ticket';
+    if (bo === '企业') return 'bo_corp';
+    if (bo === '客户') return 'bo_customer';
+    return 'bo_order';
+  };
+
+  // Check if composite
+  const isComposite = Boolean(metric?.dependencies && metric.dependencies.length > 0);
+  const numerator = metric?.dependencies?.find(d => d.role === 'NUMERATOR');
+  const denominator = metric?.dependencies?.find(d => d.role === 'DENOMINATOR');
+
   return (
     <div className="w-full bg-white rounded-xl border border-[#E6EAF0] p-6 sm:p-8 space-y-7 font-sans antialiased text-[#172033] shadow-2xs">
 
@@ -70,7 +106,7 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
 
         {/* 业务定义描述 */}
         <p className="text-xs text-[#334155] leading-relaxed bg-[#F8FAFC] p-3.5 rounded-lg border border-[#EEF2F6]">
-          满足“有效订单”业务规则的订单金额合计，用于衡量企业在指定统计周期内实际产生的有效商业交易规模与营收总盘。
+          {definition}
         </p>
 
         {/* 核心元属性行 (Flat Inline Strip) */}
@@ -79,23 +115,35 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
             <span className="text-[11px] text-[#667085] block">业务对象 (Business Object)</span>
             <button
               type="button"
-              onClick={() => onNavigateToBusinessObject?.('bo_order')}
+              onClick={() => onNavigateToBusinessObject?.(getBoId(businessObject))}
               className="font-bold text-[#2563EB] hover:text-[#1D4ED8] hover:underline inline-flex items-center space-x-1 cursor-pointer"
             >
-              <ShoppingBag className="w-3.5 h-3.5 mr-0.5" />
-              <span>{metricName === '有效订单金额' ? '订单 (Order)' : '自然人 (Person)'}</span>
+              {businessObject === '自然人' ? <Users className="w-3.5 h-3.5 mr-0.5" /> : <ShoppingBag className="w-3.5 h-3.5 mr-0.5" />}
+              <span>{businessObject}</span>
               <ChevronRight className="w-3 h-3 ml-0.5" />
             </button>
           </div>
 
           <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-lg space-y-1">
-            <span className="text-[11px] text-[#667085] block">限定业务规则 (Business Rule)</span>
+            <span className="text-[11px] text-[#667085] block">
+              {isComposite ? '复合指标依赖 (Dependencies)' : '限定业务规则 (Business Rule)'}
+            </span>
             <div className="flex items-center space-x-1.5">
-              <span className="font-bold text-[#172033]">{metricName === '有效订单金额' ? '有效订单 = 支付成功且未退款' : '老龄化率 = 60周岁及以上常住人口'}</span>
+              {isComposite ? (
+                <div className="flex items-center space-x-1">
+                  <span className="font-bold text-[#2563EB] font-mono text-[11px]">{numerator?.metricName || '分子指标'}</span>
+                  <span className="text-[#64748B]">÷</span>
+                  <span className="font-bold text-[#16A36A] font-mono text-[11px]">{denominator?.metricName || '分母指标'}</span>
+                </div>
+              ) : (
+                <span className="font-bold text-[#172033] truncate">
+                  {metric?.binding?.businessRuleFilter ? `${metric.name}业务限定规则` : '标准度量'}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={onOpenBusinessRuleDrawer}
-                className="text-[11px] text-[#2563EB] hover:underline cursor-pointer"
+                className="text-[11px] text-[#2563EB] hover:underline cursor-pointer ml-1"
               >
                 (查看规则)
               </button>
@@ -112,19 +160,19 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
             <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-0.5">
               <div className="text-[10px] text-[#64748B] font-bold">业务域</div>
-              <div className="font-bold text-[#0F172A]">{metricName === '有效订单金额' ? '交易分析' : '人口服务'}</div>
+              <div className="font-bold text-[#0F172A]">{businessDomain}</div>
             </div>
             <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-0.5">
               <div className="text-[10px] text-[#64748B] font-bold">业务场景</div>
-              <div className="font-bold text-[#0F172A]">{metricName === '有效订单金额' ? '订单经营分析' : '人口结构分析'}</div>
+              <div className="font-bold text-[#0F172A]">{scenario}</div>
             </div>
             <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-0.5">
               <div className="text-[10px] text-[#64748B] font-bold">统计范围</div>
-              <div className="font-bold text-[#0F172A]">{metricName === '有效订单金额' ? '有效订单' : '有效常住人口'}</div>
+              <div className="font-bold text-[#0F172A]">{entityScope}</div>
             </div>
             <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-0.5">
               <div className="text-[10px] text-[#64748B] font-bold">组织/实体</div>
-              <div className="font-bold text-[#0F172A]">{metricName === '有效订单金额' ? '销售业务与财务核算' : '全域自然人'}</div>
+              <div className="font-bold text-[#0F172A]">{organization}</div>
             </div>
           </div>
         </div>
@@ -152,19 +200,23 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
         <div className="bg-[#F8FAFC] border border-[#EEF2F6] rounded-lg px-5 py-3 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
           <div>
             <span className="text-[#667085] block text-[11px]">度量方式</span>
-            <span className="font-semibold text-[#172033] mt-0.5 inline-block">金额累加求和</span>
+            <span className="font-semibold text-[#172033] mt-0.5 inline-block">
+              {isComposite ? '比率复合衍生' : aggregation === 'SUM' ? '累加求和' : aggregation === 'COUNT_DISTINCT' ? '去重计数' : '平均计算'}
+            </span>
           </div>
           <div>
             <span className="text-[#667085] block text-[11px]">聚合算子</span>
-            <span className="font-mono font-bold text-[#2563EB] mt-0.5 inline-block">SUM</span>
+            <span className="font-mono font-bold text-[#2563EB] mt-0.5 inline-block">
+              {isComposite ? 'COMPOSITE_RATIO' : aggregation}
+            </span>
           </div>
           <div>
             <span className="text-[#667085] block text-[11px]">基础粒度</span>
-            <span className="font-semibold text-[#172033] mt-0.5 inline-block">订单 (order_id)</span>
+            <span className="font-semibold text-[#172033] mt-0.5 inline-block">{baseGrain}</span>
           </div>
           <div>
             <span className="text-[#667085] block text-[11px]">计量单位</span>
-            <span className="font-semibold text-[#172033] mt-0.5 inline-block">元 (CNY)</span>
+            <span className="font-semibold text-[#172033] mt-0.5 inline-block">{unit}</span>
           </div>
         </div>
 
@@ -173,24 +225,32 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
           <div className="p-3.5 rounded-lg border border-[#EEF2F6] bg-white space-y-2">
             <span className="text-[11px] font-bold text-[#667085]">业务计算口径 (Calculation)</span>
             <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-1.5">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 flex-wrap">
                 <span className="font-bold text-[#0F172A] text-xs">
-                  {metricName}
+                  {name}
                 </span>
                 <span className="text-[#64748B] font-bold">=</span>
-                <span className="font-mono font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
-                  SUM( 订单金额 )
-                </span>
+                {isComposite ? (
+                  <span className="font-mono font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
+                    {numerator?.metricName || '分子'} ÷ {denominator?.metricName || '分母'} × 100%
+                  </span>
+                ) : (
+                  <span className="font-mono font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
+                    {aggregation}( {metric?.binding?.measureField || measureName} )
+                  </span>
+                )}
               </div>
               <div className="text-[11px] text-[#475569] flex items-center space-x-1.5 pt-0.5">
                 <span className="font-semibold text-[#64748B]">限定范围：</span>
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0]">
-                  有效订单（支付成功且未退款）
+                  {metric?.binding?.businessRuleFilter || entityScope}
                 </span>
               </div>
             </div>
             <p className="text-[11px] text-[#667085]">
-              以每笔支付完成且未作废的订单事实为基础进行度量累加。（物理字段与过滤规则映射详见「数据实现」Tab）
+              {isComposite 
+                ? '基于已发布的分子与分母基础指标，沿统一时空维度与粒度执行零除保护安全除法运算。'
+                : `以每条${baseGrain}基础业务事实为基准进行${aggregation}聚合运算。（物理字段与过滤规则映射详见「数据实现」Tab）`}
             </p>
           </div>
 
@@ -199,17 +259,17 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
             <div className="p-3 bg-[#F0FDF4] border border-[#DCFCE7] rounded space-y-1.5">
               <div className="flex items-center space-x-1.5 text-[11px] text-[#166534]">
                 <Calendar className="w-3.5 h-3.5 text-[#16A36A] shrink-0" />
-                <span className="font-bold">业务时间：支付时间</span>
+                <span className="font-bold">业务时间：{businessTime}</span>
               </div>
               <div className="flex items-center space-x-1.5 text-[11px] text-[#166534]">
                 <span className="text-[#15803D] font-medium">支持周期：</span>
                 <span className="font-mono font-semibold bg-white/80 px-1.5 py-0.2 rounded border border-[#BBF7D0]">
-                  日 / 月 / 季 / 年
+                  {granularity === 'DAY' ? '日 / 月 / 季 / 年' : granularity === 'MONTH' ? '月 / 季 / 年' : '按需聚合'}
                 </span>
               </div>
             </div>
             <p className="text-[11px] text-[#667085]">
-              时态为连续流量时间语义，支持沿支付发生时间进行多周期滑动与聚合分析。
+              时态为{timeType}，支持沿{businessTime}进行多周期滑动、同比环比与聚合分析。
             </p>
           </div>
         </div>
@@ -238,80 +298,48 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
           <div className="flex items-center justify-between">
             <div className="text-[11px] font-bold text-[#475569] uppercase tracking-wider flex items-center space-x-1.5">
               <Tag className="w-3 h-3 text-[#2563EB]" />
-              <span>分析维度 (4 个可用)</span>
+              <span>分析维度 ({metric?.dimensions?.length || 0} 个可用)</span>
             </div>
-            <span className="text-[11px] text-[#64748B]">包含 3 个直接映射维度 · 1 个安全关系路径维度</span>
+            <span className="text-[11px] text-[#64748B]">全量维度均经过 5 维相容性校验与拓扑防环验证</span>
           </div>
 
           <div className="border border-[#EEF2F6] rounded-lg overflow-hidden divide-y divide-[#EEF2F6] text-xs">
-            {[
-              {
-                name: '渠道',
-                attr: '订单.渠道',
-                type: 'DIRECT',
-                mappingDesc: '直接映射 (Direct Mapping)',
-                icon: Tag
-              },
-              {
-                name: '商品分类',
-                attr: '订单.商品分类',
-                type: 'DIRECT',
-                mappingDesc: '直接映射 (Direct Mapping)',
-                icon: Layers
-              },
-              {
-                name: '地区',
-                attr: '客户.所属地区',
-                type: 'RELATIONSHIP',
-                mappingDesc: '安全关系路径: 订单 → 客户 → 行政区域',
-                icon: MapPin
-              },
-              {
-                name: '支付方式',
-                attr: '订单.支付方式',
-                type: 'DIRECT',
-                mappingDesc: '直接映射 (Direct Mapping)',
-                icon: CreditCard
-              },
-            ].map((dim, idx) => (
-              <div
-                key={idx}
-                onClick={() => onSelectDimension?.(dim.name)}
-                className="p-3 bg-white hover:bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors cursor-pointer group"
-              >
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-6 h-6 rounded bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center font-bold text-xs shrink-0">
-                    <dim.icon className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-1.5">
-                      <span className="font-bold text-[#172033] group-hover:text-[#2563EB] transition-colors">{dim.name}</span>
-                      <span className="text-[#667085] text-[11px]">({dim.attr})</span>
-                      {dim.type === 'RELATIONSHIP' && (
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-[#FAF5FF] text-[#7E22CE] border border-[#E9D5FF]">
-                          Relationship Path
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[11px] text-[#475569] mt-0.5">
-                      {dim.type === 'RELATIONSHIP' ? (
-                        <span className="text-[#7E22CE] font-medium">{dim.mappingDesc}</span>
-                      ) : (
-                        <span className="text-[#64748B]">{dim.mappingDesc}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-1 self-start sm:self-auto shrink-0">
-                  <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
-                    <Check className="w-2.5 h-2.5 mr-0.5" />
-                    正式可用
-                  </span>
-                  <ChevronRight className="w-3.5 h-3.5 text-[#94A3B8] group-hover:text-[#2563EB] transition-transform" />
-                </div>
+            {(!metric?.dimensions || metric.dimensions.length === 0) ? (
+              <div className="p-4 text-center text-xs text-[#94A3B8]">
+                暂未配置限定分析维度
               </div>
-            ))}
+            ) : (
+              metric.dimensions.map((dimName, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => onSelectDimension?.(dimName)}
+                  className="p-3 bg-white hover:bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-6 h-6 rounded bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center font-bold text-xs shrink-0">
+                      <Tag className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="font-bold text-[#172033] group-hover:text-[#2563EB] transition-colors">{dimName}</span>
+                        <span className="text-[#667085] text-[11px]">({businessObject}.{dimName})</span>
+                      </div>
+                      <div className="text-[11px] text-[#64748B] mt-0.5">
+                        直接映射分析维度 (Direct Mapping)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-1 self-start sm:self-auto shrink-0">
+                    <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-[#F0FDF4] text-[#16A36A] border border-[#DCFCE7]">
+                      <Check className="w-2.5 h-2.5 mr-0.5" />
+                      正式可用
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-[#94A3B8] group-hover:text-[#2563EB] transition-transform" />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -329,14 +357,14 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="font-bold text-[#172033]">支付时间</span>
-                  <span className="text-[#64748B] text-[11px] font-mono">(paid_time)</span>
+                  <span className="font-bold text-[#172033]">{businessTime}</span>
+                  <span className="text-[#64748B] text-[11px] font-mono">({metric?.binding?.timeField || 'stat_time'})</span>
                   <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-[#DCFCE7] text-[#166534]">
-                    流量时间 (Flow Time)
+                    {timeType}
                   </span>
                 </div>
                 <div className="text-[11px] text-[#475569] mt-0.5">
-                  支持聚合粒度：<span className="font-mono font-semibold text-[#0F172A]">日 / 月 / 季 / 年</span>
+                  支持聚合粒度：<span className="font-mono font-semibold text-[#0F172A]">{granularity === 'DAY' ? '日 / 月 / 季 / 年' : '月 / 季 / 年'}</span>
                 </div>
               </div>
             </div>
@@ -381,14 +409,14 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
                 <span>数据来源资产</span>
               </span>
               <span className="text-[10px] font-semibold text-[#16A36A] bg-[#F0FDF4] px-1.5 py-0.2 rounded border border-[#DCFCE7]">
-                绑定正常
+                {metric?.binding?.health === 'HEALTHY' ? '绑定正常' : '待绑定'}
               </span>
             </div>
             <div className="text-xs font-bold text-[#172033]">
-              订单事实数据 (`res-order-fact`)
+              {metric?.binding?.dataAssetName || '事实数据资产'} ({metric?.binding?.tableName || 'dwd_fact_table'})
             </div>
             <div className="text-[11px] text-[#667085]">
-              来源系统：订单业务系统 ｜ 基础主键：`order_id`
+              来源系统：{businessDomain}系统 ｜ 基础主键：{metric?.binding?.grainMapping?.physicalGrainField || 'id'}
             </div>
           </div>
 
@@ -400,29 +428,46 @@ export const MetricOverviewTab: React.FC<MetricOverviewTabProps> = ({
                 <span>规范制度依据</span>
               </span>
               <span className="text-[10px] font-semibold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#DBEAFE]">
-                v2.0 正式版
+                {metric?.version || 'v1.0.0'} 正式版
               </span>
             </div>
             <div className="text-xs font-bold text-[#172033]">
-              《企业电商交易业务数据治理规范》第 4.2 条
+              {metric?.provenance?.evidence?.[0] || `《${businessDomain}业务数据治理规范》`}
             </div>
             <div className="text-[11px] text-[#667085]">
-              归口责任部门：交易分析与财务核算组
+              归口责任主体：{metric?.provenance?.owner || '数据治理委员会'}
             </div>
           </div>
 
         </div>
 
-        {/* AI 可用声明条带 */}
-        <div className="p-3 bg-[#F5F3FF] border border-[#DDD6FE] rounded-lg text-xs flex items-start space-x-2.5">
+        {/* AI 可用声明条带 (遵循 V1.2 规范：无需打分与百分比，清晰声明业务语义完整、数据实现可解析、当前无阻断问题) */}
+        <div className="p-3.5 bg-[#F5F3FF] border border-[#DDD6FE] rounded-lg text-xs flex items-start space-x-3">
           <Sparkles className="w-4 h-4 text-[#7C3AED] shrink-0 mt-0.5" />
-          <div className="space-y-0.5 text-[#5B21B6]">
-            <div className="font-bold flex items-center space-x-2">
-              <span>✦ AI 可用已就绪</span>
-              <span className="text-[10px] font-semibold bg-white/70 px-1.5 py-0.2 rounded text-[#6D28D9]">语义完整度 100%</span>
+          <div className="space-y-1 text-[#5B21B6] flex-1">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="font-bold flex items-center space-x-2 text-xs">
+                <span>✦ AI 可用</span>
+                <span className="text-[10px] font-semibold bg-white/80 px-2 py-0.5 rounded text-[#6D28D9] border border-[#DDD6FE]">
+                  已通过语义与实现校验
+                </span>
+              </div>
             </div>
-            <div className="text-[11px] text-[#6D28D9] leading-relaxed">
-              当前指标语义结构完整、数据映射明确、拓扑路径安全，Semovix AI 可安全用于找数、问数、归因分析及多维下钻。
+            <div className="text-[11px] text-[#6D28D9] leading-relaxed flex items-center flex-wrap gap-x-3 gap-y-1 pt-0.5 font-medium">
+              <span className="flex items-center space-x-1">
+                <Check className="w-3 h-3 text-[#16A36A]" />
+                <span>业务语义完整</span>
+              </span>
+              <span className="text-[#C4B5FD]">·</span>
+              <span className="flex items-center space-x-1">
+                <Check className="w-3 h-3 text-[#16A36A]" />
+                <span>数据实现可解析</span>
+              </span>
+              <span className="text-[#C4B5FD]">·</span>
+              <span className="flex items-center space-x-1">
+                <Check className="w-3 h-3 text-[#16A36A]" />
+                <span>当前无阻断问题</span>
+              </span>
             </div>
           </div>
         </div>

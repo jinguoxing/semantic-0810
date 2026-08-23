@@ -42,12 +42,15 @@ import {
 } from 'lucide-react';
 import { DataBindingDrawer } from './DataBindingDrawer';
 import { MetricAuthoringChangeMode } from './MetricAuthoringChangeMode';
-import { MetricDraftInitialData } from '../types';
+import { MetricDraftInitialData, Metric } from '../types';
 
 interface MetricAuthoringWorkspaceProps {
   initialMode?: 'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft';
   initialDraftData?: MetricDraftInitialData;
+  targetMetricId?: string;
+  targetMetric?: Metric;
   onBackToRegistry?: () => void;
+  onNavigateToMetricDetail?: (metricId: string) => void;
   onNavigateToBusinessObject?: () => void;
   onNavigateToDataStandards?: () => void;
   onNavigateToDataSemantics?: () => void;
@@ -60,7 +63,10 @@ interface MetricAuthoringWorkspaceProps {
 export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> = ({
   initialMode = 'ai_prompt',
   initialDraftData,
+  targetMetricId,
+  targetMetric,
   onBackToRegistry,
+  onNavigateToMetricDetail,
   onNavigateToBusinessObject,
   onNavigateToDataStandards,
   onNavigateToDataSemantics,
@@ -349,7 +355,10 @@ export const MetricAuthoringWorkspace: React.FC<MetricAuthoringWorkspaceProps> =
   if (authoringMode === 'change_draft') {
     return (
       <MetricAuthoringChangeMode
+        metricId={targetMetricId}
+        metric={targetMetric}
         onBackToRegistry={onBackToRegistry}
+        onNavigateToMetricDetail={onNavigateToMetricDetail}
         onNavigateToBusinessObject={onNavigateToBusinessObject}
         onNavigateToDataStandards={onNavigateToDataStandards}
         onNavigateToDataSemantics={onNavigateToDataSemantics}

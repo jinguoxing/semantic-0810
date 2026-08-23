@@ -98,11 +98,21 @@ export function projectMetricToRowVM(metric: Metric): MetricRegistryRowVM {
     pendingActionDesc = '执行层数据绑定存在降级或依赖变动';
   }
 
+  // Format Applicable Scope Summary
+  const scopeParts: string[] = [];
+  if (metric.scope?.businessDomain) scopeParts.push(metric.scope.businessDomain);
+  if (metric.scope?.geography) scopeParts.push(metric.scope.geography);
+  if (metric.scope?.organization) scopeParts.push(metric.scope.organization);
+  if (metric.scope?.scenario) scopeParts.push(metric.scope.scenario);
+  if (metric.scope?.entityScope && scopeParts.length < 3) scopeParts.push(metric.scope.entityScope);
+  const scopeSummary = scopeParts.length > 0 ? scopeParts.join(' · ') : '全局通用';
+
   return {
     id: metric.id,
     name: metric.name,
     enName: metric.enName || metric.id,
     domain: metric.scope.businessDomain || '未分类',
+    scopeSummary,
     definition: metric.definition,
     businessObject: metric.businessObject,
     calculationSummary: calcSummary,
@@ -130,7 +140,8 @@ interface MetricRegistryWorkspaceProps {
   onNavigateToHome?: () => void;
   onNavigateToCreateMetric?: (
     mode?: 'ai_prompt' | 'blank' | 'draft' | 'imported_draft' | 'change_draft',
-    initialDraftData?: MetricDraftInitialData
+    initialDraftData?: MetricDraftInitialData,
+    targetMetricId?: string
   ) => void;
 }
 
@@ -808,9 +819,19 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                           </div>
                         </td>
 
-                        {/* 2. 业务语义定义 */}
+                        {/* 2. 业务语义定义 + Applicable Scope 摘要 */}
                         <td className="py-3.5 px-4 text-[#334155] leading-relaxed">
-                          <p className="line-clamp-2">{metric.definition}</p>
+                          <p className="line-clamp-2 text-xs">{metric.definition}</p>
+                          {metric.scopeSummary && (
+                            <div className="mt-1.5 flex items-center space-x-1.5 text-[11px] text-[#64748B]">
+                              <span className="font-semibold text-[#475569] bg-[#F1F5F9] px-1.5 py-0.2 rounded text-[10px] shrink-0 border border-[#E2E8F0]">
+                                Scope
+                              </span>
+                              <span className="text-[#475569] truncate max-w-[280px]" title={metric.scopeSummary}>
+                                {metric.scopeSummary}
+                              </span>
+                            </div>
+                          )}
                         </td>
 
                         {/* 3. 业务对象 */}
@@ -935,7 +956,7 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                               <button
                                 onClick={() => {
                                   setActionMenuOpenId(null);
-                                  onNavigateToCreateMetric?.('change_draft');
+                                  onNavigateToCreateMetric?.('change_draft', undefined, metric.id);
                                   addToast?.('info', '发起口径变更', `已为「${metric.name}」创建变更申请草稿空间`);
                                 }}
                                 className="w-full px-3 py-1.5 text-[#334155] hover:bg-[#F8FAFC] hover:text-[#2563EB] flex items-center space-x-2 text-left cursor-pointer"
@@ -1054,6 +1075,12 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                     </span>
                   </div>
                   <div className="flex items-center justify-between p-2.5">
+                    <span className="text-[#667085]">适用范围 (Scope)</span>
+                    <span className="font-medium text-[#172033] text-right text-xs max-w-[240px]">
+                      {selectedMetricForDetail.scopeSummary}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5">
                     <span className="text-[#667085]">计算公式 / 聚合摘要</span>
                     <span className="font-mono font-bold text-[#2563EB]">
                       {selectedMetricForDetail.calculationSummary}
@@ -1156,8 +1183,9 @@ export const MetricRegistryWorkspace: React.FC<MetricRegistryWorkspaceProps> = (
                 </button>
                 <button
                   onClick={() => {
+                    const metricId = selectedMetricForDetail.id;
                     setSelectedMetricForDetail(null);
-                    onNavigateToCreateMetric?.('change_draft');
+                    onNavigateToCreateMetric?.('change_draft', undefined, metricId);
                     addToast?.('info', '发起口径变更', `已打开「${selectedMetricForDetail.name}」的变更草稿空间`);
                   }}
                   className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md font-bold text-xs cursor-pointer"
