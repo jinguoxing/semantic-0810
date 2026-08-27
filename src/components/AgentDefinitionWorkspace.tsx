@@ -28,11 +28,13 @@ import {
 
 interface AgentDefinitionWorkspaceProps {
   onBackToRegistry: () => void;
+  onNavigateToPublish?: () => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
 export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> = ({
   onBackToRegistry,
+  onNavigateToPublish,
   addToast
 }) => {
   // Left Section Navigation State
@@ -157,11 +159,20 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
             </button>
             <button
               onClick={handleSaveDraft}
-              className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+              className="px-3 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#CBD5E1] rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
             >
               <Save className="w-3 h-3" />
               <span>保存草稿</span>
             </button>
+            {onNavigateToPublish && (
+              <button
+                onClick={onNavigateToPublish}
+                className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+              >
+                <span>前往发布验证</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -821,13 +832,32 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
               新增《数据治理规范》知识空间并升级检索模式为 Wiki+RAG。
             </p>
 
-            <button
-              onClick={() => setIsTestModalOpen(true)}
-              className="w-full mt-1 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
-            >
-              <Play className="w-3 h-3" />
-              <span>测试草稿</span>
-            </button>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                onClick={() => setIsTestModalOpen(true)}
+                className="py-1.5 bg-white hover:bg-slate-50 text-[#1E40AF] border border-[#BFDBFE] rounded text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+              >
+                <Play className="w-3 h-3 text-[#2563EB]" />
+                <span>测试草稿</span>
+              </button>
+              {onNavigateToPublish ? (
+                <button
+                  onClick={onNavigateToPublish}
+                  className="py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <span>去发布</span>
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSaveDraft}
+                  className="py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer shadow-2xs"
+                >
+                  <Save className="w-3 h-3" />
+                  <span>保存草稿</span>
+                </button>
+              )}
+            </div>
           </div>
         </aside>
       </div>
