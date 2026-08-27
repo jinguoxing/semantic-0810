@@ -31,9 +31,7 @@ import {
 } from 'lucide-react';
 import {
   AgentItem,
-  INITIAL_AGENTS,
-  AGENT_TEMPLATES,
-  AgentTemplateItem
+  INITIAL_AGENTS
 } from '../data/agentRegistryData';
 import { CreateAgentDrawer } from './CreateAgentDrawer';
 
@@ -70,7 +68,6 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
   // Drawers & Modals
   const [selectedAgentForDetail, setSelectedAgentForDetail] = useState<AgentItem | null>(null);
   const [isDraftDrawerOpen, setIsDraftDrawerOpen] = useState(false);
-  const [isTemplateDrawerOpen, setIsTemplateDrawerOpen] = useState(false);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState<boolean>(initialOpenCreateDrawer);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [hoveredExtraTasksAgentId, setHoveredExtraTasksAgentId] = useState<string | null>(null);
@@ -876,11 +873,14 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          SLIDE-OVER DRAWER 3: CREATE MANAGED AGENT (从模板创建智能体 - V1.1 Final Polish)
+          A02: CREATE MANAGED AGENT DRAWER (880–940px)
+          Stage 1: 选择模板 (Default) -> Stage 2: 基本定义
       ───────────────────────────────────────────────────────────── */}
       <CreateAgentDrawer
         isOpen={isCreateDrawerOpen}
         onClose={() => setIsCreateDrawerOpen(false)}
+        initialStep={1}
+        initialTemplateId="enterprise_knowledge"
         onCreateAndConfigure={(agentData) => {
           setIsCreateDrawerOpen(false);
           addToast?.(
@@ -898,116 +898,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
             });
           }
         }}
-        onPrevStep={() => {
-          setIsCreateDrawerOpen(false);
-          setIsTemplateDrawerOpen(true);
-        }}
-        onChangeTemplate={() => {
-          setIsCreateDrawerOpen(false);
-          setIsTemplateDrawerOpen(true);
-        }}
       />
-
-      {/* ─────────────────────────────────────────────────────────────
-          SLIDE-OVER DRAWER 4: SELECT TEMPLATE (选择模板)
-      ───────────────────────────────────────────────────────────── */}
-      {isTemplateDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div
-            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsTemplateDrawerOpen(false)}
-          />
-          <div className="relative z-10 w-full max-w-[540px] bg-white h-full shadow-2xl border-l border-[#E2E8F0] flex flex-col justify-between overflow-y-auto">
-            <div>
-              {/* Drawer Header */}
-              <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
-                <div>
-                  <h3 className="font-bold text-sm text-[#0F172A]">
-                    从受管模板创建智能体 · 选择模板
-                  </h3>
-                  <p className="text-[11px] text-[#64748B] mt-0.5">
-                    选择经 Semovix 认证的标准业务智能体模板，快速挂载技能与运行引擎。
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsTemplateDrawerOpen(false)}
-                  className="p-1 rounded-md text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Template Cards */}
-              <div className="p-5 space-y-3">
-                {AGENT_TEMPLATES.map((tpl) => (
-                  <div
-                    key={tpl.id}
-                    className={`p-4 bg-white border rounded-lg transition-all space-y-2.5 shadow-2xs group cursor-pointer ${
-                      tpl.name === '企业知识伙伴'
-                        ? 'border-[#2563EB] ring-1 ring-[#2563EB]/20 bg-[#F8FAFC]'
-                        : 'border-[#E2E8F0] hover:border-[#2563EB]'
-                    }`}
-                    onClick={() => {
-                      setIsTemplateDrawerOpen(false);
-                      setIsCreateDrawerOpen(true);
-                      addToast?.('info', '已选择模板', `已选定「${tpl.name}」模板，请填写基本定义`);
-                    }}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h4 className="font-bold text-xs text-[#0F172A] group-hover:text-[#2563EB] transition-colors">
-                            {tpl.name}
-                          </h4>
-                          <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-indigo-50 text-[#4F46E5] border border-indigo-200/60">
-                            {tpl.category}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-[#64748B] mt-1 leading-relaxed">
-                          {tpl.description}
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsTemplateDrawerOpen(false);
-                          setIsCreateDrawerOpen(true);
-                          addToast?.('info', '已选择模板', `已选定「${tpl.name}」模板，请填写基本定义`);
-                        }}
-                        className="px-2.5 py-1 bg-[#EFF6FF] hover:bg-[#2563EB] text-[#2563EB] hover:text-white rounded text-xs font-bold transition-all shrink-0 cursor-pointer"
-                      >
-                        选择此模板
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[#F1F5F9] text-[#64748B]">
-                      <span>运行引擎：<strong className="text-[#0F172A]">{tpl.engine}</strong></span>
-                      <div className="flex items-center space-x-1">
-                        {tpl.recommendedTasks.map((t, i) => (
-                          <span key={i} className="bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded text-[10px]">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex items-center justify-between text-xs text-[#64748B]">
-              <span>基于 Semovix Managed Agent Architecture</span>
-              <button
-                onClick={() => setIsTemplateDrawerOpen(false)}
-                className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-[#475569] border border-[#CBD5E1] rounded-md font-semibold cursor-pointer"
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

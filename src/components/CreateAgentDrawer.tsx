@@ -5,22 +5,18 @@ import {
   Building2,
   ChevronDown,
   Info,
-  Layers,
-  Sparkles,
-  Cpu,
   ArrowLeft,
   ArrowRight,
-  Shield,
-  Bot,
-  BookOpen,
-  BarChart3,
-  Check
+  Check,
+  Database,
+  Network,
+  BookOpen
 } from 'lucide-react';
 
 export interface AgentTemplateDefinition {
   id: string;
   name: string;
-  kind: string;
+  tag: string;
   desc: string;
   defaultName: string;
   defaultResponsibility: string;
@@ -28,18 +24,55 @@ export interface AgentTemplateDefinition {
   runtimeTarget: 'WEKNORA' | 'SEMOVIX_NATIVE';
   runtimeEngineLabel: string;
   supportedTasks: string[];
+  extraTasksCount?: number;
   capabilityPreset: string;
+  capabilityPresetDesc: string;
   defaultMaxAutonomy: string;
-  defaultModelPolicy: string;
-  icon: 'knowledge' | 'data' | 'governance';
+  autonomyDesc: string;
+  symbolType: 'data' | 'governance' | 'knowledge';
 }
 
 export const V11_AGENT_TEMPLATES: AgentTemplateDefinition[] = [
   {
+    id: 'data_intelligence',
+    name: '数据智能伙伴',
+    tag: '数据智能',
+    desc: '面向业务目标完成找数、问数与数据分析。',
+    defaultName: '数据智能伙伴',
+    defaultResponsibility: '解析业务口径与指标语义，面向业务目标完成找数、问数与多维下钻分析。',
+    defaultOwner: '数据智能团队',
+    runtimeTarget: 'SEMOVIX_NATIVE',
+    runtimeEngineLabel: 'Semovix Native',
+    supportedTasks: ['找数据', '问数据', '数据分析'],
+    capabilityPreset: '指标计算与多维归因',
+    capabilityPresetDesc: '语义模型与指标下钻计算',
+    defaultMaxAutonomy: '建议',
+    autonomyDesc: '以提供方案与下钻结果为主',
+    symbolType: 'data'
+  },
+  {
+    id: 'semantic_governance',
+    name: '语义治理伙伴',
+    tag: '语义治理',
+    desc: '辅助企业完成语义理解、业务对象、标准、指标与知识网络治理。',
+    defaultName: '语义治理伙伴',
+    defaultResponsibility: '扫描治理资产与业务对象，识别标准冲突与命名歧义，生成结构化治理提案。',
+    defaultOwner: '语义治理团队',
+    runtimeTarget: 'SEMOVIX_NATIVE',
+    runtimeEngineLabel: 'Semovix Native',
+    supportedTasks: ['语义理解', '业务对象', '标准治理'],
+    extraTasksCount: 4,
+    capabilityPreset: '语义合规审查与标准对齐',
+    capabilityPresetDesc: '数据标准比对与对象映射',
+    defaultMaxAutonomy: '提议',
+    autonomyDesc: '生成待裁决治理变更提案',
+    symbolType: 'governance'
+  },
+  {
     id: 'enterprise_knowledge',
     name: '企业知识伙伴',
-    kind: '受管智能体',
-    desc: '用于企业知识问答、跨文档研究与 Wiki 研究，默认使用 WeKnora 作为知识运行引擎。',
+    tag: '企业知识',
+    desc: '基于企业正式知识开展可信问答、跨文档研究与 Wiki 研究。',
     defaultName: '企业知识伙伴',
     defaultResponsibility: '基于企业正式知识回答问题、开展跨文档与 Wiki 研究，并提供可追溯的知识依据。',
     defaultOwner: '企业知识治理组',
@@ -47,41 +80,10 @@ export const V11_AGENT_TEMPLATES: AgentTemplateDefinition[] = [
     runtimeEngineLabel: 'WeKnora',
     supportedTasks: ['知识问答', '文档研究', 'Wiki 研究'],
     capabilityPreset: '精准知识问答',
-    defaultMaxAutonomy: '建议 (SUGGEST)',
-    defaultModelPolicy: '质量优先',
-    icon: 'knowledge'
-  },
-  {
-    id: 'data_intelligence',
-    name: '数据智能分析助手',
-    kind: '受管智能体',
-    desc: '基于语义模型与指标中台进行多维指标查询、维度下钻、异动根因归因与图表生成。',
-    defaultName: '数据智能分析助手',
-    defaultResponsibility: '解析业务口径与指标语义，执行安全的多维计算与下钻分析，保障数据一致性。',
-    defaultOwner: '数据架构与语义组',
-    runtimeTarget: 'SEMOVIX_NATIVE',
-    runtimeEngineLabel: 'Semovix Native',
-    supportedTasks: ['指标查询', '多维下钻', '根因归因'],
-    capabilityPreset: '指标计算与归因',
-    defaultMaxAutonomy: '建议 (SUGGEST)',
-    defaultModelPolicy: '均衡',
-    icon: 'data'
-  },
-  {
-    id: 'semantic_governance',
-    name: '语义治理助手',
-    kind: '受管智能体',
-    desc: '自动化数据标准比对、字段命名规范性审查与业务对象语义映射建议。',
-    defaultName: '语义治理助手',
-    defaultResponsibility: '扫描未决治理资产，识别标准冲突与命名歧义，生成结构化治理提案。',
-    defaultOwner: '数据架构与语义组',
-    runtimeTarget: 'SEMOVIX_NATIVE',
-    runtimeEngineLabel: 'Semovix Native',
-    supportedTasks: ['标准对齐审查', '映射冲突仲裁', '业务对象绑定'],
-    capabilityPreset: '语义合规审查',
-    defaultMaxAutonomy: '提议 (PROPOSE)',
-    defaultModelPolicy: '均衡',
-    icon: 'governance'
+    capabilityPresetDesc: '企业知识与制度检索增强',
+    defaultMaxAutonomy: '建议',
+    autonomyDesc: '以提供可溯源依据与方案为主',
+    symbolType: 'knowledge'
   }
 ];
 
@@ -97,20 +99,28 @@ interface CreateAgentDrawerProps {
   }) => void;
   onPrevStep?: () => void;
   onChangeTemplate?: () => void;
+  initialStep?: 1 | 2;
+  initialTemplateId?: string;
 }
 
 export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
   isOpen,
   onClose,
-  onCreateAndConfigure
+  onCreateAndConfigure,
+  initialStep = 1,
+  initialTemplateId = 'enterprise_knowledge'
 }) => {
-  // Step state: 1 = 选择模板, 2 = 基本定义 (Defaults to 2 for Enterprise Knowledge)
-  const [currentStep, setCurrentStep] = useState<1 | 2>(2);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('enterprise_knowledge');
+  // Stage state: 1 = 选择模板 (Template Selection), 2 = 基本定义 (Basic Definition)
+  // V1.1 Final Freeze defaults strictly to Stage 1: 选择模板
+  const [currentStep, setCurrentStep] = useState<1 | 2>(initialStep);
 
-  const selectedTemplate = V11_AGENT_TEMPLATES.find((t) => t.id === selectedTemplateId) || V11_AGENT_TEMPLATES[0];
+  // Template selection state: Fixed to 'enterprise_knowledge' by default as per spec
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialTemplateId);
 
-  // Form State
+  const selectedTemplate =
+    V11_AGENT_TEMPLATES.find((t) => t.id === selectedTemplateId) || V11_AGENT_TEMPLATES[2];
+
+  // Stage 2 Form State
   const [name, setName] = useState(selectedTemplate.defaultName);
   const [responsibility, setResponsibility] = useState(selectedTemplate.defaultResponsibility);
   const [owner, setOwner] = useState(selectedTemplate.defaultOwner);
@@ -119,8 +129,9 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
   const ownerOptions = [
     '企业知识治理组',
     '数据架构与语义组',
+    '数据智能团队',
+    '语义治理团队',
     '人力资源运营中心',
-    '客户体验与服务保障部',
     '法务合规中心'
   ];
 
@@ -131,10 +142,13 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
     setName(template.defaultName);
     setResponsibility(template.defaultResponsibility);
     setOwner(template.defaultOwner);
+  };
+
+  const handleGoToBasicDefinition = () => {
     setCurrentStep(2);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmitFinal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !responsibility.trim() || !owner.trim()) return;
     onCreateAndConfigure({
@@ -148,78 +162,82 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      {/* Semi-transparent Backdrop: Preserves visibility of the underlying Agent Registry */}
+      {/* ─────────────────────────────────────────────────────────────
+          SEMI-TRANSPARENT BACKDROP OVERLAY
+          Preserves subtle visibility of the underlying Agent Registry:
+          Xino｜犀诺, 数据智能伙伴, 语义治理伙伴, 企业知识伙伴
+      ───────────────────────────────────────────────────────────── */}
       <div
         className="fixed inset-0 bg-slate-900/35 backdrop-blur-[1px] transition-opacity duration-200"
         onClick={onClose}
       />
 
       {/* ─────────────────────────────────────────────────────────────
-          RIGHT CREATE DRAWER (860–920px width)
+          RIGHT CREATE DRAWER (880–940px width: max-w-[920px])
       ───────────────────────────────────────────────────────────── */}
-      <div className="relative z-10 w-full max-w-[890px] bg-white h-full shadow-2xl border-l border-[#CBD5E1] flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
+      <div className="relative z-10 w-full max-w-[920px] bg-white h-full shadow-2xl border-l border-[#CBD5E1] flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200">
         {/* ─────────────────────────────────────────────────────────
-            1. DRAWER HEADER
+            1. DRAWER HEADER (六、Drawer Header)
         ───────────────────────────────────────────────────────── */}
-        <div className="px-7 py-4.5 border-b border-[#E2E8F0] bg-white flex items-center justify-between shrink-0">
-          <div>
-            <div className="flex items-center space-x-2">
-              <h2 className="font-bold text-base text-[#0F172A] tracking-tight">
-                创建智能体
-              </h2>
-              <span className="text-[10px] font-mono font-medium text-[#64748B] bg-[#F1F5F9] border border-[#E2E8F0] px-1.5 py-0.5 rounded">
-                A02 · Create Managed Agent
-              </span>
-            </div>
-            <p className="text-xs text-[#64748B] mt-0.5 leading-relaxed">
-              从平台受控模板创建一个智能体草稿，创建后可继续完善任务、上下文、能力与运行配置。
+        <div className="px-8 py-5 border-b border-[#E2E8F0] bg-white flex items-start justify-between shrink-0">
+          <div className="space-y-1">
+            <h2 className="font-bold text-base text-[#0F172A] tracking-tight">
+              创建智能体
+            </h2>
+            <p className="text-xs text-[#64748B] leading-relaxed max-w-[760px]">
+              从平台提供的受管模板开始创建。模板会提供推荐任务、能力边界和运行方式，创建后仍可继续调整。
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-md text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors cursor-pointer"
+            className="p-1.5 rounded-md text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors cursor-pointer shrink-0"
             title="关闭"
+            aria-label="关闭抽屉"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* ─────────────────────────────────────────────────────────
-            2. STAGE INDICATOR (阶段指示器)
+            2. STAGE INDICATOR (七、阶段指示器)
+            No 01/02 numbers, no large Stepper, only text, fine line, status dots
         ───────────────────────────────────────────────────────── */}
-        <div className="px-7 py-2.5 bg-[#F8FAFC] border-b border-[#E2E8F0] flex items-center justify-between shrink-0 text-xs">
+        <div className="px-8 py-2.5 bg-[#F8FAFC] border-b border-[#E2E8F0] flex items-center justify-between shrink-0 text-xs">
           <div className="flex items-center space-x-3">
             {/* Step 1: 选择模板 */}
             <button
               onClick={() => setCurrentStep(1)}
-              className={`flex items-center space-x-1.5 cursor-pointer transition-colors ${
+              className={`flex items-center space-x-1.5 transition-colors cursor-pointer ${
                 currentStep === 1
-                  ? 'text-[#2563EB] font-bold'
+                  ? 'text-[#2563EB] font-semibold'
                   : 'text-[#16A36A] hover:text-[#15803D]'
               }`}
             >
               {currentStep === 2 ? (
                 <CheckCircle2 className="w-3.5 h-3.5 text-[#16A36A]" />
               ) : (
-                <span className="w-2 h-2 rounded-full bg-[#2563EB]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
               )}
               <span>选择模板</span>
             </button>
 
-            <span className="text-[#CBD5E1]">→</span>
+            <span className="text-[#CBD5E1] text-xs">→</span>
 
             {/* Step 2: 基本定义 */}
             <div
               className={`flex items-center space-x-1.5 ${
-                currentStep === 2 ? 'text-[#2563EB] font-bold' : 'text-[#94A3B8]'
+                currentStep === 2 ? 'text-[#2563EB] font-semibold' : 'text-[#94A3B8]'
               }`}
             >
-              {currentStep === 2 && <span className="w-2 h-2 rounded-full bg-[#2563EB]" />}
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  currentStep === 2 ? 'bg-[#2563EB]' : 'bg-[#CBD5E1]'
+                }`}
+              />
               <span>基本定义</span>
             </div>
           </div>
 
-          {/* Action: 更换模板 or 下一步 */}
           {currentStep === 2 ? (
             <button
               onClick={() => setCurrentStep(1)}
@@ -230,133 +248,256 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
             </button>
           ) : (
             <span className="text-[11px] text-[#94A3B8]">
-              选择受控模板后进入基本定义
+              当前阶段：选择官方受管智能体模板
             </span>
           )}
         </div>
 
         {/* ─────────────────────────────────────────────────────────
-            3. MAIN BODY (Step 1: Template Selection OR Step 2: Basic Definition Form)
+            3. DRAWER BODY
+            Stage 1: 选择模板 (Selection Rows + Selected Preset Summary)
+            Stage 2: 基本定义 (Form Fields + Configuration Preview)
         ───────────────────────────────────────────────────────── */}
         {currentStep === 1 ? (
-          /* STEP 1: CHOOSE TEMPLATE */
-          <div className="flex-1 overflow-y-auto p-7 bg-[#F8FAFC] space-y-4">
-            <div>
-              <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
-                选择受控智能体模板
+          <div className="flex-1 overflow-y-auto px-8 py-6 bg-white space-y-6">
+            {/* ─────────────────────────────────────────────────────
+                八、选择区顶部说明 (Selection Intro)
+            ───────────────────────────────────────────────────── */}
+            <div className="space-y-1">
+              <h3 className="font-bold text-sm text-[#0F172A] tracking-tight">
+                选择智能体模板
               </h3>
-              <p className="text-[11px] text-[#64748B] mt-0.5">
-                Semovix 平台提供 3 项标准化业务模板，已预置适用的任务边界与运行引擎映射。
+              <p className="text-xs text-[#64748B] leading-relaxed">
+                根据主要职责选择一个起点。模板只提供推荐初始定义，不限制后续调整。
+              </p>
+              <p className="text-xs text-[#94A3B8] leading-relaxed">
+                一个智能体可以承担多项正式任务，不需要为每个功能单独创建 Agent。
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-3.5 text-xs">
+            {/* ─────────────────────────────────────────────────────
+                九 ~ 十四、受管智能体模板选择列表 (3 Selection Rows)
+                Height ~150–165px each, crisp enterprise layout
+            ───────────────────────────────────────────────────── */}
+            <div className="space-y-3">
               {V11_AGENT_TEMPLATES.map((tmpl) => {
                 const isSelected = selectedTemplateId === tmpl.id;
                 return (
                   <div
                     key={tmpl.id}
                     onClick={() => handleSelectTemplate(tmpl)}
-                    className={`p-4 rounded-xl border transition-all cursor-pointer bg-white space-y-3 relative ${
+                    className={`p-4.5 rounded-lg border transition-all cursor-pointer relative min-h-[145px] flex flex-col justify-between ${
                       isSelected
-                        ? 'border-[#2563EB] ring-1 ring-[#2563EB] shadow-xs'
-                        : 'border-[#E2E8F0] hover:border-[#CBD5E1] hover:shadow-2xs'
+                        ? 'bg-[#F0F7FF] border-[#2563EB] ring-1 ring-[#2563EB]/40 shadow-2xs'
+                        : 'bg-white border-[#E2E8F0] hover:border-[#CBD5E1] hover:bg-[#FAFAFC]'
                     }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start space-x-3">
+                    {/* Top Row: Symbol + Title & Tag + Radio */}
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start space-x-3.5 min-w-0">
+                        {/* Enterprise Agent Symbol (Calm, abstract geometric symbol) */}
                         <div
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                            tmpl.icon === 'knowledge'
-                              ? 'bg-amber-50 border border-amber-200 text-amber-600'
-                              : tmpl.icon === 'data'
-                              ? 'bg-emerald-50 border border-emerald-200 text-emerald-600'
-                              : 'bg-purple-50 border border-purple-200 text-purple-600'
+                          className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border ${
+                            tmpl.symbolType === 'data'
+                              ? 'bg-slate-50 border-slate-200/80 text-slate-700'
+                              : tmpl.symbolType === 'governance'
+                              ? 'bg-slate-50 border-slate-200/80 text-slate-700'
+                              : isSelected
+                              ? 'bg-blue-50/80 border-blue-200 text-[#2563EB]'
+                              : 'bg-slate-50 border-slate-200/80 text-slate-700'
                           }`}
                         >
-                          {tmpl.icon === 'knowledge' && <BookOpen className="w-4 h-4" />}
-                          {tmpl.icon === 'data' && <BarChart3 className="w-4 h-4" />}
-                          {tmpl.icon === 'governance' && <Sparkles className="w-4 h-4" />}
+                          {tmpl.symbolType === 'data' && <Database className="w-4.5 h-4.5" />}
+                          {tmpl.symbolType === 'governance' && <Network className="w-4.5 h-4.5" />}
+                          {tmpl.symbolType === 'knowledge' && <BookOpen className="w-4.5 h-4.5" />}
                         </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-bold text-sm text-[#0F172A]">
+
+                        {/* Title, Weak Tag, Description */}
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center space-x-2.5">
+                            <span className="font-bold text-sm text-[#0F172A] tracking-tight">
                               {tmpl.name}
                             </span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-blue-50 text-[#2563EB] border border-blue-200/60 font-medium">
-                              {tmpl.kind}
-                            </span>
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-[#475569] border border-slate-200 font-mono">
-                              {tmpl.runtimeEngineLabel}
+                            <span
+                              className={`text-[11px] font-medium px-2 py-0.5 rounded border ${
+                                isSelected
+                                  ? 'bg-blue-50 text-[#2563EB] border-blue-200/70'
+                                  : 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]'
+                              }`}
+                            >
+                              {tmpl.tag}
                             </span>
                           </div>
-                          <p className="text-xs text-[#64748B] leading-relaxed">
+                          <p className="text-xs text-[#475569] leading-relaxed">
                             {tmpl.desc}
                           </p>
                         </div>
                       </div>
-                      {isSelected && (
-                        <div className="w-5 h-5 rounded-full bg-[#2563EB] text-white flex items-center justify-center shrink-0">
-                          <Check className="w-3 h-3" />
+
+                      {/* Right Radio Indicator */}
+                      <div className="shrink-0 pt-0.5">
+                        <div
+                          className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                            isSelected
+                              ? 'bg-[#2563EB] border-2 border-[#2563EB] text-white shadow-2xs'
+                              : 'border-2 border-[#CBD5E1] bg-white'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 stroke-[2.5]" />}
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Middle: Supported Task Chips (Muted gray/subtle blue, <= 3 chips) */}
+                    <div className="pt-2 flex items-center space-x-1.5 flex-wrap">
+                      <span className="text-[11px] text-[#64748B] mr-1">支持任务：</span>
+                      {tmpl.supportedTasks.map((taskName) => (
+                        <span
+                          key={taskName}
+                          className="text-xs px-2.5 py-0.5 rounded bg-white text-[#334155] border border-[#CBD5E1]/80 font-medium"
+                        >
+                          {taskName}
+                        </span>
+                      ))}
+                      {tmpl.extraTasksCount && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] border border-[#E2E8F0] font-medium font-mono">
+                          +{tmpl.extraTasksCount}
+                        </span>
                       )}
                     </div>
 
-                    <div className="pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-[11px] text-[#64748B]">
+                    {/* Bottom Metadata: Autonomy & Runtime Target */}
+                    <div className="pt-2 border-t border-[#E2E8F0]/70 flex items-center justify-between text-xs text-[#64748B]">
                       <div className="flex items-center space-x-3">
-                        <span>支持任务：<strong className="text-[#0F172A]">{tmpl.supportedTasks.join(' · ')}</strong></span>
-                        <span>能力：<strong className="text-[#0F172A]">{tmpl.capabilityPreset}</strong></span>
+                        <span>
+                          推荐自主程度：<strong className="text-[#0F172A] font-semibold">{tmpl.defaultMaxAutonomy}</strong>
+                        </span>
+                        <span className="text-[#CBD5E1]">·</span>
+                        <span>
+                          运行引擎：<strong className="text-[#0F172A] font-semibold">{tmpl.runtimeEngineLabel}</strong>
+                        </span>
                       </div>
-                      <span className="text-[#2563EB] font-semibold flex items-center space-x-1">
-                        <span>选用此模板</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </span>
+
+                      {isSelected ? (
+                        <span className="text-[11px] text-[#2563EB] font-semibold flex items-center space-x-1">
+                          <span>已选中</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-[#94A3B8] group-hover:text-[#475569]">
+                          点击选择此模板
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            {/* ─────────────────────────────────────────────────────
+                十五、Selected Preset Summary (已选择)
+                Clean enterprise surface underneath the 3 selection rows
+            ───────────────────────────────────────────────────── */}
+            <div className="border border-[#BFDBFE] bg-gradient-to-b from-[#F8FAFC] to-white rounded-lg p-4.5 space-y-3.5 shadow-2xs">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="text-[11px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
+                    已选择
+                  </span>
+                  <h4 className="font-bold text-sm text-[#0F172A]">
+                    {selectedTemplate.name}
+                  </h4>
+                </div>
+                <p className="text-xs text-[#475569] leading-relaxed">
+                  将以企业知识问答与研究为主要职责，并以 WeKnora 作为目标知识运行引擎。
+                </p>
+              </div>
+
+              {/* 4-Item Lightweight Summary Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-xs">
+                {/* 1. 支持任务 */}
+                <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
+                  <span className="text-[11px] text-[#64748B] block">支持任务</span>
+                  <span className="font-bold text-[#0F172A] text-xs block">
+                    {selectedTemplate.supportedTasks.length} 项
+                  </span>
+                  <span className="text-[10px] text-[#94A3B8] block truncate">
+                    {selectedTemplate.supportedTasks.join(' · ')}
+                  </span>
+                </div>
+
+                {/* 2. 能力模式 */}
+                <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
+                  <span className="text-[11px] text-[#64748B] block">能力模式</span>
+                  <span className="font-bold text-[#0F172A] text-xs block truncate">
+                    {selectedTemplate.capabilityPreset}
+                  </span>
+                  <span className="text-[10px] text-[#94A3B8] block truncate">
+                    {selectedTemplate.capabilityPresetDesc}
+                  </span>
+                </div>
+
+                {/* 3. 最大自主程度 */}
+                <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
+                  <span className="text-[11px] text-[#64748B] block">最大自主程度</span>
+                  <span className="font-bold text-[#0F172A] text-xs block">
+                    {selectedTemplate.defaultMaxAutonomy}
+                  </span>
+                  <span className="text-[10px] text-[#94A3B8] block truncate">
+                    {selectedTemplate.autonomyDesc}
+                  </span>
+                </div>
+
+                {/* 4. 目标运行引擎 (十六、关于 WeKnora 的表达: 只显示目标引擎，不显示已创建/已同步) */}
+                <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
+                  <span className="text-[11px] text-[#64748B] block">目标运行引擎</span>
+                  <span className="font-bold text-[#0F172A] text-xs block">
+                    {selectedTemplate.runtimeEngineLabel}
+                  </span>
+                  <span className="text-[10px] text-[#94A3B8] block truncate">
+                    正式运行配置将在发布时建立
+                  </span>
+                </div>
+              </div>
+
+              {/* Auxiliary Note */}
+              <div className="pt-2 border-t border-[#E2E8F0] flex items-center space-x-1.5 text-[11px] text-[#64748B]">
+                <Info className="w-3.5 h-3.5 text-[#2563EB] shrink-0" />
+                <span>模板只提供推荐初始值，创建 Draft 后可继续调整。</span>
+              </div>
+            </div>
           </div>
         ) : (
-          /* STEP 2: BASIC DEFINITION (Left Form 65% + Right Summary 35%) */
+          /* ─────────────────────────────────────────────────────
+              STAGE 2: 基本定义 (BASIC DEFINITION FORM)
+          ───────────────────────────────────────────────────── */
           <div className="flex-1 overflow-y-auto flex flex-col md:flex-row bg-[#F8FAFC] divide-y md:divide-y-0 md:divide-x divide-[#E2E8F0]">
-            {/* ─────────────────────────────────────────────────────
-                LEFT COLUMN: BASIC DEFINITION FORM (~65%)
-            ───────────────────────────────────────────────────── */}
-            <div className="flex-1 p-7 bg-white space-y-5">
-              {/* Template Context Banner */}
-              <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1.5">
+            {/* Left Column: Form Fields */}
+            <div className="flex-1 p-8 bg-white space-y-5">
+              <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="text-[11px] font-semibold text-[#64748B]">当前模板：</span>
                     <span className="font-bold text-xs text-[#0F172A]">{selectedTemplate.name}</span>
                   </div>
-                  <div className="flex items-center space-x-1.5">
-                    <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-blue-50 text-[#2563EB] border border-blue-200/60">
-                      {selectedTemplate.kind}
-                    </span>
-                    <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-100 text-[#475569] border border-slate-200">
-                      {selectedTemplate.runtimeEngineLabel}
-                    </span>
-                  </div>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-50 text-[#2563EB] border border-blue-200/60">
+                    {selectedTemplate.runtimeEngineLabel}
+                  </span>
                 </div>
-                <p className="text-[11px] text-[#64748B] leading-relaxed">
+                <p className="text-xs text-[#64748B] leading-relaxed">
                   {selectedTemplate.desc}
                 </p>
               </div>
 
-              {/* Form Section Header */}
-              <div>
+              <div className="space-y-1">
                 <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
                   基本定义
                 </h3>
-                <p className="text-[11px] text-[#64748B] mt-0.5">
+                <p className="text-xs text-[#64748B]">
                   填写智能体的基础业务身份。任务绑定、上下文范围和运行配置将在创建后在定义工作区继续配置。
                 </p>
               </div>
 
-              {/* Form Fields Container */}
-              <form id="create-agent-form" onSubmit={handleSubmit} className="space-y-4 text-xs">
+              <form id="create-agent-form" onSubmit={handleSubmitFinal} className="space-y-4 text-xs">
                 {/* Field 1: 智能体名称 */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
@@ -450,7 +591,6 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                 </div>
               </form>
 
-              {/* Bottom Info Banner */}
               <div className="p-3 bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg flex items-start space-x-2 text-[11px] text-[#475569]">
                 <Info className="w-3.5 h-3.5 text-[#2563EB] shrink-0 mt-0.5" />
                 <p className="leading-relaxed">
@@ -459,12 +599,9 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               </div>
             </div>
 
-            {/* ─────────────────────────────────────────────────────
-                RIGHT COLUMN: INITIAL SUMMARY SURFACE (~35%)
-            ───────────────────────────────────────────────────── */}
+            {/* Right Column: Initial Config Summary */}
             <div className="w-full md:w-[320px] p-6 bg-[#F8FAFC] flex flex-col justify-between shrink-0 space-y-6">
               <div className="space-y-4">
-                {/* Summary Surface Header */}
                 <div>
                   <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
                     初始配置
@@ -474,45 +611,41 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                   </p>
                 </div>
 
-                {/* Definition List of Initial Settings */}
                 <div className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 space-y-3 text-xs shadow-2xs">
-                  {/* 模板 */}
                   <div className="space-y-0.5">
                     <span className="text-[11px] text-[#64748B] block">模板</span>
                     <span className="font-bold text-[#0F172A] block">{selectedTemplate.name}</span>
                   </div>
 
-                  {/* 类型 */}
-                  <div className="space-y-0.5">
-                    <span className="text-[11px] text-[#64748B] block">类型</span>
-                    <span className="font-medium text-[#0F172A] block">{selectedTemplate.kind}</span>
-                  </div>
-
-                  {/* 支持任务 */}
                   <div className="space-y-0.5">
                     <span className="text-[11px] text-[#64748B] block">支持任务</span>
-                    <span className="font-bold text-[#0F172A] block">{selectedTemplate.supportedTasks.length} 项</span>
+                    <span className="font-bold text-[#0F172A] block">
+                      {selectedTemplate.supportedTasks.length} 项
+                    </span>
                     <span className="text-[10px] text-[#94A3B8] block">
                       {selectedTemplate.supportedTasks.join(' · ')}
                     </span>
                   </div>
 
-                  {/* 能力模式 */}
                   <div className="space-y-0.5">
                     <span className="text-[11px] text-[#64748B] block">能力模式</span>
-                    <span className="font-semibold text-[#0F172A] block">{selectedTemplate.capabilityPreset}</span>
+                    <span className="font-semibold text-[#0F172A] block">
+                      {selectedTemplate.capabilityPreset}
+                    </span>
                   </div>
 
-                  {/* 最大自主程度 */}
                   <div className="space-y-0.5">
                     <span className="text-[11px] text-[#64748B] block">最大自主程度</span>
-                    <span className="font-medium text-[#0F172A] block">{selectedTemplate.defaultMaxAutonomy}</span>
+                    <span className="font-medium text-[#0F172A] block">
+                      {selectedTemplate.defaultMaxAutonomy}
+                    </span>
                   </div>
 
-                  {/* 目标运行引擎 */}
                   <div className="pt-2 border-t border-[#F1F5F9] space-y-1">
                     <span className="text-[11px] text-[#64748B] block">目标运行引擎</span>
-                    <span className="font-bold text-xs text-[#0F172A] block">{selectedTemplate.runtimeEngineLabel}</span>
+                    <span className="font-bold text-xs text-[#0F172A] block">
+                      {selectedTemplate.runtimeEngineLabel}
+                    </span>
                     <p className="text-[10px] text-[#64748B] leading-tight">
                       正式运行配置将在测试与发布阶段创建。
                     </p>
@@ -520,7 +653,6 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                 </div>
               </div>
 
-              {/* Bottom Clarification Block (浅蓝信息提示) */}
               <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-[11px] text-[#1E40AF] leading-relaxed">
                 以上是模板提供的初始定义。创建草稿后，可以在“智能体定义”工作区继续调整支持任务、上下文来源、能力、模型策略与自主程度。
               </div>
@@ -529,44 +661,49 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
         )}
 
         {/* ─────────────────────────────────────────────────────────
-            4. DRAWER FOOTER ACTIONS
+            4. DRAWER FOOTER ACTIONS (十七、Footer 操作)
         ───────────────────────────────────────────────────────── */}
-        <div className="px-7 py-4 bg-white border-t border-[#E2E8F0] flex items-center justify-between shrink-0 shadow-2xs">
-          {/* Left: 上一步 / 关闭 */}
-          {currentStep === 2 ? (
+        <div className="px-8 py-4 bg-white border-t border-[#E2E8F0] flex items-center justify-between shrink-0 shadow-2xs">
+          {/* Left Button */}
+          {currentStep === 1 ? (
             <button
               type="button"
-              onClick={() => setCurrentStep(1)}
-              className="px-3.5 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#475569] border border-[#CBD5E1] rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded-md transition-colors cursor-pointer"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>更换模板</span>
+              取消
             </button>
           ) : (
             <button
               type="button"
-              onClick={onClose}
-              className="px-3.5 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#475569] border border-[#CBD5E1] rounded-md text-xs font-semibold transition-colors cursor-pointer"
+              onClick={() => setCurrentStep(1)}
+              className="px-4 py-2 bg-white hover:bg-[#F8FAFC] text-[#475569] border border-[#CBD5E1] rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
             >
-              取消
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>更换模板</span>
             </button>
           )}
 
-          {/* Right: 下一步 / 创建并继续配置 */}
+          {/* Right Primary Button */}
           {currentStep === 1 ? (
             <button
               type="button"
-              onClick={() => setCurrentStep(2)}
-              className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+              disabled={!selectedTemplateId}
+              onClick={handleGoToBasicDefinition}
+              className={`px-5 py-2 rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-all shadow-2xs ${
+                selectedTemplateId
+                  ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white cursor-pointer'
+                  : 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'
+              }`}
             >
-              <span>下一步：基本定义</span>
+              <span>继续</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           ) : (
             <button
               type="submit"
               form="create-agent-form"
-              className="px-4 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+              className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
             >
               <span>创建并继续配置</span>
               <ArrowRight className="w-3.5 h-3.5" />
