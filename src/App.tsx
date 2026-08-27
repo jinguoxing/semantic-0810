@@ -48,13 +48,15 @@ import { DataServiceMarketplaceWorkspace } from './components/DataServiceMarketp
 import { ResourceExplorerWorkspace } from './components/ResourceExplorerWorkspace';
 import { MultiResourceAccessRequestWorkspace } from './components/MultiResourceAccessRequestWorkspace';
 import { MyAccessRequestsWorkspace } from './components/MyAccessRequestsWorkspace';
+import { AgentRegistryWorkspace } from './components/AgentRegistryWorkspace';
+import { AgentDefinitionWorkspace } from './components/AgentDefinitionWorkspace';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData, MetricDraftInitialData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail'>('agents');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail'>('agents');
   const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
   const [authoringInitialDraft, setAuthoringInitialDraft] = useState<MetricDraftInitialData | undefined>(undefined);
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
@@ -106,6 +108,10 @@ export default function App() {
       setCurrentNav('access_review');
       setViewTab('access_review');
       addToast('success', '已切换至 管理中心', '已进入访问审核队列 (Access Review Queue)');
+    } else if (moduleKey === 'agent_center' || moduleKey === 'agents') {
+      setCurrentNav('agents');
+      setViewTab('agents');
+      addToast('success', '已切换至 智能体中心', '已载入 Semovix Agent Registry 受管智能体注册表');
     } else {
       addToast('info', `已选择【${moduleName}】`, `即将为你路由至 ${moduleName} 工作空间`);
     }
@@ -465,6 +471,44 @@ export default function App() {
             setCurrentNav('home');
             setViewTab('home');
             addToast('info', 'AI 工作台', '已进入 Xino AI 协同工作台');
+          }}
+        />
+      ) : currentNav === 'agent_definition' || currentNav === 'agent_detail' || viewTab === 'agent_definition' || viewTab === 'agent_detail' ? (
+        <AgentDefinitionWorkspace
+          addToast={addToast}
+          onBackToRegistry={() => {
+            setCurrentNav('agents');
+            setViewTab('agents');
+            addToast('info', '智能体中心', '已返回受管智能体注册表');
+          }}
+        />
+      ) : currentNav === 'agents' || currentNav === 'agent_center' || viewTab === 'agents' || viewTab === 'agent_center' ? (
+        <AgentRegistryWorkspace
+          addToast={addToast}
+          onNavigateToHome={() => {
+            setCurrentNav('home');
+            setViewTab('home');
+            addToast('info', 'Xino 智能伙伴', '已进入 Xino AI 协同工作台');
+          }}
+          onNavigateToGovernance={() => {
+            setCurrentNav('governance');
+            setViewTab('discovery');
+            addToast('info', '数据治理', '已切换至业务对象发现与建模视图');
+          }}
+          onNavigateToMetrics={() => {
+            setCurrentNav('metrics');
+            setViewTab('metrics');
+            addToast('info', '指标注册表', '已进入 Metric Registry 统一指标管理视图');
+          }}
+          onNavigateToMarketplace={() => {
+            setCurrentNav('marketplace');
+            setViewTab('marketplace');
+            addToast('info', '数据服务超市', '已进入数据服务超市 · 发现首页');
+          }}
+          onOpenAgentDefinition={(agent) => {
+            setCurrentNav('agent_definition');
+            setViewTab('agent_definition');
+            addToast('info', agent.name, `已载入「${agent.name}」受管智能体定义工作区`);
           }}
         />
       ) : currentNav === 'my_requests' || viewTab === 'my_requests' ? (

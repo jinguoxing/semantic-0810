@@ -25,8 +25,8 @@ interface HeaderProps {
   onOpenLauncher?: () => void;
   onOpenProfile?: () => void;
   isProfileOpen?: boolean;
-  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail';
-  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail') => void;
+  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_definition' | 'agent_detail';
+  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents') => void;
   batchCount?: number;
 }
 
@@ -81,29 +81,27 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* 3. Primary Top Navigation Menu */}
         <nav className="hidden lg:flex items-center space-x-1 text-xs font-semibold text-[#475569]">
+          {/* 1. Xino 智能伙伴 */}
           <button
             onClick={() => onSelectNav && onSelectNav('home')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
               currentNav === 'home'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
-                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
-            }`}
-          >
-            AI 工作台
-          </button>
-          
-          <button
-            onClick={() => onSelectNav && onSelectNav('marketplace')}
-            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-              currentNav === 'marketplace' || currentNav === 'marketplace_resources' || currentNav === 'asset_detail' || currentNav === 'multi_resource_request' || currentNav === 'my_requests'
                 ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
                 : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
           >
-            数据服务超市
+            Xino 智能伙伴
           </button>
 
-          {/* 业务语义 (带二级菜单下拉) */}
+          {/* 2. 任务中心 */}
+          <button
+            onClick={() => onSelectNav && onSelectNav('home')}
+            className="px-3 py-1.5 rounded-md hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors cursor-pointer text-[#475569]"
+          >
+            任务中心
+          </button>
+          
+          {/* 3. 业务语义 (带二级菜单下拉) */}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => {
@@ -260,13 +258,43 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
+          {/* 4. 数据服务超市 */}
           <button
-            onClick={() => alert('知识网络：查看实体拓扑、语义本体与知识图谱服务')}
-            className="px-3 py-1.5 rounded-md hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors cursor-pointer"
+            onClick={() => onSelectNav && onSelectNav('marketplace')}
+            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+              currentNav === 'marketplace' || currentNav === 'marketplace_resources' || currentNav === 'asset_detail' || currentNav === 'multi_resource_request' || currentNav === 'my_requests'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
+                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+            }`}
           >
-            知识网络
+            数据服务超市
           </button>
 
+          {/* 5. 数据治理 */}
+          <button
+            onClick={() => onSelectNav && onSelectNav('governance')}
+            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+              currentNav === 'governance' || currentNav === 'table_workspace' || currentNav === 'field_workspace'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
+                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+            }`}
+          >
+            数据治理
+          </button>
+
+          {/* 6. 智能体中心 (⭐ 当前高亮状态支持) */}
+          <button
+            onClick={() => onSelectNav && onSelectNav('agents')}
+            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+              currentNav === 'agents' || currentNav === 'agent_definition' || currentNav === 'agent_detail'
+                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
+                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+            }`}
+          >
+            智能体中心
+          </button>
+
+          {/* 7. 管理中心 */}
           <button
             onClick={() => onSelectNav && onSelectNav('access_review')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
@@ -285,7 +313,7 @@ export const Header: React.FC<HeaderProps> = ({
         <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#94A3B8]" />
         <input
           type="text"
-          placeholder="搜索资源名称、业务含义、业务对象或字段…"
+          placeholder="搜索全局内容"
           className="w-full pl-8 pr-12 py-1.5 text-xs bg-[#F8FAFC] border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:bg-white text-[#0F172A] placeholder-[#94A3B8] transition-all"
         />
         <kbd className="absolute right-2.5 top-1.5 px-1.5 py-0.2 text-[10px] font-mono text-[#64748B] bg-white border border-[#CBD5E1] rounded shadow-2xs">
