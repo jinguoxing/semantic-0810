@@ -59,6 +59,39 @@ function defaultContextBindingFor(preset: ManagedAgentPreset): AgentContextBindi
   return [{ sourceType, selectionMode: 'ALL_ALLOWED' }];
 }
 
+/**
+ * Context Binding 领域校验与归一化（V1.1 Domain Contract）：
+ * A. sourceType 必须在 preset.allowedContextSources 内（Context Binding 不能扩大模板允许范围）
+ * B. SELECTED 必须携带至少一个 resourceId
+ * C. SELECTED resourceIds 保存前去重（保持原顺序）
+ * D. ALL_ALLOWED 统一不保存 resourceIds（归一为 undefined）
+ */
+function validateAndNormalizeContextBindings(
+  bindings: AgentContextBinding[],
+  preset: ManagedAgentPreset
+): AgentContextBinding[] {
+  return bindings.map((binding) => {
+    if (!preset.allowedContextSources.includes(binding.sourceType)) {
+      throw new AgentContextBindingValidationError(
+        `能力模板「${preset.presetName}」不允许上下文来源: ${binding.sourceType}`
+      );
+    }
+    if (binding.selectionMode === 'SELECTED') {
+      if (!binding.resourceIds || binding.resourceIds.length === 0) {
+        throw new AgentContextBindingValidationError(
+          `SELECTED 工作范围必须至少指定一个资源: ${binding.sourceType}`
+        );
+      }
+      return {
+        sourceType: binding.sourceType,
+        selectionMode: 'SELECTED',
+        resourceIds: Array.from(new Set(binding.resourceIds))
+      };
+    }
+    return { sourceType: binding.sourceType, selectionMode: 'ALL_ALLOWED' };
+  });
+}
+
 /** 草稿 diff 用的工作范围描述（Domain 层不依赖 UI 名称 Fixture，只写来源类型与数量） */
 function describeContextBindings(bindings: AgentContextBinding[]): string {
   return bindings
@@ -89,6 +122,17 @@ export class AgentCapabilityTemplateNotFoundError extends Error {
   }
 }
 
+/**
+ * Context Binding 领域校验失败：
+ * AgentContextBinding 是正式 Domain Contract，不能只依赖 A02 UI 校验。
+ */
+export class AgentContextBindingValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentContextBindingValidationError';
+  }
+}
+
 class AgentService {
   /**
    * P0: Create new unreleased Agent Definition + Initial Draft from an official preset
@@ -108,9 +152,9 @@ class AgentService {
     const draftId = `draft_${agentId}_v1_0`;
     const nowStr = '刚刚';
 
-    // V1.1 Context Binding：显式传入优先；否则按模板生成明确默认 Binding
+    // V1.1 Context Binding：显式传入优先（经领域校验与归一化）；否则按模板生成明确默认 Binding
     const contextBindings = input.contextBindings?.length
-      ? cloneContextBindings(input.contextBindings)
+      ? validateAndNormalizeContextBindings(input.contextBindings, preset)
       : defaultContextBindingFor(preset);
 
     // 1. Initial Definition (Status: DRAFT, no published formal version)

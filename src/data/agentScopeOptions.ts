@@ -75,8 +75,20 @@ export const TEMPLATE_SCOPE_CONFIGS: Record<string, TemplateScopeConfig> = {
   }
 };
 
+/** 未知能力模板的工作范围配置：禁止静默 fallback 到 Data 范围 */
+export class AgentTemplateScopeConfigNotFoundError extends Error {
+  constructor(public readonly presetId: string) {
+    super(`未找到能力模板的工作范围配置: ${presetId}`);
+    this.name = 'AgentTemplateScopeConfigNotFoundError';
+  }
+}
+
 export function getTemplateScopeConfig(presetId: string): TemplateScopeConfig {
-  return TEMPLATE_SCOPE_CONFIGS[presetId] ?? TEMPLATE_SCOPE_CONFIGS.DATA_INTELLIGENCE;
+  const config = TEMPLATE_SCOPE_CONFIGS[presetId];
+  if (!config) {
+    throw new AgentTemplateScopeConfigNotFoundError(presetId);
+  }
+  return config;
 }
 
 /** 由 UI 状态构造主范围 Context Binding（A02 创建路径的唯一 Binding） */

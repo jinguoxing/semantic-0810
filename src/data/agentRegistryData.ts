@@ -1,4 +1,5 @@
-import { agentService } from '../domain/agent/agentService';
+import { agentService, AgentCapabilityTemplateNotFoundError } from '../domain/agent/agentService';
+import { getPresetById } from '../domain/agent/agentPresets';
 import {
   AgentContextSource as AgentContextSourceType,
   AgentContextBinding,
@@ -439,15 +440,20 @@ export function createAgentDraft(agentData: {
   /** V1.1 工作范围：A02 创建路径显式传入的 UI Binding */
   contextBindings?: AgentContextBinding[];
 }): { agentItem: AgentItem; definition: AgentDefinitionDetail } {
-  const isKnowledge = agentData.templateId === 'enterprise_knowledge' || agentData.templateId === 'ENTERPRISE_KNOWLEDGE' || agentData.runtimeTarget === 'WEKNORA';
-  const isData = agentData.templateId === 'data_intelligence' || agentData.templateId === 'DATA_INTELLIGENCE';
-  const isGovernance = agentData.templateId === 'semantic_governance' || agentData.templateId === 'SEMANTIC_GOVERNANCE';
+  // V1.1 Fix：严格解析 capability preset。禁止 unknown templateId 静默 fallback 成治理模板，
+  // 完整 Create Path 与 agentService.createDraftFromPreset 的 Unknown Preset Error 语义一致。
+  const resolvedPreset = getPresetById(agentData.templateId);
+  if (!resolvedPreset) {
+    throw new AgentCapabilityTemplateNotFoundError(agentData.templateId);
+  }
 
-  const presetId = isKnowledge ? 'ENTERPRISE_KNOWLEDGE' : isData ? 'DATA_INTELLIGENCE' : 'SEMANTIC_GOVERNANCE';
+  const isData = resolvedPreset.presetId === 'DATA_INTELLIGENCE';
+  const isKnowledge = resolvedPreset.presetId === 'ENTERPRISE_KNOWLEDGE';
+  const isGovernance = resolvedPreset.presetId === 'SEMANTIC_GOVERNANCE';
 
   // Seed the formal domain model via agentService
   const domainResult = agentService.createDraftFromPreset({
-    presetId,
+    presetId: resolvedPreset.presetId,
     name: agentData.name,
     responsibility: agentData.responsibility,
     owner: agentData.owner,
@@ -456,8 +462,10 @@ export function createAgentDraft(agentData: {
 
   const newId = domainResult.definition.agentId;
 
-  const runtimeEngine: 'Semovix Native' | 'WeKnora' = isKnowledge ? 'WeKnora' : 'Semovix Native';
-  const avatarType: 'data' | 'governance' | 'knowledge' = isKnowledge ? 'knowledge' : isGovernance ? 'governance' : 'data';
+  // runtime / avatar 投影从 resolvedPreset 推导，不再按 else-governance 兜底
+  const runtimeEngine: 'Semovix Native' | 'WeKnora' =
+    resolvedPreset.runtimeTarget === 'WEKNORA' ? 'WeKnora' : 'Semovix Native';
+  const avatarType: 'data' | 'governance' | 'knowledge' = resolvedPreset.symbolType;
 
   // 真实数据：从域模型的任务模板绑定与上下文来源枚举推导 (首次创建全部为草稿配置)
   const tasks: AgentTaskItem[] = domainResult.definition.supportedTaskTemplates.map((binding) => {
