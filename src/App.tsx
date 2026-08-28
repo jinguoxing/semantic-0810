@@ -59,6 +59,7 @@ import {
   INITIAL_AGENT_DEFINITIONS
 } from './data/agentRegistryData';
 import { ToastContainer, ToastMessage } from './components/Toast';
+import { agentService, agentSelectors } from './domain/agent';
 import { AccessProvider } from './domain/access/access.store';
 import type { SolutionExecutionContext } from './domain/access/access.types';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
@@ -528,7 +529,7 @@ export default function App() {
         />
       ) : currentNav === 'agent_publish' || viewTab === 'agent_publish' ? (
         <AgentPublishWorkspace
-          agentId={selectedAgentId}
+          agentId={selectedAgentId || currentSelectedAgent?.id || ''}
           agent={currentSelectedAgent}
           definition={currentSelectedDefinition}
           addToast={addToast}
@@ -544,21 +545,25 @@ export default function App() {
             addToast('info', '智能体中心', '已返回受管智能体注册表');
           }}
           onPublishSuccess={(publishedVersion) => {
+            // 二十二: 发布成功后回写 A01 —— Registry 与 A04 读取同一 Agent Repository
             const targetId = selectedAgentId || currentSelectedAgent?.id;
             if (!targetId) return;
+            const display = agentSelectors.getDisplayState(targetId);
+            const nextVersion = display?.formalVersion || publishedVersion;
+            const syncLabel = display?.runtimeEngine === 'WeKnora' ? '集成待接入 (MOCK_RUNTIME)' : '已同步';
             setAgentsList((prev) =>
               prev.map((a) => {
                 if (a.id === targetId) {
                   return {
                     ...a,
-                    formalVersion: publishedVersion,
+                    formalVersion: nextVersion,
                     releaseTime: '刚刚发布',
                     status: 'ACTIVE',
                     statusLabel: '正常',
                     hasDraft: false,
                     isNewDraft: false,
                     runtimeBinding: 'ACTIVE',
-                    engineSyncStatus: '已同步'
+                    engineSyncStatus: syncLabel
                   };
                 }
                 return a;
@@ -571,7 +576,7 @@ export default function App() {
                   ...prev,
                   [targetId]: {
                     ...cur,
-                    formalVersion: publishedVersion,
+                    formalVersion: nextVersion,
                     runtimeBinding: 'ACTIVE',
                     lastReleaseTime: '刚刚发布',
                     draftChanges: []
@@ -584,14 +589,14 @@ export default function App() {
               prev
                 ? {
                     ...prev,
-                    formalVersion: publishedVersion,
+                    formalVersion: nextVersion,
                     releaseTime: '刚刚发布',
                     status: 'ACTIVE',
                     statusLabel: '正常',
                     hasDraft: false,
                     isNewDraft: false,
                     runtimeBinding: 'ACTIVE',
-                    engineSyncStatus: '已同步'
+                    engineSyncStatus: syncLabel
                   }
                 : null
             );
@@ -622,6 +627,12 @@ export default function App() {
                 ...prev,
                 [targetId]: updatedDef
               }));
+              // 同步写入 Agent Repository，保证 A04 / Registry 读到同一份草稿事实
+              agentService.saveDraftEdit(targetId, {
+                name: updatedDef.name,
+                responsibility: updatedDef.responsibility,
+                owner: updatedDef.owner
+              });
             }
           }}
         />
@@ -667,6 +678,16 @@ export default function App() {
             setCurrentNav('agent_definition');
             setViewTab('agent_definition');
             addToast('info', agent.name, `已载入「${agent.name}」受管智能体定义工作区`);
+          }}
+          onOpenPublishWorkspace={(agent) => {
+            setSelectedAgentId(agent.id);
+            setSelectedDraftId(agent.hasDraft ? `draft_${agent.id}` : null);
+            setSelectedAgent(agent);
+            const def = agentDefinitions[agent.id] || INITIAL_AGENT_DEFINITIONS[agent.id];
+            setSelectedAgentDefinition(def || null);
+            setCurrentNav('agent_publish');
+            setViewTab('agent_publish');
+            addToast('info', '测试与发布', `已进入「${agent.name}」发布前验证工作区，发布需通过 Release Gate`);
           }}
         />
       ) : currentNav === 'my_requests' || viewTab === 'my_requests' ? (

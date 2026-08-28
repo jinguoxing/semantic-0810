@@ -20,19 +20,18 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
     defaultOwner: '数据智能团队',
     runtimeTarget: 'SEMOVIX_NATIVE',
     runtimeEngineLabel: 'Semovix Native',
-    supportedTaskTemplateIds: ['task_find_data', 'task_query_data', 'task_analyze_data'],
-    supportedTaskNames: ['找数据', '问数据', '数据分析'],
+    supportedTaskTemplates: [
+      { taskTemplateId: 'FIND_DATA_V1', version: 'V1', enabled: true },
+      { taskTemplateId: 'QUERY_DATA_V1', version: 'V1', enabled: true },
+      { taskTemplateId: 'ANALYZE_DATA_V1', version: 'V1', enabled: true }
+    ],
     capabilityPreset: '指标计算与多维归因',
     capabilityPresetDesc: '语义模型与指标下钻计算 (Text-to-SQL + Metric Execution)',
     modelPolicyId: 'POLICY_LOGIC_FIRST',
     modelPolicyName: '代码与逻辑优先',
     defaultMaxAutonomy: 'SUGGEST',
     autonomyDesc: '以提供取数结果、方案与下钻归因为主',
-    allowedContextSources: [
-      { id: 'ctx_metrics', name: '企业指标注册表', desc: '涵盖已发布核心指标与派生维度', type: 'BASE' },
-      { id: 'ctx_catalog', name: '数据资产目录', desc: '挂载 180+ 数据表与逻辑视图元数据', type: 'BASE' },
-      { id: 'ctx_dw_pop', name: '民生服务主题宽表', desc: '覆盖街镇老龄化照护与热线诉求记录', type: 'BASE' },
-    ],
+    allowedContextSources: ['METRIC', 'MARKETPLACE', 'DATA_SEMANTICS'],
     symbolType: 'data'
   },
 
@@ -47,8 +46,11 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
     defaultOwner: '语义治理团队',
     runtimeTarget: 'SEMOVIX_NATIVE',
     runtimeEngineLabel: 'Semovix Native',
-    supportedTaskTemplateIds: ['task_semantic_understand', 'task_business_object', 'task_standard_governance'],
-    supportedTaskNames: ['语义理解', '业务对象', '标准治理'],
+    supportedTaskTemplates: [
+      { taskTemplateId: 'SEMANTIC_UNDERSTANDING_V1', version: 'V1', enabled: true },
+      { taskTemplateId: 'BUSINESS_OBJECT_V1', version: 'V1', enabled: true },
+      { taskTemplateId: 'STANDARD_GOVERNANCE_V1', version: 'V1', enabled: true }
+    ],
     extraTasksCount: 4,
     capabilityPreset: '语义合规审查与标准对齐',
     capabilityPresetDesc: '数据标准比对与对象映射 (Schema Semantic Alignment)',
@@ -56,11 +58,7 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
     modelPolicyName: '严谨与一致性优先',
     defaultMaxAutonomy: 'PROPOSE',
     autonomyDesc: '生成待裁决治理变更提案供专家确认',
-    allowedContextSources: [
-      { id: 'ctx_gov_standards', name: '行业数据标准库', desc: '包含 GB/T 与行业规范标准元素', type: 'BASE' },
-      { id: 'ctx_gov_objects', name: '核心业务对象拓扑', desc: '涵盖自然人、组织机构、服务事件', type: 'BASE' },
-      { id: 'ctx_gov_mapping', name: '字段语义理解知识库', desc: '记录历史人工确认的映射规则', type: 'BASE' },
-    ],
+    allowedContextSources: ['BUSINESS_TERM', 'BUSINESS_OBJECT', 'DATA_SEMANTICS'],
     symbolType: 'governance'
   },
 
@@ -75,18 +73,18 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
     defaultOwner: '企业知识治理组',
     runtimeTarget: 'WEKNORA',
     runtimeEngineLabel: 'WeKnora',
-    supportedTaskTemplateIds: ['task_qa', 'task_doc_research', 'task_wiki_research'],
-    supportedTaskNames: ['知识问答', '文档研究', 'Wiki 研究'],
+    supportedTaskTemplates: [
+      { taskTemplateId: 'KNOWLEDGE_QA_V1', version: 'V1', enabled: true },
+      { taskTemplateId: 'DOCUMENT_RESEARCH_V1', version: 'V1', enabled: true },
+      { taskTemplateId: 'WIKI_RESEARCH_V1', version: 'V1', enabled: true }
+    ],
     capabilityPreset: '精准知识问答',
     capabilityPresetDesc: '企业知识与制度检索增强 (WeKnora Bridge)',
     modelPolicyId: 'POLICY_QUALITY_FIRST',
     modelPolicyName: '质量优先',
     defaultMaxAutonomy: 'SUGGEST',
     autonomyDesc: '以提供方案与可追溯依据为主',
-    allowedContextSources: [
-      { id: 'ctx_rules', name: '企业制度', desc: '涵盖行政、合规、财务规范', type: 'BASE' },
-      { id: 'ctx_product', name: '产品知识', desc: '涵盖产品白皮书、架构规范', type: 'BASE' },
-    ],
+    allowedContextSources: ['KNOWLEDGE_SPACE', 'DOCUMENT'],
     symbolType: 'knowledge'
   }
 };

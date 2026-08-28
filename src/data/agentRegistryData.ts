@@ -1,4 +1,9 @@
 import { agentService } from '../domain/agent/agentService';
+import {
+  AgentContextSource as AgentContextSourceType,
+  AGENT_CONTEXT_SOURCE_VIEWS,
+  getTaskTemplateView
+} from '../domain/agent/agentTypes';
 
 export interface AgentDraftChange {
   title: string;
@@ -111,11 +116,12 @@ export const INITIAL_AGENTS: AgentItem[] = [
     responsibility: '基于企业正式知识回答问题并开展跨文档研究',
     agentType: '受管智能体',
     category: 'MANAGED',
-    tasks: ['知识问答', '文档研究'],
+    tasks: ['企业知识问答', '文档研究'],
     extraTasksCount: 1,
-    allTasks: ['知识问答', '文档研究', '跨库检索'],
+    allTasks: ['企业知识问答', '文档研究', 'Wiki 研究'],
     runtimeEngine: 'WeKnora',
-    engineSyncStatus: '已同步',
+    // 二十四: WeKnora 真实 API 未接入 —— 注册表同样如实标注
+    engineSyncStatus: '集成待接入 (MOCK_RUNTIME)',
     formalVersion: 'v1.4',
     releaseTime: '今天 09:42 发布',
     status: 'ACTIVE',
@@ -145,16 +151,26 @@ export const INITIAL_AGENTS: AgentItem[] = [
   },
 ];
 
+/**
+ * 支持任务 ViewModel：真实数据为 taskTemplateId / version / enabled，
+ * name / desc 仅为展示投影 (任务定义由 Task Engine 统一管理)。
+ */
 export interface AgentTaskItem {
-  id: string;
+  taskTemplateId: string;
+  version: string;
+  enabled: boolean;
   name: string;
   desc: string;
   status: 'ACTIVE' | 'DRAFT_NEW' | 'DISABLED';
 }
 
+/**
+ * 上下文来源 ViewModel：真实数据为 sourceType 枚举，
+ * 实际运行上下文 = 智能体允许范围 ∩ 当前用户权限 ∩ 当前任务范围。
+ */
 export interface AgentContextSource {
-  id: string;
-  name: string;
+  sourceType: AgentContextSourceType;
+  label: string;
   desc: string;
   type: 'BASE' | 'DRAFT_NEW';
 }
@@ -218,18 +234,19 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
     status: 'ACTIVE',
     runtimeEngine: 'WeKnora',
     runtimeBinding: 'ACTIVE',
-    runtimeRevision: 'r37',
+    // 二十四: WeKnora 真实 API 未接入，如实标注 MOCK_RUNTIME，不再伪装 r37 / 实时同步
+    runtimeRevision: 'MOCK_RUNTIME',
     lastReleaseTime: '2026-08-25 16:40',
-    lastSyncTime: '今天 10:26',
+    lastSyncTime: '未接入 (MOCK_RUNTIME)',
     tasks: [
-      { id: 'task_1', name: '知识问答', desc: '基于企业标准制度与规范进行精准事实提取', status: 'ACTIVE' },
-      { id: 'task_2', name: '文档研究', desc: '跨长篇白皮书与政策文档进行多章节归纳对比', status: 'ACTIVE' },
-      { id: 'task_3', name: 'Wiki 研究', desc: '企业内部 Wiki 拓扑词条与领域专有名词协同检索', status: 'ACTIVE' },
+      { taskTemplateId: 'KNOWLEDGE_QA_V1', version: 'V1', enabled: true, name: '企业知识问答', desc: '基于企业标准制度与规范进行精准事实提取', status: 'ACTIVE' },
+      { taskTemplateId: 'DOCUMENT_RESEARCH_V1', version: 'V1', enabled: true, name: '文档研究', desc: '跨长篇白皮书与政策文档进行多章节归纳对比', status: 'ACTIVE' },
+      { taskTemplateId: 'WIKI_RESEARCH_V1', version: 'V1', enabled: true, name: 'Wiki 研究', desc: '企业内部 Wiki 拓扑词条与领域专有名词协同检索', status: 'DRAFT_NEW' },
     ],
     contextSources: [
-      { id: 'ctx_1', name: '企业制度', desc: '正式基线已有 · 涵盖行政、合规、财务规范', type: 'BASE' },
-      { id: 'ctx_2', name: '产品知识', desc: '正式基线已有 · 涵盖产品白皮书、架构规范', type: 'BASE' },
-      { id: 'ctx_3', name: '数据治理规范', desc: '草稿新增 · 涵盖数据标准、值域代码与血缘规则', type: 'DRAFT_NEW' },
+      { sourceType: 'KNOWLEDGE_SPACE', label: '知识空间', desc: '正式基线已有 · 企业制度 / 产品知识（草稿新增：数据治理规范空间）', type: 'BASE' },
+      { sourceType: 'DOCUMENT', label: '企业文档', desc: '正式基线已有 · 涵盖产品白皮书、架构规范', type: 'BASE' },
+      { sourceType: 'WIKI', label: '企业 Wiki', desc: '草稿新增 · Wiki 拓扑词条检索来源', type: 'DRAFT_NEW' },
     ],
     capabilityMode: 'Wiki + RAG 混合',
     capabilityDesc: '多跳语义拓扑检索与混合召回',
@@ -283,14 +300,14 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
     lastReleaseTime: '昨天 14:20',
     lastSyncTime: '今天 08:30',
     tasks: [
-      { id: 'task_1', name: '找数据', desc: '智能检索企业数据目录、元数据与明细宽表资产', status: 'ACTIVE' },
-      { id: 'task_2', name: '问数据', desc: '解析业务自然语言意图并生成指标取数与聚合探查逻辑', status: 'ACTIVE' },
-      { id: 'task_3', name: '数据分析', desc: '多维指标交叉比对、同环比异常波动归因下钻', status: 'ACTIVE' },
+      { taskTemplateId: 'FIND_DATA_V1', version: 'V1', enabled: true, name: '找数据', desc: '智能检索企业数据目录、元数据与明细宽表资产', status: 'ACTIVE' },
+      { taskTemplateId: 'QUERY_DATA_V1', version: 'V1', enabled: true, name: '问数据', desc: '解析业务自然语言意图并生成指标取数与聚合探查逻辑', status: 'ACTIVE' },
+      { taskTemplateId: 'ANALYZE_DATA_V1', version: 'V1', enabled: true, name: '数据分析', desc: '多维指标交叉比对、同环比异常波动归因下钻', status: 'ACTIVE' },
     ],
     contextSources: [
-      { id: 'ctx_1', name: '企业指标注册表', desc: '正式基线已有 · 涵盖已发布核心指标与派生维度', type: 'BASE' },
-      { id: 'ctx_2', name: '数据资产目录', desc: '正式基线已有 · 挂载 180+ 数据表与逻辑视图元数据', type: 'BASE' },
-      { id: 'ctx_3', name: '民生服务主题宽表', desc: '正式基线已有 · 覆盖街镇老龄化照护与热线诉求记录', type: 'BASE' },
+      { sourceType: 'METRIC', label: '指标注册表', desc: '正式基线已有 · 涵盖已发布核心指标与派生维度', type: 'BASE' },
+      { sourceType: 'MARKETPLACE', label: '数据服务超市', desc: '正式基线已有 · 挂载 180+ 数据表与逻辑视图元数据', type: 'BASE' },
+      { sourceType: 'DATA_SEMANTICS', label: '数据语义层', desc: '正式基线已有 · 覆盖街镇老龄化照护与热线诉求记录', type: 'BASE' },
     ],
     capabilityMode: '指标计算与多维归因',
     capabilityDesc: '语义模型与指标下钻计算 (Text-to-SQL + Metric Execution)',
@@ -339,14 +356,14 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
     lastReleaseTime: '3 天前发布',
     lastSyncTime: '今天 09:15',
     tasks: [
-      { id: 'task_1', name: '语义理解', desc: '解析表结构与字段名业务含义，自动生成注释与标准建议', status: 'ACTIVE' },
-      { id: 'task_2', name: '业务对象', desc: '发现潜在实体概念，辅助业务对象关系拓扑建模', status: 'ACTIVE' },
-      { id: 'task_3', name: '标准治理', desc: '国家/行业标准对齐、字段映射冲突审阅与值域校验', status: 'ACTIVE' },
+      { taskTemplateId: 'SEMANTIC_UNDERSTANDING_V1', version: 'V1', enabled: true, name: '语义理解', desc: '解析表结构与字段名业务含义，自动生成注释与标准建议', status: 'ACTIVE' },
+      { taskTemplateId: 'BUSINESS_OBJECT_V1', version: 'V1', enabled: true, name: '业务对象', desc: '发现潜在实体概念，辅助业务对象关系拓扑建模', status: 'ACTIVE' },
+      { taskTemplateId: 'STANDARD_GOVERNANCE_V1', version: 'V1', enabled: true, name: '标准治理', desc: '国家/行业标准对齐、字段映射冲突审阅与值域校验', status: 'ACTIVE' },
     ],
     contextSources: [
-      { id: 'ctx_1', name: '行业数据标准库', desc: '正式基线已有 · 包含 GB/T 与行业规范标准元素', type: 'BASE' },
-      { id: 'ctx_2', name: '核心业务对象拓扑', desc: '正式基线已有 · 涵盖自然人、组织机构、服务事件', type: 'BASE' },
-      { id: 'ctx_3', name: '字段语义理解知识库', desc: '正式基线已有 · 记录历史人工确认的映射规则', type: 'BASE' },
+      { sourceType: 'BUSINESS_TERM', label: '业务术语', desc: '正式基线已有 · 包含 GB/T 与行业规范标准元素', type: 'BASE' },
+      { sourceType: 'BUSINESS_OBJECT', label: '业务对象', desc: '正式基线已有 · 涵盖自然人、组织机构、服务事件', type: 'BASE' },
+      { sourceType: 'DATA_SEMANTICS', label: '数据语义层', desc: '正式基线已有 · 记录历史人工确认的映射规则', type: 'BASE' },
     ],
     capabilityMode: '语义合规审查与标准对齐',
     capabilityDesc: '数据标准比对与对象映射 (Schema Semantic Alignment)',
@@ -395,13 +412,13 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
     lastReleaseTime: '5 天前发布',
     lastSyncTime: '今天 11:00',
     tasks: [
-      { id: 'task_1', name: '意图理解', desc: '平台级复杂自然语言意图理解与上下文消歧', status: 'ACTIVE' },
-      { id: 'task_2', name: '任务路由', desc: '智能调度受管智能体与平台治理工作流', status: 'ACTIVE' },
-      { id: 'task_3', name: '全局协同', desc: '串联数据服务超市、指标注册表与治理队列', status: 'ACTIVE' },
+      { taskTemplateId: 'INTENT_UNDERSTANDING_V1', version: 'V1', enabled: true, name: '意图理解', desc: '平台级复杂自然语言意图理解与上下文消歧', status: 'ACTIVE' },
+      { taskTemplateId: 'TASK_ROUTING_V1', version: 'V1', enabled: true, name: '任务路由', desc: '智能调度受管智能体与平台治理工作流', status: 'ACTIVE' },
+      { taskTemplateId: 'GLOBAL_COLLAB_V1', version: 'V1', enabled: true, name: '全局协同', desc: '串联数据服务超市、指标注册表与治理队列', status: 'ACTIVE' },
     ],
     contextSources: [
-      { id: 'ctx_1', name: '平台能力注册表', desc: '系统内置 · 包含所有注册智能体与治理工具', type: 'BASE' },
-      { id: 'ctx_2', name: '任务流拓扑编排网', desc: '系统内置 · 管理跨智能体长链路执行上下文', type: 'BASE' },
+      { sourceType: 'BUSINESS_DOMAIN', label: '业务域', desc: '系统内置 · 包含所有注册智能体与治理工具', type: 'BASE' },
+      { sourceType: 'LINEAGE', label: '血缘关系', desc: '系统内置 · 管理跨智能体长链路执行上下文', type: 'BASE' },
     ],
     capabilityMode: '系统协调与任务路由中枢',
     capabilityDesc: '多 Agent 全局任务调度与状态机串联',
@@ -465,9 +482,28 @@ export function createAgentDraft(agentData: {
   const runtimeEngine: 'Semovix Native' | 'WeKnora' = isKnowledge ? 'WeKnora' : 'Semovix Native';
   const avatarType: 'data' | 'governance' | 'knowledge' = isKnowledge ? 'knowledge' : isGovernance ? 'governance' : 'data';
 
-  // Specific tasks based on archetype
-  let tasks: AgentTaskItem[] = [];
-  let contextSources: AgentContextSource[] = [];
+  // 真实数据：从域模型的任务模板绑定与上下文来源枚举推导 (首次创建全部为草稿配置)
+  const tasks: AgentTaskItem[] = domainResult.definition.supportedTaskTemplates.map((binding) => {
+    const view = getTaskTemplateView(binding.taskTemplateId);
+    return {
+      taskTemplateId: binding.taskTemplateId,
+      version: binding.version,
+      enabled: binding.enabled,
+      name: view.name,
+      desc: view.desc,
+      status: 'DRAFT_NEW' as const
+    };
+  });
+  const contextSources: AgentContextSource[] = domainResult.definition.allowedContextSources.map(
+    (sourceType) => ({
+      sourceType,
+      label: AGENT_CONTEXT_SOURCE_VIEWS[sourceType].label,
+      desc: `草稿配置 · 拟允许访问${AGENT_CONTEXT_SOURCE_VIEWS[sourceType].label}`,
+      type: 'DRAFT_NEW' as const
+    })
+  );
+
+  // 展示配置基于原型类别
   let capabilityMode = '';
   let capabilityDesc = '';
   let modelStrategy = '';
@@ -477,15 +513,6 @@ export function createAgentDraft(agentData: {
   let suggestedQueries: string[] = [];
 
   if (isData) {
-    tasks = [
-      { id: 't_1', name: '找数据', desc: '智能检索企业数据目录、元数据与明细宽表资产', status: 'DRAFT_NEW' },
-      { id: 't_2', name: '问数据', desc: '解析业务自然语言意图并生成指标取数与聚合探查逻辑', status: 'DRAFT_NEW' },
-      { id: 't_3', name: '数据分析', desc: '多维指标交叉比对、同环比异常波动归因下钻', status: 'DRAFT_NEW' },
-    ];
-    contextSources = [
-      { id: 'c_1', name: '企业指标注册表', desc: '草稿配置 · 拟挂载已发布核心指标与派生维度', type: 'DRAFT_NEW' },
-      { id: 'c_2', name: '数据资产目录', desc: '草稿配置 · 拟关联目标数据宽表与分析视图', type: 'DRAFT_NEW' },
-    ];
     capabilityMode = '指标计算与多维归因';
     capabilityDesc = '语义模型与指标下钻计算 (Text-to-SQL + Metric Execution)';
     modelStrategy = '代码与逻辑优先';
@@ -497,15 +524,6 @@ export function createAgentDraft(agentData: {
       '验证数据源关联与 SQL 计算逻辑'
     ];
   } else if (isGovernance) {
-    tasks = [
-      { id: 't_1', name: '语义理解', desc: '解析表结构与字段名业务含义，自动生成注释与标准建议', status: 'DRAFT_NEW' },
-      { id: 't_2', name: '业务对象', desc: '发现潜在实体概念，辅助业务对象关系拓扑建模', status: 'DRAFT_NEW' },
-      { id: 't_3', name: '标准治理', desc: '国家/行业标准对齐、字段映射冲突审阅与值域校验', status: 'DRAFT_NEW' },
-    ];
-    contextSources = [
-      { id: 'c_1', name: '行业数据标准库', desc: '草稿配置 · 拟关联标准数据元素规范', type: 'DRAFT_NEW' },
-      { id: 'c_2', name: '核心业务对象拓扑', desc: '草稿配置 · 拟挂载业务实体语义关系网', type: 'DRAFT_NEW' },
-    ];
     capabilityMode = '语义合规审查与标准对齐';
     capabilityDesc = '数据标准比对与对象映射 (Schema Semantic Alignment)';
     modelStrategy = '严谨与一致性优先';
@@ -517,14 +535,6 @@ export function createAgentDraft(agentData: {
       '验证字段命名冲突审阅能力'
     ];
   } else {
-    tasks = [
-      { id: 't_1', name: '知识问答', desc: '基于企业标准制度与规范进行精准事实提取', status: 'DRAFT_NEW' },
-      { id: 't_2', name: '文档研究', desc: '跨长篇白皮书与政策文档进行多章节归纳对比', status: 'DRAFT_NEW' },
-      { id: 't_3', name: 'Wiki 研究', desc: '企业内部 Wiki 拓扑词条与领域专有名词协同检索', status: 'DRAFT_NEW' },
-    ];
-    contextSources = [
-      { id: 'c_1', name: '企业知识空间 (草稿)', desc: '草稿初始化 · 待挂载首批企业制度文档或 Wiki 库', type: 'DRAFT_NEW' },
-    ];
     capabilityMode = '精准知识问答';
     capabilityDesc = '企业知识与制度检索增强 (WeKnora Bridge)';
     modelStrategy = '质量优先';

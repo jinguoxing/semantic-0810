@@ -14,15 +14,21 @@ import {
   Sliders,
   Cpu,
   Shield,
-  Send,
-  X,
-  Bot
+  X
 } from 'lucide-react';
 import {
   AgentItem,
   AgentDefinitionDetail,
   INITIAL_AGENT_DEFINITIONS
 } from '../data/agentRegistryData';
+import {
+  AgentContextSource as AgentContextSourceType,
+  AGENT_CONTEXT_SOURCE_VIEWS,
+  findTaskTemplateIdByName,
+  RuntimeTarget
+} from '../domain/agent/agentTypes';
+import { getRuntimeAdapter } from '../domain/agent/runtime/adapters';
+import type { RuntimeHealth } from '../domain/agent/runtime/runtimeTypes';
 
 export interface AgentDefinitionWorkspaceProps {
   agentId?: string;
@@ -75,22 +81,34 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
         status: agent.status,
         runtimeEngine: agent.runtimeEngine,
         runtimeBinding: agent.runtimeBinding !== undefined ? agent.runtimeBinding : (agent.formalVersion ? 'ACTIVE' : null),
-        runtimeRevision: agent.runtimeRevision || (agent.formalVersion ? 'r37' : null),
+        runtimeRevision: agent.runtimeRevision || null,
         lastReleaseTime: agent.releaseTime,
-        lastSyncTime: agent.engineSyncStatus || (agent.formalVersion ? '已同步' : null),
-        tasks: agent.allTasks.map((t, idx) => ({
-          id: `task_${idx}`,
-          name: t,
-          desc: `受管支持任务 · ${t}`,
-          status: 'ACTIVE'
-        })),
+        lastSyncTime: agent.engineSyncStatus || null,
+        tasks: agent.allTasks.map((t, idx) => {
+          const taskTemplateId = findTaskTemplateIdByName(t);
+          return {
+            taskTemplateId: taskTemplateId || `PENDING_BINDING_${idx}`,
+            version: 'V1',
+            enabled: true,
+            name: t,
+            desc: `受管支持任务 · ${t}`,
+            status: 'ACTIVE' as const
+          };
+        }),
         contextSources: [
-          {
-            id: 'c_1',
-            name: isKnowledge ? '企业知识空间' : isGovernance ? '数据标准与业务对象' : '企业指标注册表',
-            desc: agent.formalVersion ? '正式基线已有' : '草稿初始化',
-            type: agent.formalVersion ? 'BASE' : 'DRAFT_NEW'
-          }
+          (() => {
+            const sourceType: AgentContextSourceType = isKnowledge
+              ? 'KNOWLEDGE_SPACE'
+              : isGovernance
+              ? 'BUSINESS_OBJECT'
+              : 'METRIC';
+            return {
+              sourceType,
+              label: AGENT_CONTEXT_SOURCE_VIEWS[sourceType].label,
+              desc: agent.formalVersion ? '正式基线已有' : '草稿初始化',
+              type: agent.formalVersion ? ('BASE' as const) : ('DRAFT_NEW' as const)
+            };
+          })()
         ],
         capabilityMode: isKnowledge ? '精准知识问答' : isGovernance ? '语义合规审查与标准对齐' : '指标计算与多维归因',
         capabilityDesc: isKnowledge ? '企业知识与制度检索增强' : isGovernance ? '数据标准比对与对象映射' : '语义模型与指标下钻计算',
@@ -123,57 +141,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
   }, [resolvedDef]);
 
   // Modals / Drawers
-  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [isRuntimeModalOpen, setIsRuntimeModalOpen] = useState(false);
-  const [testQuery, setTestQuery] = useState('');
-  const [testLogs, setTestLogs] = useState<Array<{ role: 'user' | 'agent'; text: string; sources?: string[] }>>([]);
-  const [isSendingQuery, setIsSendingQuery] = useState(false);
-
-  // Initialize test logs whenever currentDef changes
-  useEffect(() => {
-    setTestLogs([
-      {
-        role: 'agent',
-        text: currentDef.testSandbox.welcomeMessage
-      }
-    ]);
-  }, [currentDef]);
-
-  const handleSendTestQuery = () => {
-    if (!testQuery.trim()) return;
-    const query = testQuery.trim();
-    setTestLogs((prev) => [...prev, { role: 'user', text: query }]);
-    setTestQuery('');
-    setIsSendingQuery(true);
-
-    setTimeout(() => {
-      setIsSendingQuery(false);
-      // Search for sample responses match
-      const matched = currentDef.testSandbox.sampleResponses.find((sr) =>
-        query.toLowerCase().includes(sr.trigger.toLowerCase())
-      );
-
-      if (matched) {
-        setTestLogs((prev) => [
-          ...prev,
-          {
-            role: 'agent',
-            text: matched.reply,
-            sources: matched.sources
-          }
-        ]);
-      } else {
-        setTestLogs((prev) => [
-          ...prev,
-          {
-            role: 'agent',
-            text: currentDef.testSandbox.defaultResponse.reply,
-            sources: currentDef.testSandbox.defaultResponse.sources
-          }
-        ]);
-      }
-    }, 600);
-  };
 
   const handleSaveDraft = () => {
     onSaveDraft?.(currentDef);
@@ -192,7 +160,47 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
     }
   };
 
+  /**
+   * 测试草稿：唯一的测试 / 发布工作区在 A04 (测试与发布)。
+   * 1. 自动保存当前草稿  2. selectedAgentId 保持不变 (App 级状态)  3. 进入 A04
+   */
+  const handleTestDraft = () => {
+    onSaveDraft?.(currentDef);
+    addToast?.(
+      'info',
+      '草稿已自动保存',
+      `「${currentDef.name}」草稿已自动保存，正在进入测试与发布工作区`
+    );
+    onNavigateToPublish?.();
+  };
+
   const isFirstCreationState = !currentDef.formalVersion;
+
+  // 二十四: WeKnora 真实 API 未接入 —— 任何运行状态展示都如实标注 MOCK_RUNTIME，不伪装已同步
+  const isMockWeKnora = currentDef.runtimeEngine === 'WeKnora';
+  const [runtimeHealth, setRuntimeHealth] = useState<RuntimeHealth | null>(null);
+  useEffect(() => {
+    if (!isRuntimeModalOpen) return;
+    let cancelled = false;
+    const target: RuntimeTarget = isMockWeKnora ? 'WEKNORA' : 'SEMOVIX_NATIVE';
+    getRuntimeAdapter(target)
+      .getHealth({
+        bindingId: `view_${currentDef.agentId}`,
+        agentId: currentDef.agentId,
+        runtimeTarget: target,
+        runtimeStatus: 'MOCK_RUNTIME',
+        integrationMode: 'MOCK_RUNTIME'
+      })
+      .then((health) => {
+        if (!cancelled) setRuntimeHealth(health);
+      })
+      .catch(() => {
+        if (!cancelled) setRuntimeHealth(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isRuntimeModalOpen, isMockWeKnora, currentDef.agentId]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#F8FAFC]">
@@ -264,15 +272,19 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
           ) : (
             <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#334155]">
               <GitBranch className="w-3 h-3 text-[#64748B]" />
-              <span className="font-semibold">正式版本 (已同步)</span>
+              <span className="font-semibold">
+                正式版本 ({isMockWeKnora ? '集成待接入' : '已同步'})
+              </span>
             </div>
           )}
 
           {/* Status Tag 3: 运行引擎 / 状态 */}
           {currentDef.runtimeBinding === 'ACTIVE' ? (
             <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-white border border-[#E2E8F0] rounded text-xs text-[#334155]">
-              <span className="w-2 h-2 rounded-full bg-[#16A36A]" />
-              <span className="font-medium text-[#0F172A]">{currentDef.runtimeEngine} · 正常</span>
+              <span className={`w-2 h-2 rounded-full ${isMockWeKnora ? 'bg-amber-500' : 'bg-[#16A36A]'}`} />
+              <span className="font-medium text-[#0F172A]">
+                {currentDef.runtimeEngine} · {isMockWeKnora ? '集成待接入 (MOCK_RUNTIME)' : '正常'}
+              </span>
             </div>
           ) : (
             <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-white border border-[#E2E8F0] rounded text-xs text-[#334155]">
@@ -284,11 +296,13 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
           {/* Actions */}
           <div className="flex items-center space-x-2 pl-2 border-l border-[#E2E8F0]">
             <button
-              onClick={() => setIsTestModalOpen(true)}
-              className="px-3 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#CBD5E1] rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+              onClick={handleTestDraft}
+              disabled={!onNavigateToPublish}
+              title="自动保存草稿并进入测试与发布工作区"
+              className="px-3 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#CBD5E1] rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="w-3 h-3 text-[#2563EB]" />
-              <span>测试草盒</span>
+              <span>测试草稿</span>
             </button>
             <button
               onClick={handleSaveDraft}
@@ -532,8 +546,8 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                       <div className="text-xs font-bold text-[#0F172A]">
                         {currentDef.contextSources.length} 项
                       </div>
-                      <div className="text-[10px] text-[#94A3B8] truncate" title={currentDef.contextSources.map(c => c.name).join(' · ')}>
-                        {currentDef.contextSources.map(c => c.name).join(' · ')}
+                      <div className="text-[10px] text-[#94A3B8] truncate" title={currentDef.contextSources.map(c => c.label).join(' · ')}>
+                        {currentDef.contextSources.map(c => c.label).join(' · ')}
                       </div>
                     </div>
 
@@ -644,7 +658,9 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                           <dt className="text-[#64748B]">正式运行配置</dt>
                           <dd>
                             {currentDef.runtimeBinding === 'ACTIVE' ? (
-                              <span className="font-mono text-[#0F172A]">{currentDef.runtimeRevision || 'r37'}</span>
+                              <span className="font-mono text-[#0F172A]">
+                                {currentDef.runtimeRevision || (isMockWeKnora ? 'MOCK_RUNTIME' : '—')}
+                              </span>
                             ) : (
                               <span className="text-amber-600 font-semibold">尚未建立</span>
                             )}
@@ -654,7 +670,11 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                           <dt className="text-[#64748B]">同步状态</dt>
                           <dd>
                             {currentDef.runtimeBinding === 'ACTIVE' ? (
-                              <span className="font-medium text-[#16A36A]">已同步</span>
+                              isMockWeKnora ? (
+                                <span className="font-medium text-amber-600">集成待接入 (MOCK_RUNTIME)</span>
+                              ) : (
+                                <span className="font-medium text-[#16A36A]">已同步</span>
+                              )
                             ) : (
                               <span className="text-[#94A3B8]">未绑定</span>
                             )}
@@ -769,7 +789,12 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                         </div>
                       </div>
 
-                      {currentDef.runtimeBinding === 'ACTIVE' ? (
+                      {currentDef.runtimeBinding === 'ACTIVE' && isMockWeKnora ? (
+                        <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 text-xs font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span>集成待接入 (MOCK_RUNTIME)</span>
+                        </div>
+                      ) : currentDef.runtimeBinding === 'ACTIVE' ? (
                         <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded bg-emerald-50 text-[#16A36A] border border-emerald-200/60 text-xs font-medium">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
                           <span>运行正常</span>
@@ -790,8 +815,12 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                       </div>
                       <div>
                         <span className="text-[11px] text-[#64748B] block">运行状态</span>
-                        <span className={`font-semibold mt-0.5 block ${currentDef.runtimeBinding === 'ACTIVE' ? 'text-[#16A36A]' : 'text-amber-600'}`}>
-                          {currentDef.runtimeBinding === 'ACTIVE' ? '● 正常' : '未绑定 / 草稿阶段'}
+                        <span className={`font-semibold mt-0.5 block ${currentDef.runtimeBinding === 'ACTIVE' && !isMockWeKnora ? 'text-[#16A36A]' : 'text-amber-600'}`}>
+                          {currentDef.runtimeBinding === 'ACTIVE'
+                            ? isMockWeKnora
+                              ? '● 集成待接入'
+                              : '● 正常'
+                            : '未绑定 / 草稿阶段'}
                         </span>
                       </div>
                       <div>
@@ -803,7 +832,11 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                       <div>
                         <span className="text-[11px] text-[#64748B] block">同步状态</span>
                         <span className="font-semibold text-[#0F172A] mt-0.5 block">
-                          {currentDef.runtimeBinding === 'ACTIVE' ? '正式版本已同步' : '尚未建立正式配置'}
+                          {currentDef.runtimeBinding === 'ACTIVE'
+                            ? isMockWeKnora
+                              ? 'MOCK_RUNTIME 投影 (未接入真实 API)'
+                              : '正式版本已同步'
+                            : '尚未建立正式配置'}
                         </span>
                       </div>
                       <div>
@@ -832,11 +865,11 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                         </button>
                       ) : (
                         <button
-                          onClick={() => setIsTestModalOpen(true)}
+                          onClick={handleTestDraft}
                           className="px-3 py-1.5 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#1E40AF] border border-[#BFDBFE] rounded-md text-xs font-semibold flex items-center space-x-1.5 cursor-pointer transition-colors shadow-2xs"
                         >
                           <Play className="w-3 h-3 text-[#2563EB]" />
-                          <span>在沙盒中试运行</span>
+                          <span>测试草稿 (进入测试与发布)</span>
                         </button>
                       )}
                     </div>
@@ -905,19 +938,54 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                     <div className="font-bold text-[#0F172A]">
                       当前受管支持任务 ({currentDef.tasks.length} 项)
                     </div>
+                    <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-[11px] text-[#64748B] leading-relaxed">
+                      任务定义 (Workflow、步骤与输入输出契约) 由 Task Engine 统一管理；Agent Center 仅维护绑定关系与启用状态，不在此编辑任务内容。
+                    </div>
                     <div className="space-y-2">
                       {currentDef.tasks.map((task, idx) => (
                         <div
-                          key={task.id || idx}
-                          className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md flex items-center justify-between"
+                          key={task.taskTemplateId || idx}
+                          className={`p-3 rounded-md flex items-center justify-between ${
+                            task.status === 'DRAFT_NEW'
+                              ? 'bg-[#EFF6FF] border border-[#BFDBFE]'
+                              : 'bg-[#F8FAFC] border border-[#E2E8F0]'
+                          }`}
                         >
-                          <div>
-                            <div className="font-semibold text-[#0F172A]">{idx + 1}. {task.name}</div>
-                            <div className="text-[11px] text-[#64748B]">{task.desc}</div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-[#0F172A] flex items-center space-x-2">
+                              <span>{idx + 1}. {task.name}</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-[#475569] border border-[#E2E8F0] shrink-0">
+                                {task.taskTemplateId}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-[#64748B] mt-0.5">{task.desc}</div>
                           </div>
-                          <span className="text-[10px] bg-emerald-50 text-[#16A36A] px-2 py-0.5 rounded font-medium border border-emerald-200">
-                            {task.status === 'DRAFT_NEW' ? '草稿配置' : '启用中'}
-                          </span>
+                          <div className="flex items-center space-x-2 shrink-0">
+                            <button
+                              onClick={() =>
+                                addToast?.(
+                                  'info',
+                                  `任务定义 · ${task.taskTemplateId}`,
+                                  '该任务由 Task Engine 管理，请在任务模板中心查看任务定义与版本详情'
+                                )
+                              }
+                              className="flex items-center space-x-1 text-[11px] font-semibold text-[#2563EB] hover:underline cursor-pointer"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              <span>查看任务定义</span>
+                            </button>
+                            <span
+                              className={`text-[10px] px-2 py-0.5 rounded font-medium border ${
+                                !task.enabled
+                                  ? 'bg-slate-100 text-[#64748B] border-[#E2E8F0]'
+                                  : task.status === 'DRAFT_NEW'
+                                  ? 'bg-blue-50 text-[#2563EB] border-[#BFDBFE]'
+                                  : 'bg-emerald-50 text-[#16A36A] border-emerald-200'
+                              }`}
+                            >
+                              {!task.enabled ? '已停用' : task.status === 'DRAFT_NEW' ? `草稿配置 · ${task.version}` : `启用中 · ${task.version}`}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -928,13 +996,25 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                   <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-3 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-[#0F172A]">
-                        挂载资产与范围 ({currentDef.contextSources.length} 个)
+                        允许上下文来源 ({currentDef.contextSources.length} 个)
                       </span>
                     </div>
+
+                    {/* 运行上下文裁决公式：Agent Center 不复制 Permission Matrix */}
+                    <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1.5">
+                      <div className="font-semibold text-[#0F172A] text-[11px]">实际运行上下文</div>
+                      <div className="font-mono text-[11px] text-[#2563EB] bg-white border border-[#BFDBFE] rounded px-2 py-1.5 leading-relaxed">
+                        实际运行上下文 = 智能体允许范围 ∩ 当前用户权限 ∩ 当前任务范围
+                      </div>
+                      <p className="text-[11px] text-[#64748B] leading-relaxed">
+                        此处仅定义智能体允许访问的来源类型；用户权限由 Permission Matrix 统一裁决，任务范围由 Task Engine 下发，Agent Center 不复制权限矩阵。
+                      </p>
+                    </div>
+
                     <div className="space-y-2">
                       {currentDef.contextSources.map((ctx, idx) => (
                         <div
-                          key={ctx.id || idx}
+                          key={ctx.sourceType || idx}
                           className={`p-3 rounded-md flex items-center justify-between ${
                             ctx.type === 'DRAFT_NEW'
                               ? 'bg-[#EFF6FF] border border-[#BFDBFE]'
@@ -942,15 +1022,18 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                           }`}
                         >
                           <div>
-                            <div className={`font-semibold ${ctx.type === 'DRAFT_NEW' ? 'text-[#1E40AF]' : 'text-[#0F172A]'}`}>
-                              {ctx.name}
+                            <div className={`font-semibold flex items-center space-x-2 ${ctx.type === 'DRAFT_NEW' ? 'text-[#1E40AF]' : 'text-[#0F172A]'}`}>
+                              <span>{ctx.label}</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-[#475569] border border-[#E2E8F0]">
+                                {ctx.sourceType}
+                              </span>
                             </div>
-                            <div className={`text-[11px] ${ctx.type === 'DRAFT_NEW' ? 'text-[#2563EB]' : 'text-[#64748B]'}`}>
+                            <div className={`text-[11px] mt-0.5 ${ctx.type === 'DRAFT_NEW' ? 'text-[#2563EB]' : 'text-[#64748B]'}`}>
                               {ctx.desc}
                             </div>
                           </div>
                           <span
-                            className={`text-[10px] px-2 py-0.5 rounded font-mono ${
+                            className={`text-[10px] px-2 py-0.5 rounded font-mono shrink-0 ${
                               ctx.type === 'DRAFT_NEW'
                                 ? 'text-[#2563EB] bg-white font-semibold border border-blue-200'
                                 : 'text-slate-500 bg-slate-100'
@@ -1061,10 +1144,15 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[#64748B]">运行状态</span>
-              {currentDef.runtimeBinding === 'ACTIVE' ? (
+              {currentDef.runtimeBinding === 'ACTIVE' && !isMockWeKnora ? (
                 <div className="flex items-center space-x-1 text-[#16A36A] font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#16A36A]" />
                   <span>正常</span>
+                </div>
+              ) : currentDef.runtimeBinding === 'ACTIVE' ? (
+                <div className="flex items-center space-x-1 text-amber-600 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  <span>集成待接入</span>
                 </div>
               ) : (
                 <div className="flex items-center space-x-1 text-amber-600 font-medium">
@@ -1090,11 +1178,11 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
 
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <button
-                  onClick={() => setIsTestModalOpen(true)}
+                  onClick={handleTestDraft}
                   className="py-1.5 bg-white hover:bg-amber-100/50 text-amber-900 border border-amber-300 rounded text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer shadow-2xs"
                 >
                   <Play className="w-3 h-3 text-amber-700" />
-                  <span>测试草盒</span>
+                  <span>测试草稿</span>
                 </button>
                 {onNavigateToPublish ? (
                   <button
@@ -1127,11 +1215,11 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
 
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <button
-                  onClick={() => setIsTestModalOpen(true)}
+                  onClick={handleTestDraft}
                   className="py-1.5 bg-white hover:bg-slate-50 text-[#1E40AF] border border-[#BFDBFE] rounded text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer shadow-2xs"
                 >
                   <Play className="w-3 h-3 text-[#2563EB]" />
-                  <span>测试草盒</span>
+                  <span>测试草稿</span>
                 </button>
                 {onNavigateToPublish ? (
                   <button
@@ -1162,132 +1250,16 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                 线上正式版本 {currentDef.formalVersion} 正在稳定运行。
               </p>
               <button
-                onClick={() => setIsTestModalOpen(true)}
+                onClick={handleTestDraft}
                 className="w-full py-1.5 bg-white hover:bg-slate-50 text-[#334155] border border-[#CBD5E1] rounded text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer shadow-2xs"
               >
                 <Play className="w-3 h-3 text-[#2563EB]" />
-                <span>运行验证沙盒</span>
+                <span>测试草稿 (进入测试与发布)</span>
               </button>
             </div>
           )}
         </aside>
       </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          MODAL 1: TEST DRAFT DIALOG (测试草稿沙盒)
-      ───────────────────────────────────────────────────────────── */}
-      {isTestModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsTestModalOpen(false)}
-          />
-          <div className="relative z-10 w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-[#E2E8F0] flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="px-5 py-3.5 bg-[#F8FAFC] border-b border-[#E2E8F0] flex items-center justify-between">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-7 h-7 rounded-lg bg-[#2563EB] text-white flex items-center justify-center">
-                  <Bot className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-xs text-[#0F172A]">
-                    {currentDef.name} · 草稿测试沙盒 (Draft Test Sandbox)
-                  </h3>
-                  <p className="text-[11px] text-[#64748B]">
-                    测试环境：包含 {currentDef.tasks.length} 项支持任务与 {currentDef.capabilityMode} (
-                    {currentDef.formalVersion ? `不影响线上 ${currentDef.formalVersion} 正式版` : '首次创建未发布环境'}
-                    )
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsTestModalOpen(false)}
-                className="p-1 rounded-md text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Chat Body */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#F8FAFC]">
-              {testLogs.map((log, index) => (
-                <div
-                  key={index}
-                  className={`flex ${log.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-lg p-3 text-xs leading-relaxed ${
-                      log.role === 'user'
-                        ? 'bg-[#2563EB] text-white'
-                        : 'bg-white border border-[#E2E8F0] text-[#0F172A] shadow-2xs'
-                    }`}
-                  >
-                    <div className="whitespace-pre-line">{log.text}</div>
-                    {log.sources && log.sources.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-[#F1F5F9] text-[10px] text-[#64748B]">
-                        <span className="font-semibold text-[#0F172A]">依据溯源：</span>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {log.sources.map((src, i) => (
-                            <span
-                              key={i}
-                              className="bg-[#EFF6FF] text-[#2563EB] px-1.5 py-0.5 rounded border border-[#BFDBFE]"
-                            >
-                              {src}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {isSendingQuery && (
-                <div className="flex items-center space-x-2 text-xs text-[#64748B] p-2">
-                  <div className="w-3.5 h-3.5 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
-                  <span>正在执行草稿意图解析与沙盒推理...</span>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Prompts */}
-            {currentDef.testSandbox.suggestedQueries && currentDef.testSandbox.suggestedQueries.length > 0 && (
-              <div className="px-4 py-2 bg-white border-t border-[#F1F5F9] flex items-center space-x-2 overflow-x-auto text-[11px]">
-                <span className="text-[#94A3B8] shrink-0">快捷测试：</span>
-                {currentDef.testSandbox.suggestedQueries.map((sq, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setTestQuery(sq)}
-                    className="px-2 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0] rounded cursor-pointer shrink-0 truncate max-w-[280px]"
-                    title={sq}
-                  >
-                    {sq}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Input Bar */}
-            <div className="p-3 bg-white border-t border-[#E2E8F0] flex items-center space-x-2">
-              <input
-                type="text"
-                value={testQuery}
-                onChange={(e) => setTestQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendTestQuery()}
-                placeholder="输入测试语句，验证草稿支持任务与回答模式..."
-                className="flex-1 px-3 py-2 text-xs bg-[#F8FAFC] border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:bg-white text-[#0F172A]"
-              />
-              <button
-                onClick={handleSendTestQuery}
-                disabled={!testQuery.trim() || isSendingQuery}
-                className="px-3.5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-[#94A3B8] text-white rounded-md text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>发送</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ─────────────────────────────────────────────────────────────
           MODAL 2: RUNTIME DETAIL DIALOG (查看运行详情)
@@ -1317,29 +1289,43 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-[#64748B]">集群节点状态</span>
-                  <span className="font-semibold text-[#16A36A]">3/3 Nodes Ready (Healthy)</span>
+                  <span className="text-[#64748B]">集成模式</span>
+                  <span
+                    className={`font-semibold ${
+                      runtimeHealth?.integrationMode === 'PRODUCTION' ? 'text-[#16A36A]' : 'text-amber-600'
+                    }`}
+                  >
+                    {runtimeHealth?.integrationMode ?? 'MOCK_RUNTIME'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#64748B]">检索/执行延迟 (P95)</span>
-                  <span className="font-mono text-[#0F172A]">142 ms</span>
+                  <span className="text-[#64748B]">Runtime 健康状态</span>
+                  <span className="font-semibold text-[#0F172A]">
+                    {runtimeHealth ? runtimeHealth.status : '读取中...'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#64748B]">运行实例</span>
                   <span className="font-semibold text-[#0F172A]">
-                    {currentDef.runtimeEngine === 'WeKnora' ? 'Enterprise Knowledge 实例' : 'Semovix Native Cluster'}
+                    {currentDef.runtimeEngine === 'WeKnora' ? '未接入 (Runtime integration pending)' : 'Semovix Native 原型运行时'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#64748B]">正式配置 Revision</span>
                   <span className="font-mono text-[#0F172A]">
-                    {currentDef.runtimeRevision || 'r37'} ({currentDef.lastReleaseTime || '已发布'})
+                    {currentDef.runtimeRevision || (isMockWeKnora ? 'MOCK_RUNTIME' : '—')} ({currentDef.lastReleaseTime || '已发布'})
                   </span>
                 </div>
               </div>
 
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 leading-relaxed">
+                {runtimeHealth?.message
+                  ? `${runtimeHealth.message}（来自 AgentRuntimeAdapter.getHealth，非实时探测数据）`
+                  : '正在从 Runtime Adapter 读取健康信息...'}
+              </div>
+
               <div className="text-[11px] text-[#64748B] leading-relaxed">
-                当前运行实例已与正式版本 {currentDef.formalVersion} 绑定。草稿配置未同步至线上引擎，草稿修改仅在沙盒中生效。
+                当前运行时绑定以 {currentDef.runtimeRevision || 'MOCK_RUNTIME'} 投影与正式版本 {currentDef.formalVersion || '（待发布）'} 关联。草稿配置未同步至线上引擎，草稿修改仅在沙盒中生效。
               </div>
             </div>
 

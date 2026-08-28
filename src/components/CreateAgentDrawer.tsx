@@ -16,7 +16,8 @@ import {
   PRESET_LIST,
   ManagedAgentPreset,
   getPresetById,
-  MANAGED_AGENT_PRESETS
+  MANAGED_AGENT_PRESETS,
+  getTaskTemplateView
 } from '../domain/agent';
 
 export interface AgentTemplateDefinition {
@@ -31,7 +32,9 @@ export interface AgentTemplateDefinition {
   defaultOwner: string;
   runtimeTarget: 'WEKNORA' | 'SEMOVIX_NATIVE';
   runtimeEngineLabel: string;
-  supportedTasks: string[];
+  /** 展示标签投影：真实数据为 preset.supportedTaskTemplates (TaskTemplateBinding[]) */
+  supportedTaskLabels: string[];
+  supportedTaskTemplateIds: string[];
   extraTasksCount?: number;
   capabilityPreset: string;
   capabilityPresetDesc: string;
@@ -52,7 +55,10 @@ export const V11_AGENT_TEMPLATES: AgentTemplateDefinition[] = PRESET_LIST.map((p
   defaultOwner: preset.defaultOwner,
   runtimeTarget: preset.runtimeTarget,
   runtimeEngineLabel: preset.runtimeEngineLabel,
-  supportedTasks: preset.supportedTaskNames,
+  supportedTaskLabels: preset.supportedTaskTemplates.map(
+    (binding) => getTaskTemplateView(binding.taskTemplateId).name
+  ),
+  supportedTaskTemplateIds: preset.supportedTaskTemplates.map((binding) => binding.taskTemplateId),
   extraTasksCount: preset.extraTasksCount,
   capabilityPreset: preset.capabilityPreset,
   capabilityPresetDesc: preset.capabilityPresetDesc,
@@ -76,8 +82,6 @@ interface CreateAgentDrawerProps {
     templateId: string;
     runtimeTarget: string;
   }) => void;
-  onPrevStep?: () => void;
-  onChangeTemplate?: () => void;
   initialStep?: 1 | 2;
   initialTemplateId?: string | null;
 }
@@ -104,7 +108,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
   const [responsibility, setResponsibility] = useState(
     selectedTemplate ? selectedTemplate.defaultResponsibility : ''
   );
-  const [owner, setOwner] = useState(selectedTemplate ? selectedTemplate.defaultOwner : '企业知识治理组');
+  const [owner, setOwner] = useState(selectedTemplate ? selectedTemplate.defaultOwner : '');
   const [isOwnerDropdownOpen, setIsOwnerDropdownOpen] = useState(false);
 
   useEffect(() => {
@@ -121,7 +125,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
       } else {
         setName('');
         setResponsibility('');
-        setOwner('企业知识治理组');
+        setOwner('');
       }
     }
   }, [isOpen, initialStep, initialTemplateId]);
@@ -356,7 +360,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                     {/* Middle: Supported Task Chips (Muted gray/subtle blue, <= 3 chips) */}
                     <div className="pt-2 flex items-center space-x-1.5 flex-wrap">
                       <span className="text-[11px] text-[#64748B] mr-1">支持任务：</span>
-                      {tmpl.supportedTasks.map((taskName) => (
+                      {tmpl.supportedTaskLabels.map((taskName) => (
                         <span
                           key={taskName}
                           className="text-xs px-2.5 py-0.5 rounded bg-white text-[#334155] border border-[#CBD5E1]/80 font-medium"
@@ -424,10 +428,10 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                   <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
                     <span className="text-[11px] text-[#64748B] block">支持任务</span>
                     <span className="font-bold text-[#0F172A] text-xs block">
-                      {selectedTemplate.supportedTasks.length} 项
+                      {selectedTemplate.supportedTaskLabels.length} 项
                     </span>
                     <span className="text-[10px] text-[#94A3B8] block truncate">
-                      {selectedTemplate.supportedTasks.join(' · ')}
+                      {selectedTemplate.supportedTaskLabels.join(' · ')}
                     </span>
                   </div>
 
@@ -488,7 +492,25 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               STAGE 2: 基本定义 (BASIC DEFINITION FORM)
           ───────────────────────────────────────────────────── */
           (() => {
-            const activeTemplate = selectedTemplate || V11_AGENT_TEMPLATES[2];
+            // Bug B 修复：未显式选择模板时不隐式回退到任何预设，给出引导态
+            if (!selectedTemplate) {
+              return (
+                <div className="flex-1 flex items-center justify-center bg-[#F8FAFC]">
+                  <div className="text-center space-y-2">
+                    <Info className="w-6 h-6 text-[#CBD5E1] mx-auto" />
+                    <div className="text-xs font-bold text-[#0F172A]">尚未选择模板</div>
+                    <p className="text-[11px] text-[#64748B]">请先返回上一步选择智能体模板。</p>
+                    <button
+                      onClick={() => setCurrentStep(1)}
+                      className="px-3 py-1.5 bg-white hover:bg-[#F1F5F9] text-[#334155] border border-[#CBD5E1] rounded-md text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      返回选择模板
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            const activeTemplate = selectedTemplate;
             return (
               <div className="flex-1 overflow-y-auto flex flex-col md:flex-row bg-[#F8FAFC] divide-y md:divide-y-0 md:divide-x divide-[#E2E8F0]">
                 {/* Left Column: Form Fields */}
@@ -640,10 +662,10 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                       <div className="space-y-0.5">
                         <span className="text-[11px] text-[#64748B] block">支持任务</span>
                         <span className="font-bold text-[#0F172A] block">
-                          {activeTemplate.supportedTasks.length} 项
+                          {activeTemplate.supportedTaskLabels.length} 项
                         </span>
                         <span className="text-[10px] text-[#94A3B8] block">
-                          {activeTemplate.supportedTasks.join(' · ')}
+                          {activeTemplate.supportedTaskLabels.join(' · ')}
                         </span>
                       </div>
 

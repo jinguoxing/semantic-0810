@@ -4,7 +4,8 @@
  * - createDraftFromPreset: Generates an AgentDefinition + AgentDraft from an official preset
  * - publishDraft: Enforces immutable versioning (creates AgentVersion, updates runtime binding)
  * - createDraftFromPublishedVersion: Starts a new draft cycle from an existing immutable version
- * - updateDraft: Persists draft changes
+ * - saveDraftEdit: Persists workspace edits into the repository draft
+ * - evaluateReleaseValidation: Runs the five Release Gates for the current draft
  */
 
 import {
@@ -12,16 +13,28 @@ import {
   AgentDraft,
   AgentVersion,
   AgentRuntimeBinding,
-  AgentBusinessDiff
+  AgentBusinessDiff,
+  AgentReleaseValidation
 } from './agentTypes';
 import { getPresetById, MANAGED_AGENT_PRESETS } from './agentPresets';
 import { agentRepository } from './agentRepository';
+import { getRuntimeAdapter } from './runtime/adapters';
 
 export interface CreateDraftFromPresetInput {
   presetId: string;
   name: string;
   responsibility: string;
   owner: string;
+}
+
+export class AgentPublishError extends Error {
+  constructor(
+    message: string,
+    public readonly failedStage: 'VALIDATION' | 'ACTIVATION'
+  ) {
+    super(message);
+    this.name = 'AgentPublishError';
+  }
 }
 
 class AgentService {
@@ -48,11 +61,8 @@ class AgentService {
       agentKind: 'MANAGED',
       owner: input.owner.trim() || preset.defaultOwner,
       sourcePresetId: preset.presetId,
-      supportedTaskTemplateIds: [...preset.supportedTaskTemplateIds],
-      allowedContextSources: preset.allowedContextSources.map((ctx) => ({
-        ...ctx,
-        type: 'DRAFT_NEW' as const
-      })),
+      supportedTaskTemplates: preset.supportedTaskTemplates.map((binding) => ({ ...binding })),
+      allowedContextSources: [...preset.allowedContextSources],
       capabilityPreset: preset.capabilityPreset,
       capabilityDesc: preset.capabilityPresetDesc,
       modelPolicyId: preset.modelPolicyId,
@@ -95,7 +105,7 @@ class AgentService {
       name: definition.name,
       description: definition.description,
       responsibilitySummary: definition.responsibilitySummary,
-      supportedTaskTemplateIds: [...definition.supportedTaskTemplateIds],
+      supportedTaskTemplates: definition.supportedTaskTemplates.map((binding) => ({ ...binding })),
       allowedContextSources: [...definition.allowedContextSources],
       capabilityPreset: definition.capabilityPreset,
       capabilityDesc: definition.capabilityDesc,
@@ -128,81 +138,175 @@ class AgentService {
   }
 
   /**
-   * P0: Publish an existing draft to create an immutable AgentVersion
+   * 计算期望的下一版本号（只依据当前正式版本推导，绝不写死具体版本号）：
+   * 无正式版本 → v1.0；v1.4 → v1.5
    */
-  public publishDraft(params: {
+  public getExpectedNextVersion(agentId: string): string | null {
+    const def = agentRepository.getDefinition(agentId);
+    if (!def) return null;
+    return def.currentPublishedVersion ? this.incrementMinorVersion(def.currentPublishedVersion) : 'v1.0';
+  }
+
+  /**
+   * Release Validation：对当前草稿执行五道发布门检查。
+   * 没有未发布草稿时全部保持 PENDING（无可发布内容）。
+   */
+  public async evaluateReleaseValidation(agentId: string): Promise<AgentReleaseValidation> {
+    const def = agentRepository.getDefinition(agentId);
+    const draft = agentRepository.getDraftByAgentId(agentId);
+
+    if (!def || !draft) {
+      return {
+        agentId,
+        draftId: draft?.draftId ?? '',
+        configCheck: 'PENDING',
+        runtimeCompile: 'PENDING',
+        runtimeDependencies: 'PENDING',
+        testRun: 'PENDING',
+        qualityEvaluation: 'PENDING'
+      };
+    }
+
+    const adapter = getRuntimeAdapter(draft.runtimeTarget);
+
+    // 1) 配置完整性：名称 / 责任描述 / 至少一项启用的任务模板 / 模型策略
+    const configPassed =
+      Boolean(draft.name.trim()) &&
+      Boolean(draft.responsibilitySummary.trim()) &&
+      draft.supportedTaskTemplates.some((t) => t.enabled) &&
+      Boolean(draft.modelPolicyId);
+
+    // 2) Runtime 编译：Adapter.compile 抛错即 FAILED
+    let projection = null;
+    let runtimeCompile: AgentReleaseValidation['runtimeCompile'] = 'FAILED';
+    try {
+      projection = await adapter.compile(draft);
+      runtimeCompile = 'PASSED';
+    } catch {
+      runtimeCompile = 'FAILED';
+    }
+
+    // 3) Runtime 依赖：Adapter.validate 结构校验
+    let runtimeDependencies: AgentReleaseValidation['runtimeDependencies'] = 'FAILED';
+    if (projection) {
+      try {
+        const result = await adapter.validate(projection);
+        runtimeDependencies = result.passed ? 'PASSED' : 'FAILED';
+      } catch {
+        runtimeDependencies = 'FAILED';
+      }
+    }
+
+    // 4) 测试运行：沙盒用例可在编译产物上执行（原型环境以结构可执行性为准）
+    const testRun: AgentReleaseValidation['testRun'] =
+      projection && draft.supportedTaskTemplates.some((t) => t.enabled) ? 'PASSED' : 'FAILED';
+
+    // 5) 质量评估：责任边界与自治等级声明确认（原型基线）
+    const qualityEvaluation: AgentReleaseValidation['qualityEvaluation'] =
+      configPassed && Boolean(draft.maxAutonomyDesc) ? 'PASSED' : 'FAILED';
+
+    return {
+      agentId,
+      draftId: draft.draftId,
+      configCheck: configPassed ? 'PASSED' : 'FAILED',
+      runtimeCompile,
+      runtimeDependencies,
+      testRun,
+      qualityEvaluation
+    };
+  }
+
+  /**
+   * P0: 发布草稿为不可变版本。
+   *
+   * 失败安全规则（顺序不可颠倒）：
+   *   Create candidate AgentVersion → Runtime Validation → Runtime Activation → Switch Published Version
+   * 任何一步失败：正式版本保持不变（旧版本继续 ACTIVE），草稿保留。
+   */
+  public async publishDraft(params: {
     agentId: string;
     publishedBy: string;
     releaseNotes?: string;
-    targetVersion?: string;
-  }): { version: AgentVersion; definition: AgentDefinition; runtimeBinding: AgentRuntimeBinding } {
+  }): Promise<{ version: AgentVersion; definition: AgentDefinition; runtimeBinding: AgentRuntimeBinding }> {
     const def = agentRepository.getDefinition(params.agentId);
     if (!def) {
       throw new Error(`Agent definition not found for id: ${params.agentId}`);
     }
 
     const draft = agentRepository.getDraftByAgentId(params.agentId);
-    const targetVersionNumber =
-      params.targetVersion ||
-      (def.currentPublishedVersion
-        ? this.incrementMinorVersion(def.currentPublishedVersion)
-        : 'v1.0');
+    if (!draft) {
+      throw new Error('当前没有未发布草稿，无需发布');
+    }
 
-    // Update definition with draft data
-    const updatedDef: AgentDefinition = {
+    // 期望下一版本号：无正式版本 → v1.0；否则次版本号 +1
+    const targetVersionNumber = def.currentPublishedVersion
+      ? this.incrementMinorVersion(def.currentPublishedVersion)
+      : 'v1.0';
+
+    // ── Step 1: 候选版本（尚未落库，仅为快照） ──
+    const candidateDef: AgentDefinition = {
       ...def,
-      name: draft ? draft.name : def.name,
-      description: draft ? draft.description : def.description,
-      responsibilitySummary: draft ? draft.responsibilitySummary : def.responsibilitySummary,
-      capabilityPreset: draft ? draft.capabilityPreset : def.capabilityPreset,
-      capabilityDesc: draft?.capabilityDesc || def.capabilityDesc,
-      supportedTaskTemplateIds: draft ? draft.supportedTaskTemplateIds : def.supportedTaskTemplateIds,
-      allowedContextSources: draft
-        ? draft.allowedContextSources.map((c) => ({ ...c, type: 'BASE' as const }))
-        : def.allowedContextSources,
-      modelPolicyId: draft ? draft.modelPolicyId : def.modelPolicyId,
-      maxAutonomy: draft ? draft.maxAutonomy : def.maxAutonomy,
-      runtimeTarget: draft ? draft.runtimeTarget : def.runtimeTarget,
+      name: draft.name,
+      description: draft.description,
+      responsibilitySummary: draft.responsibilitySummary,
+      capabilityPreset: draft.capabilityPreset,
+      capabilityDesc: draft.capabilityDesc || def.capabilityDesc,
+      supportedTaskTemplates: draft.supportedTaskTemplates.map((binding) => ({ ...binding })),
+      allowedContextSources: [...draft.allowedContextSources],
+      modelPolicyId: draft.modelPolicyId,
+      modelPolicyName: draft.modelPolicyName || def.modelPolicyName,
+      maxAutonomy: draft.maxAutonomy,
+      maxAutonomyDesc: draft.maxAutonomyDesc || def.maxAutonomyDesc,
+      runtimeTarget: draft.runtimeTarget,
       status: 'ACTIVE',
-      currentPublishedVersion: targetVersionNumber,
-      currentDraftId: undefined, // Draft is closed after release
+      currentPublishedVersion: targetVersionNumber, // 仅存在于候选快照中，失败不落库
+      currentDraftId: undefined,
       updatedAt: '刚刚'
     };
 
-    const newRevision = `r${Math.floor(Math.random() * 50) + 20}`;
+    // ── Step 2: Runtime Validation（编译 + 依赖校验） ──
+    const adapter = getRuntimeAdapter(candidateDef.runtimeTarget);
+    let projection;
+    try {
+      projection = await adapter.compile(draft);
+      const validation = await adapter.validate(projection);
+      if (!validation.passed) {
+        throw new AgentPublishError(
+          `Runtime 校验未通过：${validation.checks.filter((c) => c.status === 'FAILED').map((c) => c.name).join('、')}`,
+          'VALIDATION'
+        );
+      }
+    } catch (error) {
+      if (error instanceof AgentPublishError) throw error;
+      throw new AgentPublishError('Runtime 编译失败，发布中止', 'VALIDATION');
+    }
 
-    // Immutable Version snapshot
+    // ── Step 3: Runtime Activation（激活成功才允许切换正式版本） ──
+    let runtimeBinding: AgentRuntimeBinding;
+    try {
+      runtimeBinding = await adapter.activate(projection);
+    } catch {
+      throw new AgentPublishError('Runtime 激活失败，发布中止', 'ACTIVATION');
+    }
+
+    // ── Step 4: 切换正式版本（以上全部成功后才写仓库） ──
     const version: AgentVersion = {
       versionId: `ver_${params.agentId}_${Date.now().toString(36)}`,
       versionNumber: targetVersionNumber,
       agentId: params.agentId,
-      snapshot: { ...updatedDef },
+      snapshot: { ...candidateDef },
       publishedAt: '刚刚',
       publishedBy: params.publishedBy,
       releaseNotes: params.releaseNotes || `正式发布版本 ${targetVersionNumber}`,
-      runtimeRevision: newRevision
+      runtimeRevision: runtimeBinding.syncRevision ?? targetVersionNumber
     };
 
-    // Update Runtime Binding to SYNCED
-    const runtimeBinding: AgentRuntimeBinding = {
-      bindingId: `bind_${params.agentId}`,
-      agentId: params.agentId,
-      runtimeTarget: updatedDef.runtimeTarget,
-      runtimeInstanceId: `inst_${params.agentId}_prod`,
-      runtimeStatus: 'SYNCED',
-      syncRevision: newRevision,
-      lastSyncedAt: '刚刚'
-    };
-
-    // Save all to repository
-    agentRepository.saveDefinition(updatedDef);
+    agentRepository.saveDefinition(candidateDef);
     agentRepository.addVersion(version);
     agentRepository.saveRuntimeBinding(runtimeBinding);
-    if (draft) {
-      agentRepository.removeDraft(draft.draftId);
-    }
+    agentRepository.removeDraft(draft.draftId);
 
-    return { version, definition: updatedDef, runtimeBinding };
+    return { version, definition: candidateDef, runtimeBinding };
   }
 
   /**
@@ -222,8 +326,8 @@ class AgentService {
       name: def.name,
       description: def.description,
       responsibilitySummary: def.responsibilitySummary,
-      supportedTaskTemplateIds: [...def.supportedTaskTemplateIds],
-      allowedContextSources: def.allowedContextSources.map((c) => ({ ...c })),
+      supportedTaskTemplates: def.supportedTaskTemplates.map((binding) => ({ ...binding })),
+      allowedContextSources: [...def.allowedContextSources],
       capabilityPreset: def.capabilityPreset,
       capabilityDesc: def.capabilityDesc,
       modelPolicyId: def.modelPolicyId,
@@ -241,6 +345,35 @@ class AgentService {
     agentRepository.saveDraft(draft);
 
     return draft;
+  }
+
+  /**
+   * 将定义工作区 (A03) 的编辑持久化到 Repository 草稿。
+   * 没有草稿时基于当前正式版本自动开一个编辑草稿，保证 A04 读到同一份事实。
+   */
+  public saveDraftEdit(
+    agentId: string,
+    edits: { name: string; responsibility: string; owner: string }
+  ): AgentDraft | null {
+    const def = agentRepository.getDefinition(agentId);
+    if (!def) return null;
+
+    let draft = agentRepository.getDraftByAgentId(agentId);
+    if (!draft) {
+      draft = this.createDraftFromPublishedVersion(agentId, edits.owner || def.owner);
+    }
+
+    const updatedDraft: AgentDraft = {
+      ...draft,
+      name: edits.name.trim() || draft.name,
+      description: edits.responsibility.trim() || draft.description,
+      responsibilitySummary: edits.responsibility.trim() || draft.responsibilitySummary,
+      updatedAt: '刚刚',
+      updatedBy: edits.owner || draft.updatedBy
+    };
+
+    agentRepository.saveDraft(updatedDraft);
+    return updatedDraft;
   }
 
   private incrementMinorVersion(version: string): string {

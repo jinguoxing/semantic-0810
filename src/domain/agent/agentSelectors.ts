@@ -24,7 +24,7 @@ export interface AgentDisplayState {
   draftId?: string;
   status: 'ACTIVE' | 'DRAFT' | 'DISABLED';
   runtimeEngine: 'Semovix' | 'Semovix Native' | 'WeKnora';
-  runtimeBindingStatus: 'READY' | 'DRAFT_PROJECTION' | 'SYNCED' | 'UNBOUND' | 'ERROR';
+  runtimeBindingStatus: 'READY' | 'DRAFT_PROJECTION' | 'SYNCED' | 'MOCK_RUNTIME' | 'UNBOUND' | 'ERROR';
   runtimeRevision: string | null;
   lastReleaseTime: string | null;
   lastSyncTime: string | null;

@@ -34,11 +34,12 @@ class AgentRepository {
       responsibilitySummary: '理解用户目标并协调平台任务与智能能力，提供端到端的目标达成体验。',
       agentKind: 'SYSTEM',
       owner: '平台 AI 团队',
-      supportedTaskTemplateIds: ['task_intent', 'task_routing', 'task_global_collab'],
-      allowedContextSources: [
-        { id: 'ctx_caps', name: '平台能力注册表', desc: '包含所有注册智能体与治理工具', type: 'BASE' },
-        { id: 'ctx_topo', name: '任务流拓扑编排网', desc: '管理跨智能体长链路执行上下文', type: 'BASE' }
+      supportedTaskTemplates: [
+        { taskTemplateId: 'INTENT_UNDERSTANDING_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'TASK_ROUTING_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'GLOBAL_COLLAB_V1', version: 'V1', enabled: true }
       ],
+      allowedContextSources: ['BUSINESS_DOMAIN', 'LINEAGE'],
       capabilityPreset: '系统协调与任务路由中枢',
       capabilityDesc: '多 Agent 全局任务调度与状态机串联',
       modelPolicyId: 'POLICY_BALANCED',
@@ -72,12 +73,12 @@ class AgentRepository {
       agentKind: 'MANAGED',
       owner: '数据智能团队',
       sourcePresetId: 'DATA_INTELLIGENCE',
-      supportedTaskTemplateIds: ['task_find_data', 'task_query_data', 'task_analyze_data'],
-      allowedContextSources: [
-        { id: 'ctx_1', name: '企业指标注册表', desc: '涵盖已发布核心指标与派生维度', type: 'BASE' },
-        { id: 'ctx_2', name: '数据资产目录', desc: '挂载 180+ 数据表与逻辑视图元数据', type: 'BASE' },
-        { id: 'ctx_3', name: '民生服务主题宽表', desc: '覆盖街镇老龄化照护与热线诉求记录', type: 'BASE' }
+      supportedTaskTemplates: [
+        { taskTemplateId: 'FIND_DATA_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'QUERY_DATA_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'ANALYZE_DATA_V1', version: 'V1', enabled: true }
       ],
+      allowedContextSources: ['METRIC', 'MARKETPLACE', 'DATA_SEMANTICS'],
       capabilityPreset: '指标计算与多维归因',
       capabilityDesc: '语义模型与指标下钻计算 (Text-to-SQL + Metric Execution)',
       modelPolicyId: 'POLICY_LOGIC_FIRST',
@@ -111,12 +112,12 @@ class AgentRepository {
       agentKind: 'MANAGED',
       owner: '语义治理团队',
       sourcePresetId: 'SEMANTIC_GOVERNANCE',
-      supportedTaskTemplateIds: ['task_semantic', 'task_obj', 'task_standards', 'task_align', 'task_metric_model'],
-      allowedContextSources: [
-        { id: 'ctx_1', name: '行业数据标准库', desc: '包含 GB/T 与行业规范标准元素', type: 'BASE' },
-        { id: 'ctx_2', name: '核心业务对象拓扑', desc: '涵盖自然人、组织机构、服务事件', type: 'BASE' },
-        { id: 'ctx_3', name: '字段语义理解知识库', desc: '记录历史人工确认的映射规则', type: 'BASE' }
+      supportedTaskTemplates: [
+        { taskTemplateId: 'SEMANTIC_UNDERSTANDING_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'BUSINESS_OBJECT_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'STANDARD_GOVERNANCE_V1', version: 'V1', enabled: true }
       ],
+      allowedContextSources: ['BUSINESS_TERM', 'BUSINESS_OBJECT', 'DATA_SEMANTICS'],
       capabilityPreset: '语义合规审查与标准对齐',
       capabilityDesc: '数据标准比对与对象映射 (Schema Semantic Alignment)',
       modelPolicyId: 'POLICY_STRICT_CONSISTENCY',
@@ -150,11 +151,12 @@ class AgentRepository {
       agentKind: 'MANAGED',
       owner: '企业知识治理组',
       sourcePresetId: 'ENTERPRISE_KNOWLEDGE',
-      supportedTaskTemplateIds: ['task_qa', 'task_doc_research', 'task_wiki_research'],
-      allowedContextSources: [
-        { id: 'ctx_rules', name: '企业制度', desc: '正式基线已有 · 涵盖行政、合规、财务规范', type: 'BASE' },
-        { id: 'ctx_product', name: '产品知识', desc: '正式基线已有 · 涵盖产品白皮书、架构规范', type: 'BASE' }
+      supportedTaskTemplates: [
+        { taskTemplateId: 'KNOWLEDGE_QA_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'DOCUMENT_RESEARCH_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'WIKI_RESEARCH_V1', version: 'V1', enabled: false }
       ],
+      allowedContextSources: ['KNOWLEDGE_SPACE', 'DOCUMENT'],
       capabilityPreset: '精准知识问答',
       capabilityDesc: '企业知识与制度检索增强',
       modelPolicyId: 'POLICY_QUALITY_FIRST',
@@ -180,7 +182,7 @@ class AgentRepository {
       publishedAt: '2026-08-25 16:40',
       publishedBy: '企业知识治理组',
       releaseNotes: '优化知识问答召回精度并完成多文档对比支持',
-      runtimeRevision: 'r37'
+      runtimeRevision: 'MOCK_RUNTIME'
     };
     this.versions.set('enterprise_knowledge', [v1_4]);
 
@@ -210,12 +212,12 @@ class AgentRepository {
       name: '企业知识伙伴',
       description: entKnowledgeDef.description,
       responsibilitySummary: entKnowledgeDef.responsibilitySummary,
-      supportedTaskTemplateIds: ['task_qa', 'task_doc_research', 'task_wiki_research'],
-      allowedContextSources: [
-        { id: 'ctx_rules', name: '企业制度', desc: '正式基线已有 · 涵盖行政、合规、财务规范', type: 'BASE' },
-        { id: 'ctx_product', name: '产品知识', desc: '正式基线已有 · 涵盖产品白皮书、架构规范', type: 'BASE' },
-        { id: 'ctx_gov', name: '数据治理规范', desc: '草稿新增 · 涵盖数据标准、值域代码与血缘规则', type: 'DRAFT_NEW' }
+      supportedTaskTemplates: [
+        { taskTemplateId: 'KNOWLEDGE_QA_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'DOCUMENT_RESEARCH_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'WIKI_RESEARCH_V1', version: 'V1', enabled: true }
       ],
+      allowedContextSources: ['KNOWLEDGE_SPACE', 'DOCUMENT', 'WIKI'],
       capabilityPreset: 'Wiki + RAG 混合',
       capabilityDesc: '多跳语义拓扑检索与混合召回',
       modelPolicyId: 'POLICY_QUALITY_FIRST',
@@ -229,15 +231,86 @@ class AgentRepository {
     };
     this.drafts.set(entDraft.draftId, entDraft);
 
+    // WeKnora 绑定：真实 API 未接入，如实标注 MOCK_RUNTIME，
+    // 不再宣称 inst_weknora_ent / r37 / 已同步。
     this.runtimeBindings.set('enterprise_knowledge', {
       bindingId: 'bind_ent_01',
       agentId: 'enterprise_knowledge',
       runtimeTarget: 'WEKNORA',
-      runtimeInstanceId: 'inst_weknora_ent',
-      runtimeStatus: 'READY',
-      syncRevision: 'r37',
-      lastSyncedAt: '今天 10:26'
+      runtimeInstanceId: undefined,
+      runtimeStatus: 'MOCK_RUNTIME',
+      integrationMode: 'MOCK_RUNTIME',
+      syncRevision: undefined,
+      lastSyncedAt: undefined
     });
+
+    // 补齐各智能体的历史版本种子，使 A04 发布记录统一从 Repository 读取
+    this.versions.set('xino', [
+      {
+        versionId: 'ver_xino_1_6',
+        versionNumber: 'v1.6',
+        agentId: 'xino',
+        snapshot: { ...xinoDef },
+        publishedAt: '2026-08-23 11:00',
+        publishedBy: '平台 AI 团队',
+        releaseNotes: '任务路由策略升级：支持多智能体并行协同',
+        runtimeRevision: 'native'
+      },
+      {
+        versionId: 'ver_xino_1_5',
+        versionNumber: 'v1.5',
+        agentId: 'xino',
+        snapshot: { ...xinoDef, currentPublishedVersion: 'v1.5' },
+        publishedAt: '2026-08-08 15:30',
+        publishedBy: '平台 AI 团队',
+        releaseNotes: '全局意图理解接入业务术语消歧',
+        runtimeRevision: 'native'
+      }
+    ]);
+    this.versions.set('data_intelligence', [
+      {
+        versionId: 'ver_data_1_3',
+        versionNumber: 'v1.3',
+        agentId: 'data_intelligence',
+        snapshot: { ...dataDef },
+        publishedAt: '2026-08-24 10:15',
+        publishedBy: '数据智能团队',
+        releaseNotes: '问数据链路支持指标口径自动校验',
+        runtimeRevision: 'native'
+      },
+      {
+        versionId: 'ver_data_1_2',
+        versionNumber: 'v1.2',
+        agentId: 'data_intelligence',
+        snapshot: { ...dataDef, currentPublishedVersion: 'v1.2' },
+        publishedAt: '2026-08-11 14:20',
+        publishedBy: '数据智能团队',
+        releaseNotes: '新增数据分析任务的归因下钻能力',
+        runtimeRevision: 'native'
+      }
+    ]);
+    this.versions.set('semantic_governance', [
+      {
+        versionId: 'ver_gov_1_2',
+        versionNumber: 'v1.2',
+        agentId: 'semantic_governance',
+        snapshot: { ...govDef },
+        publishedAt: '2026-08-21 09:40',
+        publishedBy: '语义治理团队',
+        releaseNotes: '标准治理任务接入行业标准对齐库',
+        runtimeRevision: 'native'
+      },
+      {
+        versionId: 'ver_gov_1_1',
+        versionNumber: 'v1.1',
+        agentId: 'semantic_governance',
+        snapshot: { ...govDef, currentPublishedVersion: 'v1.1' },
+        publishedAt: '2026-08-13 16:05',
+        publishedBy: '语义治理团队',
+        releaseNotes: '业务对象发现算法与语义对齐基线版本',
+        runtimeRevision: 'native'
+      }
+    ]);
   }
 
   // Repository Methods

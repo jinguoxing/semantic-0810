@@ -35,6 +35,7 @@ import {
   AgentDefinitionDetail,
   createAgentDraft
 } from '../data/agentRegistryData';
+import { agentService } from '../domain/agent';
 import { CreateAgentDrawer } from './CreateAgentDrawer';
 
 interface AgentRegistryWorkspaceProps {
@@ -46,6 +47,8 @@ interface AgentRegistryWorkspaceProps {
   onNavigateToMetrics?: () => void;
   onNavigateToMarketplace?: () => void;
   onOpenAgentDefinition?: (agent: AgentItem, definition?: AgentDefinitionDetail) => void;
+  /** 前往测试与发布工作区 (A04 是唯一发布入口，Registry 不再本地发布) */
+  onOpenPublishWorkspace?: (agent: AgentItem) => void;
   initialOpenCreateDrawer?: boolean;
 }
 
@@ -58,6 +61,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
   onNavigateToMetrics,
   onNavigateToMarketplace,
   onOpenAgentDefinition,
+  onOpenPublishWorkspace,
   initialOpenCreateDrawer = false
 }) => {
   // Navigation State
@@ -685,7 +689,8 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
         const draftAuthor = activeDraftAgent.draftDetails?.author || activeDraftAgent.owner;
         const draftUpdatedAt = activeDraftAgent.draftDetails?.updatedAt || '刚刚';
         const changes = activeDraftAgent.draftDetails?.changes || [];
-        const targetNextVersion = hasFormal ? 'v1.5' : 'v1.0';
+        // 二十一: 版本号由 Domain Service 依据当前正式版本推导，不写死
+        const targetNextVersion = agentService.getExpectedNextVersion(activeDraftAgent.id) ?? 'v1.0';
 
         return (
           <div className="fixed inset-0 z-50 flex justify-end">
@@ -808,33 +813,21 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                   <button
                     onClick={() => {
                       setIsDraftDrawerOpen(false);
-                      setAgents((prev) =>
-                        prev.map((a) =>
-                          a.id === activeDraftAgent.id
-                            ? {
-                                ...a,
-                                formalVersion: targetNextVersion,
-                                releaseTime: '刚刚发布',
-                                status: 'ACTIVE',
-                                statusLabel: '正常',
-                                hasDraft: false,
-                                isNewDraft: false,
-                                runtimeBinding: 'ACTIVE',
-                                engineSyncStatus: '已同步'
-                              }
-                            : a
-                        )
-                      );
+                      if (onOpenPublishWorkspace) {
+                        onOpenPublishWorkspace(activeDraftAgent);
+                      } else {
+                        onOpenAgentDefinition?.(activeDraftAgent);
+                      }
                       addToast?.(
-                        'success',
-                        '发布成功',
-                        `已成功发布「${activeDraftAgent.name}」正式版本 ${targetNextVersion} 并同步至 ${activeDraftAgent.runtimeEngine} 引擎`
+                        'info',
+                        '前往测试与发布',
+                        `「${activeDraftAgent.name}」草稿需在测试与发布工作区通过 Release Gate 验证后才能发布为 ${targetNextVersion}`
                       );
                     }}
                     className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 cursor-pointer shadow-2xs"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>发布为 {targetNextVersion} 正式版</span>
+                    <span>前往测试与发布 (预计 {targetNextVersion})</span>
                   </button>
                 </div>
               </div>
