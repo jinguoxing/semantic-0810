@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   CheckCircle2,
@@ -12,12 +12,20 @@ import {
   Network,
   BookOpen
 } from 'lucide-react';
+import {
+  PRESET_LIST,
+  ManagedAgentPreset,
+  getPresetById,
+  MANAGED_AGENT_PRESETS
+} from '../domain/agent';
 
 export interface AgentTemplateDefinition {
   id: string;
+  presetId: string;
   name: string;
   tag: string;
   desc: string;
+  selectionSummary: string;
   defaultName: string;
   defaultResponsibility: string;
   defaultOwner: string;
@@ -32,60 +40,31 @@ export interface AgentTemplateDefinition {
   symbolType: 'data' | 'governance' | 'knowledge';
 }
 
-export const V11_AGENT_TEMPLATES: AgentTemplateDefinition[] = [
-  {
-    id: 'data_intelligence',
-    name: '数据智能伙伴',
-    tag: '数据智能',
-    desc: '面向业务目标完成找数、问数与数据分析。',
-    defaultName: '数据智能伙伴',
-    defaultResponsibility: '解析业务口径与指标语义，面向业务目标完成找数、问数与多维下钻分析。',
-    defaultOwner: '数据智能团队',
-    runtimeTarget: 'SEMOVIX_NATIVE',
-    runtimeEngineLabel: 'Semovix Native',
-    supportedTasks: ['找数据', '问数据', '数据分析'],
-    capabilityPreset: '指标计算与多维归因',
-    capabilityPresetDesc: '语义模型与指标下钻计算',
-    defaultMaxAutonomy: '建议',
-    autonomyDesc: '以提供方案与下钻结果为主',
-    symbolType: 'data'
-  },
-  {
-    id: 'semantic_governance',
-    name: '语义治理伙伴',
-    tag: '语义治理',
-    desc: '辅助企业完成语义理解、业务对象、标准、指标与知识网络治理。',
-    defaultName: '语义治理伙伴',
-    defaultResponsibility: '扫描治理资产与业务对象，识别标准冲突与命名歧义，生成结构化治理提案。',
-    defaultOwner: '语义治理团队',
-    runtimeTarget: 'SEMOVIX_NATIVE',
-    runtimeEngineLabel: 'Semovix Native',
-    supportedTasks: ['语义理解', '业务对象', '标准治理'],
-    extraTasksCount: 4,
-    capabilityPreset: '语义合规审查与标准对齐',
-    capabilityPresetDesc: '数据标准比对与对象映射',
-    defaultMaxAutonomy: '提议',
-    autonomyDesc: '生成待裁决治理变更提案',
-    symbolType: 'governance'
-  },
-  {
-    id: 'enterprise_knowledge',
-    name: '企业知识伙伴',
-    tag: '企业知识',
-    desc: '基于企业正式知识开展可信问答、跨文档研究与 Wiki 研究。',
-    defaultName: '企业知识伙伴',
-    defaultResponsibility: '基于企业正式知识回答问题、开展跨文档与 Wiki 研究，并提供可追溯的知识依据。',
-    defaultOwner: '企业知识治理组',
-    runtimeTarget: 'WEKNORA',
-    runtimeEngineLabel: 'WeKnora',
-    supportedTasks: ['知识问答', '文档研究', 'Wiki 研究'],
-    capabilityPreset: '精准知识问答',
-    capabilityPresetDesc: '企业知识与制度检索增强',
-    defaultMaxAutonomy: '建议',
-    autonomyDesc: '以提供可溯源依据与方案为主',
-    symbolType: 'knowledge'
-  }
-];
+export const V11_AGENT_TEMPLATES: AgentTemplateDefinition[] = PRESET_LIST.map((preset) => ({
+  id: preset.presetId.toLowerCase(),
+  presetId: preset.presetId,
+  name: preset.presetName,
+  tag: preset.categoryTag,
+  desc: preset.description,
+  selectionSummary: preset.selectionSummary,
+  defaultName: preset.defaultName,
+  defaultResponsibility: preset.defaultResponsibility,
+  defaultOwner: preset.defaultOwner,
+  runtimeTarget: preset.runtimeTarget,
+  runtimeEngineLabel: preset.runtimeEngineLabel,
+  supportedTasks: preset.supportedTaskNames,
+  extraTasksCount: preset.extraTasksCount,
+  capabilityPreset: preset.capabilityPreset,
+  capabilityPresetDesc: preset.capabilityPresetDesc,
+  defaultMaxAutonomy:
+    preset.defaultMaxAutonomy === 'SUGGEST'
+      ? '建议'
+      : preset.defaultMaxAutonomy === 'PROPOSE'
+      ? '提议'
+      : '策略内执行',
+  autonomyDesc: preset.autonomyDesc,
+  symbolType: preset.symbolType
+}));
 
 interface CreateAgentDrawerProps {
   isOpen: boolean;
@@ -100,7 +79,7 @@ interface CreateAgentDrawerProps {
   onPrevStep?: () => void;
   onChangeTemplate?: () => void;
   initialStep?: 1 | 2;
-  initialTemplateId?: string;
+  initialTemplateId?: string | null;
 }
 
 export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
@@ -108,23 +87,44 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
   onClose,
   onCreateAndConfigure,
   initialStep = 1,
-  initialTemplateId = 'enterprise_knowledge'
+  initialTemplateId = null
 }) => {
   // Stage state: 1 = 选择模板 (Template Selection), 2 = 基本定义 (Basic Definition)
-  // V1.1 Final Freeze defaults strictly to Stage 1: 选择模板
   const [currentStep, setCurrentStep] = useState<1 | 2>(initialStep);
 
-  // Template selection state: Fixed to 'enterprise_knowledge' by default as per spec
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialTemplateId);
+  // Template selection state: null by default (unselected), require explicit selection
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(initialTemplateId ?? null);
 
-  const selectedTemplate =
-    V11_AGENT_TEMPLATES.find((t) => t.id === selectedTemplateId) || V11_AGENT_TEMPLATES[2];
+  const selectedTemplate = selectedTemplateId
+    ? V11_AGENT_TEMPLATES.find((t) => t.id === selectedTemplateId || t.presetId === selectedTemplateId) || null
+    : null;
 
   // Stage 2 Form State
-  const [name, setName] = useState(selectedTemplate.defaultName);
-  const [responsibility, setResponsibility] = useState(selectedTemplate.defaultResponsibility);
-  const [owner, setOwner] = useState(selectedTemplate.defaultOwner);
+  const [name, setName] = useState(selectedTemplate ? selectedTemplate.defaultName : '');
+  const [responsibility, setResponsibility] = useState(
+    selectedTemplate ? selectedTemplate.defaultResponsibility : ''
+  );
+  const [owner, setOwner] = useState(selectedTemplate ? selectedTemplate.defaultOwner : '企业知识治理组');
   const [isOwnerDropdownOpen, setIsOwnerDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(initialStep);
+      setSelectedTemplateId(initialTemplateId ?? null);
+      if (initialTemplateId) {
+        const found = V11_AGENT_TEMPLATES.find((t) => t.id === initialTemplateId || t.presetId === initialTemplateId);
+        if (found) {
+          setName(found.defaultName);
+          setResponsibility(found.defaultResponsibility);
+          setOwner(found.defaultOwner);
+        }
+      } else {
+        setName('');
+        setResponsibility('');
+        setOwner('企业知识治理组');
+      }
+    }
+  }, [isOpen, initialStep, initialTemplateId]);
 
   const ownerOptions = [
     '企业知识治理组',
@@ -145,11 +145,16 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
   };
 
   const handleGoToBasicDefinition = () => {
+    if (!selectedTemplate) return;
+    if (!name) setName(selectedTemplate.defaultName);
+    if (!responsibility) setResponsibility(selectedTemplate.defaultResponsibility);
+    if (!owner) setOwner(selectedTemplate.defaultOwner);
     setCurrentStep(2);
   };
 
   const handleSubmitFinal = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedTemplate) return;
     if (!name.trim() || !responsibility.trim() || !owner.trim()) return;
     onCreateAndConfigure({
       name: name.trim(),
@@ -185,7 +190,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               创建智能体
             </h2>
             <p className="text-xs text-[#64748B] leading-relaxed max-w-[760px]">
-              从平台提供的受管模板开始创建。模板会提供推荐任务、能力边界和运行方式，创建后仍可继续调整。
+              从平台提供的受管预设开始创建。预设会提供推荐任务、能力边界和运行方式，创建后仍可继续调整。
             </p>
           </div>
           <button
@@ -204,7 +209,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
         ───────────────────────────────────────────────────────── */}
         <div className="px-8 py-2.5 bg-[#F8FAFC] border-b border-[#E2E8F0] flex items-center justify-between shrink-0 text-xs">
           <div className="flex items-center space-x-3">
-            {/* Step 1: 选择模板 */}
+            {/* Step 1: 选择预设 */}
             <button
               onClick={() => setCurrentStep(1)}
               className={`flex items-center space-x-1.5 transition-colors cursor-pointer ${
@@ -218,7 +223,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               ) : (
                 <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
               )}
-              <span>选择模板</span>
+              <span>选择受管预设</span>
             </button>
 
             <span className="text-[#CBD5E1] text-xs">→</span>
@@ -397,267 +402,284 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                 十五、Selected Preset Summary (已选择)
                 Clean enterprise surface underneath the 3 selection rows
             ───────────────────────────────────────────────────── */}
-            <div className="border border-[#BFDBFE] bg-gradient-to-b from-[#F8FAFC] to-white rounded-lg p-4.5 space-y-3.5 shadow-2xs">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2">
-                  <span className="text-[11px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
-                    已选择
-                  </span>
-                  <h4 className="font-bold text-sm text-[#0F172A]">
-                    {selectedTemplate.name}
-                  </h4>
+            {selectedTemplate ? (
+              <div className="border border-[#BFDBFE] bg-gradient-to-b from-[#F0F7FF]/50 to-white rounded-lg p-4.5 space-y-3.5 shadow-2xs">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[11px] font-bold text-[#2563EB] bg-[#EFF6FF] px-2 py-0.5 rounded border border-[#BFDBFE]">
+                      已选择
+                    </span>
+                    <h4 className="font-bold text-sm text-[#0F172A]">
+                      {selectedTemplate.name}
+                    </h4>
+                  </div>
+                  <p className="text-xs text-[#475569] leading-relaxed">
+                    将以「{selectedTemplate.name}」的推荐职责开始，目标运行引擎为 {selectedTemplate.runtimeEngineLabel}。
+                  </p>
                 </div>
-                <p className="text-xs text-[#475569] leading-relaxed">
-                  将以企业知识问答与研究为主要职责，并以 WeKnora 作为目标知识运行引擎。
+
+                {/* 4-Item Lightweight Summary Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-xs">
+                  {/* 1. 支持任务 */}
+                  <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
+                    <span className="text-[11px] text-[#64748B] block">支持任务</span>
+                    <span className="font-bold text-[#0F172A] text-xs block">
+                      {selectedTemplate.supportedTasks.length} 项
+                    </span>
+                    <span className="text-[10px] text-[#94A3B8] block truncate">
+                      {selectedTemplate.supportedTasks.join(' · ')}
+                    </span>
+                  </div>
+
+                  {/* 2. 能力模式 */}
+                  <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
+                    <span className="text-[11px] text-[#64748B] block">能力模式</span>
+                    <span className="font-bold text-[#0F172A] text-xs block truncate">
+                      {selectedTemplate.capabilityPreset}
+                    </span>
+                    <span className="text-[10px] text-[#94A3B8] block truncate">
+                      {selectedTemplate.capabilityPresetDesc}
+                    </span>
+                  </div>
+
+                  {/* 3. 最大自主程度 */}
+                  <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
+                    <span className="text-[11px] text-[#64748B] block">最大自主程度</span>
+                    <span className="font-bold text-[#0F172A] text-xs block">
+                      {selectedTemplate.defaultMaxAutonomy}
+                    </span>
+                    <span className="text-[10px] text-[#94A3B8] block truncate">
+                      {selectedTemplate.autonomyDesc}
+                    </span>
+                  </div>
+
+                  {/* 4. 目标运行引擎 (十六、关于 WeKnora 的表达: 只显示目标引擎，不显示已创建/已同步) */}
+                  <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
+                    <span className="text-[11px] text-[#64748B] block">目标运行引擎</span>
+                    <span className="font-bold text-[#0F172A] text-xs block">
+                      {selectedTemplate.runtimeEngineLabel}
+                    </span>
+                    <span className="text-[10px] text-[#94A3B8] block truncate">
+                      正式运行配置将在发布时建立
+                    </span>
+                  </div>
+                </div>
+
+                {/* Auxiliary Note */}
+                <div className="pt-2 border-t border-[#E2E8F0] flex items-center space-x-1.5 text-[11px] text-[#64748B]">
+                  <Info className="w-3.5 h-3.5 text-[#2563EB] shrink-0" />
+                  <span>模板只提供推荐初始值，创建 Draft 后可继续调整。</span>
+                </div>
+              </div>
+            ) : (
+              <div className="border border-dashed border-[#CBD5E1] bg-[#F8FAFC] rounded-lg p-5 text-center space-y-1.5">
+                <div className="flex items-center justify-center space-x-1.5 text-xs font-semibold text-[#64748B]">
+                  <Info className="w-4 h-4 text-[#94A3B8]" />
+                  <span>尚未选择模板</span>
+                </div>
+                <p className="text-xs text-[#94A3B8]">
+                  请在上方列表中选择一个业务职责相符的智能体模板，以查看推荐配置并继续。
                 </p>
               </div>
-
-              {/* 4-Item Lightweight Summary Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-xs">
-                {/* 1. 支持任务 */}
-                <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
-                  <span className="text-[11px] text-[#64748B] block">支持任务</span>
-                  <span className="font-bold text-[#0F172A] text-xs block">
-                    {selectedTemplate.supportedTasks.length} 项
-                  </span>
-                  <span className="text-[10px] text-[#94A3B8] block truncate">
-                    {selectedTemplate.supportedTasks.join(' · ')}
-                  </span>
-                </div>
-
-                {/* 2. 能力模式 */}
-                <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
-                  <span className="text-[11px] text-[#64748B] block">能力模式</span>
-                  <span className="font-bold text-[#0F172A] text-xs block truncate">
-                    {selectedTemplate.capabilityPreset}
-                  </span>
-                  <span className="text-[10px] text-[#94A3B8] block truncate">
-                    {selectedTemplate.capabilityPresetDesc}
-                  </span>
-                </div>
-
-                {/* 3. 最大自主程度 */}
-                <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
-                  <span className="text-[11px] text-[#64748B] block">最大自主程度</span>
-                  <span className="font-bold text-[#0F172A] text-xs block">
-                    {selectedTemplate.defaultMaxAutonomy}
-                  </span>
-                  <span className="text-[10px] text-[#94A3B8] block truncate">
-                    {selectedTemplate.autonomyDesc}
-                  </span>
-                </div>
-
-                {/* 4. 目标运行引擎 (十六、关于 WeKnora 的表达: 只显示目标引擎，不显示已创建/已同步) */}
-                <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
-                  <span className="text-[11px] text-[#64748B] block">目标运行引擎</span>
-                  <span className="font-bold text-[#0F172A] text-xs block">
-                    {selectedTemplate.runtimeEngineLabel}
-                  </span>
-                  <span className="text-[10px] text-[#94A3B8] block truncate">
-                    正式运行配置将在发布时建立
-                  </span>
-                </div>
-              </div>
-
-              {/* Auxiliary Note */}
-              <div className="pt-2 border-t border-[#E2E8F0] flex items-center space-x-1.5 text-[11px] text-[#64748B]">
-                <Info className="w-3.5 h-3.5 text-[#2563EB] shrink-0" />
-                <span>模板只提供推荐初始值，创建 Draft 后可继续调整。</span>
-              </div>
-            </div>
+            )}
           </div>
         ) : (
           /* ─────────────────────────────────────────────────────
               STAGE 2: 基本定义 (BASIC DEFINITION FORM)
           ───────────────────────────────────────────────────── */
-          <div className="flex-1 overflow-y-auto flex flex-col md:flex-row bg-[#F8FAFC] divide-y md:divide-y-0 md:divide-x divide-[#E2E8F0]">
-            {/* Left Column: Form Fields */}
-            <div className="flex-1 p-8 bg-white space-y-5">
-              <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-[11px] font-semibold text-[#64748B]">当前模板：</span>
-                    <span className="font-bold text-xs text-[#0F172A]">{selectedTemplate.name}</span>
-                  </div>
-                  <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-50 text-[#2563EB] border border-blue-200/60">
-                    {selectedTemplate.runtimeEngineLabel}
-                  </span>
-                </div>
-                <p className="text-xs text-[#64748B] leading-relaxed">
-                  {selectedTemplate.desc}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
-                  基本定义
-                </h3>
-                <p className="text-xs text-[#64748B]">
-                  填写智能体的基础业务身份。任务绑定、上下文范围和运行配置将在创建后在定义工作区继续配置。
-                </p>
-              </div>
-
-              <form id="create-agent-form" onSubmit={handleSubmitFinal} className="space-y-4 text-xs">
-                {/* Field 1: 智能体名称 */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="font-semibold text-[#0F172A]">
-                      智能体名称 <span className="text-red-500">*</span>
-                    </label>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">
-                      {name.length}/50
-                    </span>
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    maxLength={50}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="输入智能体名称..."
-                    className="w-full px-3 py-2 bg-white border border-[#CBD5E1] rounded-md text-xs text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] transition-colors"
-                  />
-                  <p className="text-[11px] text-[#64748B]">
-                    在平台智能体中心识别该智能体的主名称。
-                  </p>
-                </div>
-
-                {/* Field 2: 主要职责 */}
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="font-semibold text-[#0F172A]">
-                      主要职责 <span className="text-red-500">*</span>
-                    </label>
-                    <span className="text-[10px] text-[#94A3B8] font-mono">
-                      {responsibility.length}/500
-                    </span>
-                  </div>
-                  <textarea
-                    required
-                    rows={3}
-                    maxLength={500}
-                    value={responsibility}
-                    onChange={(e) => setResponsibility(e.target.value)}
-                    placeholder="简述该智能体负责的业务范围与核心目标..."
-                    className="w-full px-3 py-2 bg-white border border-[#CBD5E1] rounded-md text-xs text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] transition-colors resize-none leading-relaxed"
-                  />
-                  <p className="text-[11px] text-[#64748B]">
-                    定义业务职责摘要。详细的角色指令和原则可在创建后完善。
-                  </p>
-                </div>
-
-                {/* Field 3: Owner */}
-                <div className="space-y-1.5 relative">
-                  <label className="font-semibold text-[#0F172A]">
-                    Owner <span className="text-red-500">*</span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setIsOwnerDropdownOpen(!isOwnerDropdownOpen)}
-                    className="w-full px-3 py-2 bg-white border border-[#CBD5E1] rounded-md text-xs text-[#0F172A] flex items-center justify-between focus:outline-none focus:ring-1 focus:ring-[#2563EB] transition-colors cursor-pointer"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <Building2 className="w-3.5 h-3.5 text-[#64748B]" />
-                      <span className="font-medium">{owner}</span>
+          (() => {
+            const activeTemplate = selectedTemplate || V11_AGENT_TEMPLATES[2];
+            return (
+              <div className="flex-1 overflow-y-auto flex flex-col md:flex-row bg-[#F8FAFC] divide-y md:divide-y-0 md:divide-x divide-[#E2E8F0]">
+                {/* Left Column: Form Fields */}
+                <div className="flex-1 p-8 bg-white space-y-5">
+                  <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[11px] font-semibold text-[#64748B]">当前模板：</span>
+                        <span className="font-bold text-xs text-[#0F172A]">{activeTemplate.name}</span>
+                      </div>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-50 text-[#2563EB] border border-blue-200/60">
+                        {activeTemplate.runtimeEngineLabel}
+                      </span>
                     </div>
-                    <ChevronDown className="w-3.5 h-3.5 text-[#64748B]" />
-                  </button>
+                    <p className="text-xs text-[#64748B] leading-relaxed">
+                      {activeTemplate.desc}
+                    </p>
+                  </div>
 
-                  {isOwnerDropdownOpen && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg z-30 py-1 divide-y divide-[#F1F5F9]">
-                      {ownerOptions.map((opt) => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => {
-                            setOwner(opt);
-                            setIsOwnerDropdownOpen(false);
-                          }}
-                          className={`w-full px-3 py-1.5 text-xs text-left flex items-center space-x-2 transition-colors cursor-pointer ${
-                            owner === opt
-                              ? 'bg-[#EFF6FF] text-[#2563EB] font-semibold'
-                              : 'text-[#334155] hover:bg-[#F8FAFC]'
-                          }`}
-                        >
-                          <Building2 className="w-3 h-3 text-[#94A3B8]" />
-                          <span>{opt}</span>
-                        </button>
-                      ))}
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
+                      基本定义
+                    </h3>
+                    <p className="text-xs text-[#64748B]">
+                      填写智能体的基础业务身份。任务绑定、上下文范围和运行配置将在创建后在定义工作区继续配置。
+                    </p>
+                  </div>
+
+                  <form id="create-agent-form" onSubmit={handleSubmitFinal} className="space-y-4 text-xs">
+                    {/* Field 1: 智能体名称 */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="font-semibold text-[#0F172A]">
+                          智能体名称 <span className="text-red-500">*</span>
+                        </label>
+                        <span className="text-[10px] text-[#94A3B8] font-mono">
+                          {name.length}/50
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        maxLength={50}
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="输入智能体名称..."
+                        className="w-full px-3 py-2 bg-white border border-[#CBD5E1] rounded-md text-xs text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] transition-colors"
+                      />
+                      <p className="text-[11px] text-[#64748B]">
+                        在平台智能体中心识别该智能体的主名称。
+                      </p>
                     </div>
-                  )}
-                  <p className="text-[11px] text-[#64748B]">
-                    Owner 负责该智能体的配置、测试和正式版本管理。
-                  </p>
-                </div>
-              </form>
 
-              <div className="p-3 bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg flex items-start space-x-2 text-[11px] text-[#475569]">
-                <Info className="w-3.5 h-3.5 text-[#2563EB] shrink-0 mt-0.5" />
-                <p className="leading-relaxed">
-                  创建后只会生成一个未发布草稿，不会立即创建正式版本或影响当前运行环境。
-                </p>
-              </div>
-            </div>
+                    {/* Field 2: 主要职责 */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="font-semibold text-[#0F172A]">
+                          主要职责 <span className="text-red-500">*</span>
+                        </label>
+                        <span className="text-[10px] text-[#94A3B8] font-mono">
+                          {responsibility.length}/500
+                        </span>
+                      </div>
+                      <textarea
+                        required
+                        rows={3}
+                        maxLength={500}
+                        value={responsibility}
+                        onChange={(e) => setResponsibility(e.target.value)}
+                        placeholder="简述该智能体负责的业务范围与核心目标..."
+                        className="w-full px-3 py-2 bg-white border border-[#CBD5E1] rounded-md text-xs text-[#0F172A] focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] transition-colors resize-none leading-relaxed"
+                      />
+                      <p className="text-[11px] text-[#64748B]">
+                        定义业务职责摘要。详细的角色指令和原则可在创建后完善。
+                      </p>
+                    </div>
 
-            {/* Right Column: Initial Config Summary */}
-            <div className="w-full md:w-[320px] p-6 bg-[#F8FAFC] flex flex-col justify-between shrink-0 space-y-6">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
-                    初始配置
-                  </h3>
-                  <p className="text-[11px] text-[#64748B] mt-0.5">
-                    由“{selectedTemplate.name}”模板提供，创建后可继续调整。
-                  </p>
-                </div>
+                    {/* Field 3: Owner */}
+                    <div className="space-y-1.5 relative">
+                      <label className="font-semibold text-[#0F172A]">
+                        Owner <span className="text-red-500">*</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsOwnerDropdownOpen(!isOwnerDropdownOpen)}
+                        className="w-full px-3 py-2 bg-white border border-[#CBD5E1] rounded-md text-xs text-[#0F172A] flex items-center justify-between focus:outline-none focus:ring-1 focus:ring-[#2563EB] transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Building2 className="w-3.5 h-3.5 text-[#64748B]" />
+                          <span className="font-medium">{owner}</span>
+                        </div>
+                        <ChevronDown className="w-3.5 h-3.5 text-[#64748B]" />
+                      </button>
 
-                <div className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 space-y-3 text-xs shadow-2xs">
-                  <div className="space-y-0.5">
-                    <span className="text-[11px] text-[#64748B] block">模板</span>
-                    <span className="font-bold text-[#0F172A] block">{selectedTemplate.name}</span>
-                  </div>
+                      {isOwnerDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E2E8F0] rounded-lg shadow-lg z-30 py-1 divide-y divide-[#F1F5F9]">
+                          {ownerOptions.map((opt) => (
+                            <button
+                              key={opt}
+                              type="button"
+                              onClick={() => {
+                                setOwner(opt);
+                                setIsOwnerDropdownOpen(false);
+                              }}
+                              className={`w-full px-3 py-1.5 text-xs text-left flex items-center space-x-2 transition-colors cursor-pointer ${
+                                owner === opt
+                                  ? 'bg-[#EFF6FF] text-[#2563EB] font-semibold'
+                                  : 'text-[#334155] hover:bg-[#F8FAFC]'
+                              }`}
+                            >
+                              <Building2 className="w-3 h-3 text-[#94A3B8]" />
+                              <span>{opt}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-[11px] text-[#64748B]">
+                        Owner 负责该智能体的配置、测试和正式版本管理。
+                      </p>
+                    </div>
+                  </form>
 
-                  <div className="space-y-0.5">
-                    <span className="text-[11px] text-[#64748B] block">支持任务</span>
-                    <span className="font-bold text-[#0F172A] block">
-                      {selectedTemplate.supportedTasks.length} 项
-                    </span>
-                    <span className="text-[10px] text-[#94A3B8] block">
-                      {selectedTemplate.supportedTasks.join(' · ')}
-                    </span>
-                  </div>
-
-                  <div className="space-y-0.5">
-                    <span className="text-[11px] text-[#64748B] block">能力模式</span>
-                    <span className="font-semibold text-[#0F172A] block">
-                      {selectedTemplate.capabilityPreset}
-                    </span>
-                  </div>
-
-                  <div className="space-y-0.5">
-                    <span className="text-[11px] text-[#64748B] block">最大自主程度</span>
-                    <span className="font-medium text-[#0F172A] block">
-                      {selectedTemplate.defaultMaxAutonomy}
-                    </span>
-                  </div>
-
-                  <div className="pt-2 border-t border-[#F1F5F9] space-y-1">
-                    <span className="text-[11px] text-[#64748B] block">目标运行引擎</span>
-                    <span className="font-bold text-xs text-[#0F172A] block">
-                      {selectedTemplate.runtimeEngineLabel}
-                    </span>
-                    <p className="text-[10px] text-[#64748B] leading-tight">
-                      正式运行配置将在测试与发布阶段创建。
+                  <div className="p-3 bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg flex items-start space-x-2 text-[11px] text-[#475569]">
+                    <Info className="w-3.5 h-3.5 text-[#2563EB] shrink-0 mt-0.5" />
+                    <p className="leading-relaxed">
+                      创建后只会生成一个未发布草稿，不会立即创建正式版本或影响当前运行环境。
                     </p>
                   </div>
                 </div>
-              </div>
 
-              <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-[11px] text-[#1E40AF] leading-relaxed">
-                以上是模板提供的初始定义。创建草稿后，可以在“智能体定义”工作区继续调整支持任务、上下文来源、能力、模型策略与自主程度。
+                {/* Right Column: Initial Config Summary */}
+                <div className="w-full md:w-[320px] p-6 bg-[#F8FAFC] flex flex-col justify-between shrink-0 space-y-6">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
+                        初始配置
+                      </h3>
+                      <p className="text-[11px] text-[#64748B] mt-0.5">
+                        由“{activeTemplate.name}”模板提供，创建后可继续调整。
+                      </p>
+                    </div>
+
+                    <div className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 space-y-3 text-xs shadow-2xs">
+                      <div className="space-y-0.5">
+                        <span className="text-[11px] text-[#64748B] block">模板</span>
+                        <span className="font-bold text-[#0F172A] block">{activeTemplate.name}</span>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <span className="text-[11px] text-[#64748B] block">支持任务</span>
+                        <span className="font-bold text-[#0F172A] block">
+                          {activeTemplate.supportedTasks.length} 项
+                        </span>
+                        <span className="text-[10px] text-[#94A3B8] block">
+                          {activeTemplate.supportedTasks.join(' · ')}
+                        </span>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <span className="text-[11px] text-[#64748B] block">能力模式</span>
+                        <span className="font-semibold text-[#0F172A] block">
+                          {activeTemplate.capabilityPreset}
+                        </span>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <span className="text-[11px] text-[#64748B] block">最大自主程度</span>
+                        <span className="font-medium text-[#0F172A] block">
+                          {activeTemplate.defaultMaxAutonomy}
+                        </span>
+                      </div>
+
+                      <div className="pt-2 border-t border-[#F1F5F9] space-y-1">
+                        <span className="text-[11px] text-[#64748B] block">目标运行引擎</span>
+                        <span className="font-bold text-xs text-[#0F172A] block">
+                          {activeTemplate.runtimeEngineLabel}
+                        </span>
+                        <p className="text-[10px] text-[#64748B] leading-tight">
+                          正式运行配置将在测试与发布阶段创建。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-[11px] text-[#1E40AF] leading-relaxed">
+                    以上是模板提供的初始定义。创建草稿后，可以在“智能体定义”工作区继续调整支持任务、上下文来源、能力、模型策略与自主程度。
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()
         )}
 
         {/* ─────────────────────────────────────────────────────────

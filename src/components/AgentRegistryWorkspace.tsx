@@ -31,28 +31,34 @@ import {
 } from 'lucide-react';
 import {
   AgentItem,
-  INITIAL_AGENTS
+  INITIAL_AGENTS,
+  AgentDefinitionDetail,
+  createAgentDraft
 } from '../data/agentRegistryData';
 import { CreateAgentDrawer } from './CreateAgentDrawer';
 
 interface AgentRegistryWorkspaceProps {
+  agents?: AgentItem[];
+  onAgentsChange?: (agents: AgentItem[]) => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
   onNavigateToHome?: () => void;
   onNavigateToGovernance?: () => void;
   onNavigateToMetrics?: () => void;
   onNavigateToMarketplace?: () => void;
-  onOpenAgentDefinition?: (agent: AgentItem) => void;
+  onOpenAgentDefinition?: (agent: AgentItem, definition?: AgentDefinitionDetail) => void;
   initialOpenCreateDrawer?: boolean;
 }
 
 export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
+  agents: agentsProp,
+  onAgentsChange,
   addToast,
   onNavigateToHome,
   onNavigateToGovernance,
   onNavigateToMetrics,
   onNavigateToMarketplace,
   onOpenAgentDefinition,
-  initialOpenCreateDrawer = true
+  initialOpenCreateDrawer = false
 }) => {
   // Navigation State
   const [activeLeftNav, setActiveLeftNav] = useState<'agents' | 'skills'>('agents');
@@ -67,13 +73,23 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
 
   // Drawers & Modals
   const [selectedAgentForDetail, setSelectedAgentForDetail] = useState<AgentItem | null>(null);
+  const [selectedDraftAgent, setSelectedDraftAgent] = useState<AgentItem | null>(null);
   const [isDraftDrawerOpen, setIsDraftDrawerOpen] = useState(false);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState<boolean>(initialOpenCreateDrawer);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [hoveredExtraTasksAgentId, setHoveredExtraTasksAgentId] = useState<string | null>(null);
 
-  // Mock Agent list
-  const [agents, setAgents] = useState<AgentItem[]>(INITIAL_AGENTS);
+  // Agent list state (controlled from App.tsx or local fallback)
+  const [internalAgents, setInternalAgents] = useState<AgentItem[]>(INITIAL_AGENTS);
+  const agents = agentsProp || internalAgents;
+  const setAgents = (updater: AgentItem[] | ((prev: AgentItem[]) => AgentItem[])) => {
+    if (onAgentsChange) {
+      const next = typeof updater === 'function' ? updater(agents) : updater;
+      onAgentsChange(next);
+    } else {
+      setInternalAgents(updater);
+    }
+  };
 
   // Filtered List
   const filteredAgents = useMemo(() => {
@@ -371,28 +387,42 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
           {/* ─────────────────────────────────────────────────────────
               TWELVE. 草稿提醒信息条 (Light Blue Information Strip)
           ───────────────────────────────────────────────────────── */}
-          <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-            <div className="flex items-start space-x-3">
-              <div className="w-5 h-5 rounded-full bg-[#DBEAFE] text-[#2563EB] flex items-center justify-center shrink-0 mt-0.5">
-                <Info className="w-3.5 h-3.5" />
-              </div>
-              <div>
-                <div className="text-xs font-bold text-[#1E40AF]">
-                  1 个智能体有未发布草稿
+          {agents.some((a) => a.hasDraft) && (
+            <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-start space-x-3">
+                <div className="w-5 h-5 rounded-full bg-[#DBEAFE] text-[#2563EB] flex items-center justify-center shrink-0 mt-0.5">
+                  <Info className="w-3.5 h-3.5" />
                 </div>
-                <div className="text-xs text-[#3B82F6] mt-0.5 leading-relaxed">
-                  企业知识伙伴 · 正式版本 v1.4 正常运行，当前草稿包含 2 项未发布修改。
+                <div>
+                  <div className="text-xs font-bold text-[#1E40AF]">
+                    {agents.filter((a) => a.hasDraft).length} 个智能体有未发布草稿
+                  </div>
+                  <div className="text-xs text-[#3B82F6] mt-0.5 leading-relaxed">
+                    {agents
+                      .filter((a) => a.hasDraft)
+                      .map(
+                        (a) =>
+                          `${a.name} · ${
+                            a.formalVersion ? `正式版本 ${a.formalVersion} 正常运行` : '首次创建草稿 (未发布)'
+                          }`
+                      )
+                      .join('；')}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <button
-              onClick={() => setIsDraftDrawerOpen(true)}
-              className="self-start sm:self-center px-3 py-1 bg-white hover:bg-[#F8FAFC] text-[#2563EB] border border-[#BFDBFE] rounded-md text-xs font-bold cursor-pointer transition-colors shrink-0 shadow-2xs"
-            >
-              查看草稿
-            </button>
-          </div>
+              <button
+                onClick={() => {
+                  const target = agents.find((a) => a.hasDraft) || agents[0];
+                  setSelectedDraftAgent(target);
+                  setIsDraftDrawerOpen(true);
+                }}
+                className="self-start sm:self-center px-3 py-1 bg-white hover:bg-[#F8FAFC] text-[#2563EB] border border-[#BFDBFE] rounded-md text-xs font-bold cursor-pointer transition-colors shrink-0 shadow-2xs"
+              >
+                查看草稿
+              </button>
+            </div>
+          )}
 
           {/* ─────────────────────────────────────────────────────────
               THIRTEEN - TWENTY. REGISTRY TABLE (成熟企业级表格)
@@ -505,46 +535,58 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                           <span className="font-semibold text-[#0F172A] text-xs">
                             {agent.runtimeEngine}
                           </span>
-                          {agent.engineSyncStatus && (
-                            <p className="text-[11px] text-[#94A3B8] font-normal leading-tight">
-                              {agent.engineSyncStatus}
-                            </p>
-                          )}
+                          <p className="text-[11px] text-[#94A3B8] font-normal leading-tight">
+                            {agent.engineSyncStatus || (agent.formalVersion ? '已同步' : '未建立运行配置')}
+                          </p>
                         </div>
                       </td>
 
-                      {/* Column 4: 正式版本 (vX.X + 发布时间 + optional 草稿有修改) */}
+                      {/* Column 4: 正式版本 (vX.X / 暂无 + 发布时间 + optional 草稿有修改) */}
                       <td className="py-3.5 px-4 align-top">
                         <div className="space-y-0.5">
                           <div className="font-mono font-semibold text-[#0F172A] text-xs">
-                            {agent.formalVersion}
+                            {agent.formalVersion ? (
+                              agent.formalVersion
+                            ) : (
+                              <span className="text-[#94A3B8] font-normal">暂无 (未发布)</span>
+                            )}
                           </div>
                           <p className="text-[11px] text-[#64748B]">
-                            {agent.releaseTime}
+                            {agent.releaseTime || '尚未发布'}
                           </p>
                           {agent.hasDraft && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setSelectedDraftAgent(agent);
                                 setIsDraftDrawerOpen(true);
                               }}
                               className="text-[11px] text-[#2563EB] hover:underline font-medium flex items-center space-x-1 pt-0.5 cursor-pointer"
                             >
                               <GitBranch className="w-3 h-3 text-[#2563EB]" />
-                              <span>{agent.draftNote || '草稿有修改'}</span>
+                              <span>{agent.draftNote || (agent.formalVersion ? '草稿有修改' : '未发布草稿')}</span>
                             </button>
                           )}
                         </div>
                       </td>
 
-                      {/* Column 5: 运行状态 (● 正常) */}
+                      {/* Column 5: 运行状态 (● 正常 / ● 未发布草稿) */}
                       <td className="py-3.5 px-4 align-top">
-                        <div className="flex items-center space-x-1.5 pt-0.5">
-                          <span className="w-2 h-2 rounded-full bg-[#16A36A]" />
-                          <span className="font-medium text-[#16A36A] text-xs">
-                            {agent.statusLabel}
-                          </span>
-                        </div>
+                        {agent.formalVersion ? (
+                          <div className="flex items-center space-x-1.5 pt-0.5">
+                            <span className="w-2 h-2 rounded-full bg-[#16A36A]" />
+                            <span className="font-medium text-[#16A36A] text-xs">
+                              {agent.statusLabel || '正常'}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-1.5 pt-0.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-500" />
+                            <span className="font-medium text-amber-700 text-xs">
+                              未发布草稿
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Column 6: Owner (统一中文组织名) */}
@@ -590,6 +632,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                             {agent.hasDraft && (
                               <button
                                 onClick={() => {
+                                  setSelectedDraftAgent(agent);
                                   setIsDraftDrawerOpen(true);
                                   setActiveActionMenuId(null);
                                 }}
@@ -636,121 +679,169 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
       {/* ─────────────────────────────────────────────────────────────
           SLIDE-OVER DRAWER 1: VIEW DRAFT (查看草稿)
       ───────────────────────────────────────────────────────────── */}
-      {isDraftDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div
-            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsDraftDrawerOpen(false)}
-          />
-          <div className="relative z-10 w-full max-w-[480px] bg-white h-full shadow-2xl border-l border-[#E2E8F0] flex flex-col justify-between overflow-y-auto">
-            <div>
-              {/* Drawer Header */}
-              <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-[#FFFBEB] border border-[#FDE68A] text-[#D97706] flex items-center justify-center shrink-0">
-                    <BookOpen className="w-4 h-4" />
+      {isDraftDrawerOpen && (() => {
+        const activeDraftAgent = selectedDraftAgent || agents.find((a) => a.hasDraft) || agents[0];
+        const hasFormal = Boolean(activeDraftAgent.formalVersion);
+        const draftAuthor = activeDraftAgent.draftDetails?.author || activeDraftAgent.owner;
+        const draftUpdatedAt = activeDraftAgent.draftDetails?.updatedAt || '刚刚';
+        const changes = activeDraftAgent.draftDetails?.changes || [];
+        const targetNextVersion = hasFormal ? 'v1.5' : 'v1.0';
+
+        return (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <div
+              className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs transition-opacity"
+              onClick={() => setIsDraftDrawerOpen(false)}
+            />
+            <div className="relative z-10 w-full max-w-[480px] bg-white h-full shadow-2xl border-l border-[#E2E8F0] flex flex-col justify-between overflow-y-auto">
+              <div>
+                {/* Drawer Header */}
+                <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
+                  <div className="flex items-center space-x-2.5">
+                    {renderAgentAvatar(activeDraftAgent)}
+                    <div>
+                      <h3 className="font-bold text-sm text-[#0F172A]">
+                        {activeDraftAgent.name} · 未发布草稿
+                      </h3>
+                      <p className="text-[11px] text-[#64748B]">
+                        {hasFormal
+                          ? `正式版本 ${activeDraftAgent.formalVersion} (正常运行中) vs 当前编辑草稿`
+                          : '首次创建草稿 (尚未建立正式版本)'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-[#0F172A]">
-                      企业知识伙伴 · 未发布草稿
-                    </h3>
-                    <p className="text-[11px] text-[#64748B]">
-                      正式版本 v1.4 (正常运行中) vs 当前编辑草稿
+                  <button
+                    onClick={() => setIsDraftDrawerOpen(false)}
+                    className="p-1 rounded-md text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Drawer Body */}
+                <div className="p-5 space-y-4">
+                  {/* Meta info */}
+                  <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-xs space-y-1">
+                    <div className="font-bold text-[#1E40AF] flex items-center justify-between">
+                      <span>草稿编辑人：{draftAuthor}</span>
+                      <span className="text-[11px] font-normal text-[#3B82F6]">{draftUpdatedAt} 更新</span>
+                    </div>
+                    <p className="text-[#3B82F6] text-[11px]">
+                      {hasFormal
+                        ? `该草稿已通过本地离线评估集，尚未发布至 ${activeDraftAgent.runtimeEngine} 生产环境，线上用户仍由 ${activeDraftAgent.formalVersion} 正式版服务。`
+                        : `该智能体为新创建草稿，配置尚未发布至 ${activeDraftAgent.runtimeEngine} 生产环境。`}
                     </p>
                   </div>
+
+                  {/* Change list */}
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-[#0F172A] flex items-center justify-between">
+                      <span>
+                        {changes.length > 0 ? `包含 ${changes.length} 项待发布修改 (Changes)` : '草稿初始变更项'}
+                      </span>
+                      <span className="text-[10px] font-mono text-[#64748B] bg-slate-100 px-1.5 py-0.2 rounded">
+                        DIFF: {changes.length > 0 ? `${changes.length} MODIFICATIONS` : 'INITIAL DRAFT'}
+                      </span>
+                    </div>
+
+                    {changes.length > 0 ? (
+                      changes.map((ch, idx) => (
+                        <div key={idx} className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1.5">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                            <span className="font-bold text-xs text-[#0F172A]">
+                              {idx + 1}. {ch.field}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#475569] leading-relaxed pl-3.5">
+                            {ch.detail}
+                          </p>
+                          <div className="pl-3.5 pt-1 text-[11px] font-mono text-[#64748B] flex items-center space-x-2">
+                            <span className="line-through text-red-500">{ch.before}</span>
+                            <span>→</span>
+                            <span className="text-[#16A36A] font-bold">{ch.after}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span className="font-bold text-xs text-[#0F172A]">
+                            首次创建草稿
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#475569] pl-3.5">
+                          已初始化任务定义与运行引擎绑定规格，进入定义工作区可继续进行沙盒测试与发布。
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              </div>
+
+              {/* Drawer Footer Actions */}
+              <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex items-center justify-between">
                 <button
-                  onClick={() => setIsDraftDrawerOpen(false)}
-                  className="p-1 rounded-md text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#F1F5F9] cursor-pointer"
+                  onClick={() => {
+                    setIsDraftDrawerOpen(false);
+                    if (onOpenAgentDefinition) {
+                      onOpenAgentDefinition(activeDraftAgent);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-100 text-[#2563EB] border border-[#BFDBFE] rounded-md text-xs font-semibold flex items-center space-x-1.5 cursor-pointer"
                 >
-                  <X className="w-4 h-4" />
+                  <FileText className="w-3.5 h-3.5 text-[#2563EB]" />
+                  <span>进入定义工作区</span>
                 </button>
-              </div>
 
-              {/* Drawer Body */}
-              <div className="p-5 space-y-4">
-                {/* Meta info */}
-                <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-xs space-y-1">
-                  <div className="font-bold text-[#1E40AF] flex items-center justify-between">
-                    <span>草稿编辑人：王健 (企业知识治理组)</span>
-                    <span className="text-[11px] font-normal text-[#3B82F6]">今天 10:15 更新</span>
-                  </div>
-                  <p className="text-[#3B82F6] text-[11px]">
-                    该草稿已通过本地离线评估集，尚未发布至 WeKnora 生产环境，线上用户仍由 v1.4 正式版服务。
-                  </p>
-                </div>
-
-                {/* Change list */}
-                <div className="space-y-3">
-                  <div className="text-xs font-bold text-[#0F172A] flex items-center justify-between">
-                    <span>包含 2 项待发布修改 (Changes)</span>
-                    <span className="text-[10px] font-mono text-[#64748B] bg-slate-100 px-1.5 py-0.2 rounded">
-                      DIFF: 2 MODIFICATIONS
-                    </span>
-                  </div>
-
-                  {/* Change 1 */}
-                  <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1.5">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
-                      <span className="font-bold text-xs text-[#0F172A]">
-                        1. 混合检索召回策略优化
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#475569] leading-relaxed pl-3.5">
-                      调整稠密向量 (Dense) 与 BM25 稀疏检索权重配比至 0.7 : 0.3，提升政务及业务缩写术语检索召回率。
-                    </p>
-                    <div className="pl-3.5 pt-1 text-[11px] font-mono text-[#64748B] flex items-center space-x-2">
-                      <span className="line-through text-red-500">Dense: 0.5, BM25: 0.5</span>
-                      <span>→</span>
-                      <span className="text-[#16A36A] font-bold">Dense: 0.7, BM25: 0.3</span>
-                    </div>
-                  </div>
-
-                  {/* Change 2 */}
-                  <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1.5">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
-                      <span className="font-bold text-xs text-[#0F172A]">
-                        2. 领域专有名词与实体词库更新
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#475569] leading-relaxed pl-3.5">
-                      挂载「政务与民政老龄化服务领域专有名词库 V2.1」，新增 28 个核心词条及其同义词扩展。
-                    </p>
-                    <div className="pl-3.5 pt-1 text-[11px] font-mono text-[#16A36A] font-semibold">
-                      + 28 词条 (含民政热线分类、常住老龄人口口径术语)
-                    </div>
-                  </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      setIsDraftDrawerOpen(false);
+                      addToast?.('info', '保留草稿', `已保留「${activeDraftAgent.name}」未发布的草稿`);
+                    }}
+                    className="px-3 py-1.5 bg-white hover:bg-slate-100 text-[#475569] border border-[#CBD5E1] rounded-md text-xs font-semibold cursor-pointer"
+                  >
+                    关闭
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsDraftDrawerOpen(false);
+                      setAgents((prev) =>
+                        prev.map((a) =>
+                          a.id === activeDraftAgent.id
+                            ? {
+                                ...a,
+                                formalVersion: targetNextVersion,
+                                releaseTime: '刚刚发布',
+                                status: 'ACTIVE',
+                                statusLabel: '正常',
+                                hasDraft: false,
+                                isNewDraft: false,
+                                runtimeBinding: 'ACTIVE',
+                                engineSyncStatus: '已同步'
+                              }
+                            : a
+                        )
+                      );
+                      addToast?.(
+                        'success',
+                        '发布成功',
+                        `已成功发布「${activeDraftAgent.name}」正式版本 ${targetNextVersion} 并同步至 ${activeDraftAgent.runtimeEngine} 引擎`
+                      );
+                    }}
+                    className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>发布为 {targetNextVersion} 正式版</span>
+                  </button>
                 </div>
               </div>
-            </div>
-
-            {/* Drawer Footer Actions */}
-            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex items-center justify-end space-x-2.5">
-              <button
-                onClick={() => {
-                  setIsDraftDrawerOpen(false);
-                  addToast?.('info', '放弃草稿', '已放弃未发布的草稿修改，保留线上 v1.4 正式版');
-                }}
-                className="px-3.5 py-1.5 bg-white hover:bg-slate-100 text-[#475569] border border-[#CBD5E1] rounded-md text-xs font-semibold cursor-pointer"
-              >
-                放弃草稿
-              </button>
-              <button
-                onClick={() => {
-                  setIsDraftDrawerOpen(false);
-                  addToast?.('success', '发布成功', '已成功发布「企业知识伙伴」正式版本 v1.5 并热同步至 WeKnora 引擎');
-                }}
-                className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 cursor-pointer shadow-2xs"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>发布为 v1.5 正式版</span>
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ─────────────────────────────────────────────────────────────
           SLIDE-OVER DRAWER 2: AGENT DETAIL / SPEC (智能体详情)
@@ -880,22 +971,28 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
         isOpen={isCreateDrawerOpen}
         onClose={() => setIsCreateDrawerOpen(false)}
         initialStep={1}
-        initialTemplateId="enterprise_knowledge"
+        initialTemplateId={null}
         onCreateAndConfigure={(agentData) => {
           setIsCreateDrawerOpen(false);
+          const { agentItem, definition } = createAgentDraft({
+            name: agentData.name,
+            responsibility: agentData.responsibility,
+            owner: agentData.owner,
+            templateId: agentData.templateId,
+            runtimeTarget: agentData.runtimeTarget
+          });
+
+          // Prepend new draft agent to registry
+          setAgents((prev) => [agentItem, ...prev]);
+
           addToast?.(
             'success',
             '已创建智能体草稿',
-            `已基于「${agentData.name}」生成未发布草稿，即将进入定义工作区继续完善配置`
+            `已基于模板生成「${agentData.name}」未发布草稿，已进入定义工作区继续配置`
           );
+
           if (onOpenAgentDefinition) {
-            const matchedAgent = agents.find(a => a.name === '企业知识伙伴') || agents[0];
-            onOpenAgentDefinition({
-              ...matchedAgent,
-              name: agentData.name,
-              responsibility: agentData.responsibility,
-              owner: agentData.owner
-            });
+            onOpenAgentDefinition(agentItem, definition);
           }
         }}
       />

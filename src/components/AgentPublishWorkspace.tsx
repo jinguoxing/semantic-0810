@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -21,18 +21,64 @@ import {
   Sliders,
   FileText
 } from 'lucide-react';
+import {
+  AgentItem,
+  AgentDefinitionDetail,
+  INITIAL_AGENT_DEFINITIONS
+} from '../data/agentRegistryData';
 
 interface AgentPublishWorkspaceProps {
+  agentId?: string;
+  agent?: AgentItem;
+  definition?: AgentDefinitionDetail;
   onBackToDefinition: () => void;
   onBackToRegistry?: () => void;
+  onPublishSuccess?: (newVersion: string) => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
 export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
+  agentId,
+  agent,
+  definition,
   onBackToDefinition,
   onBackToRegistry,
+  onPublishSuccess,
   addToast
 }) => {
+  const currentDef = useMemo(() => {
+    if (definition && (!agentId || definition.agentId === `agt_${agentId}` || definition.agentId === agentId || definition.name === agent?.name)) {
+      return definition;
+    }
+    if (agentId && INITIAL_AGENT_DEFINITIONS[agentId]) {
+      return INITIAL_AGENT_DEFINITIONS[agentId];
+    }
+    if (definition) return definition;
+    if (agent && INITIAL_AGENT_DEFINITIONS[agent.id]) {
+      return INITIAL_AGENT_DEFINITIONS[agent.id];
+    }
+    return agentId ? INITIAL_AGENT_DEFINITIONS[agentId] : null;
+  }, [agentId, definition, agent]);
+
+  const agentName = currentDef?.name || agent?.name || '受管智能体';
+  const runtimeEngine = currentDef?.runtimeEngine || agent?.runtimeEngine || 'Semovix Native';
+  const formalVersion = currentDef?.formalVersion || agent?.formalVersion || null;
+  const isFirstRelease = !formalVersion;
+  
+  // Calculate target version dynamically
+  const targetNewVersion = useMemo(() => {
+    if (!formalVersion) return 'v1.0';
+    const match = formalVersion.match(/v?(\d+)\.(\d+)/);
+    if (match) {
+      const major = parseInt(match[1], 10);
+      const minor = parseInt(match[2], 10);
+      return `v${major}.${minor + 1}`;
+    }
+    return 'v1.0';
+  }, [formalVersion]);
+
+  const draftChanges = currentDef?.draftChanges || [];
+
   // Left Navigation State: Release Section Workspace
   const [activeSection, setActiveSection] = useState<
     'release_overview' | 'config_check' | 'test_run' | 'quality_eval' | 'release_history'
@@ -41,18 +87,19 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
   // Publish Modal State
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [hasPublishedV15, setHasPublishedV15] = useState(false);
+  const [hasPublishedNext, setHasPublishedNext] = useState(false);
 
   const handleConfirmPublish = () => {
     setIsPublishing(true);
     setTimeout(() => {
       setIsPublishing(false);
       setIsPublishModalOpen(false);
-      setHasPublishedV15(true);
+      setHasPublishedNext(true);
+      onPublishSuccess?.(targetNewVersion);
       addToast?.(
         'success',
-        'v1.5 版本发布成功',
-        '企业知识伙伴 v1.5 已成功发布并同步至 WeKnora 运行时实例，正式生效。'
+        `${targetNewVersion} 版本发布成功`,
+        `「${agentName}」${targetNewVersion} 已成功发布并同步至 ${runtimeEngine} 运行时实例，正式生效。`
       );
     }, 900);
   };
@@ -71,7 +118,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
             title="返回智能体定义工作区"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>企业知识伙伴</span>
+            <span>{agentName}</span>
           </button>
 
           <div className="h-5 w-px bg-[#E2E8F0] shrink-0" />
@@ -90,14 +137,14 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                 onClick={onBackToDefinition}
                 className="hover:text-[#0F172A] cursor-pointer transition-colors"
               >
-                企业知识伙伴
+                {agentName}
               </span>
               <span>/</span>
               <span className="text-[#0F172A] font-medium">测试与发布</span>
             </div>
             <div className="flex items-center space-x-2 mt-0.5">
               <h1 className="text-sm font-bold text-[#0F172A] tracking-tight truncate">
-                企业知识伙伴 · 测试与发布
+                {agentName} · 测试与发布
               </h1>
               <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-blue-50 text-[#2563EB] border border-blue-200/60 shrink-0">
                 受管智能体
@@ -108,26 +155,36 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
 
         {/* Right: Exactly 3 Status Tags + Action Buttons */}
         <div className="flex items-center space-x-3 shrink-0">
-          {/* Status Tag 1: 正式版本 v1.4 (or v1.5 if published) */}
+          {/* Status Tag 1: 正式版本 */}
           <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#334155]">
             <span className="text-[#64748B]">正式版本</span>
             <span className="font-mono font-semibold text-[#0F172A]">
-              {hasPublishedV15 ? 'v1.5' : 'v1.4'}
+              {hasPublishedNext ? targetNewVersion : formalVersion ? formalVersion : '暂无'}
             </span>
           </div>
 
-          {/* Status Tag 2: 草稿待发布 */}
+          {/* Status Tag 2: 草稿状态 */}
           <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 bg-[#EFF6FF] border border-[#BFDBFE] rounded text-xs text-[#1E40AF]">
             <GitBranch className="w-3 h-3 text-[#2563EB]" />
             <span className="font-semibold">
-              {hasPublishedV15 ? '已是最新版本' : '草稿待发布'}
+              {hasPublishedNext
+                ? '已是最新版本'
+                : isFirstRelease
+                ? '首发草稿待发布'
+                : '草稿待发布'}
             </span>
           </div>
 
-          {/* Status Tag 3: WeKnora · 正常 */}
+          {/* Status Tag 3: Runtime · 状态 */}
           <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-white border border-[#E2E8F0] rounded text-xs text-[#334155]">
-            <span className="w-2 h-2 rounded-full bg-[#16A36A]" />
-            <span className="font-medium text-[#0F172A]">WeKnora · 正常</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                hasPublishedNext || formalVersion ? 'bg-[#16A36A]' : 'bg-amber-500'
+              }`}
+            />
+            <span className="font-medium text-[#0F172A]">
+              {runtimeEngine} · {hasPublishedNext || formalVersion ? '正常' : '待激活'}
+            </span>
           </div>
 
           {/* Actions */}
@@ -155,7 +212,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
           在正式发布前，对当前草稿的配置、Runtime、测试结果与质量基线进行统一验证。
         </p>
         <span className="text-[11px] font-mono text-[#94A3B8] hidden md:inline">
-          Release Gate: 5/5 PASSED · Target: v1.5
+          Release Gate: 5/5 PASSED · Target: {targetNewVersion}
         </span>
       </div>
 
@@ -301,25 +358,41 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                     {/* Current Formal Version */}
                     <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
                       <span className="text-[11px] text-[#64748B] block">当前正式版本</span>
-                      <div className="font-mono font-bold text-xs text-[#0F172A]">v1.4</div>
-                      <span className="text-[10px] text-[#64748B] block">
-                        WeKnora · r37 · 正常运行
+                      <div className="font-mono font-bold text-xs text-[#0F172A]">
+                        {formalVersion || '暂无 (未发布)'}
+                      </div>
+                      <span className="text-[10px] text-[#64748B] block truncate">
+                        {formalVersion
+                          ? `${runtimeEngine} · ${currentDef?.runtimeRevision || 'r37'} · 正常运行`
+                          : `${runtimeEngine} · 尚未建立正式运行配置`}
                       </span>
                     </div>
 
                     {/* Current Draft */}
                     <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
                       <span className="text-[11px] text-[#64748B] block">当前草稿</span>
-                      <div className="font-bold text-xs text-[#2563EB]">2 项修改</div>
-                      <span className="text-[10px] text-[#64748B] block">
-                        知识范围与能力模式升级
+                      <div className="font-bold text-xs text-[#2563EB]">
+                        {isFirstRelease
+                          ? '首发创建草稿'
+                          : draftChanges.length > 0
+                          ? `${draftChanges.length} 项修改`
+                          : '与正式版一致'}
+                      </div>
+                      <span className="text-[10px] text-[#64748B] block truncate">
+                        {isFirstRelease
+                          ? '待发布为初始正式版本'
+                          : draftChanges.length > 0
+                          ? draftChanges.map((d) => d.field).join('、')
+                          : '配置文件已就绪'}
                       </span>
                     </div>
 
                     {/* Target Version */}
                     <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
                       <span className="text-[11px] text-[#64748B] block">预计发布版本</span>
-                      <div className="font-mono font-bold text-xs text-[#0F172A]">v1.5</div>
+                      <div className="font-mono font-bold text-xs text-[#0F172A]">
+                        {targetNewVersion}
+                      </div>
                       <span className="text-[10px] text-[#64748B] block">
                         发布成功后正式生成
                       </span>
@@ -327,7 +400,9 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                   </div>
 
                   <p className="text-[11px] text-[#94A3B8] pt-1">
-                    发布成功后才会生成正式版本 v1.5；当前草稿不会影响正在运行的 v1.4。
+                    {isFirstRelease
+                      ? `发布成功后将正式生成首发版本 ${targetNewVersion} 并激活 ${runtimeEngine} 运行时实例。`
+                      : `发布成功后才会生成正式版本 ${targetNewVersion}；当前草稿不会影响正在运行的 ${formalVersion}。`}
                   </p>
                 </div>
 
@@ -338,44 +413,46 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                   <div>
                     <h3 className="text-xs font-bold text-[#0F172A]">草稿变更</h3>
                     <p className="text-[11px] text-[#64748B] mt-0.5">
-                      相比正式版本 v1.4，本次准备发布以下 2 项业务级修改。
+                      {isFirstRelease
+                        ? `首发版本上线，包含 ${(currentDef?.tasks || []).length} 项支持任务与基础能力模式配置。`
+                        : draftChanges.length > 0
+                        ? `相比正式版本 ${formalVersion}，本次准备发布以下 ${draftChanges.length} 项业务级修改。`
+                        : `当前草稿与正式版本 ${formalVersion} 保持完全一致，无需额外差异调整。`}
                     </p>
                   </div>
 
                   <div className="space-y-2 text-xs">
-                    {/* Diff 1: 知识范围 */}
-                    <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-[#0F172A]">知识范围</span>
-                        <span className="text-[10px] font-mono text-[#16A36A] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                          + 数据治理规范
-                        </span>
+                    {isFirstRelease ? (
+                      <div className="p-3 bg-white border border-blue-200 rounded-lg space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#0F172A]">首发规格定义</span>
+                          <span className="text-[10px] font-mono text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-semibold">
+                            NEW DRAFT
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-[#475569] leading-relaxed">
+                          包含支持任务：{(currentDef?.tasks || []).map((t) => t.name).join('、')}；能力模式：{currentDef?.capabilityMode}。
+                        </div>
                       </div>
-                      <div className="text-[11px] text-[#64748B] flex items-center space-x-2">
-                        <span>正式版本：企业制度、产品知识</span>
-                        <span>→</span>
-                        <span className="text-[#0F172A] font-medium">
-                          当前草稿：企业制度、产品知识、<strong className="text-[#16A36A]">数据治理规范</strong>
-                        </span>
+                    ) : draftChanges.length > 0 ? (
+                      draftChanges.map((change, idx) => (
+                        <div key={idx} className="p-3 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-[#0F172A]">{change.field}</span>
+                            <span className="text-[10px] font-mono text-[#2563EB] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                              {change.tag}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[#475569] leading-relaxed">
+                            {change.changeText}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg text-[11px] text-[#64748B]">
+                        当前草稿与正式版本 {formalVersion} 保持一致，暂无未发布修改。
                       </div>
-                    </div>
-
-                    {/* Diff 2: 能力模式 */}
-                    <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-[#0F172A]">能力模式</span>
-                        <span className="text-[10px] font-mono text-[#2563EB] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                          MODE UPGRADE
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-[#64748B] flex items-center space-x-2">
-                        <span className="line-through">精准知识问答</span>
-                        <span>→</span>
-                        <span className="text-[#2563EB] font-bold">
-                          Wiki + RAG 混合研究
-                        </span>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -410,7 +487,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       <div className="space-y-0.5 pr-4">
                         <div className="font-bold text-[#0F172A]">Runtime 编译</div>
                         <p className="text-[11px] text-[#64748B]">
-                          当前草稿已成功编译为 WeKnora Runtime Projection。
+                          当前草稿已成功编译为 {runtimeEngine} Runtime Projection。
                         </p>
                       </div>
                       <div className="flex items-center space-x-1 text-[#16A36A] font-medium shrink-0 pt-0.5">
@@ -438,7 +515,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       <div className="space-y-0.5 pr-4">
                         <div className="font-bold text-[#0F172A]">测试运行</div>
                         <p className="text-[11px] text-[#64748B]">
-                          关键知识问答测试已全部完成。
+                          关键能力与支持任务测试已全部完成。
                         </p>
                       </div>
                       <div className="flex items-center space-x-1 text-[#16A36A] font-medium shrink-0 pt-0.5">
@@ -452,7 +529,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       <div className="space-y-0.5 pr-4">
                         <div className="font-bold text-[#0F172A]">质量评估</div>
                         <p className="text-[11px] text-[#64748B]">
-                          当前草稿满足企业知识伙伴正式发布质量标准。
+                          当前草稿满足「{agentName}」正式发布质量标准。
                         </p>
                       </div>
                       <div className="flex items-center space-x-1 text-[#16A36A] font-medium shrink-0 pt-0.5">
@@ -503,7 +580,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       <div className="space-y-1">
                         <div className="text-[11px] text-[#64748B]">Runtime Projection</div>
                         <div className="font-bold text-xs text-[#0F172A]">
-                          Ready <span className="text-[10px] font-normal text-[#64748B]">(WeKnora)</span>
+                          Ready <span className="text-[10px] font-normal text-[#64748B]">({runtimeEngine})</span>
                         </div>
                         <div className="text-[10px] text-[#94A3B8]">发布前验证副本</div>
                       </div>
@@ -589,29 +666,29 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           <span className="text-[#16A36A] font-semibold">VALID</span>
                         </div>
                         <p className="text-[11px] text-[#64748B]">
-                          企业知识伙伴 · 企业知识治理组 · 职责长度合规 (68/500)
+                          {agentName} · {currentDef?.owner || agent?.owner || '受管团队'} · 职责定义完整 ({currentDef?.responsibility?.length || 45}/500)
                         </p>
                       </div>
 
                       <div className="font-bold text-[#0F172A] pt-2">Context & Capability 校验</div>
                       <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-[#0F172A]">知识空间与能力模式挂载</span>
+                          <span className="font-medium text-[#0F172A]">范围资产与能力模式挂载</span>
                           <span className="text-[#16A36A] font-semibold">VALID</span>
                         </div>
                         <p className="text-[11px] text-[#64748B]">
-                          3 个空间（企业制度、产品知识、数据治理规范）均在线且向量索引可用。
+                          {currentDef?.contextSources?.length || 1} 个挂载范围（{(currentDef?.contextSources || []).map((c) => c.name).join('、') || '默认受管资产'}）均在线且配置一致。
                         </p>
                       </div>
 
-                      <div className="font-bold text-[#0F172A] pt-2">WeKnora Runtime 编译投影</div>
+                      <div className="font-bold text-[#0F172A] pt-2">{runtimeEngine} Runtime 编译投影</div>
                       <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-[#1E40AF]">Runtime Schema Compatibility</span>
                           <span className="text-[#2563EB] font-semibold">PROJECTION READY</span>
                         </div>
                         <p className="text-[11px] text-[#2563EB]">
-                          Runtime Revision Projection: r38-draft · 目标引擎 WeKnora 已完成协议编译。
+                          Runtime Revision Projection: {currentDef?.runtimeRevision ? `r${parseInt(currentDef.runtimeRevision.replace(/\D/g, '') || '37') + 1}` : 'r38'}-draft · 目标引擎 {runtimeEngine} 已完成协议编译。
                         </p>
                       </div>
                     </div>
@@ -625,34 +702,47 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                     <div className="space-y-3">
                       <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-2">
                         <div className="flex items-center justify-between">
-                          <div className="font-bold text-[#0F172A]">测试案例 1：敏感数据如何定义？</div>
+                          <div className="font-bold text-[#0F172A]">
+                            {currentDef?.testSandbox?.suggestedQueries?.[0]
+                              ? `测试案例 1：${currentDef.testSandbox.suggestedQueries[0]}`
+                              : `测试案例 1：${agentName} 核心任务能力探查`}
+                          </div>
                           <span className="text-[#16A36A] font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                             测试通过
                           </span>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-[#64748B] pt-1 border-t border-[#E2E8F0]">
-                          <div>Routing: <span className="font-mono text-[#0F172A]">KNOWLEDGE_QA_V1</span></div>
+                          <div>Routing: <span className="font-mono text-[#0F172A]">{runtimeEngine === 'WeKnora' ? 'KNOWLEDGE_QA_V1' : 'NATIVE_SEMANTIC_ROUTING'}</span></div>
                           <div>Agent: <span className="text-[#0F172A]">当前草稿</span></div>
-                          <div>Runtime: <span className="text-[#0F172A]">WeKnora · Draft Projection</span></div>
-                          <div>Evidence: <span className="font-bold text-[#0F172A]">4 条有效引用</span></div>
+                          <div>Runtime: <span className="text-[#0F172A]">{runtimeEngine} · Draft Projection</span></div>
+                          <div>Evidence: <span className="font-bold text-[#0F172A]">{currentDef?.contextSources?.length ? `${currentDef.contextSources.length} 项有效依据` : '3 项有效引用'}</span></div>
                         </div>
                         <div className="text-[11px] text-[#334155] bg-white p-2.5 rounded border border-[#E2E8F0]">
-                          <strong>回答摘要：</strong> 依据《数据治理规范 V2.4》第 3.1 节，企业敏感数据分为 L1~L4 四级，涉及客户个人身份标识与交易鉴权要素归入 L3 以上受控范围。
+                          <strong>回答摘要：</strong>{' '}
+                          {currentDef?.testSandbox?.sampleResponses?.[0]?.reply
+                            ? currentDef.testSandbox.sampleResponses[0].reply.split('\n')[0]
+                            : `已通过 ${runtimeEngine} 运行时验证，草稿配置符合业务规范与执行标准。`}
                         </div>
                       </div>
 
                       <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg flex items-center justify-between">
                         <div>
-                          <div className="font-semibold text-[#0F172A]">测试案例 2：产品架构多租户隔离规范</div>
-                          <div className="text-[11px] text-[#64748B]">命中知识空间：《产品知识》 · Evidence: 3 条</div>
+                          <div className="font-semibold text-[#0F172A]">
+                            {currentDef?.testSandbox?.suggestedQueries?.[1]
+                              ? `测试案例 2：${currentDef.testSandbox.suggestedQueries[1]}`
+                              : `测试案例 2：${currentDef?.tasks?.[0]?.name || '基础支持任务'}边界校验`}
+                          </div>
+                          <div className="text-[11px] text-[#64748B]">命中受管资产：{currentDef?.contextSources?.[0]?.name || '受管业务语义'} · 状态: 正常</div>
                         </div>
                         <span className="text-[#16A36A] font-semibold">通过</span>
                       </div>
 
                       <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg flex items-center justify-between">
                         <div>
-                          <div className="font-semibold text-[#0F172A]">测试案例 3：跨文档考勤与差旅补贴对比</div>
-                          <div className="text-[11px] text-[#64748B]">命中知识空间：《企业制度》 · Evidence: 5 条</div>
+                          <div className="font-semibold text-[#0F172A]">
+                            测试案例 3：{currentDef?.tasks?.[1]?.name || '多维意图与策略识别'}联动执行探查
+                          </div>
+                          <div className="text-[11px] text-[#64748B]">运行引擎：{runtimeEngine} · 自主程度: {currentDef?.maxAutonomy || '建议'}</div>
                         </div>
                         <span className="text-[#16A36A] font-semibold">通过</span>
                       </div>
@@ -709,30 +799,36 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#F1F5F9]">
-                        {hasPublishedV15 && (
+                        {hasPublishedNext && (
                           <tr className="bg-blue-50/40 font-medium">
-                            <td className="py-3 px-4 font-mono font-bold text-[#2563EB]">v1.5</td>
+                            <td className="py-3 px-4 font-mono font-bold text-[#2563EB]">{targetNewVersion}</td>
                             <td className="py-3 px-4">
                               <span className="text-[10px] bg-emerald-50 text-[#16A36A] px-1.5 py-0.5 rounded border border-emerald-200 font-bold">
                                 当前正式
                               </span>
                             </td>
                             <td className="py-3 px-4 text-[#475569]">刚刚发布</td>
-                            <td className="py-3 px-4 font-mono text-[#64748B]">WeKnora r38</td>
-                            <td className="py-3 px-4 text-[#0F172A]">新增数据治理规范知识空间；升级 Wiki+RAG 模式</td>
+                            <td className="py-3 px-4 font-mono text-[#64748B]">{runtimeEngine} r38</td>
+                            <td className="py-3 px-4 text-[#0F172A]">
+                              {isFirstRelease
+                                ? '首发正式版本上线并激活受管实例'
+                                : '新增数据治理规范知识空间；升级 Wiki+RAG 模式'}
+                            </td>
                           </tr>
                         )}
-                        <tr>
-                          <td className="py-3 px-4 font-mono font-bold text-[#0F172A]">v1.4</td>
-                          <td className="py-3 px-4">
-                            <span className="text-[10px] bg-slate-100 text-[#475569] px-1.5 py-0.5 rounded">
-                              {hasPublishedV15 ? '历史' : '当前正式'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-[#64748B]">2026-08-25 16:40</td>
-                          <td className="py-3 px-4 font-mono text-[#64748B]">WeKnora r37</td>
-                          <td className="py-3 px-4 text-[#334155]">增加产品知识空间</td>
-                        </tr>
+                        {formalVersion && (
+                          <tr>
+                            <td className="py-3 px-4 font-mono font-bold text-[#0F172A]">{formalVersion}</td>
+                            <td className="py-3 px-4">
+                              <span className="text-[10px] bg-slate-100 text-[#475569] px-1.5 py-0.5 rounded">
+                                {hasPublishedNext ? '历史' : '当前正式'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-[#64748B]">2026-08-25 16:40</td>
+                            <td className="py-3 px-4 font-mono text-[#64748B]">{runtimeEngine} r37</td>
+                            <td className="py-3 px-4 text-[#334155]">已验证并稳定运行版本</td>
+                          </tr>
+                        )}
                         <tr>
                           <td className="py-3 px-4 font-mono font-bold text-[#0F172A]">v1.3</td>
                           <td className="py-3 px-4">
@@ -776,8 +872,12 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
             <div className="space-y-0.5">
               <span className="text-[11px] text-[#64748B] block">当前正式版本</span>
               <div className="flex items-center justify-between">
-                <span className="font-mono font-bold text-[#0F172A]">v1.4</span>
-                <span className="text-[10px] font-mono text-[#64748B]">WeKnora · r37</span>
+                <span className="font-mono font-bold text-[#0F172A]">
+                  {formalVersion || '暂无 (未发布)'}
+                </span>
+                <span className="text-[10px] font-mono text-[#64748B]">
+                  {runtimeEngine} {currentDef?.runtimeRevision ? `· ${currentDef.runtimeRevision}` : ''}
+                </span>
               </div>
             </div>
 
@@ -785,23 +885,32 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
             <div className="space-y-0.5 pt-2 border-t border-[#F1F5F9]">
               <span className="text-[11px] text-[#64748B] block">当前草稿</span>
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-[#2563EB]">2 项修改</span>
-                <span className="font-mono font-bold text-[#0F172A]">预计版本：v1.5</span>
+                <span className="font-semibold text-[#2563EB]">
+                  {isFirstRelease ? '首发创建草稿' : draftChanges.length > 0 ? `${draftChanges.length} 项修改` : '与正式版一致'}
+                </span>
+                <span className="font-mono font-bold text-[#0F172A]">预计版本：{targetNewVersion}</span>
               </div>
             </div>
 
             {/* Changes list */}
             <div className="p-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-[11px] space-y-1 text-[#334155]">
               <div className="font-semibold text-[#0F172A]">本次主要变更：</div>
-              <div>• 新增：数据治理规范</div>
-              <div>• 能力模式：Wiki + RAG 混合研究</div>
+              {isFirstRelease ? (
+                <div>• 首发正式上线并激活受管实例</div>
+              ) : draftChanges.length > 0 ? (
+                draftChanges.map((d, i) => (
+                  <div key={i} className="truncate">• {d.field}：{d.changeText}</div>
+                ))
+              ) : (
+                <div>• 配置文件与线上正式版本一致</div>
+              )}
             </div>
 
             {/* Runtime Projection */}
             <div className="space-y-1 pt-2 border-t border-[#F1F5F9]">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-[#64748B]">Runtime</span>
-                <span className="font-semibold text-[#0F172A]">WeKnora</span>
+                <span className="font-semibold text-[#0F172A]">{runtimeEngine}</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
                 <span className="text-[#64748B]">Draft Projection</span>
@@ -834,7 +943,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               className="w-full py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
             >
               <Rocket className="w-3.5 h-3.5" />
-              <span>发布新版本</span>
+              <span>{isFirstRelease ? `发布首发版本 ${targetNewVersion}` : `发布新版本 ${targetNewVersion}`}</span>
             </button>
 
             <button
@@ -861,7 +970,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
             <div className="px-5 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
               <div>
                 <h3 className="font-bold text-sm text-[#0F172A]">
-                  发布企业知识伙伴 · 新版本
+                  发布「{agentName}」· {isFirstRelease ? '首发版本' : '新版本'}
                 </h3>
                 <p className="text-xs text-[#64748B] mt-0.5">
                   将当前已验证的草稿发布为正式运行版本。
@@ -881,20 +990,32 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                 <div>
                   <span className="text-[11px] text-[#64748B] block">预计生成新版本</span>
                   <span className="text-sm font-bold font-mono text-[#0F172A] block mt-0.5">
-                    v1.5
+                    {targetNewVersion}
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="text-[11px] text-[#64748B] block">绑定 Runtime</span>
-                  <span className="font-medium text-[#0F172A] block mt-0.5">WeKnora (r38)</span>
+                  <span className="font-medium text-[#0F172A] block mt-0.5">
+                    {runtimeEngine} {currentDef?.runtimeRevision ? `(${currentDef.runtimeRevision})` : '(初始编译)'}
+                  </span>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <div className="font-bold text-[#0F172A]">本次主要变更 (2 项)：</div>
+                <div className="font-bold text-[#0F172A]">本次主要变更：</div>
                 <ul className="list-disc list-inside space-y-1 text-[#475569] pl-1">
-                  <li>新增「数据治理规范」知识空间挂载</li>
-                  <li>能力模式由「精准知识问答」升级为「Wiki + RAG 混合研究」</li>
+                  {currentDef?.draftChanges && currentDef.draftChanges.length > 0 ? (
+                    currentDef.draftChanges.map((change, idx) => (
+                      <li key={idx}>
+                        {change.field}：{change.changeText}
+                      </li>
+                    ))
+                  ) : (
+                    <>
+                      <li>基础配置初始化：设定业务职责与安全规则边界</li>
+                      <li>绑定运行引擎：接入 {runtimeEngine} 运行时执行流</li>
+                    </>
+                  )}
                 </ul>
               </div>
 
@@ -921,7 +1042,10 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               </div>
 
               <div className="p-3 bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-[11px] text-[#475569] leading-relaxed">
-                <strong>发布保障：</strong> 若发布过程中断或 WeKnora 同步失败，线上正式版本 v1.4 将保持在线不受影响。
+                <strong>发布保障：</strong>{' '}
+                {isFirstRelease
+                  ? `发布将首次建立「${agentName}」在 ${runtimeEngine} 中的受管运行实例，发布后可立即对外提供服务。`
+                  : `若发布过程中断或 ${runtimeEngine} 同步失败，线上正式版本 ${formalVersion} 将保持在线不受影响。`}
               </div>
             </div>
 
@@ -945,7 +1069,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                 ) : (
                   <>
                     <Rocket className="w-3.5 h-3.5" />
-                    <span>发布 v1.5</span>
+                    <span>发布 {targetNewVersion}</span>
                   </>
                 )}
               </button>

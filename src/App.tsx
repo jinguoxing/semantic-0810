@@ -51,6 +51,12 @@ import { MyAccessRequestsWorkspace } from './components/MyAccessRequestsWorkspac
 import { AgentRegistryWorkspace } from './components/AgentRegistryWorkspace';
 import { AgentDefinitionWorkspace } from './components/AgentDefinitionWorkspace';
 import { AgentPublishWorkspace } from './components/AgentPublishWorkspace';
+import {
+  AgentItem,
+  AgentDefinitionDetail,
+  INITIAL_AGENTS,
+  INITIAL_AGENT_DEFINITIONS
+} from './data/agentRegistryData';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData, MetricDraftInitialData } from './types';
@@ -77,6 +83,40 @@ export default function App() {
   const [currentModule, setCurrentModule] = useState<string>('xino_partner');
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isReanalyzing, setIsReanalyzing] = useState<boolean>(false);
+
+  // Agents Central State
+  const [agentsList, setAgentsList] = useState<AgentItem[]>(INITIAL_AGENTS);
+  const [agentDefinitions, setAgentDefinitions] = useState<Record<string, AgentDefinitionDetail>>(INITIAL_AGENT_DEFINITIONS);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<AgentItem | null>(null);
+  const [selectedAgentDefinition, setSelectedAgentDefinition] = useState<AgentDefinitionDetail | null>(null);
+
+  // Derived current selected agent and definition
+  const currentSelectedAgent = useMemo(() => {
+    if (selectedAgent && (!selectedAgentId || selectedAgent.id === selectedAgentId)) {
+      return selectedAgent;
+    }
+    if (selectedAgentId) {
+      return agentsList.find((a) => a.id === selectedAgentId) || null;
+    }
+    return agentsList[0] || null;
+  }, [selectedAgent, selectedAgentId, agentsList]);
+
+  const currentSelectedDefinition = useMemo(() => {
+    const targetId = selectedAgentId || currentSelectedAgent?.id;
+    if (!targetId) return null;
+    if (selectedAgentDefinition && (selectedAgentDefinition.agentId === `agt_${targetId}` || selectedAgentDefinition.agentId === targetId)) {
+      return selectedAgentDefinition;
+    }
+    if (agentDefinitions[targetId]) {
+      return agentDefinitions[targetId];
+    }
+    if (INITIAL_AGENT_DEFINITIONS[targetId]) {
+      return INITIAL_AGENT_DEFINITIONS[targetId];
+    }
+    return null;
+  }, [selectedAgentDefinition, selectedAgentId, agentDefinitions, currentSelectedAgent]);
 
   // Helper to trigger toast
   const addToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
@@ -476,20 +516,80 @@ export default function App() {
         />
       ) : currentNav === 'agent_publish' || viewTab === 'agent_publish' ? (
         <AgentPublishWorkspace
+          agentId={selectedAgentId}
+          agent={currentSelectedAgent}
+          definition={currentSelectedDefinition}
           addToast={addToast}
           onBackToDefinition={() => {
             setCurrentNav('agent_definition');
             setViewTab('agent_definition');
-            addToast('info', '企业知识伙伴', '已返回智能体定义工作区');
+            const name = currentSelectedAgent?.name || currentSelectedDefinition?.name || '智能体';
+            addToast('info', name, '已返回智能体定义工作区');
           }}
           onBackToRegistry={() => {
             setCurrentNav('agents');
             setViewTab('agents');
             addToast('info', '智能体中心', '已返回受管智能体注册表');
           }}
+          onPublishSuccess={(publishedVersion) => {
+            const targetId = selectedAgentId || currentSelectedAgent?.id;
+            if (!targetId) return;
+            setAgentsList((prev) =>
+              prev.map((a) => {
+                if (a.id === targetId) {
+                  return {
+                    ...a,
+                    formalVersion: publishedVersion,
+                    releaseTime: '刚刚发布',
+                    status: 'ACTIVE',
+                    statusLabel: '正常',
+                    hasDraft: false,
+                    isNewDraft: false,
+                    runtimeBinding: 'ACTIVE',
+                    engineSyncStatus: '已同步'
+                  };
+                }
+                return a;
+              })
+            );
+            setAgentDefinitions((prev) => {
+              const cur = prev[targetId] || currentSelectedDefinition;
+              if (cur) {
+                return {
+                  ...prev,
+                  [targetId]: {
+                    ...cur,
+                    formalVersion: publishedVersion,
+                    runtimeBinding: 'ACTIVE',
+                    lastReleaseTime: '刚刚发布',
+                    draftChanges: []
+                  }
+                };
+              }
+              return prev;
+            });
+            setSelectedAgent((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    formalVersion: publishedVersion,
+                    releaseTime: '刚刚发布',
+                    status: 'ACTIVE',
+                    statusLabel: '正常',
+                    hasDraft: false,
+                    isNewDraft: false,
+                    runtimeBinding: 'ACTIVE',
+                    engineSyncStatus: '已同步'
+                  }
+                : null
+            );
+          }}
         />
       ) : currentNav === 'agent_definition' || currentNav === 'agent_detail' || viewTab === 'agent_definition' || viewTab === 'agent_detail' ? (
         <AgentDefinitionWorkspace
+          agentId={selectedAgentId}
+          agent={currentSelectedAgent}
+          definition={currentSelectedDefinition}
           addToast={addToast}
           onBackToRegistry={() => {
             setCurrentNav('agents');
@@ -499,11 +599,24 @@ export default function App() {
           onNavigateToPublish={() => {
             setCurrentNav('agent_publish');
             setViewTab('agent_publish');
-            addToast('info', '测试与发布', '已进入「企业知识伙伴」发布前验证工作区');
+            const name = currentSelectedAgent?.name || currentSelectedDefinition?.name || '智能体';
+            addToast('info', '测试与发布', `已进入「${name}」发布前验证工作区`);
+          }}
+          onSaveDraft={(updatedDef) => {
+            setSelectedAgentDefinition(updatedDef);
+            const targetId = selectedAgentId || currentSelectedAgent?.id;
+            if (targetId) {
+              setAgentDefinitions((prev) => ({
+                ...prev,
+                [targetId]: updatedDef
+              }));
+            }
           }}
         />
       ) : currentNav === 'agents' || currentNav === 'agent_center' || viewTab === 'agents' || viewTab === 'agent_center' ? (
         <AgentRegistryWorkspace
+          agents={agentsList}
+          onAgentsChange={setAgentsList}
           addToast={addToast}
           onNavigateToHome={() => {
             setCurrentNav('home');
@@ -525,7 +638,20 @@ export default function App() {
             setViewTab('marketplace');
             addToast('info', '数据服务超市', '已进入数据服务超市 · 发现首页');
           }}
-          onOpenAgentDefinition={(agent) => {
+          onOpenAgentDefinition={(agent, definition) => {
+            setSelectedAgentId(agent.id);
+            setSelectedDraftId(agent.hasDraft ? `draft_${agent.id}` : null);
+            setSelectedAgent(agent);
+            if (definition) {
+              setSelectedAgentDefinition(definition);
+              setAgentDefinitions((prev) => ({
+                ...prev,
+                [agent.id]: definition
+              }));
+            } else {
+              const def = agentDefinitions[agent.id] || INITIAL_AGENT_DEFINITIONS[agent.id];
+              setSelectedAgentDefinition(def || null);
+            }
             setCurrentNav('agent_definition');
             setViewTab('agent_definition');
             addToast('info', agent.name, `已载入「${agent.name}」受管智能体定义工作区`);
