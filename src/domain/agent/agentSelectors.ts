@@ -8,7 +8,8 @@ import {
   AgentDraft,
   AgentVersion,
   AgentRuntimeBinding,
-  AgentBusinessDiff
+  AgentBusinessDiff,
+  AgentOrigin
 } from './agentTypes';
 import { agentRepository } from './agentRepository';
 
@@ -19,6 +20,8 @@ export interface AgentDisplayState {
   owner: string;
   agentType: '系统智能体' | '受管智能体';
   category: 'SYSTEM' | 'MANAGED';
+  /** 用户可见分类：内置 vs 组织自定义（V1.1 起以此为准，agentKind 仅内部兼容） */
+  origin: AgentOrigin;
   formalVersion: string | null; // null if unreleased
   hasDraft: boolean;
   draftId?: string;
@@ -62,6 +65,7 @@ export const agentSelectors = {
       owner: def.owner,
       agentType: def.agentKind === 'SYSTEM' ? '系统智能体' : '受管智能体',
       category: def.agentKind,
+      origin: def.origin,
       formalVersion,
       hasDraft,
       draftId: draft?.draftId,
@@ -82,6 +86,15 @@ export const agentSelectors = {
   isUnreleased(agentId: string): boolean {
     const def = agentRepository.getDefinition(agentId);
     return !def?.currentPublishedVersion;
+  },
+
+  /**
+   * V1.1 内置判定基线：origin === 'BUILT_IN' 即平台内置智能体。
+   * UI 层的内置锁定/保护在后续 Commit 中基于此判定实现。
+   */
+  isBuiltInAgent(agentId: string): boolean {
+    const def = agentRepository.getDefinition(agentId);
+    return def?.origin === 'BUILT_IN';
   },
 
   /**

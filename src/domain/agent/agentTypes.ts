@@ -8,6 +8,16 @@ export type AgentKind = 'SYSTEM' | 'MANAGED';
 
 export type AgentStatus = 'DRAFT' | 'ACTIVE' | 'DISABLED';
 
+/**
+ * 智能体来源 (V1.1)：
+ * - BUILT_IN: 平台内置智能体（数据智能伙伴 / 语义治理伙伴 / 企业知识伙伴）
+ * - CUSTOM: 组织用户通过能力模板自定义创建的智能体
+ *
+ * origin 只表达"内置 vs 组织自定义"，不替代 runtimeTarget / status / version；
+ * 用户可见分类一律以 origin 为准，agentKind 仅作为内部兼容字段保留。
+ */
+export type AgentOrigin = 'BUILT_IN' | 'CUSTOM';
+
 export type MaxAutonomy =
   | 'SUGGEST'
   | 'PROPOSE'
@@ -61,6 +71,8 @@ export interface AgentDefinition {
   description: string;
   responsibilitySummary: string;
   agentKind: AgentKind;
+  /** 内置 vs 组织自定义（用户可见分类字段） */
+  origin: AgentOrigin;
   owner: string;
   sourcePresetId?: string;
   supportedTaskTemplates: TaskTemplateBinding[];
@@ -87,6 +99,8 @@ export interface AgentDraft {
   name: string;
   description: string;
   responsibilitySummary: string;
+  /** 与所属 AgentDefinition 的 origin 保持一致（草稿继承，不改变来源） */
+  origin: AgentOrigin;
   supportedTaskTemplates: TaskTemplateBinding[];
   allowedContextSources: AgentContextSource[];
   capabilityPreset: string;

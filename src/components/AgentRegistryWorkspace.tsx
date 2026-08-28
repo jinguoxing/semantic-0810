@@ -138,12 +138,6 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
   // Helper for agent avatar
   const renderAgentAvatar = (agent: AgentItem) => {
     switch (agent.avatarType) {
-      case 'xino':
-        return (
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#2563EB] to-[#4F46E5] text-white flex items-center justify-center shadow-2xs shrink-0">
-            <Bot className="w-4 h-4" />
-          </div>
-        );
       case 'data':
         return (
           <div className="w-8 h-8 rounded-lg bg-[#ECFDF5] border border-[#A7F3D0] text-[#059669] flex items-center justify-center shrink-0">

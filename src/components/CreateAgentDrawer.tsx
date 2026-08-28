@@ -174,7 +174,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
       {/* ─────────────────────────────────────────────────────────────
           SEMI-TRANSPARENT BACKDROP OVERLAY
           Preserves subtle visibility of the underlying Agent Registry:
-          Xino｜犀诺, 数据智能伙伴, 语义治理伙伴, 企业知识伙伴
+          数据智能伙伴, 语义治理伙伴, 企业知识伙伴
       ───────────────────────────────────────────────────────────── */}
       <div
         className="fixed inset-0 bg-slate-900/35 backdrop-blur-[1px] transition-opacity duration-200"

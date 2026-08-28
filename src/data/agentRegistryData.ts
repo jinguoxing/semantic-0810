@@ -23,6 +23,8 @@ export interface AgentItem {
   responsibility: string;
   agentType: '系统智能体' | '受管智能体';
   category: 'SYSTEM' | 'MANAGED';
+  /** 用户可见分类：内置 vs 组织自定义（与域模型 AgentOrigin 一致） */
+  origin: 'BUILT_IN' | 'CUSTOM';
   tasks: string[];
   extraTasksCount: number;
   allTasks: string[];
@@ -38,7 +40,7 @@ export interface AgentItem {
   draftNote?: string;
   draftDetails?: AgentDraftDetails;
   description: string;
-  avatarType: 'xino' | 'data' | 'governance' | 'knowledge';
+  avatarType: 'data' | 'governance' | 'knowledge';
   skillsCount: number;
   toolsCount: number;
   runtimeBinding?: 'ACTIVE' | 'NOT_BOUND' | null;
@@ -48,32 +50,12 @@ export interface AgentItem {
 
 export const INITIAL_AGENTS: AgentItem[] = [
   {
-    id: 'xino',
-    name: 'Xino｜犀诺',
-    responsibility: '理解用户目标并协调平台任务与智能能力',
-    agentType: '系统智能体',
-    category: 'SYSTEM',
-    tasks: ['意图理解', '任务路由'],
-    extraTasksCount: 1,
-    allTasks: ['意图理解', '任务路由', '全局协同'],
-    runtimeEngine: 'Semovix',
-    formalVersion: 'v1.6',
-    releaseTime: '5 天前发布',
-    status: 'ACTIVE',
-    statusLabel: '正常',
-    owner: '平台 AI 团队',
-    hasDraft: false,
-    description: 'Xino 是 Semovix 平台的主控智能协调角色，负责全局用户意图解析、多 Agent 任务路由协同与上下文串联。',
-    avatarType: 'xino',
-    skillsCount: 8,
-    toolsCount: 14,
-  },
-  {
     id: 'data_intelligence',
     name: '数据智能伙伴',
     responsibility: '面向业务目标完成找数、问数与数据分析',
     agentType: '受管智能体',
     category: 'MANAGED',
+    origin: 'BUILT_IN',
     tasks: ['找数据', '问数据'],
     extraTasksCount: 1,
     allTasks: ['找数据', '问数据', '数据分析'],
@@ -95,6 +77,7 @@ export const INITIAL_AGENTS: AgentItem[] = [
     responsibility: '辅助企业完成语义理解、业务对象与治理任务',
     agentType: '受管智能体',
     category: 'MANAGED',
+    origin: 'BUILT_IN',
     tasks: ['语义理解', '业务对象'],
     extraTasksCount: 5,
     allTasks: ['语义理解', '业务对象', '标准校验', '字段对齐', '指标建模', '值域映射', '冲突审阅'],
@@ -116,6 +99,7 @@ export const INITIAL_AGENTS: AgentItem[] = [
     responsibility: '基于企业正式知识回答问题并开展跨文档研究',
     agentType: '受管智能体',
     category: 'MANAGED',
+    origin: 'BUILT_IN',
     tasks: ['企业知识问答', '文档研究'],
     extraTasksCount: 1,
     allTasks: ['企业知识问答', '文档研究', 'Wiki 研究'],
@@ -189,6 +173,8 @@ export interface AgentDefinitionDetail {
   owner: string;
   agentType: '系统智能体' | '受管智能体';
   category: 'SYSTEM' | 'MANAGED';
+  /** 用户可见分类：内置 vs 组织自定义（与域模型 AgentOrigin 一致） */
+  origin: 'BUILT_IN' | 'CUSTOM';
   formalVersion: string | null; // null if unreleased (首次创建状态)
   status: 'ACTIVE' | 'DRAFT';
   runtimeEngine: 'Semovix' | 'Semovix Native' | 'WeKnora';
@@ -230,6 +216,7 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
     owner: '企业知识治理组',
     agentType: '受管智能体',
     category: 'MANAGED',
+    origin: 'BUILT_IN',
     formalVersion: 'v1.4',
     status: 'ACTIVE',
     runtimeEngine: 'WeKnora',
@@ -292,6 +279,7 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
     owner: '数据智能团队',
     agentType: '受管智能体',
     category: 'MANAGED',
+    origin: 'BUILT_IN',
     formalVersion: 'v1.3',
     status: 'ACTIVE',
     runtimeEngine: 'Semovix Native',
@@ -348,6 +336,7 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
     owner: '语义治理团队',
     agentType: '受管智能体',
     category: 'MANAGED',
+    origin: 'BUILT_IN',
     formalVersion: 'v1.2',
     status: 'ACTIVE',
     runtimeEngine: 'Semovix Native',
@@ -393,56 +382,6 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
       defaultResponse: {
         reply: '已完成语义分析，未发现阻断性口径冲突。可生成对应治理建议工单。',
         sources: ['Semovix Native Governance Engine']
-      }
-    }
-  },
-
-  xino: {
-    agentId: 'agt_xino_master_00',
-    name: 'Xino｜犀诺',
-    responsibility: 'Xino 是 Semovix 平台的主控智能协调角色，负责全局用户意图解析、多 Agent 任务路由协同与上下文串联。协调受管智能体、数据服务超市与指标注册表，提供端到端的目标达成体验。',
-    owner: '平台 AI 团队',
-    agentType: '系统智能体',
-    category: 'SYSTEM',
-    formalVersion: 'v1.6',
-    status: 'ACTIVE',
-    runtimeEngine: 'Semovix',
-    runtimeBinding: 'ACTIVE',
-    runtimeRevision: 'r48',
-    lastReleaseTime: '5 天前发布',
-    lastSyncTime: '今天 11:00',
-    tasks: [
-      { taskTemplateId: 'INTENT_UNDERSTANDING_V1', version: 'V1', enabled: true, name: '意图理解', desc: '平台级复杂自然语言意图理解与上下文消歧', status: 'ACTIVE' },
-      { taskTemplateId: 'TASK_ROUTING_V1', version: 'V1', enabled: true, name: '任务路由', desc: '智能调度受管智能体与平台治理工作流', status: 'ACTIVE' },
-      { taskTemplateId: 'GLOBAL_COLLAB_V1', version: 'V1', enabled: true, name: '全局协同', desc: '串联数据服务超市、指标注册表与治理队列', status: 'ACTIVE' },
-    ],
-    contextSources: [
-      { sourceType: 'BUSINESS_DOMAIN', label: '业务域', desc: '系统内置 · 包含所有注册智能体与治理工具', type: 'BASE' },
-      { sourceType: 'LINEAGE', label: '血缘关系', desc: '系统内置 · 管理跨智能体长链路执行上下文', type: 'BASE' },
-    ],
-    capabilityMode: '系统协调与任务路由中枢',
-    capabilityDesc: '多 Agent 全局任务调度与状态机串联',
-    modelStrategy: '综合平衡',
-    modelStrategyDesc: '平衡意图理解延迟与路由准确率',
-    maxAutonomy: '建议',
-    maxAutonomyDesc: '任务分发与方案协同',
-    draftChanges: [],
-    testSandbox: {
-      welcomeMessage: '您好，我是系统主控伙伴「Xino」。我负责协调平台任务与受管智能体。请输入您的业务意图。',
-      suggestedQueries: [
-        '我想分析老龄化照护支出并核对相关指标标准',
-        '查看当前各受管智能体的工作负载与健康度'
-      ],
-      sampleResponses: [
-        {
-          trigger: '老龄化',
-          reply: '已识别复合意图：\n1. 任务 A（指标分析）已分发至「数据智能伙伴」；\n2. 任务 B（口径对齐）已路由至「语义治理伙伴」；\n即将为您聚合协同结果。',
-          sources: ['平台协同路由器 v2']
-        }
-      ],
-      defaultResponse: {
-        reply: '已解析意图，平台各执行节点运转正常。',
-        sources: ['Xino Master Coordinator']
       }
     }
   }
@@ -555,6 +494,7 @@ export function createAgentDraft(agentData: {
     responsibility: agentData.responsibility,
     agentType: '受管智能体',
     category: 'MANAGED',
+    origin: domainResult.definition.origin, // 用户创建 → CUSTOM
     tasks: allTaskNames.slice(0, 2),
     extraTasksCount: Math.max(0, allTaskNames.length - 2),
     allTasks: allTaskNames,
@@ -589,6 +529,7 @@ export function createAgentDraft(agentData: {
     owner: agentData.owner,
     agentType: '受管智能体',
     category: 'MANAGED',
+    origin: domainResult.definition.origin, // 用户创建 → CUSTOM
     formalVersion: null, // 首次创建状态：无正式版本
     status: 'DRAFT',
     runtimeEngine,

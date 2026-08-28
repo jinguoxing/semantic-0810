@@ -26,51 +26,18 @@ class AgentRepository {
   }
 
   private seedInitialDomainData() {
-    // 1. Xino Master System Agent
-    const xinoDef: AgentDefinition = {
-      agentId: 'xino',
-      name: 'Xino｜犀诺',
-      description: 'Xino 是 Semovix 平台的主控智能协调角色，负责全局用户意图解析、多 Agent 任务路由协同与上下文串联。',
-      responsibilitySummary: '理解用户目标并协调平台任务与智能能力，提供端到端的目标达成体验。',
-      agentKind: 'SYSTEM',
-      owner: '平台 AI 团队',
-      supportedTaskTemplates: [
-        { taskTemplateId: 'INTENT_UNDERSTANDING_V1', version: 'V1', enabled: true },
-        { taskTemplateId: 'TASK_ROUTING_V1', version: 'V1', enabled: true },
-        { taskTemplateId: 'GLOBAL_COLLAB_V1', version: 'V1', enabled: true }
-      ],
-      allowedContextSources: ['BUSINESS_DOMAIN', 'LINEAGE'],
-      capabilityPreset: '系统协调与任务路由中枢',
-      capabilityDesc: '多 Agent 全局任务调度与状态机串联',
-      modelPolicyId: 'POLICY_BALANCED',
-      modelPolicyName: '综合平衡',
-      maxAutonomy: 'SUGGEST',
-      maxAutonomyDesc: '任务分发与方案协同',
-      runtimeTarget: 'SEMOVIX_NATIVE',
-      status: 'ACTIVE',
-      currentPublishedVersion: 'v1.6',
-      createdAt: '2026-08-01 10:00',
-      createdBy: '系统管理员',
-      updatedAt: '5 天前'
-    };
-    this.definitions.set(xinoDef.agentId, xinoDef);
-    this.runtimeBindings.set(xinoDef.agentId, {
-      bindingId: 'bind_xino_01',
-      agentId: 'xino',
-      runtimeTarget: 'SEMOVIX_NATIVE',
-      runtimeInstanceId: 'inst_xino_native',
-      runtimeStatus: 'READY',
-      syncRevision: 'r48',
-      lastSyncedAt: '5 天前'
-    });
+    // V1.1: Xino 不再作为 Agent Center 内置智能体播种（Xino 属于 AI Workbench /
+    // Orchestration 产品能力，不进入 Registry / Draft 生命周期 / Version 列表）。
+    // Registry 只固定播种三个内置智能体，origin = 'BUILT_IN'。
 
-    // 2. Data Intelligence Agent
+    // 1. Data Intelligence Agent
     const dataDef: AgentDefinition = {
       agentId: 'data_intelligence',
       name: '数据智能伙伴',
       description: '专注于业务数据消费场景，结合指标语义、数据目录与分析模型，自动执行跨库探查、计算与归因下钻。',
       responsibilitySummary: '面向业务目标完成找数、问数与数据分析，自动解析业务口径与指标语义。',
       agentKind: 'MANAGED',
+      origin: 'BUILT_IN',
       owner: '数据智能团队',
       sourcePresetId: 'DATA_INTELLIGENCE',
       supportedTaskTemplates: [
@@ -103,13 +70,14 @@ class AgentRepository {
       lastSyncedAt: '昨天'
     });
 
-    // 3. Semantic Governance Agent
+    // 2. Semantic Governance Agent
     const govDef: AgentDefinition = {
       agentId: 'semantic_governance',
       name: '语义治理伙伴',
       description: '面向数据治理与语义建模专家，提供表/字段语义推理、实体发现、标准映射与口径冲突仲裁能力。',
       responsibilitySummary: '辅助企业完成语义理解、业务对象、标准校验、字段对齐与知识网络治理任务。',
       agentKind: 'MANAGED',
+      origin: 'BUILT_IN',
       owner: '语义治理团队',
       sourcePresetId: 'SEMANTIC_GOVERNANCE',
       supportedTaskTemplates: [
@@ -142,13 +110,14 @@ class AgentRepository {
       lastSyncedAt: '3 天前'
     });
 
-    // 4. Enterprise Knowledge Agent (has active draft with clean business-level diffs)
+    // 3. Enterprise Knowledge Agent (has active draft with clean business-level diffs)
     const entKnowledgeDef: AgentDefinition = {
       agentId: 'enterprise_knowledge',
       name: '企业知识伙伴',
       description: '依托企业级 WeKnora 知识引擎，对结构化与非结构化制度、规范、业务字典进行多跳推理与准确回答。',
       responsibilitySummary: '企业知识伙伴负责基于当前用户有权访问的企业正式知识回答问题，并支持跨文档、Wiki 与知识空间开展深入研究。严禁无依据推测。',
       agentKind: 'MANAGED',
+      origin: 'BUILT_IN',
       owner: '企业知识治理组',
       sourcePresetId: 'ENTERPRISE_KNOWLEDGE',
       supportedTaskTemplates: [
@@ -212,6 +181,7 @@ class AgentRepository {
       name: '企业知识伙伴',
       description: entKnowledgeDef.description,
       responsibilitySummary: entKnowledgeDef.responsibilitySummary,
+      origin: entKnowledgeDef.origin,
       supportedTaskTemplates: [
         { taskTemplateId: 'KNOWLEDGE_QA_V1', version: 'V1', enabled: true },
         { taskTemplateId: 'DOCUMENT_RESEARCH_V1', version: 'V1', enabled: true },
@@ -245,28 +215,6 @@ class AgentRepository {
     });
 
     // 补齐各智能体的历史版本种子，使 A04 发布记录统一从 Repository 读取
-    this.versions.set('xino', [
-      {
-        versionId: 'ver_xino_1_6',
-        versionNumber: 'v1.6',
-        agentId: 'xino',
-        snapshot: { ...xinoDef },
-        publishedAt: '2026-08-23 11:00',
-        publishedBy: '平台 AI 团队',
-        releaseNotes: '任务路由策略升级：支持多智能体并行协同',
-        runtimeRevision: 'native'
-      },
-      {
-        versionId: 'ver_xino_1_5',
-        versionNumber: 'v1.5',
-        agentId: 'xino',
-        snapshot: { ...xinoDef, currentPublishedVersion: 'v1.5' },
-        publishedAt: '2026-08-08 15:30',
-        publishedBy: '平台 AI 团队',
-        releaseNotes: '全局意图理解接入业务术语消歧',
-        runtimeRevision: 'native'
-      }
-    ]);
     this.versions.set('data_intelligence', [
       {
         versionId: 'ver_data_1_3',
