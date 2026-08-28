@@ -600,8 +600,6 @@ export default function App() {
       ) : currentNav === 'agent_definition' || currentNav === 'agent_detail' || viewTab === 'agent_definition' || viewTab === 'agent_detail' ? (
         <AgentDefinitionWorkspace
           agentId={selectedAgentId}
-          agent={currentSelectedAgent}
-          definition={currentSelectedDefinition}
           addToast={addToast}
           onBackToRegistry={() => {
             setCurrentNav('agents');
@@ -614,23 +612,46 @@ export default function App() {
             const name = currentSelectedAgent?.name || currentSelectedDefinition?.name || '智能体';
             addToast('info', '测试与发布', `已进入「${name}」发布前验证工作区`);
           }}
-          onSaveDraft={(updatedDef) => {
-            setSelectedAgentDefinition(updatedDef);
+          onSaveDraftPatch={(patch) => {
             const targetId = selectedAgentId || currentSelectedAgent?.id;
-            if (targetId) {
-              setAgentDefinitions((prev) => ({
-                ...prev,
-                [targetId]: updatedDef
-              }));
-              // 同步写入 Agent Repository，保证 A04 / Registry 读到同一份草稿事实。
-              // V1.1：统一走 updateAgentDraft（A03 当前 UI 只编辑名称/职责/Owner；
-              // roleInstruction / tasks / scope 等编辑能力属于 Commit 06）
-              agentService.updateAgentDraft(targetId, {
-                name: updatedDef.name,
-                description: updatedDef.responsibility,
-                responsibilitySummary: updatedDef.responsibility,
-                owner: updatedDef.owner
-              });
+            if (!targetId) return false;
+            try {
+              agentService.updateAgentDraft(targetId, patch, 'agent_center_user');
+              const display = agentSelectors.getDisplayState(targetId);
+              if (display) {
+                setSelectedAgent((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        name: display.name,
+                        responsibility: display.responsibility,
+                        owner: display.owner,
+                        hasDraft: display.hasDraft
+                      }
+                    : prev
+                );
+                setAgentsList((prev) =>
+                  prev.map((a) =>
+                    a.id === targetId
+                      ? {
+                          ...a,
+                          name: display.name,
+                          responsibility: display.responsibility,
+                          owner: display.owner,
+                          hasDraft: display.hasDraft
+                        }
+                      : a
+                  )
+                );
+              }
+              return true;
+            } catch (error) {
+              addToast(
+                'error',
+                '草稿保存失败',
+                error instanceof Error ? error.message : 'Domain 校验失败，请检查后重试'
+              );
+              return false;
             }
           }}
         />

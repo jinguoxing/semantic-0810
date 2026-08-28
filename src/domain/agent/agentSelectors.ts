@@ -9,9 +9,60 @@ import {
   AgentVersion,
   AgentRuntimeBinding,
   AgentBusinessDiff,
-  AgentOrigin
+  AgentOrigin,
+  AgentContextBinding,
+  AgentContextSource,
+  MaxAutonomy,
+  RuntimeTarget,
+  TaskTemplateBinding
 } from './agentTypes';
 import { agentRepository } from './agentRepository';
+
+/**
+ * A03 可编辑配置事实（V1.1 §28）：AgentDraft / AgentDefinitionSnapshot / AgentDefinition
+ * 在这些字段上结构一致，Workspace 一律通过本投影读取，不直接依赖 UI Fixture。
+ */
+export interface AgentEditableConfig {
+  name: string;
+  description: string;
+  responsibilitySummary: string;
+  roleInstruction: string;
+  owner: string;
+  supportedTaskTemplates: TaskTemplateBinding[];
+  allowedContextSources: AgentContextSource[];
+  contextBindings: AgentContextBinding[];
+  capabilityPreset: string;
+  capabilityDesc?: string;
+  modelPolicyId: string;
+  modelPolicyName?: string;
+  maxAutonomy: MaxAutonomy;
+  maxAutonomyDesc?: string;
+}
+
+/**
+ * A03 Definition Workspace 的唯一 View Projection（V1.1 §20）：
+ * - 用户类型：definition.origin（内置 / 自定义）
+ * - 正式版本：definition.currentPublishedVersion
+ * - 草稿状态：draft 是否存在
+ * - 可编辑配置：有 Draft 用 Draft；否则当前 Published Snapshot；否则 Definition 基线
+ * - Runtime 字段仅供高级诊断（showRuntimeDiagnostics），普通 UI 不展示
+ */
+export interface AgentDefinitionWorkspaceState {
+  agentId: string;
+  origin: AgentOrigin;
+  sourcePresetId?: string;
+  /** 内部投影：仅高级诊断使用 */
+  runtimeTarget: RuntimeTarget;
+  formalVersion: string | null;
+  hasDraft: boolean;
+  draftId?: string;
+  draftUpdatedBy?: string;
+  draftUpdatedAt?: string;
+  businessDiffs: AgentBusinessDiff[];
+  editable: AgentEditableConfig;
+  editableSource: 'DRAFT' | 'PUBLISHED_SNAPSHOT' | 'DEFINITION';
+  lastReleaseTime: string | null;
+}
 
 export interface AgentDisplayState {
   agentId: string;
@@ -62,7 +113,9 @@ export const agentSelectors = {
       agentId: def.agentId,
       name: draft ? draft.name : def.name,
       responsibility: draft ? draft.responsibilitySummary : def.responsibilitySummary,
-      owner: def.owner,
+      // V1.1 修复：Owner 修改保存在 Draft 中，有 Draft 时必须优先读 draft.owner，
+      // 否则 UI 会在 selector 层"丢失"未发布的 Owner 修改
+      owner: draft?.owner ?? def.owner,
       agentType: def.agentKind === 'SYSTEM' ? '系统智能体' : '受管智能体',
       category: def.agentKind,
       origin: def.origin,
@@ -95,6 +148,62 @@ export const agentSelectors = {
   isBuiltInAgent(agentId: string): boolean {
     const def = agentRepository.getDefinition(agentId);
     return def?.origin === 'BUILT_IN';
+  },
+
+  /**
+   * A03 Definition Workspace View Projection（V1.1 §20 / Commit 06 TASK 3）。
+   * 配置事实优先级：AgentDraft > 当前 Published Snapshot > AgentDefinition；
+   * 调用方不依赖 INITIAL_AGENT_DEFINITIONS 之类的展示 Fixture 作为配置 SoT。
+   */
+  getDefinitionWorkspaceState(agentId: string): AgentDefinitionWorkspaceState | null {
+    const def = agentRepository.getDefinition(agentId);
+    if (!def) return null;
+
+    const draft = agentRepository.getDraftByAgentId(agentId);
+    const publishedSnapshot = def.currentPublishedVersion
+      ? agentRepository.getVersion(agentId, def.currentPublishedVersion)?.snapshot
+      : undefined;
+    const versions = agentRepository.getVersions(agentId);
+    const latestVersion = versions[0];
+
+    // 三种来源在 AgentEditableConfig 字段上结构一致
+    const source: AgentEditableConfig = draft ?? publishedSnapshot ?? def;
+    const editable: AgentEditableConfig = {
+      name: source.name,
+      description: source.description,
+      responsibilitySummary: source.responsibilitySummary,
+      roleInstruction: source.roleInstruction,
+      owner: source.owner,
+      supportedTaskTemplates: source.supportedTaskTemplates.map((binding) => ({ ...binding })),
+      allowedContextSources: [...source.allowedContextSources],
+      contextBindings: source.contextBindings.map((binding) => ({
+        sourceType: binding.sourceType,
+        selectionMode: binding.selectionMode,
+        resourceIds: binding.resourceIds ? [...binding.resourceIds] : undefined
+      })),
+      capabilityPreset: source.capabilityPreset,
+      capabilityDesc: source.capabilityDesc,
+      modelPolicyId: source.modelPolicyId,
+      modelPolicyName: source.modelPolicyName,
+      maxAutonomy: source.maxAutonomy,
+      maxAutonomyDesc: source.maxAutonomyDesc
+    };
+
+    return {
+      agentId: def.agentId,
+      origin: def.origin,
+      sourcePresetId: def.sourcePresetId,
+      runtimeTarget: def.runtimeTarget,
+      formalVersion: def.currentPublishedVersion || null,
+      hasDraft: Boolean(draft),
+      draftId: draft?.draftId,
+      draftUpdatedBy: draft?.updatedBy,
+      draftUpdatedAt: draft?.updatedAt,
+      businessDiffs: draft?.businessDiffs || [],
+      editable,
+      editableSource: draft ? 'DRAFT' : publishedSnapshot ? 'PUBLISHED_SNAPSHOT' : 'DEFINITION',
+      lastReleaseTime: latestVersion ? latestVersion.publishedAt : null
+    };
   },
 
   /**

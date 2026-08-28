@@ -427,6 +427,27 @@ export function findTaskTemplateIdByName(name: string): string | undefined {
   return match?.taskTemplateId;
 }
 
+/** 模型策略受控选项 (V1.1 §26)：普通 UI 只允许选择正式策略 ID，不暴露 Temperature / Top-P / Raw Model ID */
+export interface ModelPolicyOption {
+  modelPolicyId: string;
+  modelPolicyName: string;
+  desc: string;
+}
+
+export const MODEL_POLICY_OPTIONS: ModelPolicyOption[] = [
+  { modelPolicyId: 'POLICY_BALANCED', modelPolicyName: '均衡', desc: '在响应速度与结果质量之间保持平衡' },
+  { modelPolicyId: 'POLICY_QUALITY_FIRST', modelPolicyName: '质量优先', desc: '严禁无依据推测，优先高确定性知识依据' },
+  { modelPolicyId: 'POLICY_LOGIC_FIRST', modelPolicyName: '逻辑与计算优先', desc: '精准解析计算逻辑与多维聚合，确保口径一致性' },
+  { modelPolicyId: 'POLICY_STRICT_CONSISTENCY', modelPolicyName: '严谨一致性优先', desc: '以标准规范与事实映射为第一准则，严控模糊映射' }
+];
+
+/** 自主程度产品语言 (V1.1 §27)：用户看到产品语义文案，保存 Domain enum */
+export const MAX_AUTONOMY_VIEWS: Record<MaxAutonomy, string> = {
+  SUGGEST: '提供答案与建议',
+  PROPOSE: '生成待确认方案',
+  EXECUTE_WITHIN_POLICY: '在授权范围内执行'
+};
+
 /** 上下文来源展示标签：权限裁决统一由 Permission Matrix 完成 */
 export const AGENT_CONTEXT_SOURCE_VIEWS: Record<AgentContextSource, { label: string; desc: string }> = {
   BUSINESS_DOMAIN: { label: '业务域', desc: '业务域划分与域内资产元数据' },

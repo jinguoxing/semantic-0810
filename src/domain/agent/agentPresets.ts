@@ -9,7 +9,7 @@
  * Runtime Target 保留在 Domain，但不在创建 UI 中作为用户选择理由展示。
  */
 
-import { ManagedAgentPreset } from './agentTypes';
+import { ManagedAgentPreset, MaxAutonomy } from './agentTypes';
 
 export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
   DATA_INTELLIGENCE: {
@@ -106,6 +106,57 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
 };
 
 export const PRESET_LIST: ManagedAgentPreset[] = Object.values(MANAGED_AGENT_PRESETS);
+
+/* ─────────────────────────────────────────────────────────────
+   V1.1 受控编辑边界（A03 编辑区使用的选项目录，不是新增能力模板）
+   ───────────────────────────────────────────────────────────── */
+
+/** 受控 Capability Preset 选项：只收录产品已验证组合，不虚构未上线能力（V1.1 无「深度知识研究」） */
+export interface CapabilityPresetOption {
+  capabilityPreset: string;
+  capabilityDesc: string;
+}
+
+export const TEMPLATE_CAPABILITY_OPTIONS: Record<string, CapabilityPresetOption[]> = {
+  DATA_INTELLIGENCE: [
+    {
+      capabilityPreset: '指标计算与多维归因',
+      capabilityDesc: '语义模型与指标下钻计算 (Text-to-SQL + Metric Execution)'
+    }
+  ],
+  // 知识模板的两个真实业务 Preset：精准知识问答 = 模板默认；Wiki + RAG 混合 = 企业知识伙伴草稿在用
+  ENTERPRISE_KNOWLEDGE: [
+    { capabilityPreset: '精准知识问答', capabilityDesc: '企业知识与制度检索增强 (WeKnora Bridge)' },
+    { capabilityPreset: 'Wiki + RAG 混合', capabilityDesc: '多跳语义拓扑检索与混合召回' }
+  ],
+  SEMANTIC_GOVERNANCE: [
+    {
+      capabilityPreset: '语义合规审查与标准对齐',
+      capabilityDesc: '数据标准比对与对象映射 (Schema Semantic Alignment)'
+    }
+  ]
+};
+
+/**
+ * 自主程度受控选项（V1.1 模板上限，V1.1 Final Correction §27 / TASK 25）：
+ * - DATA_INTELLIGENCE → 仅 SUGGEST
+ * - ENTERPRISE_KNOWLEDGE → 仅 SUGGEST
+ * - SEMANTIC_GOVERNANCE → SUGGEST / PROPOSE
+ * EXECUTE_WITHIN_POLICY 未对普通配置开放；desc 同时作为保存时的 maxAutonomyDesc。
+ */
+export interface AutonomyOption {
+  maxAutonomy: MaxAutonomy;
+  desc: string;
+}
+
+export const TEMPLATE_AUTONOMY_OPTIONS: Record<string, AutonomyOption[]> = {
+  DATA_INTELLIGENCE: [{ maxAutonomy: 'SUGGEST', desc: '以提供取数结果、方案与下钻归因为主' }],
+  ENTERPRISE_KNOWLEDGE: [{ maxAutonomy: 'SUGGEST', desc: '以提供方案与可追溯依据为主' }],
+  SEMANTIC_GOVERNANCE: [
+    { maxAutonomy: 'SUGGEST', desc: '以提供治理分析与建议为主' },
+    { maxAutonomy: 'PROPOSE', desc: '生成待裁决治理变更提案供专家确认' }
+  ]
+};
 
 export function getPresetById(presetId: string): ManagedAgentPreset | undefined {
   const normalized = presetId.toUpperCase().replace(/^TPL_/, '');
