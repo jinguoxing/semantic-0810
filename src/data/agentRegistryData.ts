@@ -1,9 +1,11 @@
 import { agentService } from '../domain/agent/agentService';
 import {
   AgentContextSource as AgentContextSourceType,
+  AgentContextBinding,
   AGENT_CONTEXT_SOURCE_VIEWS,
   getTaskTemplateView
 } from '../domain/agent/agentTypes';
+import { describeScopeBinding } from './agentScopeOptions';
 
 export interface AgentDraftChange {
   title: string;
@@ -434,6 +436,8 @@ export function createAgentDraft(agentData: {
   owner: string;
   templateId: string;
   runtimeTarget: string;
+  /** V1.1 工作范围：A02 创建路径显式传入的 UI Binding */
+  contextBindings?: AgentContextBinding[];
 }): { agentItem: AgentItem; definition: AgentDefinitionDetail } {
   const isKnowledge = agentData.templateId === 'enterprise_knowledge' || agentData.templateId === 'ENTERPRISE_KNOWLEDGE' || agentData.runtimeTarget === 'WEKNORA';
   const isData = agentData.templateId === 'data_intelligence' || agentData.templateId === 'DATA_INTELLIGENCE';
@@ -446,7 +450,8 @@ export function createAgentDraft(agentData: {
     presetId,
     name: agentData.name,
     responsibility: agentData.responsibility,
-    owner: agentData.owner
+    owner: agentData.owner,
+    contextBindings: agentData.contextBindings
   });
 
   const newId = domainResult.definition.agentId;
@@ -466,11 +471,18 @@ export function createAgentDraft(agentData: {
       status: 'DRAFT_NEW' as const
     };
   });
+  // 主工作范围 Binding（A02 创建路径只落一个主范围 Binding）
+  const primaryBinding = domainResult.draft.contextBindings[0];
+  const scopeDesc = primaryBinding ? describeScopeBinding(primaryBinding) : '';
   const contextSources: AgentContextSource[] = domainResult.definition.allowedContextSources.map(
     (sourceType) => ({
       sourceType,
       label: AGENT_CONTEXT_SOURCE_VIEWS[sourceType].label,
-      desc: `草稿配置 · 拟允许访问${AGENT_CONTEXT_SOURCE_VIEWS[sourceType].label}`,
+      // 主范围来源的描述反映本次选择的工作范围（AC-15：A03 能表达刚选择的范围）
+      desc:
+        primaryBinding && primaryBinding.sourceType === sourceType && scopeDesc
+          ? scopeDesc
+          : `草稿配置 · 拟允许访问${AGENT_CONTEXT_SOURCE_VIEWS[sourceType].label}`,
       type: 'DRAFT_NEW' as const
     })
   );
@@ -575,10 +587,11 @@ export function createAgentDraft(agentData: {
     maxAutonomy,
     maxAutonomyDesc,
     draftChanges: [
-      { field: '初始草稿', changeText: `基于能力模板「${isData ? '数据查找与分析' : isGovernance ? '语义治理与审查' : '企业知识问答与研究'}」生成未发布草稿`, tag: 'NEW DRAFT', isNew: true }
+      { field: '初始草稿', changeText: `基于能力模板「${isData ? '数据查找与分析' : isGovernance ? '语义治理与审查' : '企业知识问答与研究'}」生成未发布草稿`, tag: 'NEW DRAFT', isNew: true },
+      { field: '工作范围', changeText: scopeDesc, tag: 'SCOPE', isNew: true }
     ],
     testSandbox: {
-      welcomeMessage: `您好，我是新创建的草稿智能体「${agentData.name} (未发布草稿)」。当前运行于测试沙盒环境，尚未建立正式运行配置。请输入测试语句验证意图理解与任务支持。`,
+      welcomeMessage: `您好，我是新创建的草稿智能体「${agentData.name} (未发布草稿)」。工作范围：${scopeDesc}。当前运行于测试沙盒环境，尚未建立正式运行配置。请输入测试语句验证意图理解与任务支持。`,
       suggestedQueries,
       sampleResponses: [
         {

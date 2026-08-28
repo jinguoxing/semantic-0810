@@ -34,7 +34,8 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
     modelPolicyName: '代码与逻辑优先',
     defaultMaxAutonomy: 'SUGGEST',
     autonomyDesc: '以提供取数结果、方案与下钻归因为主',
-    allowedContextSources: ['METRIC', 'MARKETPLACE', 'DATA_SEMANTICS'],
+    // V1.1：数据工作范围按业务域表达，Create UI 只暴露主范围（业务域），不暴露库/表级来源
+    allowedContextSources: ['BUSINESS_DOMAIN', 'METRIC', 'MARKETPLACE', 'DATA_SEMANTICS'],
     symbolType: 'data'
   },
 
@@ -92,7 +93,8 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
     modelPolicyName: '严谨与一致性优先',
     defaultMaxAutonomy: 'PROPOSE',
     autonomyDesc: '生成待裁决治理变更提案供专家确认',
-    allowedContextSources: ['BUSINESS_TERM', 'BUSINESS_OBJECT', 'DATA_SEMANTICS'],
+    // V1.1：治理范围按业务域表达
+    allowedContextSources: ['BUSINESS_DOMAIN', 'BUSINESS_TERM', 'BUSINESS_OBJECT', 'DATA_SEMANTICS'],
     symbolType: 'governance'
   }
 };

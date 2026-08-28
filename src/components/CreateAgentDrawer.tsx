@@ -17,8 +17,15 @@ import {
   ManagedAgentPreset,
   getPresetById,
   MANAGED_AGENT_PRESETS,
-  getTaskTemplateView
+  getTaskTemplateView,
+  AgentContextBinding,
+  ContextSelectionMode
 } from '../domain/agent';
+import {
+  TemplateScopeConfig,
+  getTemplateScopeConfig,
+  buildScopeContextBinding
+} from '../data/agentScopeOptions';
 
 export interface AgentTemplateDefinition {
   id: string;
@@ -35,11 +42,27 @@ export interface AgentTemplateDefinition {
   /** 展示标签投影：真实数据为 preset.supportedTaskTemplates (TaskTemplateBinding[]) */
   supportedTaskLabels: string[];
   supportedTaskTemplateIds: string[];
+  /** V1.1 §18 自治产品语言：只展示行为结果，不展示底层 enum */
+  behaviorLabel: string;
+  /** V1.1 Stage 2 工作范围区块配置（按能力模板动态变化） */
+  scopeConfig: TemplateScopeConfig;
   capabilityPreset: string;
   capabilityPresetDesc: string;
   defaultMaxAutonomy: string;
   autonomyDesc: string;
   symbolType: 'data' | 'governance' | 'knowledge';
+}
+
+/**
+ * V1.1 §18 自治产品语言映射（用户行为结果）：
+ * SUGGEST → 提供答案与建议 / PROPOSE → 生成待确认方案 / EXECUTE_WITHIN_POLICY → 可在授权范围内执行
+ */
+function behaviorLabelFor(preset: ManagedAgentPreset): string {
+  if (preset.defaultMaxAutonomy === 'EXECUTE_WITHIN_POLICY') return '可在授权范围内执行';
+  if (preset.defaultMaxAutonomy === 'PROPOSE') return '生成待确认的治理方案';
+  return preset.presetId === 'ENTERPRISE_KNOWLEDGE'
+    ? '提供答案与建议，并给出可追溯依据'
+    : '提供数据结果、分析方案与解释';
 }
 
 /** Stage 1 展示前 3 个任务，+N 由真实任务数动态计算 */
@@ -60,6 +83,8 @@ export const V11_AGENT_TEMPLATES: AgentTemplateDefinition[] = PRESET_LIST.map((p
     (binding) => getTaskTemplateView(binding.taskTemplateId).name
   ),
   supportedTaskTemplateIds: preset.supportedTaskTemplates.map((binding) => binding.taskTemplateId),
+  behaviorLabel: behaviorLabelFor(preset),
+  scopeConfig: getTemplateScopeConfig(preset.presetId),
   capabilityPreset: preset.capabilityPreset,
   capabilityPresetDesc: preset.capabilityPresetDesc,
   defaultMaxAutonomy:
@@ -81,6 +106,8 @@ interface CreateAgentDrawerProps {
     owner: string;
     templateId: string;
     runtimeTarget: string;
+    /** V1.1 工作范围：A02 正常创建路径始终显式传入当前 UI Binding */
+    contextBindings: AgentContextBinding[];
   }) => void;
   initialStep?: 1 | 2;
   initialTemplateId?: string | null;
@@ -93,7 +120,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
   initialStep = 1,
   initialTemplateId = null
 }) => {
-  // Stage state: 1 = 选择模板 (Template Selection), 2 = 基本定义 (Basic Definition)
+  // Stage state: 1 = 选择能力模板, 2 = 定义用途与工作范围
   const [currentStep, setCurrentStep] = useState<1 | 2>(initialStep);
 
   // Template selection state: null by default (unselected), require explicit selection
@@ -111,10 +138,17 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
   const [owner, setOwner] = useState(selectedTemplate ? selectedTemplate.defaultOwner : '');
   const [isOwnerDropdownOpen, setIsOwnerDropdownOpen] = useState(false);
 
+  // V1.1 工作范围状态：三个模板默认 ALL_ALLOWED（Quick Start），
+  // 需要限定范围时才切换 SELECTED（Enterprise Scope Control）
+  const [scopeMode, setScopeMode] = useState<ContextSelectionMode>('ALL_ALLOWED');
+  const [scopeResourceIds, setScopeResourceIds] = useState<string[]>([]);
+
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(initialStep);
       setSelectedTemplateId(initialTemplateId ?? null);
+      setScopeMode('ALL_ALLOWED');
+      setScopeResourceIds([]);
       if (initialTemplateId) {
         const found = V11_AGENT_TEMPLATES.find((t) => t.id === initialTemplateId || t.presetId === initialTemplateId);
         if (found) {
@@ -146,6 +180,15 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
     setName(template.defaultName);
     setResponsibility(template.defaultResponsibility);
     setOwner(template.defaultOwner);
+    // 切换模板后工作范围回到默认 ALL_ALLOWED
+    setScopeMode('ALL_ALLOWED');
+    setScopeResourceIds([]);
+  };
+
+  const toggleScopeResource = (resourceId: string) => {
+    setScopeResourceIds((prev) =>
+      prev.includes(resourceId) ? prev.filter((id) => id !== resourceId) : [...prev, resourceId]
+    );
   };
 
   const handleGoToBasicDefinition = () => {
@@ -156,16 +199,33 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
     setCurrentStep(2);
   };
 
+  // V1.1 SELECTED 校验：指定范围必须至少选择一个 resourceId，否则 Create CTA disabled
+  const isScopeIncomplete =
+    selectedTemplate !== null && scopeMode === 'SELECTED' && scopeResourceIds.length === 0;
+
+  // 右栏工作范围摘要（动态跟随当前选择）
+  const scopeSummary = selectedTemplate
+    ? scopeMode === 'ALL_ALLOWED'
+      ? selectedTemplate.scopeConfig.allAllowedLabel
+      : scopeResourceIds
+          .map((id) => selectedTemplate.scopeConfig.options.find((o) => o.resourceId === id)?.name ?? id)
+          .join(' · ')
+    : '';
+
   const handleSubmitFinal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTemplate) return;
     if (!name.trim() || !responsibility.trim() || !owner.trim()) return;
+    if (isScopeIncomplete) return;
     onCreateAndConfigure({
       name: name.trim(),
       responsibility: responsibility.trim(),
       owner: owner.trim(),
       templateId: selectedTemplate.id,
-      runtimeTarget: selectedTemplate.runtimeTarget
+      runtimeTarget: selectedTemplate.runtimeTarget,
+      contextBindings: [
+        buildScopeContextBinding(selectedTemplate.scopeConfig, scopeMode, scopeResourceIds)
+      ]
     });
   };
 
@@ -191,10 +251,10 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
         <div className="px-8 py-5 border-b border-[#E2E8F0] bg-white flex items-start justify-between shrink-0">
           <div className="space-y-1">
             <h2 className="font-bold text-base text-[#0F172A] tracking-tight">
-              创建智能体
+              创建自定义智能体
             </h2>
             <p className="text-xs text-[#64748B] leading-relaxed max-w-[760px]">
-              从平台提供的能力模板开始创建。模板提供推荐任务、能力边界与默认行为，创建后仍可继续调整。
+              选择一个能力模板作为起点，并定义该智能体的业务用途与工作范围。创建后先生成未发布草稿，通过测试与发布后才会正式生效。
             </p>
           </div>
           <button
@@ -232,7 +292,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
 
             <span className="text-[#CBD5E1] text-xs">→</span>
 
-            {/* Step 2: 基本定义 */}
+            {/* Step 2: 定义用途与工作范围 */}
             <div
               className={`flex items-center space-x-1.5 ${
                 currentStep === 2 ? 'text-[#2563EB] font-semibold' : 'text-[#94A3B8]'
@@ -243,7 +303,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                   currentStep === 2 ? 'bg-[#2563EB]' : 'bg-[#CBD5E1]'
                 }`}
               />
-              <span>基本定义</span>
+              <span>定义用途与工作范围</span>
             </div>
           </div>
 
@@ -265,7 +325,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
         {/* ─────────────────────────────────────────────────────────
             3. DRAWER BODY
             Stage 1: 选择模板 (Selection Rows + Selected Preset Summary)
-            Stage 2: 基本定义 (Form Fields + Configuration Preview)
+            Stage 2: 定义用途与工作范围 (Basic Info + Work Scope)
         ───────────────────────────────────────────────────────── */}
         {currentStep === 1 ? (
           <div className="flex-1 overflow-y-auto px-8 py-6 bg-white space-y-6">
@@ -375,11 +435,11 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                       )}
                     </div>
 
-                    {/* Bottom Metadata: 默认行为 (推荐自主程度；不展示运行引擎) */}
+                    {/* Bottom Metadata: 默认行为（用户行为结果，不展示底层自治 enum / 运行引擎） */}
                     <div className="pt-2 border-t border-[#E2E8F0]/70 flex items-center justify-between text-xs text-[#64748B]">
                       <div className="flex items-center space-x-3">
                         <span>
-                          推荐自主程度：<strong className="text-[#0F172A] font-semibold">{tmpl.defaultMaxAutonomy}</strong>
+                          默认行为：<strong className="text-[#0F172A] font-semibold">{tmpl.behaviorLabel}</strong>
                         </span>
                       </div>
 
@@ -474,7 +534,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
           </div>
         ) : (
           /* ─────────────────────────────────────────────────────
-              STAGE 2: 基本定义 (BASIC DEFINITION FORM)
+              STAGE 2: 定义用途与工作范围 (PURPOSE & WORK SCOPE FORM)
           ───────────────────────────────────────────────────── */
           (() => {
             // Bug B 修复：未显式选择模板时不隐式回退到任何预设，给出引导态
@@ -512,10 +572,10 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
 
                   <div className="space-y-1">
                     <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
-                      基本定义
+                      定义用途与工作范围
                     </h3>
                     <p className="text-xs text-[#64748B]">
-                      填写智能体的基础业务身份。任务绑定、上下文范围和运行配置将在创建后在定义工作区继续配置。
+                      填写智能体的基础业务身份，并确定它的实际工作范围。任务绑定与运行配置将在创建后在定义工作区继续配置。
                     </p>
                   </div>
 
@@ -611,62 +671,164 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                         Owner 负责该智能体的配置、测试和正式版本管理。
                       </p>
                     </div>
+
+                    {/* Field 4: 工作范围（按能力模板动态变化；只配置主业务范围，不暴露底层来源枚举） */}
+                    <div className="space-y-2 p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
+                      <label className="font-semibold text-[#0F172A] block">
+                        {activeTemplate.scopeConfig.sectionTitle}
+                      </label>
+
+                      {/* Radio: ALL_ALLOWED（默认） */}
+                      <button
+                        type="button"
+                        onClick={() => setScopeMode('ALL_ALLOWED')}
+                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md border text-xs text-left transition-colors cursor-pointer ${
+                          scopeMode === 'ALL_ALLOWED'
+                            ? 'bg-[#F0F7FF] border-[#2563EB] text-[#0F172A]'
+                            : 'bg-white border-[#CBD5E1] text-[#334155] hover:border-[#94A3B8]'
+                        }`}
+                      >
+                        <span
+                          className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            scopeMode === 'ALL_ALLOWED' ? 'border-[#2563EB]' : 'border-[#CBD5E1]'
+                          }`}
+                        >
+                          {scopeMode === 'ALL_ALLOWED' && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                          )}
+                        </span>
+                        <span className="font-medium">{activeTemplate.scopeConfig.allAllowedLabel}</span>
+                      </button>
+
+                      {/* Radio: SELECTED（指定范围） */}
+                      <button
+                        type="button"
+                        onClick={() => setScopeMode('SELECTED')}
+                        className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md border text-xs text-left transition-colors cursor-pointer ${
+                          scopeMode === 'SELECTED'
+                            ? 'bg-[#F0F7FF] border-[#2563EB] text-[#0F172A]'
+                            : 'bg-white border-[#CBD5E1] text-[#334155] hover:border-[#94A3B8]'
+                        }`}
+                      >
+                        <span
+                          className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            scopeMode === 'SELECTED' ? 'border-[#2563EB]' : 'border-[#CBD5E1]'
+                          }`}
+                        >
+                          {scopeMode === 'SELECTED' && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                          )}
+                        </span>
+                        <span className="font-medium">{activeTemplate.scopeConfig.selectedLabel}</span>
+                      </button>
+
+                      {/* SELECTED → 多选资源列表 */}
+                      {scopeMode === 'SELECTED' && (
+                        <div className="space-y-1.5 pl-1">
+                          <span className="text-[11px] text-[#64748B] block">
+                            {activeTemplate.scopeConfig.optionsTitle}（可多选）
+                          </span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {activeTemplate.scopeConfig.options.map((opt) => {
+                              const checked = scopeResourceIds.includes(opt.resourceId);
+                              return (
+                                <button
+                                  key={opt.resourceId}
+                                  type="button"
+                                  onClick={() => toggleScopeResource(opt.resourceId)}
+                                  className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-md border text-xs text-left transition-colors cursor-pointer ${
+                                    checked
+                                      ? 'bg-[#F0F7FF] border-[#2563EB] text-[#0F172A] font-medium'
+                                      : 'bg-white border-[#CBD5E1] text-[#475569] hover:border-[#94A3B8]'
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                                      checked ? 'bg-[#2563EB] border-[#2563EB] text-white' : 'border-[#CBD5E1] bg-white'
+                                    }`}
+                                  >
+                                    {checked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                                  </span>
+                                  <span>{opt.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {isScopeIncomplete && (
+                            <p className="text-[11px] text-amber-600 flex items-center space-x-1">
+                              <Info className="w-3 h-3" />
+                              <span>请至少选择一个工作范围。</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <p className="text-[11px] text-[#64748B] leading-relaxed">
+                        {scopeMode === 'ALL_ALLOWED'
+                          ? '智能体只会在当前用户有权访问的资源范围内工作。'
+                          : '智能体只在指定的范围内工作，且仍然不能超出用户权限。'}
+                      </p>
+                    </div>
                   </form>
 
                   <div className="p-3 bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg flex items-start space-x-2 text-[11px] text-[#475569]">
                     <Info className="w-3.5 h-3.5 text-[#2563EB] shrink-0 mt-0.5" />
                     <p className="leading-relaxed">
-                      创建后只会生成一个未发布草稿，不会立即创建正式版本或影响当前运行环境。
+                      创建后只生成未发布草稿，不会直接影响正式环境。
                     </p>
                   </div>
                 </div>
 
-                {/* Right Column: Initial Config Summary */}
+                {/* Right Column: 创建后将获得（用户化摘要，不含 Runtime 表达） */}
                 <div className="w-full md:w-[320px] p-6 bg-[#F8FAFC] flex flex-col justify-between shrink-0 space-y-6">
                   <div className="space-y-4">
                     <div>
                       <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
-                        初始配置
+                        创建后将获得
                       </h3>
                       <p className="text-[11px] text-[#64748B] mt-0.5">
-                        由“{activeTemplate.name}”模板提供，创建后可继续调整。
+                        以“{activeTemplate.name}”能力模板为起点，创建后可继续调整。
                       </p>
                     </div>
 
                     <div className="bg-white border border-[#E2E8F0] rounded-lg p-3.5 space-y-3 text-xs shadow-2xs">
                       <div className="space-y-0.5">
-                        <span className="text-[11px] text-[#64748B] block">模板</span>
+                        <span className="text-[11px] text-[#64748B] block">能力模板</span>
                         <span className="font-bold text-[#0F172A] block">{activeTemplate.name}</span>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[11px] text-[#64748B] block">支持任务</span>
-                        <span className="font-bold text-[#0F172A] block">
-                          {activeTemplate.supportedTaskLabels.length} 项
-                        </span>
-                        <span className="text-[10px] text-[#94A3B8] block">
+                        <span className="text-[11px] text-[#64748B] block">主要任务</span>
+                        <span className="font-semibold text-[#0F172A] block leading-relaxed">
                           {activeTemplate.supportedTaskLabels.join(' · ')}
                         </span>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[11px] text-[#64748B] block">能力模式</span>
-                        <span className="font-semibold text-[#0F172A] block">
-                          {activeTemplate.capabilityPreset}
+                        <span className="text-[11px] text-[#64748B] block">工作范围</span>
+                        <span className="font-semibold text-[#0F172A] block leading-relaxed">
+                          {scopeSummary}
                         </span>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[11px] text-[#64748B] block">最大自主程度</span>
-                        <span className="font-medium text-[#0F172A] block">
-                          {activeTemplate.defaultMaxAutonomy}
+                        <span className="text-[11px] text-[#64748B] block">行为方式</span>
+                        <span className="font-semibold text-[#0F172A] block leading-relaxed">
+                          {activeTemplate.behaviorLabel}
+                        </span>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <span className="text-[11px] text-[#64748B] block">Owner</span>
+                        <span className="font-semibold text-[#0F172A] block">
+                          {owner || activeTemplate.defaultOwner}
                         </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-[11px] text-[#1E40AF] leading-relaxed">
-                    以上是模板提供的初始定义。创建草稿后，可以在“智能体定义”工作区继续调整支持任务、上下文来源、能力、模型策略与自主程度。
+                    以上是能力模板提供的初始定义。创建草稿后，可以在“智能体定义”工作区继续调整支持任务、工作范围、能力、模型策略与自主程度。
                   </div>
                 </div>
               </div>
@@ -717,9 +879,14 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
             <button
               type="submit"
               form="create-agent-form"
-              className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
+              disabled={isScopeIncomplete}
+              className={`px-5 py-2 rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors shadow-2xs ${
+                isScopeIncomplete
+                  ? 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'
+                  : 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white cursor-pointer'
+              }`}
             >
-              <span>创建并继续配置</span>
+              <span>创建草稿并继续配置</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}

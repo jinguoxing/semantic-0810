@@ -303,14 +303,14 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
               </p>
             </div>
 
-            {/* Main Action Button: 从模板创建 (Blue Primary Button) */}
+            {/* Main Action Button: 创建智能体 (Blue Primary Button) */}
             <div className="flex items-center space-x-2.5 shrink-0">
               <button
                 onClick={() => setIsCreateDrawerOpen(true)}
                 className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 shadow-2xs transition-all cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>从模板创建</span>
+                <span>创建智能体</span>
               </button>
             </div>
           </div>
@@ -938,8 +938,8 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          A02: CREATE MANAGED AGENT DRAWER (880–940px)
-          Stage 1: 选择模板 (Default) -> Stage 2: 基本定义
+          A02: CREATE CUSTOM AGENT DRAWER (880–940px)
+          Stage 1: 选择能力模板 -> Stage 2: 定义用途与工作范围
       ───────────────────────────────────────────────────────────── */}
       <CreateAgentDrawer
         isOpen={isCreateDrawerOpen}
@@ -953,7 +953,8 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
             responsibility: agentData.responsibility,
             owner: agentData.owner,
             templateId: agentData.templateId,
-            runtimeTarget: agentData.runtimeTarget
+            runtimeTarget: agentData.runtimeTarget,
+            contextBindings: agentData.contextBindings
           });
 
           // Prepend new draft agent to registry

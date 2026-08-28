@@ -46,6 +46,8 @@ class AgentRepository {
         { taskTemplateId: 'ANALYZE_DATA_V1', version: 'V1', enabled: true }
       ],
       allowedContextSources: ['METRIC', 'MARKETPLACE', 'DATA_SEMANTICS'],
+      // V1.1：内置已发布智能体是版本化的独立配置，不随能力模板默认 Context 变化自动同步
+      contextBindings: [],
       capabilityPreset: '指标计算与多维归因',
       capabilityDesc: '语义模型与指标下钻计算 (Text-to-SQL + Metric Execution)',
       modelPolicyId: 'POLICY_LOGIC_FIRST',
@@ -90,6 +92,7 @@ class AgentRepository {
         { taskTemplateId: 'DKN_BUILD_V1', version: 'V1', enabled: true }
       ],
       allowedContextSources: ['BUSINESS_TERM', 'BUSINESS_OBJECT', 'DATA_SEMANTICS'],
+      contextBindings: [],
       capabilityPreset: '语义合规审查与标准对齐',
       capabilityDesc: '数据标准比对与对象映射 (Schema Semantic Alignment)',
       modelPolicyId: 'POLICY_STRICT_CONSISTENCY',
@@ -130,6 +133,7 @@ class AgentRepository {
         { taskTemplateId: 'WIKI_RESEARCH_V1', version: 'V1', enabled: false }
       ],
       allowedContextSources: ['KNOWLEDGE_SPACE', 'DOCUMENT'],
+      contextBindings: [],
       capabilityPreset: '精准知识问答',
       capabilityDesc: '企业知识与制度检索增强',
       modelPolicyId: 'POLICY_QUALITY_FIRST',
@@ -192,6 +196,7 @@ class AgentRepository {
         { taskTemplateId: 'WIKI_RESEARCH_V1', version: 'V1', enabled: true }
       ],
       allowedContextSources: ['KNOWLEDGE_SPACE', 'DOCUMENT', 'WIKI'],
+      contextBindings: [],
       capabilityPreset: 'Wiki + RAG 混合',
       capabilityDesc: '多跳语义拓扑检索与混合召回',
       modelPolicyId: 'POLICY_QUALITY_FIRST',

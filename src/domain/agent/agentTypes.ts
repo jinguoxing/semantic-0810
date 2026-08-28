@@ -48,6 +48,27 @@ export type AgentContextSource =
   | 'WEB';
 
 /**
+ * 工作范围选择模式 (V1.1 Context Binding)：
+ * - ALL_ALLOWED: 按用户权限动态使用该来源类型的全部适用资源
+ * - SELECTED: 仅使用 resourceIds 指定的资源（必须至少一个）
+ */
+export type ContextSelectionMode = 'ALL_ALLOWED' | 'SELECTED';
+
+/**
+ * Agent 实际配置的业务工作范围。
+ * 语义边界（V1.1 §16）：
+ * - allowedContextSources 回答"最大允许使用哪些来源类型"
+ * - contextBindings 回答"当前实际配置了什么业务范围"
+ * 运行公式：Effective Context = Agent Context Binding ∩ User Permission ∩ Task Scope；
+ * Agent Center 不复制 Permission Matrix，Context Binding 永远不能扩大用户权限。
+ */
+export interface AgentContextBinding {
+  sourceType: AgentContextSource;
+  selectionMode: ContextSelectionMode;
+  resourceIds?: string[];
+}
+
+/**
  * Agent 与任务模板的绑定 (业务真实模型)。
  * 任务定义 (Workflow / 步骤 / 输入输出契约) 由 Task Engine 统一管理，
  * Agent 侧只保存绑定关系与启用状态，不编辑任务内容。
@@ -77,6 +98,8 @@ export interface AgentDefinition {
   sourcePresetId?: string;
   supportedTaskTemplates: TaskTemplateBinding[];
   allowedContextSources: AgentContextSource[];
+  /** 当前实际配置的工作范围（与 allowedContextSources 的"最大允许"语义区分） */
+  contextBindings: AgentContextBinding[];
   capabilityPreset: string;
   capabilityDesc?: string;
   modelPolicyId: string;
@@ -103,6 +126,8 @@ export interface AgentDraft {
   origin: AgentOrigin;
   supportedTaskTemplates: TaskTemplateBinding[];
   allowedContextSources: AgentContextSource[];
+  /** 当前实际配置的工作范围（草稿编辑对象，发布时并入 AgentVersion 快照） */
+  contextBindings: AgentContextBinding[];
   capabilityPreset: string;
   capabilityDesc?: string;
   modelPolicyId: string;

@@ -14,7 +14,11 @@ import {
   AgentVersion,
   AgentRuntimeBinding,
   AgentBusinessDiff,
-  AgentReleaseValidation
+  AgentReleaseValidation,
+  AgentContextBinding,
+  AgentContextSource,
+  AGENT_CONTEXT_SOURCE_VIEWS,
+  ManagedAgentPreset
 } from './agentTypes';
 import { getPresetById } from './agentPresets';
 import { agentRepository } from './agentRepository';
@@ -25,6 +29,46 @@ export interface CreateDraftFromPresetInput {
   name: string;
   responsibility: string;
   owner: string;
+  /** V1.1 工作范围；A02 正常创建路径应始终显式传入当前 UI Binding */
+  contextBindings?: AgentContextBinding[];
+}
+
+/**
+ * 各能力模板的主工作范围来源：调用者未传 contextBindings 时，
+ * Domain Service 依据 Preset 生成明确默认 Binding（ALL_ALLOWED），
+ * 不落空数组导致行为不可预测。
+ */
+const PRESET_DEFAULT_SCOPE_SOURCE: Record<string, AgentContextSource> = {
+  DATA_INTELLIGENCE: 'BUSINESS_DOMAIN',
+  ENTERPRISE_KNOWLEDGE: 'KNOWLEDGE_SPACE',
+  SEMANTIC_GOVERNANCE: 'BUSINESS_DOMAIN'
+};
+
+/** 深拷贝：Definition 与 Draft 各自持有独立副本，避免共享引用 */
+function cloneContextBindings(bindings: AgentContextBinding[]): AgentContextBinding[] {
+  return bindings.map((binding) => ({
+    sourceType: binding.sourceType,
+    selectionMode: binding.selectionMode,
+    resourceIds: binding.resourceIds ? [...binding.resourceIds] : undefined
+  }));
+}
+
+/** 依据 Preset 生成默认主范围 Binding：BUSINESS_DOMAIN / KNOWLEDGE_SPACE × ALL_ALLOWED */
+function defaultContextBindingFor(preset: ManagedAgentPreset): AgentContextBinding[] {
+  const sourceType = PRESET_DEFAULT_SCOPE_SOURCE[preset.presetId] ?? 'BUSINESS_DOMAIN';
+  return [{ sourceType, selectionMode: 'ALL_ALLOWED' }];
+}
+
+/** 草稿 diff 用的工作范围描述（Domain 层不依赖 UI 名称 Fixture，只写来源类型与数量） */
+function describeContextBindings(bindings: AgentContextBinding[]): string {
+  return bindings
+    .map((binding) => {
+      const label = AGENT_CONTEXT_SOURCE_VIEWS[binding.sourceType].label;
+      return binding.selectionMode === 'ALL_ALLOWED'
+        ? `${label} · 按用户权限动态使用`
+        : `${label} · 指定 ${binding.resourceIds?.length ?? 0} 项资源`;
+    })
+    .join('；');
 }
 
 export class AgentPublishError extends Error {
@@ -64,6 +108,11 @@ class AgentService {
     const draftId = `draft_${agentId}_v1_0`;
     const nowStr = '刚刚';
 
+    // V1.1 Context Binding：显式传入优先；否则按模板生成明确默认 Binding
+    const contextBindings = input.contextBindings?.length
+      ? cloneContextBindings(input.contextBindings)
+      : defaultContextBindingFor(preset);
+
     // 1. Initial Definition (Status: DRAFT, no published formal version)
     const definition: AgentDefinition = {
       agentId,
@@ -77,6 +126,7 @@ class AgentService {
       sourcePresetId: preset.presetId,
       supportedTaskTemplates: preset.supportedTaskTemplates.map((binding) => ({ ...binding })),
       allowedContextSources: [...preset.allowedContextSources],
+      contextBindings: cloneContextBindings(contextBindings),
       capabilityPreset: preset.capabilityPreset,
       capabilityDesc: preset.capabilityPresetDesc,
       modelPolicyId: preset.modelPolicyId,
@@ -101,6 +151,11 @@ class AgentService {
         isNew: true
       },
       {
+        field: '工作范围',
+        changeText: describeContextBindings(contextBindings),
+        tag: 'SCOPE'
+      },
+      {
         field: '能力预设',
         changeText: `${preset.capabilityPreset} (${preset.capabilityPresetDesc})`,
         tag: 'CAPABILITY'
@@ -122,6 +177,8 @@ class AgentService {
       origin: definition.origin,
       supportedTaskTemplates: definition.supportedTaskTemplates.map((binding) => ({ ...binding })),
       allowedContextSources: [...definition.allowedContextSources],
+      // 草稿持有独立副本（深 clone），与 Definition 不共享引用
+      contextBindings: cloneContextBindings(contextBindings),
       capabilityPreset: definition.capabilityPreset,
       capabilityDesc: definition.capabilityDesc,
       modelPolicyId: definition.modelPolicyId,
@@ -268,6 +325,7 @@ class AgentService {
       capabilityDesc: draft.capabilityDesc || def.capabilityDesc,
       supportedTaskTemplates: draft.supportedTaskTemplates.map((binding) => ({ ...binding })),
       allowedContextSources: [...draft.allowedContextSources],
+      contextBindings: cloneContextBindings(draft.contextBindings),
       modelPolicyId: draft.modelPolicyId,
       modelPolicyName: draft.modelPolicyName || def.modelPolicyName,
       maxAutonomy: draft.maxAutonomy,
@@ -344,6 +402,7 @@ class AgentService {
       origin: def.origin,
       supportedTaskTemplates: def.supportedTaskTemplates.map((binding) => ({ ...binding })),
       allowedContextSources: [...def.allowedContextSources],
+      contextBindings: cloneContextBindings(def.contextBindings),
       capabilityPreset: def.capabilityPreset,
       capabilityDesc: def.capabilityDesc,
       modelPolicyId: def.modelPolicyId,
