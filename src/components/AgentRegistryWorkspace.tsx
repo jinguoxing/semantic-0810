@@ -33,7 +33,10 @@ import {
   AgentItem,
   INITIAL_AGENTS,
   AgentDefinitionDetail,
-  createAgentDraft
+  AgentProductStatusKey,
+  createAgentDraft,
+  getAgentOriginLabel,
+  getAgentProductStatus
 } from '../data/agentRegistryData';
 import { agentService } from '../domain/agent';
 import { CreateAgentDrawer } from './CreateAgentDrawer';
@@ -70,9 +73,9 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'SYSTEM' | 'MANAGED'>('ALL');
-  const [engineFilter, setEngineFilter] = useState<'ALL' | 'Semovix' | 'Semovix Native' | 'WeKnora'>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE'>('ALL');
+  // V1.1: 用户分类 = origin (内置 / 自定义)，不再依据 agentKind / category
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'BUILT_IN' | 'CUSTOM'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | AgentProductStatusKey>('ALL');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Drawers & Modals
@@ -98,41 +101,53 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
   // Filtered List
   const filteredAgents = useMemo(() => {
     return agents.filter((agent) => {
-      // Search
+      // Search: 名称 / 职责 / Owner / 支持任务 / 类型标签
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchName = agent.name.toLowerCase().includes(q);
         const matchResp = agent.responsibility.toLowerCase().includes(q);
         const matchOwner = agent.owner.toLowerCase().includes(q);
         const matchTask = agent.allTasks.some(t => t.toLowerCase().includes(q));
-        if (!matchName && !matchResp && !matchOwner && !matchTask) return false;
+        const matchOrigin = getAgentOriginLabel(agent.origin).includes(q);
+        if (!matchName && !matchResp && !matchOwner && !matchTask && !matchOrigin) return false;
       }
 
-      // Type Filter
+      // Type Filter (origin)
       if (typeFilter !== 'ALL') {
-        if (agent.category !== typeFilter) return false;
+        if (agent.origin !== typeFilter) return false;
       }
 
-      // Engine Filter
-      if (engineFilter !== 'ALL') {
-        if (agent.runtimeEngine !== engineFilter) return false;
-      }
-
-      // Status Filter
+      // Status Filter (产品状态投影)
       if (statusFilter !== 'ALL') {
-        if (agent.status !== statusFilter) return false;
+        if (getAgentProductStatus(agent).key !== statusFilter) return false;
       }
 
       return true;
     });
-  }, [agents, searchQuery, typeFilter, engineFilter, statusFilter]);
+  }, [agents, searchQuery, typeFilter, statusFilter]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => {
       setIsRefreshing(false);
-      addToast?.('success', '状态已同步', '所有受管智能体运行引擎心跳与版本状态已更新至最新');
+      addToast?.('success', '状态已同步', '所有智能体的正式版本与状态已更新至最新');
     }, 450);
+  };
+
+  // 产品状态弱展示样式（V1.1 §7.4：不把 Runtime / Sync 技术状态作为 Registry 状态）
+  const getProductStatusStyle = (key: AgentProductStatusKey): { dot: string; text: string } => {
+    switch (key) {
+      case 'NORMAL':
+        return { dot: 'bg-[#16A36A]', text: 'text-[#16A36A]' };
+      case 'UNPUBLISHED':
+        return { dot: 'bg-amber-500', text: 'text-amber-700' };
+      case 'PENDING_CHANGES':
+        return { dot: 'bg-[#2563EB]', text: 'text-[#2563EB]' };
+      case 'NEEDS_ATTENTION':
+        return { dot: 'bg-orange-500', text: 'text-orange-600' };
+      case 'DISABLED':
+        return { dot: 'bg-slate-400', text: 'text-slate-500' };
+    }
   };
 
   // Helper for agent avatar
@@ -284,7 +299,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                 </span>
               </div>
               <p className="text-xs text-[#64748B] mt-1 leading-relaxed">
-                管理平台中的智能执行角色、任务职责、运行引擎与正式版本。
+                管理平台内置和组织自定义的智能体，查看它们的工作职责、支持任务与正式状态。
               </p>
             </div>
 
@@ -326,47 +341,33 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
 
             {/* Filter Dropdowns */}
             <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-              {/* Type Filter */}
+              {/* Type Filter (origin: 内置 / 自定义) */}
               <div className="relative">
                 <select
                   value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value as any)}
+                  onChange={(e) => setTypeFilter(e.target.value as 'ALL' | 'BUILT_IN' | 'CUSTOM')}
                   aria-label="筛选智能体类型"
                   className="appearance-none bg-[#F8FAFC] hover:bg-slate-100 text-xs font-medium text-[#334155] border border-[#E2E8F0] rounded-md pl-3 pr-7 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                 >
                   <option value="ALL">全部类型</option>
-                  <option value="SYSTEM">系统智能体</option>
-                  <option value="MANAGED">受管智能体</option>
+                  <option value="BUILT_IN">内置智能体</option>
+                  <option value="CUSTOM">自定义智能体</option>
                 </select>
                 <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
               </div>
 
-              {/* Engine Filter */}
-              <div className="relative">
-                <select
-                  value={engineFilter}
-                  onChange={(e) => setEngineFilter(e.target.value as any)}
-                  aria-label="筛选运行引擎"
-                  className="appearance-none bg-[#F8FAFC] hover:bg-slate-100 text-xs font-medium text-[#334155] border border-[#E2E8F0] rounded-md pl-3 pr-7 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
-                >
-                  <option value="ALL">全部运行引擎</option>
-                  <option value="Semovix">Semovix</option>
-                  <option value="Semovix Native">Semovix Native</option>
-                  <option value="WeKnora">WeKnora</option>
-                </select>
-                <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
-              </div>
-
-              {/* Status Filter */}
+              {/* Status Filter (产品状态投影) */}
               <div className="relative">
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as any)}
-                  aria-label="筛选运行状态"
+                  onChange={(e) => setStatusFilter(e.target.value as 'ALL' | AgentProductStatusKey)}
+                  aria-label="筛选状态"
                   className="appearance-none bg-[#F8FAFC] hover:bg-slate-100 text-xs font-medium text-[#334155] border border-[#E2E8F0] rounded-md pl-3 pr-7 py-1.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#2563EB]"
                 >
                   <option value="ALL">全部状态</option>
-                  <option value="ACTIVE">正常</option>
+                  <option value="NORMAL">正常</option>
+                  <option value="UNPUBLISHED">未发布</option>
+                  <option value="PENDING_CHANGES">有未发布修改</option>
                 </select>
                 <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
               </div>
@@ -393,16 +394,16 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                 </div>
                 <div>
                   <div className="text-xs font-bold text-[#1E40AF]">
-                    {agents.filter((a) => a.hasDraft).length} 个智能体有未发布草稿
+                    {agents.filter((a) => a.hasDraft).length} 个智能体有未发布修改
                   </div>
                   <div className="text-xs text-[#3B82F6] mt-0.5 leading-relaxed">
                     {agents
                       .filter((a) => a.hasDraft)
                       .map(
                         (a) =>
-                          `${a.name} · ${
-                            a.formalVersion ? `正式版本 ${a.formalVersion} 正常运行` : '首次创建草稿 (未发布)'
-                          }`
+                          a.formalVersion
+                            ? `${a.name} 当前正式版本 ${a.formalVersion} 仍正常使用，存在未发布草稿`
+                            : `${a.name} 为新创建智能体，尚未发布首个正式版本`
                       )
                       .join('；')}
                   </div>
@@ -427,14 +428,14 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
           ───────────────────────────────────────────────────────── */}
           <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden shadow-2xs">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[960px]">
+              <table className="w-full text-left border-collapse min-w-[920px]">
                 <thead>
                   <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-semibold text-[#475569]">
                     <th className="py-3 px-4 w-[280px]">智能体</th>
+                    <th className="py-3 px-4 w-[90px]">类型</th>
                     <th className="py-3 px-4 w-[220px]">支持任务</th>
-                    <th className="py-3 px-4 w-[160px]">运行引擎</th>
                     <th className="py-3 px-4 w-[160px]">正式版本</th>
-                    <th className="py-3 px-4 w-[120px]">运行状态</th>
+                    <th className="py-3 px-4 w-[130px]">状态</th>
                     <th className="py-3 px-4 w-[140px]">Owner</th>
                     <th className="py-3 px-4 w-[60px] text-right">操作</th>
                   </tr>
@@ -452,7 +453,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                         }
                       }}
                     >
-                      {/* Column 1: 智能体 (Avatar + Name + Responsibility + Management Badge) */}
+                      {/* Column 1: 智能体 (Avatar + Name + Responsibility) */}
                       <td className="py-3.5 px-4 align-top">
                         <div className="flex items-start space-x-3">
                           {renderAgentAvatar(agent)}
@@ -461,22 +462,19 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                               <span className="font-bold text-[#0F172A] text-xs tracking-tight group-hover:text-[#2563EB] transition-colors">
                                 {agent.name}
                               </span>
-                              {/* Management Badge */}
-                              <span
-                                className={`text-[10px] font-medium px-1.5 py-0.2 rounded border ${
-                                  agent.category === 'SYSTEM'
-                                    ? 'bg-slate-100 text-slate-600 border-slate-200'
-                                    : 'bg-blue-50 text-blue-700 border-blue-200/60'
-                                }`}
-                              >
-                                {agent.agentType}
-                              </span>
                             </div>
                             <p className="text-[11px] text-[#64748B] leading-relaxed line-clamp-2">
                               {agent.responsibility}
                             </p>
                           </div>
                         </div>
+                      </td>
+
+                      {/* Column 2: 类型 (origin 弱展示 Badge：内置 / 自定义) */}
+                      <td className="py-3.5 px-4 align-top">
+                        <span className="inline-flex items-center text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-50 text-slate-500 border border-slate-200">
+                          {getAgentOriginLabel(agent.origin)}
+                        </span>
                       </td>
 
                       {/* Column 2: 支持任务 (Task Chips, max 2 + rest as +N) */}
@@ -527,18 +525,6 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                         </div>
                       </td>
 
-                      {/* Column 3: 运行引擎 (Semovix / Semovix Native / WeKnora + optional 已同步) */}
-                      <td className="py-3.5 px-4 align-top">
-                        <div className="space-y-0.5">
-                          <span className="font-semibold text-[#0F172A] text-xs">
-                            {agent.runtimeEngine}
-                          </span>
-                          <p className="text-[11px] text-[#94A3B8] font-normal leading-tight">
-                            {agent.engineSyncStatus || (agent.formalVersion ? '已同步' : '未建立运行配置')}
-                          </p>
-                        </div>
-                      </td>
-
                       {/* Column 4: 正式版本 (vX.X / 暂无 + 发布时间 + optional 草稿有修改) */}
                       <td className="py-3.5 px-4 align-top">
                         <div className="space-y-0.5">
@@ -568,23 +554,20 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                         </div>
                       </td>
 
-                      {/* Column 5: 运行状态 (● 正常 / ● 未发布草稿) */}
+                      {/* Column 5: 状态 (产品状态投影：正常 / 未发布 / 有未发布修改 / 需关注 / 已停用) */}
                       <td className="py-3.5 px-4 align-top">
-                        {agent.formalVersion ? (
-                          <div className="flex items-center space-x-1.5 pt-0.5">
-                            <span className="w-2 h-2 rounded-full bg-[#16A36A]" />
-                            <span className="font-medium text-[#16A36A] text-xs">
-                              {agent.statusLabel || '正常'}
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center space-x-1.5 pt-0.5">
-                            <span className="w-2 h-2 rounded-full bg-amber-500" />
-                            <span className="font-medium text-amber-700 text-xs">
-                              未发布草稿
-                            </span>
-                          </div>
-                        )}
+                        {(() => {
+                          const productStatus = getAgentProductStatus(agent);
+                          const statusStyle = getProductStatusStyle(productStatus.key);
+                          return (
+                            <div className="flex items-center space-x-1.5 pt-0.5">
+                              <span className={`w-2 h-2 rounded-full ${statusStyle.dot}`} />
+                              <span className={`font-medium text-xs ${statusStyle.text}`}>
+                                {productStatus.label}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Column 6: Owner (统一中文组织名) */}
@@ -667,7 +650,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                 共 {filteredAgents.length} 个智能体
               </span>
               <span className="text-[11px] text-[#94A3B8]">
-                Semovix 受管智能体平台 · 全量心跳在线
+                Semovix 智能体平台 · 全量在线
               </span>
             </div>
           </div>
@@ -727,8 +710,8 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                     </div>
                     <p className="text-[#3B82F6] text-[11px]">
                       {hasFormal
-                        ? `该草稿已通过本地离线评估集，尚未发布至 ${activeDraftAgent.runtimeEngine} 生产环境，线上用户仍由 ${activeDraftAgent.formalVersion} 正式版服务。`
-                        : `该智能体为新创建草稿，配置尚未发布至 ${activeDraftAgent.runtimeEngine} 生产环境。`}
+                        ? `该草稿已通过本地离线评估集，尚未发布，线上用户仍由 ${activeDraftAgent.formalVersion} 正式版服务。`
+                        : '该智能体为新创建草稿，配置尚未发布为正式版本。'}
                     </p>
                   </div>
 
@@ -771,7 +754,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                           </span>
                         </div>
                         <p className="text-xs text-[#475569] pl-3.5">
-                          已初始化任务定义与运行引擎绑定规格，进入定义工作区可继续进行沙盒测试与发布。
+                          已初始化支持任务与基础配置，进入定义工作区可继续进行沙盒测试与发布。
                         </p>
                       </div>
                     )}
@@ -850,12 +833,16 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                       <h3 className="font-bold text-sm text-[#0F172A]">
                         {selectedAgentForDetail.name}
                       </h3>
-                      <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                        {selectedAgentForDetail.agentType}
+                      <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-slate-50 text-slate-500 border border-slate-200">
+                        {getAgentOriginLabel(selectedAgentForDetail.origin)}
                       </span>
                     </div>
                     <p className="text-[11px] text-[#64748B] mt-0.5">
-                      正式版本 {selectedAgentForDetail.formalVersion} · 运行正常
+                      {selectedAgentForDetail.formalVersion
+                        ? `正式版本 ${selectedAgentForDetail.formalVersion}`
+                        : '尚未发布正式版本'}
+                      {' · '}
+                      {getAgentProductStatus(selectedAgentForDetail).label}
                     </p>
                   </div>
                 </div>
@@ -879,18 +866,18 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
 
                 {/* 规格参数清单 */}
                 <div className="space-y-2">
-                  <span className="text-xs font-bold text-[#0F172A]">受管规格与运行配置</span>
+                  <span className="text-xs font-bold text-[#0F172A]">规格信息</span>
                   <div className="bg-white border border-[#E2E8F0] rounded-lg divide-y divide-[#F1F5F9] text-xs">
                     <div className="flex items-center justify-between p-2.5">
-                      <span className="text-[#64748B]">运行引擎 (Runtime)</span>
+                      <span className="text-[#64748B]">类型</span>
                       <span className="font-semibold text-[#0F172A]">
-                        {selectedAgentForDetail.runtimeEngine}
+                        {getAgentOriginLabel(selectedAgentForDetail.origin)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between p-2.5">
                       <span className="text-[#64748B]">当前正式版本</span>
                       <span className="font-mono font-bold text-[#2563EB]">
-                        {selectedAgentForDetail.formalVersion}
+                        {selectedAgentForDetail.formalVersion || '暂无 (未发布)'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between p-2.5">

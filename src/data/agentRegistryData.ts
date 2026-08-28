@@ -21,19 +21,19 @@ export interface AgentItem {
   id: string;
   name: string;
   responsibility: string;
-  agentType: '系统智能体' | '受管智能体';
-  category: 'SYSTEM' | 'MANAGED';
   /** 用户可见分类：内置 vs 组织自定义（与域模型 AgentOrigin 一致） */
   origin: 'BUILT_IN' | 'CUSTOM';
   tasks: string[];
   extraTasksCount: number;
   allTasks: string[];
+  /**
+   * Runtime Provider 仅作内部投影数据保留（A04 发布工作区回退读取），
+   * A01 Registry 主 UI 不再展示 / 筛选；技术诊断后续进入 Advanced Runtime Diagnostics。
+   */
   runtimeEngine: 'Semovix' | 'Semovix Native' | 'WeKnora';
-  engineSyncStatus?: string;
   formalVersion: string | null;
   releaseTime: string;
-  status: 'ACTIVE' | 'DRAFT';
-  statusLabel: string;
+  status: 'ACTIVE' | 'DRAFT' | 'DISABLED';
   owner: string;
   hasDraft: boolean;
   isNewDraft?: boolean;
@@ -48,13 +48,55 @@ export interface AgentItem {
   templateId?: string;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   A01 产品状态投影 (V1.1 §7.4)：用户只看到产品状态，
+   Runtime / Sync 底层状态映射收敛，不把 SYNCED / MOCK_RUNTIME /
+   READY / WeKnora 作为 Registry 状态展示。
+   ───────────────────────────────────────────────────────────── */
+export type AgentProductStatusKey =
+  | 'NORMAL'
+  | 'UNPUBLISHED'
+  | 'PENDING_CHANGES'
+  | 'NEEDS_ATTENTION'
+  | 'DISABLED';
+
+export interface AgentProductStatusView {
+  key: AgentProductStatusKey;
+  label: string;
+}
+
+/**
+ * 轻量 View Projection：由 Registry ViewModel 推导用户可见状态。
+ * - 未发布：新建、从未发布 (formalVersion = null)
+ * - 有未发布修改：已发布且存在草稿
+ * - 正常：已发布、无草稿、无运行异常
+ * - 需关注：Runtime / 集成明确异常 (ERROR / FAILED / OUT_OF_SYNC)；
+ *   当前原型数据无该态信号，MOCK_RUNTIME 集成待接入不代表不可用，不映射为此态
+ * - 已停用：DISABLED
+ */
+export function getAgentProductStatus(agent: AgentItem): AgentProductStatusView {
+  if (agent.status === 'DISABLED') {
+    return { key: 'DISABLED', label: '已停用' };
+  }
+  if (agent.formalVersion === null) {
+    return { key: 'UNPUBLISHED', label: '未发布' };
+  }
+  if (agent.hasDraft) {
+    return { key: 'PENDING_CHANGES', label: '有未发布修改' };
+  }
+  return { key: 'NORMAL', label: '正常' };
+}
+
+/** 类型弱展示标签：内置 / 自定义 */
+export function getAgentOriginLabel(origin: 'BUILT_IN' | 'CUSTOM'): string {
+  return origin === 'BUILT_IN' ? '内置' : '自定义';
+}
+
 export const INITIAL_AGENTS: AgentItem[] = [
   {
     id: 'data_intelligence',
     name: '数据智能伙伴',
     responsibility: '面向业务目标完成找数、问数与数据分析',
-    agentType: '受管智能体',
-    category: 'MANAGED',
     origin: 'BUILT_IN',
     tasks: ['找数据', '问数据'],
     extraTasksCount: 1,
@@ -63,7 +105,6 @@ export const INITIAL_AGENTS: AgentItem[] = [
     formalVersion: 'v1.3',
     releaseTime: '昨天发布',
     status: 'ACTIVE',
-    statusLabel: '正常',
     owner: '数据智能团队',
     hasDraft: false,
     description: '专注于业务数据消费场景，结合指标语义、数据目录与分析模型，自动执行跨库探查、计算与归因下钻。',
@@ -75,8 +116,6 @@ export const INITIAL_AGENTS: AgentItem[] = [
     id: 'semantic_governance',
     name: '语义治理伙伴',
     responsibility: '辅助企业完成语义理解、业务对象与治理任务',
-    agentType: '受管智能体',
-    category: 'MANAGED',
     origin: 'BUILT_IN',
     tasks: ['语义理解', '业务对象'],
     extraTasksCount: 5,
@@ -85,7 +124,6 @@ export const INITIAL_AGENTS: AgentItem[] = [
     formalVersion: 'v1.2',
     releaseTime: '3 天前发布',
     status: 'ACTIVE',
-    statusLabel: '正常',
     owner: '语义治理团队',
     hasDraft: false,
     description: '面向数据治理与语义建模专家，提供表/字段语义推理、实体发现、标准映射与口径冲突仲裁能力。',
@@ -97,19 +135,14 @@ export const INITIAL_AGENTS: AgentItem[] = [
     id: 'enterprise_knowledge',
     name: '企业知识伙伴',
     responsibility: '基于企业正式知识回答问题并开展跨文档研究',
-    agentType: '受管智能体',
-    category: 'MANAGED',
     origin: 'BUILT_IN',
     tasks: ['企业知识问答', '文档研究'],
     extraTasksCount: 1,
     allTasks: ['企业知识问答', '文档研究', 'Wiki 研究'],
     runtimeEngine: 'WeKnora',
-    // 二十四: WeKnora 真实 API 未接入 —— 注册表同样如实标注
-    engineSyncStatus: '集成待接入 (MOCK_RUNTIME)',
     formalVersion: 'v1.4',
     releaseTime: '今天 09:42 发布',
     status: 'ACTIVE',
-    statusLabel: '正常',
     owner: '企业知识治理组',
     hasDraft: true,
     draftNote: '草稿有修改',
@@ -492,8 +525,6 @@ export function createAgentDraft(agentData: {
     id: newId,
     name: agentData.name,
     responsibility: agentData.responsibility,
-    agentType: '受管智能体',
-    category: 'MANAGED',
     origin: domainResult.definition.origin, // 用户创建 → CUSTOM
     tasks: allTaskNames.slice(0, 2),
     extraTasksCount: Math.max(0, allTaskNames.length - 2),
@@ -502,7 +533,6 @@ export function createAgentDraft(agentData: {
     formalVersion: null, // 正式版本：暂无
     releaseTime: '尚未发布',
     status: 'DRAFT',
-    statusLabel: '未发布草稿',
     owner: agentData.owner,
     hasDraft: true,
     isNewDraft: true,

@@ -162,7 +162,7 @@ export default function App() {
     } else if (moduleKey === 'agent_center' || moduleKey === 'agents') {
       setCurrentNav('agents');
       setViewTab('agents');
-      addToast('success', '已切换至 智能体中心', '已载入 Semovix Agent Registry 受管智能体注册表');
+      addToast('success', '已切换至 智能体中心', '已载入 Semovix Agent Registry 智能体注册表');
     } else {
       addToast('info', `已选择【${moduleName}】`, `即将为你路由至 ${moduleName} 工作空间`);
     }
@@ -542,7 +542,7 @@ export default function App() {
           onBackToRegistry={() => {
             setCurrentNav('agents');
             setViewTab('agents');
-            addToast('info', '智能体中心', '已返回受管智能体注册表');
+            addToast('info', '智能体中心', '已返回智能体注册表');
           }}
           onPublishSuccess={(publishedVersion) => {
             // 二十二: 发布成功后回写 A01 —— Registry 与 A04 读取同一 Agent Repository
@@ -550,7 +550,6 @@ export default function App() {
             if (!targetId) return;
             const display = agentSelectors.getDisplayState(targetId);
             const nextVersion = display?.formalVersion || publishedVersion;
-            const syncLabel = display?.runtimeEngine === 'WeKnora' ? '集成待接入 (MOCK_RUNTIME)' : '已同步';
             setAgentsList((prev) =>
               prev.map((a) => {
                 if (a.id === targetId) {
@@ -559,11 +558,9 @@ export default function App() {
                     formalVersion: nextVersion,
                     releaseTime: '刚刚发布',
                     status: 'ACTIVE',
-                    statusLabel: '正常',
                     hasDraft: false,
                     isNewDraft: false,
-                    runtimeBinding: 'ACTIVE',
-                    engineSyncStatus: syncLabel
+                    runtimeBinding: 'ACTIVE'
                   };
                 }
                 return a;
@@ -592,11 +589,9 @@ export default function App() {
                     formalVersion: nextVersion,
                     releaseTime: '刚刚发布',
                     status: 'ACTIVE',
-                    statusLabel: '正常',
                     hasDraft: false,
                     isNewDraft: false,
-                    runtimeBinding: 'ACTIVE',
-                    engineSyncStatus: syncLabel
+                    runtimeBinding: 'ACTIVE'
                   }
                 : null
             );
@@ -611,7 +606,7 @@ export default function App() {
           onBackToRegistry={() => {
             setCurrentNav('agents');
             setViewTab('agents');
-            addToast('info', '智能体中心', '已返回受管智能体注册表');
+            addToast('info', '智能体中心', '已返回智能体注册表');
           }}
           onNavigateToPublish={() => {
             setCurrentNav('agent_publish');
@@ -677,7 +672,7 @@ export default function App() {
             }
             setCurrentNav('agent_definition');
             setViewTab('agent_definition');
-            addToast('info', agent.name, `已载入「${agent.name}」受管智能体定义工作区`);
+            addToast('info', agent.name, `已载入「${agent.name}」智能体定义工作区`);
           }}
           onOpenPublishWorkspace={(agent) => {
             setSelectedAgentId(agent.id);
