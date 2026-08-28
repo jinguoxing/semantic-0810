@@ -488,7 +488,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                               {task}
                             </span>
                           ))}
-                          {agent.extraTasksCount > 0 && (
+                          {agent.allTasks.length - agent.tasks.length > 0 && (
                             <div className="relative inline-block">
                               <button
                                 onMouseEnter={() => setHoveredExtraTasksAgentId(agent.id)}
@@ -499,7 +499,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                                 }}
                                 className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-[#F1F5F9] hover:bg-[#E2E8F0] text-[#64748B] border border-[#E2E8F0] transition-colors cursor-pointer"
                               >
-                                +{agent.extraTasksCount}
+                                +{agent.allTasks.length - agent.tasks.length}
                               </button>
 
                               {/* Hover Popover showing all tasks */}

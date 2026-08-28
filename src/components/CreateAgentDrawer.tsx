@@ -30,18 +30,20 @@ export interface AgentTemplateDefinition {
   defaultName: string;
   defaultResponsibility: string;
   defaultOwner: string;
+  /** 内部数据：随创建传给 Domain (runtimeTarget 保留在 Domain，不在创建 UI 展示) */
   runtimeTarget: 'WEKNORA' | 'SEMOVIX_NATIVE';
-  runtimeEngineLabel: string;
   /** 展示标签投影：真实数据为 preset.supportedTaskTemplates (TaskTemplateBinding[]) */
   supportedTaskLabels: string[];
   supportedTaskTemplateIds: string[];
-  extraTasksCount?: number;
   capabilityPreset: string;
   capabilityPresetDesc: string;
   defaultMaxAutonomy: string;
   autonomyDesc: string;
   symbolType: 'data' | 'governance' | 'knowledge';
 }
+
+/** Stage 1 展示前 3 个任务，+N 由真实任务数动态计算 */
+const STAGE1_SHOWN_TASKS = 3;
 
 export const V11_AGENT_TEMPLATES: AgentTemplateDefinition[] = PRESET_LIST.map((preset) => ({
   id: preset.presetId.toLowerCase(),
@@ -54,12 +56,10 @@ export const V11_AGENT_TEMPLATES: AgentTemplateDefinition[] = PRESET_LIST.map((p
   defaultResponsibility: preset.defaultResponsibility,
   defaultOwner: preset.defaultOwner,
   runtimeTarget: preset.runtimeTarget,
-  runtimeEngineLabel: preset.runtimeEngineLabel,
   supportedTaskLabels: preset.supportedTaskTemplates.map(
     (binding) => getTaskTemplateView(binding.taskTemplateId).name
   ),
   supportedTaskTemplateIds: preset.supportedTaskTemplates.map((binding) => binding.taskTemplateId),
-  extraTasksCount: preset.extraTasksCount,
   capabilityPreset: preset.capabilityPreset,
   capabilityPresetDesc: preset.capabilityPresetDesc,
   defaultMaxAutonomy:
@@ -174,7 +174,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
       {/* ─────────────────────────────────────────────────────────────
           SEMI-TRANSPARENT BACKDROP OVERLAY
           Preserves subtle visibility of the underlying Agent Registry:
-          数据智能伙伴, 语义治理伙伴, 企业知识伙伴
+          数据查找与分析, 企业知识问答与研究, 语义治理与审查
       ───────────────────────────────────────────────────────────── */}
       <div
         className="fixed inset-0 bg-slate-900/35 backdrop-blur-[1px] transition-opacity duration-200"
@@ -194,7 +194,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               创建智能体
             </h2>
             <p className="text-xs text-[#64748B] leading-relaxed max-w-[760px]">
-              从平台提供的受管预设开始创建。预设会提供推荐任务、能力边界和运行方式，创建后仍可继续调整。
+              从平台提供的能力模板开始创建。模板提供推荐任务、能力边界与默认行为，创建后仍可继续调整。
             </p>
           </div>
           <button
@@ -213,7 +213,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
         ───────────────────────────────────────────────────────── */}
         <div className="px-8 py-2.5 bg-[#F8FAFC] border-b border-[#E2E8F0] flex items-center justify-between shrink-0 text-xs">
           <div className="flex items-center space-x-3">
-            {/* Step 1: 选择预设 */}
+            {/* Step 1: 选择能力模板 */}
             <button
               onClick={() => setCurrentStep(1)}
               className={`flex items-center space-x-1.5 transition-colors cursor-pointer ${
@@ -227,7 +227,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               ) : (
                 <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
               )}
-              <span>选择受管预设</span>
+              <span>选择能力模板</span>
             </button>
 
             <span className="text-[#CBD5E1] text-xs">→</span>
@@ -257,7 +257,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
             </button>
           ) : (
             <span className="text-[11px] text-[#94A3B8]">
-              当前阶段：选择官方受管智能体模板
+              当前阶段：选择能力模板
             </span>
           )}
         </div>
@@ -274,7 +274,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
             ───────────────────────────────────────────────────── */}
             <div className="space-y-1">
               <h3 className="font-bold text-sm text-[#0F172A] tracking-tight">
-                选择智能体模板
+                选择能力模板
               </h3>
               <p className="text-xs text-[#64748B] leading-relaxed">
                 根据主要职责选择一个起点。模板只提供推荐初始定义，不限制后续调整。
@@ -285,7 +285,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
             </div>
 
             {/* ─────────────────────────────────────────────────────
-                九 ~ 十四、受管智能体模板选择列表 (3 Selection Rows)
+                九 ~ 十四、能力模板选择列表 (3 Selection Rows)
                 Height ~150–165px each, crisp enterprise layout
             ───────────────────────────────────────────────────── */}
             <div className="space-y-3">
@@ -360,7 +360,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                     {/* Middle: Supported Task Chips (Muted gray/subtle blue, <= 3 chips) */}
                     <div className="pt-2 flex items-center space-x-1.5 flex-wrap">
                       <span className="text-[11px] text-[#64748B] mr-1">支持任务：</span>
-                      {tmpl.supportedTaskLabels.map((taskName) => (
+                      {tmpl.supportedTaskLabels.slice(0, STAGE1_SHOWN_TASKS).map((taskName) => (
                         <span
                           key={taskName}
                           className="text-xs px-2.5 py-0.5 rounded bg-white text-[#334155] border border-[#CBD5E1]/80 font-medium"
@@ -368,22 +368,18 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                           {taskName}
                         </span>
                       ))}
-                      {tmpl.extraTasksCount && (
+                      {tmpl.supportedTaskLabels.length - STAGE1_SHOWN_TASKS > 0 && (
                         <span className="text-xs px-2 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] border border-[#E2E8F0] font-medium font-mono">
-                          +{tmpl.extraTasksCount}
+                          +{tmpl.supportedTaskLabels.length - STAGE1_SHOWN_TASKS}
                         </span>
                       )}
                     </div>
 
-                    {/* Bottom Metadata: Autonomy & Runtime Target */}
+                    {/* Bottom Metadata: 默认行为 (推荐自主程度；不展示运行引擎) */}
                     <div className="pt-2 border-t border-[#E2E8F0]/70 flex items-center justify-between text-xs text-[#64748B]">
                       <div className="flex items-center space-x-3">
                         <span>
                           推荐自主程度：<strong className="text-[#0F172A] font-semibold">{tmpl.defaultMaxAutonomy}</strong>
-                        </span>
-                        <span className="text-[#CBD5E1]">·</span>
-                        <span>
-                          运行引擎：<strong className="text-[#0F172A] font-semibold">{tmpl.runtimeEngineLabel}</strong>
                         </span>
                       </div>
 
@@ -418,12 +414,12 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                     </h4>
                   </div>
                   <p className="text-xs text-[#475569] leading-relaxed">
-                    将以「{selectedTemplate.name}」的推荐职责开始，目标运行引擎为 {selectedTemplate.runtimeEngineLabel}。
+                    {selectedTemplate.selectionSummary}
                   </p>
                 </div>
 
-                {/* 4-Item Lightweight Summary Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 text-xs">
+                {/* 3-Item Lightweight Summary Grid (不展示运行引擎) */}
+                <div className="grid grid-cols-3 gap-3 pt-1 text-xs">
                   {/* 1. 支持任务 */}
                   <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
                     <span className="text-[11px] text-[#64748B] block">支持任务</span>
@@ -456,17 +452,6 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                       {selectedTemplate.autonomyDesc}
                     </span>
                   </div>
-
-                  {/* 4. 目标运行引擎 (十六、关于 WeKnora 的表达: 只显示目标引擎，不显示已创建/已同步) */}
-                  <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
-                    <span className="text-[11px] text-[#64748B] block">目标运行引擎</span>
-                    <span className="font-bold text-[#0F172A] text-xs block">
-                      {selectedTemplate.runtimeEngineLabel}
-                    </span>
-                    <span className="text-[10px] text-[#94A3B8] block truncate">
-                      正式运行配置将在发布时建立
-                    </span>
-                  </div>
                 </div>
 
                 {/* Auxiliary Note */}
@@ -479,10 +464,10 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               <div className="border border-dashed border-[#CBD5E1] bg-[#F8FAFC] rounded-lg p-5 text-center space-y-1.5">
                 <div className="flex items-center justify-center space-x-1.5 text-xs font-semibold text-[#64748B]">
                   <Info className="w-4 h-4 text-[#94A3B8]" />
-                  <span>尚未选择模板</span>
+                  <span>尚未选择能力模板</span>
                 </div>
                 <p className="text-xs text-[#94A3B8]">
-                  请在上方列表中选择一个业务职责相符的智能体模板，以查看推荐配置并继续。
+                  请在上方列表中选择一个业务职责相符的能力模板，以查看推荐配置并继续。
                 </p>
               </div>
             )}
@@ -498,8 +483,8 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                 <div className="flex-1 flex items-center justify-center bg-[#F8FAFC]">
                   <div className="text-center space-y-2">
                     <Info className="w-6 h-6 text-[#CBD5E1] mx-auto" />
-                    <div className="text-xs font-bold text-[#0F172A]">尚未选择模板</div>
-                    <p className="text-[11px] text-[#64748B]">请先返回上一步选择智能体模板。</p>
+                    <div className="text-xs font-bold text-[#0F172A]">尚未选择能力模板</div>
+                    <p className="text-[11px] text-[#64748B]">请先返回上一步选择能力模板。</p>
                     <button
                       onClick={() => setCurrentStep(1)}
                       className="px-3 py-1.5 bg-white hover:bg-[#F1F5F9] text-[#334155] border border-[#CBD5E1] rounded-md text-xs font-semibold cursor-pointer transition-colors"
@@ -516,14 +501,9 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                 {/* Left Column: Form Fields */}
                 <div className="flex-1 p-8 bg-white space-y-5">
                   <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-[11px] font-semibold text-[#64748B]">当前模板：</span>
-                        <span className="font-bold text-xs text-[#0F172A]">{activeTemplate.name}</span>
-                      </div>
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-blue-50 text-[#2563EB] border border-blue-200/60">
-                        {activeTemplate.runtimeEngineLabel}
-                      </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[11px] font-semibold text-[#64748B]">当前能力模板：</span>
+                      <span className="font-bold text-xs text-[#0F172A]">{activeTemplate.name}</span>
                     </div>
                     <p className="text-xs text-[#64748B] leading-relaxed">
                       {activeTemplate.desc}
@@ -681,16 +661,6 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                         <span className="font-medium text-[#0F172A] block">
                           {activeTemplate.defaultMaxAutonomy}
                         </span>
-                      </div>
-
-                      <div className="pt-2 border-t border-[#F1F5F9] space-y-1">
-                        <span className="text-[11px] text-[#64748B] block">目标运行引擎</span>
-                        <span className="font-bold text-xs text-[#0F172A] block">
-                          {activeTemplate.runtimeEngineLabel}
-                        </span>
-                        <p className="text-[10px] text-[#64748B] leading-tight">
-                          正式运行配置将在测试与发布阶段创建。
-                        </p>
                       </div>
                     </div>
                   </div>

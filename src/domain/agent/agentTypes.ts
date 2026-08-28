@@ -180,7 +180,6 @@ export interface ManagedAgentPreset {
   runtimeTarget: RuntimeTarget;
   runtimeEngineLabel: string;
   supportedTaskTemplates: TaskTemplateBinding[];
-  extraTasksCount?: number;
   capabilityPreset: string;
   capabilityPresetDesc: string;
   modelPolicyId: string;
@@ -239,15 +238,36 @@ export const TASK_TEMPLATE_CATALOG: Record<string, TaskTemplateView> = {
     name: '语义理解',
     desc: '解析表结构与字段名业务含义，自动生成注释与标准建议'
   },
-  BUSINESS_OBJECT_V1: {
-    taskTemplateId: 'BUSINESS_OBJECT_V1',
-    name: '业务对象',
+  // V1.1 语义治理与审查能力模板的正式任务（7 个真实 TaskTemplateBinding）
+  BUSINESS_OBJECT_DISCOVERY_V1: {
+    taskTemplateId: 'BUSINESS_OBJECT_DISCOVERY_V1',
+    name: '业务对象发现',
     desc: '发现潜在实体概念，辅助业务对象关系拓扑建模'
   },
-  STANDARD_GOVERNANCE_V1: {
-    taskTemplateId: 'STANDARD_GOVERNANCE_V1',
-    name: '标准治理',
-    desc: '国家/行业标准对齐、字段映射冲突审阅与值域校验'
+  OBJECT_MERGE_V1: {
+    taskTemplateId: 'OBJECT_MERGE_V1',
+    name: '业务对象合并',
+    desc: '识别同一业务实体的重复对象并生成合并提案'
+  },
+  STANDARD_MATCHING_V1: {
+    taskTemplateId: 'STANDARD_MATCHING_V1',
+    name: '标准匹配',
+    desc: '国家/行业标准对齐、数据元素标准匹配与值域校验'
+  },
+  METRIC_GOVERNANCE_V1: {
+    taskTemplateId: 'METRIC_GOVERNANCE_V1',
+    name: '指标治理',
+    desc: '指标口径审查、命名规范检查与重复口径识别'
+  },
+  DRKN_BUILD_V1: {
+    taskTemplateId: 'DRKN_BUILD_V1',
+    name: '数据资源网络构建',
+    desc: '构建数据资源之间的关联网络拓扑'
+  },
+  DKN_BUILD_V1: {
+    taskTemplateId: 'DKN_BUILD_V1',
+    name: '领域知识网络构建',
+    desc: '构建领域知识词条与语义关系网络'
   },
   INTENT_UNDERSTANDING_V1: {
     taskTemplateId: 'INTENT_UNDERSTANDING_V1',

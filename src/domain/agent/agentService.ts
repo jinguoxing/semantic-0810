@@ -16,7 +16,7 @@ import {
   AgentBusinessDiff,
   AgentReleaseValidation
 } from './agentTypes';
-import { getPresetById, MANAGED_AGENT_PRESETS } from './agentPresets';
+import { getPresetById } from './agentPresets';
 import { agentRepository } from './agentRepository';
 import { getRuntimeAdapter } from './runtime/adapters';
 
@@ -37,6 +37,14 @@ export class AgentPublishError extends Error {
   }
 }
 
+/** 非法 / 未知能力模板 ID：禁止静默 fallback 到任何默认模板（如知识模板） */
+export class AgentCapabilityTemplateNotFoundError extends Error {
+  constructor(public readonly presetId: string) {
+    super(`未找到对应的能力模板: ${presetId}`);
+    this.name = 'AgentCapabilityTemplateNotFoundError';
+  }
+}
+
 class AgentService {
   /**
    * P0: Create new unreleased Agent Definition + Initial Draft from an official preset
@@ -46,7 +54,11 @@ class AgentService {
     draft: AgentDraft;
     runtimeBinding: AgentRuntimeBinding;
   } {
-    const preset = getPresetById(input.presetId) || MANAGED_AGENT_PRESETS.ENTERPRISE_KNOWLEDGE;
+    // V1.1: 非法 presetId 必须显式失败，禁止静默 fallback 成知识模板
+    const preset = getPresetById(input.presetId);
+    if (!preset) {
+      throw new AgentCapabilityTemplateNotFoundError(input.presetId);
+    }
     const timestamp = Date.now().toString(36);
     const agentId = `agent_${timestamp}`;
     const draftId = `draft_${agentId}_v1_0`;
@@ -84,7 +96,7 @@ class AgentService {
     const initialDiffs: AgentBusinessDiff[] = [
       {
         field: '初始草稿',
-        changeText: `基于受管预设「${preset.presetName}」生成未发布草稿`,
+        changeText: `基于能力模板「${preset.presetName}」生成未发布草稿`,
         tag: 'NEW DRAFT',
         isNew: true
       },

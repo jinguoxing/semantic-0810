@@ -24,7 +24,6 @@ export interface AgentItem {
   /** 用户可见分类：内置 vs 组织自定义（与域模型 AgentOrigin 一致） */
   origin: 'BUILT_IN' | 'CUSTOM';
   tasks: string[];
-  extraTasksCount: number;
   allTasks: string[];
   /**
    * Runtime Provider 仅作内部投影数据保留（A04 发布工作区回退读取），
@@ -99,7 +98,6 @@ export const INITIAL_AGENTS: AgentItem[] = [
     responsibility: '面向业务目标完成找数、问数与数据分析',
     origin: 'BUILT_IN',
     tasks: ['找数据', '问数据'],
-    extraTasksCount: 1,
     allTasks: ['找数据', '问数据', '数据分析'],
     runtimeEngine: 'Semovix Native',
     formalVersion: 'v1.3',
@@ -117,9 +115,8 @@ export const INITIAL_AGENTS: AgentItem[] = [
     name: '语义治理伙伴',
     responsibility: '辅助企业完成语义理解、业务对象与治理任务',
     origin: 'BUILT_IN',
-    tasks: ['语义理解', '业务对象'],
-    extraTasksCount: 5,
-    allTasks: ['语义理解', '业务对象', '标准校验', '字段对齐', '指标建模', '值域映射', '冲突审阅'],
+    tasks: ['语义理解', '业务对象发现'],
+    allTasks: ['语义理解', '业务对象发现', '业务对象合并', '标准匹配', '指标治理', '数据资源网络构建', '领域知识网络构建'],
     runtimeEngine: 'Semovix Native',
     formalVersion: 'v1.2',
     releaseTime: '3 天前发布',
@@ -137,7 +134,6 @@ export const INITIAL_AGENTS: AgentItem[] = [
     responsibility: '基于企业正式知识回答问题并开展跨文档研究',
     origin: 'BUILT_IN',
     tasks: ['企业知识问答', '文档研究'],
-    extraTasksCount: 1,
     allTasks: ['企业知识问答', '文档研究', 'Wiki 研究'],
     runtimeEngine: 'WeKnora',
     formalVersion: 'v1.4',
@@ -379,8 +375,12 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
     lastSyncTime: '今天 09:15',
     tasks: [
       { taskTemplateId: 'SEMANTIC_UNDERSTANDING_V1', version: 'V1', enabled: true, name: '语义理解', desc: '解析表结构与字段名业务含义，自动生成注释与标准建议', status: 'ACTIVE' },
-      { taskTemplateId: 'BUSINESS_OBJECT_V1', version: 'V1', enabled: true, name: '业务对象', desc: '发现潜在实体概念，辅助业务对象关系拓扑建模', status: 'ACTIVE' },
-      { taskTemplateId: 'STANDARD_GOVERNANCE_V1', version: 'V1', enabled: true, name: '标准治理', desc: '国家/行业标准对齐、字段映射冲突审阅与值域校验', status: 'ACTIVE' },
+      { taskTemplateId: 'BUSINESS_OBJECT_DISCOVERY_V1', version: 'V1', enabled: true, name: '业务对象发现', desc: '发现潜在实体概念，辅助业务对象关系拓扑建模', status: 'ACTIVE' },
+      { taskTemplateId: 'OBJECT_MERGE_V1', version: 'V1', enabled: true, name: '业务对象合并', desc: '识别同一业务实体的重复对象并生成合并提案', status: 'ACTIVE' },
+      { taskTemplateId: 'STANDARD_MATCHING_V1', version: 'V1', enabled: true, name: '标准匹配', desc: '国家/行业标准对齐、数据元素标准匹配与值域校验', status: 'ACTIVE' },
+      { taskTemplateId: 'METRIC_GOVERNANCE_V1', version: 'V1', enabled: true, name: '指标治理', desc: '指标口径审查、命名规范检查与重复口径识别', status: 'ACTIVE' },
+      { taskTemplateId: 'DRKN_BUILD_V1', version: 'V1', enabled: true, name: '数据资源网络构建', desc: '构建数据资源之间的关联网络拓扑', status: 'ACTIVE' },
+      { taskTemplateId: 'DKN_BUILD_V1', version: 'V1', enabled: true, name: '领域知识网络构建', desc: '构建领域知识词条与语义关系网络', status: 'ACTIVE' },
     ],
     contextSources: [
       { sourceType: 'BUSINESS_TERM', label: '业务术语', desc: '正式基线已有 · 包含 GB/T 与行业规范标准元素', type: 'BASE' },
@@ -527,7 +527,6 @@ export function createAgentDraft(agentData: {
     responsibility: agentData.responsibility,
     origin: domainResult.definition.origin, // 用户创建 → CUSTOM
     tasks: allTaskNames.slice(0, 2),
-    extraTasksCount: Math.max(0, allTaskNames.length - 2),
     allTasks: allTaskNames,
     runtimeEngine,
     formalVersion: null, // 正式版本：暂无
@@ -576,7 +575,7 @@ export function createAgentDraft(agentData: {
     maxAutonomy,
     maxAutonomyDesc,
     draftChanges: [
-      { field: '初始草稿', changeText: `基于模板「${isData ? '数据智能伙伴' : isGovernance ? '语义治理伙伴' : '企业知识伙伴'}」生成未发布草稿`, tag: 'NEW DRAFT', isNew: true }
+      { field: '初始草稿', changeText: `基于能力模板「${isData ? '数据查找与分析' : isGovernance ? '语义治理与审查' : '企业知识问答与研究'}」生成未发布草稿`, tag: 'NEW DRAFT', isNew: true }
     ],
     testSandbox: {
       welcomeMessage: `您好，我是新创建的草稿智能体「${agentData.name} (未发布草稿)」。当前运行于测试沙盒环境，尚未建立正式运行配置。请输入测试语句验证意图理解与任务支持。`,

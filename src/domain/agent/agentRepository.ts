@@ -82,8 +82,12 @@ class AgentRepository {
       sourcePresetId: 'SEMANTIC_GOVERNANCE',
       supportedTaskTemplates: [
         { taskTemplateId: 'SEMANTIC_UNDERSTANDING_V1', version: 'V1', enabled: true },
-        { taskTemplateId: 'BUSINESS_OBJECT_V1', version: 'V1', enabled: true },
-        { taskTemplateId: 'STANDARD_GOVERNANCE_V1', version: 'V1', enabled: true }
+        { taskTemplateId: 'BUSINESS_OBJECT_DISCOVERY_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'OBJECT_MERGE_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'STANDARD_MATCHING_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'METRIC_GOVERNANCE_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'DRKN_BUILD_V1', version: 'V1', enabled: true },
+        { taskTemplateId: 'DKN_BUILD_V1', version: 'V1', enabled: true }
       ],
       allowedContextSources: ['BUSINESS_TERM', 'BUSINESS_OBJECT', 'DATA_SEMANTICS'],
       capabilityPreset: '语义合规审查与标准对齐',
