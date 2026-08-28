@@ -49,6 +49,15 @@ import { ResourceExplorerWorkspace } from './components/ResourceExplorerWorkspac
 import { MultiResourceAccessRequestWorkspace } from './components/MultiResourceAccessRequestWorkspace';
 import { MyAccessRequestsWorkspace } from './components/MyAccessRequestsWorkspace';
 import { DataApiDetailWorkspace } from './components/DataApiDetailWorkspace';
+import { AgentRegistryWorkspace } from './components/AgentRegistryWorkspace';
+import { AgentDefinitionWorkspace } from './components/AgentDefinitionWorkspace';
+import { AgentPublishWorkspace } from './components/AgentPublishWorkspace';
+import {
+  AgentItem,
+  AgentDefinitionDetail,
+  INITIAL_AGENTS,
+  INITIAL_AGENT_DEFINITIONS
+} from './data/agentRegistryData';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { AccessProvider } from './domain/access/access.store';
 import type { SolutionExecutionContext } from './domain/access/access.types';
@@ -56,8 +65,8 @@ import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData, MetricDraftInitialData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace_resources');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail'>('marketplace_resources');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('marketplace_resources');
+  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'api_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('marketplace_resources');
   const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
   const [authoringInitialDraft, setAuthoringInitialDraft] = useState<MetricDraftInitialData | undefined>(undefined);
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
@@ -83,6 +92,40 @@ export default function App() {
   const [isReanalyzing, setIsReanalyzing] = useState<boolean>(false);
   const [selectedReviewRequestId, setSelectedReviewRequestId] = useState<string>('rev-001');
   const [activeExecutionContext, setActiveExecutionContext] = useState<SolutionExecutionContext | null>(null);
+
+  // Agents Central State
+  const [agentsList, setAgentsList] = useState<AgentItem[]>(INITIAL_AGENTS);
+  const [agentDefinitions, setAgentDefinitions] = useState<Record<string, AgentDefinitionDetail>>(INITIAL_AGENT_DEFINITIONS);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<AgentItem | null>(null);
+  const [selectedAgentDefinition, setSelectedAgentDefinition] = useState<AgentDefinitionDetail | null>(null);
+
+  // Derived current selected agent and definition
+  const currentSelectedAgent = useMemo(() => {
+    if (selectedAgent && (!selectedAgentId || selectedAgent.id === selectedAgentId)) {
+      return selectedAgent;
+    }
+    if (selectedAgentId) {
+      return agentsList.find((a) => a.id === selectedAgentId) || null;
+    }
+    return agentsList[0] || null;
+  }, [selectedAgent, selectedAgentId, agentsList]);
+
+  const currentSelectedDefinition = useMemo(() => {
+    const targetId = selectedAgentId || currentSelectedAgent?.id;
+    if (!targetId) return null;
+    if (selectedAgentDefinition && (selectedAgentDefinition.agentId === `agt_${targetId}` || selectedAgentDefinition.agentId === targetId)) {
+      return selectedAgentDefinition;
+    }
+    if (agentDefinitions[targetId]) {
+      return agentDefinitions[targetId];
+    }
+    if (INITIAL_AGENT_DEFINITIONS[targetId]) {
+      return INITIAL_AGENT_DEFINITIONS[targetId];
+    }
+    return null;
+  }, [selectedAgentDefinition, selectedAgentId, agentDefinitions, currentSelectedAgent]);
 
   // Helper to trigger toast
   const addToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
@@ -115,6 +158,10 @@ export default function App() {
       setCurrentNav('access_review');
       setViewTab('access_review');
       addToast('success', '已切换至 管理中心', '已进入访问审核队列 (Access Review Queue)');
+    } else if (moduleKey === 'agent_center' || moduleKey === 'agents') {
+      setCurrentNav('agents');
+      setViewTab('agents');
+      addToast('success', '已切换至 智能体中心', '已载入 Semovix Agent Registry 受管智能体注册表');
     } else {
       addToast('info', `已选择【${moduleName}】`, `即将为你路由至 ${moduleName} 工作空间`);
     }
@@ -477,6 +524,149 @@ export default function App() {
             setCurrentNav('home');
             setViewTab('home');
             addToast('info', 'AI 工作台', '已进入 Xino AI 协同工作台');
+          }}
+        />
+      ) : currentNav === 'agent_publish' || viewTab === 'agent_publish' ? (
+        <AgentPublishWorkspace
+          agentId={selectedAgentId}
+          agent={currentSelectedAgent}
+          definition={currentSelectedDefinition}
+          addToast={addToast}
+          onBackToDefinition={() => {
+            setCurrentNav('agent_definition');
+            setViewTab('agent_definition');
+            const name = currentSelectedAgent?.name || currentSelectedDefinition?.name || '智能体';
+            addToast('info', name, '已返回智能体定义工作区');
+          }}
+          onBackToRegistry={() => {
+            setCurrentNav('agents');
+            setViewTab('agents');
+            addToast('info', '智能体中心', '已返回受管智能体注册表');
+          }}
+          onPublishSuccess={(publishedVersion) => {
+            const targetId = selectedAgentId || currentSelectedAgent?.id;
+            if (!targetId) return;
+            setAgentsList((prev) =>
+              prev.map((a) => {
+                if (a.id === targetId) {
+                  return {
+                    ...a,
+                    formalVersion: publishedVersion,
+                    releaseTime: '刚刚发布',
+                    status: 'ACTIVE',
+                    statusLabel: '正常',
+                    hasDraft: false,
+                    isNewDraft: false,
+                    runtimeBinding: 'ACTIVE',
+                    engineSyncStatus: '已同步'
+                  };
+                }
+                return a;
+              })
+            );
+            setAgentDefinitions((prev) => {
+              const cur = prev[targetId] || currentSelectedDefinition;
+              if (cur) {
+                return {
+                  ...prev,
+                  [targetId]: {
+                    ...cur,
+                    formalVersion: publishedVersion,
+                    runtimeBinding: 'ACTIVE',
+                    lastReleaseTime: '刚刚发布',
+                    draftChanges: []
+                  }
+                };
+              }
+              return prev;
+            });
+            setSelectedAgent((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    formalVersion: publishedVersion,
+                    releaseTime: '刚刚发布',
+                    status: 'ACTIVE',
+                    statusLabel: '正常',
+                    hasDraft: false,
+                    isNewDraft: false,
+                    runtimeBinding: 'ACTIVE',
+                    engineSyncStatus: '已同步'
+                  }
+                : null
+            );
+          }}
+        />
+      ) : currentNav === 'agent_definition' || currentNav === 'agent_detail' || viewTab === 'agent_definition' || viewTab === 'agent_detail' ? (
+        <AgentDefinitionWorkspace
+          agentId={selectedAgentId}
+          agent={currentSelectedAgent}
+          definition={currentSelectedDefinition}
+          addToast={addToast}
+          onBackToRegistry={() => {
+            setCurrentNav('agents');
+            setViewTab('agents');
+            addToast('info', '智能体中心', '已返回受管智能体注册表');
+          }}
+          onNavigateToPublish={() => {
+            setCurrentNav('agent_publish');
+            setViewTab('agent_publish');
+            const name = currentSelectedAgent?.name || currentSelectedDefinition?.name || '智能体';
+            addToast('info', '测试与发布', `已进入「${name}」发布前验证工作区`);
+          }}
+          onSaveDraft={(updatedDef) => {
+            setSelectedAgentDefinition(updatedDef);
+            const targetId = selectedAgentId || currentSelectedAgent?.id;
+            if (targetId) {
+              setAgentDefinitions((prev) => ({
+                ...prev,
+                [targetId]: updatedDef
+              }));
+            }
+          }}
+        />
+      ) : currentNav === 'agents' || currentNav === 'agent_center' || viewTab === 'agents' || viewTab === 'agent_center' ? (
+        <AgentRegistryWorkspace
+          agents={agentsList}
+          onAgentsChange={setAgentsList}
+          addToast={addToast}
+          onNavigateToHome={() => {
+            setCurrentNav('home');
+            setViewTab('home');
+            addToast('info', 'Xino 智能伙伴', '已进入 Xino AI 协同工作台');
+          }}
+          onNavigateToGovernance={() => {
+            setCurrentNav('governance');
+            setViewTab('discovery');
+            addToast('info', '数据治理', '已切换至业务对象发现与建模视图');
+          }}
+          onNavigateToMetrics={() => {
+            setCurrentNav('metrics');
+            setViewTab('metrics');
+            addToast('info', '指标注册表', '已进入 Metric Registry 统一指标管理视图');
+          }}
+          onNavigateToMarketplace={() => {
+            setCurrentNav('marketplace');
+            setViewTab('marketplace');
+            addToast('info', '数据服务超市', '已进入数据服务超市 · 发现首页');
+          }}
+          onOpenAgentDefinition={(agent, definition) => {
+            setSelectedAgentId(agent.id);
+            setSelectedDraftId(agent.hasDraft ? `draft_${agent.id}` : null);
+            setSelectedAgent(agent);
+            if (definition) {
+              setSelectedAgentDefinition(definition);
+              setAgentDefinitions((prev) => ({
+                ...prev,
+                [agent.id]: definition
+              }));
+            } else {
+              const def = agentDefinitions[agent.id] || INITIAL_AGENT_DEFINITIONS[agent.id];
+              setSelectedAgentDefinition(def || null);
+            }
+            setCurrentNav('agent_definition');
+            setViewTab('agent_definition');
+            addToast('info', agent.name, `已载入「${agent.name}」受管智能体定义工作区`);
           }}
         />
       ) : currentNav === 'my_requests' || viewTab === 'my_requests' ? (
