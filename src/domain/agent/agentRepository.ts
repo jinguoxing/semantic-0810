@@ -12,7 +12,8 @@ import {
   AgentDraft,
   AgentVersion,
   AgentRuntimeBinding,
-  AgentBusinessDiff
+  AgentBusinessDiff,
+  buildAgentDefinitionSnapshot
 } from './agentTypes';
 
 class AgentRepository {
@@ -36,6 +37,9 @@ class AgentRepository {
       name: '数据智能伙伴',
       description: '专注于业务数据消费场景，结合指标语义、数据目录与分析模型，自动执行跨库探查、计算与归因下钻。',
       responsibilitySummary: '面向业务目标完成找数、问数与数据分析，自动解析业务口径与指标语义。',
+      // V1.1：内置智能体显式携带 roleInstruction（Runtime 角色行为说明），不依赖 undefined fallback
+      roleInstruction:
+        '作为企业数据分析智能体（数据智能伙伴），围绕业务目标使用当前用户有权的数据、指标与业务语义完成找数、问数与分析；优先采用正式指标与已发布语义；证据不足时明确说明；不得绕过权限或自行扩大数据访问范围。',
       agentKind: 'MANAGED',
       origin: 'BUILT_IN',
       owner: '数据智能团队',
@@ -78,6 +82,8 @@ class AgentRepository {
       name: '语义治理伙伴',
       description: '面向数据治理与语义建模专家，提供表/字段语义推理、实体发现、标准映射与口径冲突仲裁能力。',
       responsibilitySummary: '辅助企业完成语义理解、业务对象、标准校验、字段对齐与知识网络治理任务。',
+      roleInstruction:
+        '作为企业语义治理智能体（语义治理伙伴），基于数据事实、业务语义与治理规范生成治理判断与候选方案；冲突或低确定性事项形成待确认提案；不得绕过治理流程直接发布正式语义或治理变更。',
       agentKind: 'MANAGED',
       origin: 'BUILT_IN',
       owner: '语义治理团队',
@@ -123,6 +129,8 @@ class AgentRepository {
       name: '企业知识伙伴',
       description: '依托企业级 WeKnora 知识引擎，对结构化与非结构化制度、规范、业务字典进行多跳推理与准确回答。',
       responsibilitySummary: '企业知识伙伴负责基于当前用户有权访问的企业正式知识回答问题，并支持跨文档、Wiki 与知识空间开展深入研究。严禁无依据推测。',
+      roleInstruction:
+        '作为企业知识智能体（企业知识伙伴），只依据当前用户有权访问的企业正式知识回答与研究，支持跨文档、Wiki 与知识空间的多跳检索；回答优先提供可追溯依据；知识冲突、缺失或无法确认时必须说明；不得把推测表达为企业正式事实。',
       agentKind: 'MANAGED',
       origin: 'BUILT_IN',
       owner: '企业知识治理组',
@@ -151,11 +159,12 @@ class AgentRepository {
     this.definitions.set(entKnowledgeDef.agentId, entKnowledgeDef);
 
     // Seed Published Version for enterprise_knowledge (Immutable)
+    // V1.1：种子版本一律经 canonical Snapshot Builder，快照不含 currentDraftId 等生命周期字段
     const v1_4: AgentVersion = {
       versionId: 'ver_ent_kno_1_4',
       versionNumber: 'v1.4',
       agentId: 'enterprise_knowledge',
-      snapshot: { ...entKnowledgeDef },
+      snapshot: buildAgentDefinitionSnapshot(entKnowledgeDef),
       publishedAt: '2026-08-25 16:40',
       publishedBy: '企业知识治理组',
       releaseNotes: '优化知识问答召回精度并完成多文档对比支持',
@@ -189,7 +198,10 @@ class AgentRepository {
       name: '企业知识伙伴',
       description: entKnowledgeDef.description,
       responsibilitySummary: entKnowledgeDef.responsibilitySummary,
+      // 草稿继承正式定义的 roleInstruction；owner 为当前正式 Owner（≠ updatedBy 编辑人）
+      roleInstruction: entKnowledgeDef.roleInstruction,
       origin: entKnowledgeDef.origin,
+      owner: entKnowledgeDef.owner,
       supportedTaskTemplates: [
         { taskTemplateId: 'KNOWLEDGE_QA_V1', version: 'V1', enabled: true },
         { taskTemplateId: 'DOCUMENT_RESEARCH_V1', version: 'V1', enabled: true },
@@ -229,7 +241,7 @@ class AgentRepository {
         versionId: 'ver_data_1_3',
         versionNumber: 'v1.3',
         agentId: 'data_intelligence',
-        snapshot: { ...dataDef },
+        snapshot: buildAgentDefinitionSnapshot(dataDef),
         publishedAt: '2026-08-24 10:15',
         publishedBy: '数据智能团队',
         releaseNotes: '问数据链路支持指标口径自动校验',
@@ -239,7 +251,7 @@ class AgentRepository {
         versionId: 'ver_data_1_2',
         versionNumber: 'v1.2',
         agentId: 'data_intelligence',
-        snapshot: { ...dataDef, currentPublishedVersion: 'v1.2' },
+        snapshot: buildAgentDefinitionSnapshot(dataDef),
         publishedAt: '2026-08-11 14:20',
         publishedBy: '数据智能团队',
         releaseNotes: '新增数据分析任务的归因下钻能力',
@@ -251,7 +263,7 @@ class AgentRepository {
         versionId: 'ver_gov_1_2',
         versionNumber: 'v1.2',
         agentId: 'semantic_governance',
-        snapshot: { ...govDef },
+        snapshot: buildAgentDefinitionSnapshot(govDef),
         publishedAt: '2026-08-21 09:40',
         publishedBy: '语义治理团队',
         releaseNotes: '标准治理任务接入行业标准对齐库',
@@ -261,7 +273,7 @@ class AgentRepository {
         versionId: 'ver_gov_1_1',
         versionNumber: 'v1.1',
         agentId: 'semantic_governance',
-        snapshot: { ...govDef, currentPublishedVersion: 'v1.1' },
+        snapshot: buildAgentDefinitionSnapshot(govDef),
         publishedAt: '2026-08-13 16:05',
         publishedBy: '语义治理团队',
         releaseNotes: '业务对象发现算法与语义对齐基线版本',
@@ -308,13 +320,28 @@ class AgentRepository {
   }
 
   public getVersions(agentId: string): AgentVersion[] {
-    return this.versions.get(agentId) || [];
+    // 不可变实现：返回深拷贝，外部引用修改不会反向改写历史 Snapshot
+    return (this.versions.get(agentId) || []).map((version) => ({
+      ...version,
+      snapshot: buildAgentDefinitionSnapshot(version.snapshot)
+    }));
+  }
+
+  /** 按版本号取单个已发布版本（同样返回深拷贝） */
+  public getVersion(agentId: string, versionNumber: string): AgentVersion | undefined {
+    const found = (this.versions.get(agentId) || []).find(
+      (version) => version.versionNumber === versionNumber
+    );
+    return found ? { ...found, snapshot: buildAgentDefinitionSnapshot(found.snapshot) } : undefined;
   }
 
   public addVersion(version: AgentVersion): void {
     const list = this.versions.get(version.agentId) || [];
-    // Enforce immutability: prepend or append new version
-    this.versions.set(version.agentId, [version, ...list]);
+    // Enforce immutability: 入库前对 Snapshot 深拷贝，prepend 新版本
+    this.versions.set(version.agentId, [
+      { ...version, snapshot: buildAgentDefinitionSnapshot(version.snapshot) },
+      ...list
+    ]);
   }
 
   public getRuntimeBinding(agentId: string): AgentRuntimeBinding | undefined {

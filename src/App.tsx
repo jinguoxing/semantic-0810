@@ -622,10 +622,13 @@ export default function App() {
                 ...prev,
                 [targetId]: updatedDef
               }));
-              // 同步写入 Agent Repository，保证 A04 / Registry 读到同一份草稿事实
-              agentService.saveDraftEdit(targetId, {
+              // 同步写入 Agent Repository，保证 A04 / Registry 读到同一份草稿事实。
+              // V1.1：统一走 updateAgentDraft（A03 当前 UI 只编辑名称/职责/Owner；
+              // roleInstruction / tasks / scope 等编辑能力属于 Commit 06）
+              agentService.updateAgentDraft(targetId, {
                 name: updatedDef.name,
-                responsibility: updatedDef.responsibility,
+                description: updatedDef.responsibility,
+                responsibilitySummary: updatedDef.responsibility,
                 owner: updatedDef.owner
               });
             }

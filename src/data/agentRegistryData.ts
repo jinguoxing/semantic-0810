@@ -202,6 +202,8 @@ export interface AgentDefinitionDetail {
   agentId: string;
   name: string;
   responsibility: string;
+  /** Runtime 角色行为说明（Commit 06「高级角色说明」编辑的数据桥接，本 Commit 不新增 UI） */
+  roleInstruction?: string;
   owner: string;
   agentType: '系统智能体' | '受管智能体';
   category: 'SYSTEM' | 'MANAGED';
@@ -575,6 +577,7 @@ export function createAgentDraft(agentData: {
     agentId: `agt_${newId}`,
     name: agentData.name,
     responsibility: agentData.responsibility,
+    roleInstruction: domainResult.definition.roleInstruction,
     owner: agentData.owner,
     agentType: '受管智能体',
     category: 'MANAGED',

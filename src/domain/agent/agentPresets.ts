@@ -20,6 +20,8 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
     selectionSummary: '将以业务找数、问数与多维数据分析为主要职责，提供可解释的取数方案与归因分析。',
     defaultName: '数据分析助手',
     defaultResponsibility: '解析业务口径与指标语义，面向业务目标完成找数、问数与多维下钻分析。回答以企业指标与宽表数据为依据，提供可解释的分析逻辑。',
+    defaultRoleInstruction:
+      '作为企业数据分析智能体，围绕当前任务目标使用有权的数据、指标和业务语义，完成数据发现、问数和分析；优先采用正式指标与已发布语义；证据不足时明确说明；不得绕过权限或自行扩大数据访问范围。',
     defaultOwner: '数据智能团队',
     runtimeTarget: 'SEMOVIX_NATIVE',
     runtimeEngineLabel: 'Semovix Native',
@@ -47,6 +49,8 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
     selectionSummary: '将以企业知识问答与跨文档研究为主要职责，提供可信答案与可追溯依据。',
     defaultName: '企业知识助手',
     defaultResponsibility: '基于企业正式知识回答问题、开展跨文档与 Wiki 研究，并提供可追溯的知识依据。严禁无依据推测，优先高确定性知识依据。',
+    defaultRoleInstruction:
+      '作为企业知识智能体，只依据当前用户有权访问的企业正式知识回答和研究；回答优先提供可追溯依据；知识冲突、缺失或无法确认时必须说明；不得把推测表达为企业正式事实。',
     defaultOwner: '企业知识治理组',
     runtimeTarget: 'WEKNORA',
     runtimeEngineLabel: 'WeKnora',
@@ -74,6 +78,8 @@ export const MANAGED_AGENT_PRESETS: Record<string, ManagedAgentPreset> = {
     selectionSummary: '将以语义理解、业务对象、标准、指标与知识网络治理为主要职责，生成结构化治理提案。',
     defaultName: '语义治理助手',
     defaultResponsibility: '扫描治理资产与业务对象，识别标准冲突与命名歧义，生成结构化治理提案。以标准规范与事实映射为第一准则，严控模糊映射。',
+    defaultRoleInstruction:
+      '作为企业语义治理智能体，基于数据事实、业务语义和治理规范生成治理判断与候选方案；冲突或低确定性事项形成待确认提案；不得绕过治理流程直接发布正式语义或治理变更。',
     defaultOwner: '语义治理团队',
     runtimeTarget: 'SEMOVIX_NATIVE',
     runtimeEngineLabel: 'Semovix Native',

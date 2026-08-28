@@ -3,8 +3,8 @@
  * Core business operations:
  * - createDraftFromPreset: Generates an AgentDefinition + AgentDraft from an official preset
  * - publishDraft: Enforces immutable versioning (creates AgentVersion, updates runtime binding)
- * - createDraftFromPublishedVersion: Starts a new draft cycle from an existing immutable version
- * - saveDraftEdit: Persists workspace edits into the repository draft
+ * - createDraftFromPublishedVersion: Starts a new draft cycle from an immutable published snapshot
+ * - updateAgentDraft: The single unified draft edit entry (UpdateAgentDraftPatch)
  * - evaluateReleaseValidation: Runs the five Release Gates for the current draft
  */
 
@@ -18,7 +18,9 @@ import {
   AgentContextBinding,
   AgentContextSource,
   AGENT_CONTEXT_SOURCE_VIEWS,
-  ManagedAgentPreset
+  ManagedAgentPreset,
+  UpdateAgentDraftPatch,
+  buildAgentDefinitionSnapshot
 } from './agentTypes';
 import { getPresetById } from './agentPresets';
 import { agentRepository } from './agentRepository';
@@ -60,20 +62,20 @@ function defaultContextBindingFor(preset: ManagedAgentPreset): AgentContextBindi
 }
 
 /**
- * Context Binding 领域校验与归一化（V1.1 Domain Contract）：
- * A. sourceType 必须在 preset.allowedContextSources 内（Context Binding 不能扩大模板允许范围）
+ * Context Binding 领域校验与归一化（V1.1 Domain Contract，创建与更新共用同一规则）：
+ * A. sourceType 必须在允许的来源范围内（Context Binding 不能扩大允许范围）
  * B. SELECTED 必须携带至少一个 resourceId
  * C. SELECTED resourceIds 保存前去重（保持原顺序）
  * D. ALL_ALLOWED 统一不保存 resourceIds（归一为 undefined）
  */
-function validateAndNormalizeContextBindings(
+function validateAndNormalizeContextBindingsAgainst(
   bindings: AgentContextBinding[],
-  preset: ManagedAgentPreset
+  allowedContextSources: AgentContextSource[]
 ): AgentContextBinding[] {
   return bindings.map((binding) => {
-    if (!preset.allowedContextSources.includes(binding.sourceType)) {
+    if (!allowedContextSources.includes(binding.sourceType)) {
       throw new AgentContextBindingValidationError(
-        `能力模板「${preset.presetName}」不允许上下文来源: ${binding.sourceType}`
+        `上下文来源不在允许范围内: ${binding.sourceType}`
       );
     }
     if (binding.selectionMode === 'SELECTED') {
@@ -90,6 +92,14 @@ function validateAndNormalizeContextBindings(
     }
     return { sourceType: binding.sourceType, selectionMode: 'ALL_ALLOWED' };
   });
+}
+
+/** 创建路径：以能力模板的 allowedContextSources 为允许范围 */
+function validateAndNormalizeContextBindings(
+  bindings: AgentContextBinding[],
+  preset: ManagedAgentPreset
+): AgentContextBinding[] {
+  return validateAndNormalizeContextBindingsAgainst(bindings, preset.allowedContextSources);
 }
 
 /** 草稿 diff 用的工作范围描述（Domain 层不依赖 UI 名称 Fixture，只写来源类型与数量） */
@@ -133,6 +143,22 @@ export class AgentContextBindingValidationError extends Error {
   }
 }
 
+/** Draft 编辑校验失败（如必填字段被显式传入空字符串）—— 禁止静默吞掉非法编辑 */
+export class AgentDraftValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentDraftValidationError';
+  }
+}
+
+/** currentPublishedVersion 存在但找不到对应 AgentVersion Snapshot —— 禁止静默继续 */
+export class AgentPublishedVersionNotFoundError extends Error {
+  constructor(agentId: string, versionNumber: string) {
+    super(`未找到智能体 ${agentId} 的正式版本快照: ${versionNumber}`);
+    this.name = 'AgentPublishedVersionNotFoundError';
+  }
+}
+
 class AgentService {
   /**
    * P0: Create new unreleased Agent Definition + Initial Draft from an official preset
@@ -163,6 +189,9 @@ class AgentService {
       name: input.name.trim() || preset.defaultName,
       description: input.responsibility.trim() || preset.defaultResponsibility,
       responsibilitySummary: input.responsibility.trim() || preset.defaultResponsibility,
+      // V1.1：roleInstruction 来自能力模板独立默认值（≠ responsibilitySummary 业务职责摘要）。
+      // A02 创建时不收集 Role Instruction，创建后在 A03「高级角色说明」编辑（Commit 06）。
+      roleInstruction: preset.defaultRoleInstruction,
       agentKind: 'MANAGED',
       // 用户经由能力模板创建的智能体 = 组织自定义 (CUSTOM)
       origin: 'CUSTOM',
@@ -218,7 +247,10 @@ class AgentService {
       name: definition.name,
       description: definition.description,
       responsibilitySummary: definition.responsibilitySummary,
+      roleInstruction: definition.roleInstruction,
       origin: definition.origin,
+      // AgentDraft 是完整可编辑配置：持有 owner（Agent 配置的一部分，≠ updatedBy）
+      owner: definition.owner,
       supportedTaskTemplates: definition.supportedTaskTemplates.map((binding) => ({ ...binding })),
       allowedContextSources: [...definition.allowedContextSources],
       // 草稿持有独立副本（深 clone），与 Definition 不共享引用
@@ -360,11 +392,14 @@ class AgentService {
       : 'v1.0';
 
     // ── Step 1: 候选版本（尚未落库，仅为快照） ──
+    // V1.1：owner / roleInstruction 必须来自 Draft，否则用户编辑不会进入新正式版本
     const candidateDef: AgentDefinition = {
       ...def,
       name: draft.name,
       description: draft.description,
       responsibilitySummary: draft.responsibilitySummary,
+      roleInstruction: draft.roleInstruction,
+      owner: draft.owner,
       capabilityPreset: draft.capabilityPreset,
       capabilityDesc: draft.capabilityDesc || def.capabilityDesc,
       supportedTaskTemplates: draft.supportedTaskTemplates.map((binding) => ({ ...binding })),
@@ -376,7 +411,7 @@ class AgentService {
       maxAutonomyDesc: draft.maxAutonomyDesc || def.maxAutonomyDesc,
       runtimeTarget: draft.runtimeTarget,
       status: 'ACTIVE',
-      currentPublishedVersion: targetVersionNumber, // 仅存在于候选快照中，失败不落库
+      currentPublishedVersion: targetVersionNumber, // 仅存在于候选定义中，不进入 Snapshot
       currentDraftId: undefined,
       updatedAt: '刚刚'
     };
@@ -411,7 +446,9 @@ class AgentService {
       versionId: `ver_${params.agentId}_${Date.now().toString(36)}`,
       versionNumber: targetVersionNumber,
       agentId: params.agentId,
-      snapshot: { ...candidateDef },
+      // V1.1：AgentVersion.snapshot 只能是 canonical builder 产生的干净 Snapshot
+      // （candidateDef 继续用于更新当前 AgentDefinition，但不整体进入快照）
+      snapshot: buildAgentDefinitionSnapshot(candidateDef),
       publishedAt: '刚刚',
       publishedBy: params.publishedBy,
       releaseNotes: params.releaseNotes || `正式发布版本 ${targetVersionNumber}`,
@@ -427,7 +464,9 @@ class AgentService {
   }
 
   /**
-   * P0: Create new edit draft from an existing published version
+   * P0: Create new edit draft from an existing published version.
+   * V1.1：以 currentPublishedVersion 对应 AgentVersion 的不可变 Snapshot 为正式配置来源，
+   * 不再把 mutable AgentDefinition 当作发布版本配置快照使用。
    */
   public createDraftFromPublishedVersion(agentId: string, editorName: string): AgentDraft {
     const def = agentRepository.getDefinition(agentId);
@@ -435,25 +474,38 @@ class AgentService {
       throw new Error(`Agent not found: ${agentId}`);
     }
 
+    const versionNumber = def.currentPublishedVersion;
+    if (!versionNumber) {
+      throw new AgentPublishedVersionNotFoundError(agentId, '(none)');
+    }
+    const version = agentRepository.getVersion(agentId, versionNumber);
+    if (!version) {
+      throw new AgentPublishedVersionNotFoundError(agentId, versionNumber);
+    }
+
+    // Snapshot → New AgentDraft（深拷贝，Draft 与历史版本互不影响）
+    const snap = buildAgentDefinitionSnapshot(version.snapshot);
     const draftId = `draft_${agentId}_${Date.now().toString(36)}`;
     const draft: AgentDraft = {
       draftId,
       agentId,
-      baseVersion: def.currentPublishedVersion,
-      name: def.name,
-      description: def.description,
-      responsibilitySummary: def.responsibilitySummary,
-      origin: def.origin,
-      supportedTaskTemplates: def.supportedTaskTemplates.map((binding) => ({ ...binding })),
-      allowedContextSources: [...def.allowedContextSources],
-      contextBindings: cloneContextBindings(def.contextBindings),
-      capabilityPreset: def.capabilityPreset,
-      capabilityDesc: def.capabilityDesc,
-      modelPolicyId: def.modelPolicyId,
-      modelPolicyName: def.modelPolicyName,
-      maxAutonomy: def.maxAutonomy,
-      maxAutonomyDesc: def.maxAutonomyDesc,
-      runtimeTarget: def.runtimeTarget,
+      baseVersion: versionNumber,
+      origin: snap.origin,
+      name: snap.name,
+      description: snap.description,
+      responsibilitySummary: snap.responsibilitySummary,
+      roleInstruction: snap.roleInstruction,
+      owner: snap.owner,
+      supportedTaskTemplates: snap.supportedTaskTemplates.map((binding) => ({ ...binding })),
+      allowedContextSources: [...snap.allowedContextSources],
+      contextBindings: cloneContextBindings(snap.contextBindings),
+      capabilityPreset: snap.capabilityPreset,
+      capabilityDesc: snap.capabilityDesc,
+      modelPolicyId: snap.modelPolicyId,
+      modelPolicyName: snap.modelPolicyName,
+      maxAutonomy: snap.maxAutonomy,
+      maxAutonomyDesc: snap.maxAutonomyDesc,
+      runtimeTarget: snap.runtimeTarget,
       businessDiffs: [],
       updatedAt: '刚刚',
       updatedBy: editorName
@@ -467,28 +519,86 @@ class AgentService {
   }
 
   /**
-   * 将定义工作区 (A03) 的编辑持久化到 Repository 草稿。
-   * 没有草稿时基于当前正式版本自动开一个编辑草稿，保证 A04 读到同一份事实。
+   * V1.1 §28 Draft Update Contract：唯一统一的 Draft 编辑入口。
+   * 所有 A03 Section 写入同一个 AgentDraft，禁止出现第二套保存逻辑。
+   *
+   * A. 找 AgentDefinition，不存在 → explicit error
+   * B. 找当前 Draft；不存在且已有 Published Version → createDraftFromPublishedVersion()
+   * C. 应用 patch（必填字段空字符串 → AgentDraftValidationError，不静默吞掉）
+   * D. task / context / model 数组全部深拷贝，绝不保存调用方引用
+   * E. updatedAt 更新
+   * F. updatedBy：仅调用方显式提供时更新（Owner 修改不自动当成编辑人）
    */
-  public saveDraftEdit(
+  public updateAgentDraft(
     agentId: string,
-    edits: { name: string; responsibility: string; owner: string }
-  ): AgentDraft | null {
+    patch: UpdateAgentDraftPatch,
+    updatedBy?: string
+  ): AgentDraft {
     const def = agentRepository.getDefinition(agentId);
-    if (!def) return null;
+    if (!def) {
+      throw new Error(`Agent definition not found for id: ${agentId}`);
+    }
 
     let draft = agentRepository.getDraftByAgentId(agentId);
     if (!draft) {
-      draft = this.createDraftFromPublishedVersion(agentId, edits.owner || def.owner);
+      if (!def.currentPublishedVersion) {
+        throw new AgentDraftValidationError(
+          `智能体 ${agentId} 没有可编辑草稿，也没有可开新草稿的正式版本`
+        );
+      }
+      draft = this.createDraftFromPublishedVersion(agentId, updatedBy ?? def.owner);
     }
+
+    // 必填文本字段：显式传入空字符串 → 明确失败（禁止 trim() || oldValue 静默吞掉非法编辑）
+    const requiredTextFields: Array<
+      ['name' | 'responsibilitySummary' | 'roleInstruction' | 'owner' | 'modelPolicyId', string]
+    > = [
+      ['name', '智能体名称'],
+      ['responsibilitySummary', '主要职责'],
+      ['roleInstruction', '角色行为说明'],
+      ['owner', 'Owner'],
+      ['modelPolicyId', '模型策略']
+    ];
+    for (const [field, label] of requiredTextFields) {
+      const value = patch[field];
+      if (value !== undefined && value.trim() === '') {
+        throw new AgentDraftValidationError(`${label}不能为空`);
+      }
+    }
+
+    // Context Domain Validation（与创建路径同一套规则）：
+    // effectiveAllowed = patch.allowedContextSources ?? draft.allowedContextSources；
+    // 校验 patch.contextBindings（未传则以现有 draft.contextBindings 复核），
+    // 因此「缩小 allowedContextSources 导致既有 Binding 非法」会显式失败，不留 Domain 不一致。
+    const effectiveAllowed = patch.allowedContextSources ?? draft.allowedContextSources;
+    const bindingsToCheck = patch.contextBindings ?? draft.contextBindings;
+    const normalizedBindings = validateAndNormalizeContextBindingsAgainst(bindingsToCheck, effectiveAllowed);
 
     const updatedDraft: AgentDraft = {
       ...draft,
-      name: edits.name.trim() || draft.name,
-      description: edits.responsibility.trim() || draft.description,
-      responsibilitySummary: edits.responsibility.trim() || draft.responsibilitySummary,
+      ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+      ...(patch.description !== undefined ? { description: patch.description } : {}),
+      ...(patch.responsibilitySummary !== undefined
+        ? { responsibilitySummary: patch.responsibilitySummary.trim() }
+        : {}),
+      ...(patch.roleInstruction !== undefined ? { roleInstruction: patch.roleInstruction.trim() } : {}),
+      ...(patch.owner !== undefined ? { owner: patch.owner.trim() } : {}),
+      ...(patch.capabilityPreset !== undefined ? { capabilityPreset: patch.capabilityPreset } : {}),
+      ...(patch.capabilityDesc !== undefined ? { capabilityDesc: patch.capabilityDesc } : {}),
+      ...(patch.modelPolicyId !== undefined ? { modelPolicyId: patch.modelPolicyId.trim() } : {}),
+      ...(patch.modelPolicyName !== undefined ? { modelPolicyName: patch.modelPolicyName } : {}),
+      ...(patch.maxAutonomy !== undefined ? { maxAutonomy: patch.maxAutonomy } : {}),
+      ...(patch.maxAutonomyDesc !== undefined ? { maxAutonomyDesc: patch.maxAutonomyDesc } : {}),
+      ...(patch.supportedTaskTemplates !== undefined
+        ? { supportedTaskTemplates: patch.supportedTaskTemplates.map((binding) => ({ ...binding })) }
+        : {}),
+      ...(patch.allowedContextSources !== undefined
+        ? { allowedContextSources: [...patch.allowedContextSources] }
+        : {}),
+      // 归一化后的 Binding（去重 / ALL_ALLOWED 去 resourceIds），独立新数组
+      contextBindings: normalizedBindings,
       updatedAt: '刚刚',
-      updatedBy: edits.owner || draft.updatedBy
+      updatedBy: updatedBy ?? draft.updatedBy
     };
 
     agentRepository.saveDraft(updatedDraft);

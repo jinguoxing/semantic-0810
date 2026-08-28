@@ -91,6 +91,15 @@ export interface AgentDefinition {
   name: string;
   description: string;
   responsibilitySummary: string;
+  /**
+   * Runtime 使用的专业角色行为说明（≠ responsibilitySummary 面向用户的一句话业务职责摘要）。
+   *
+   * Prompt Layer Contract（冻结）：
+   *   P0 Platform Policy → P1 Agent Role Instruction → P2 Task Instruction
+   *   → P3 Runtime Context → P4 User Input
+   * P1 不能：覆盖 Platform Policy、绕过 Permission、修改 Task Contract、提升 Max Autonomy。
+   */
+  roleInstruction: string;
   agentKind: AgentKind;
   /** 内置 vs 组织自定义（用户可见分类字段） */
   origin: AgentOrigin;
@@ -124,6 +133,13 @@ export interface AgentDraft {
   responsibilitySummary: string;
   /** 与所属 AgentDefinition 的 origin 保持一致（草稿继承，不改变来源） */
   origin: AgentOrigin;
+  /**
+   * Runtime 使用的专业角色行为说明（AgentDraft 是完整可编辑配置，含 roleInstruction）。
+   * 语义与 Prompt Layer 约束同 AgentDefinition.roleInstruction。
+   */
+  roleInstruction: string;
+  /** 草稿编辑期间持有的 Owner（Agent 配置的一部分，≠ updatedBy 编辑人） */
+  owner: string;
   supportedTaskTemplates: TaskTemplateBinding[];
   allowedContextSources: AgentContextSource[];
   /** 当前实际配置的工作范围（草稿编辑对象，发布时并入 AgentVersion 快照） */
@@ -140,15 +156,97 @@ export interface AgentDraft {
   updatedBy: string;
 }
 
+/**
+ * 发布版本快照（V1.1 §31）：只包含 Runtime Config 字段。
+ * 严禁包含生命周期状态：agentId / agentKind / status / currentPublishedVersion /
+ * currentDraftId / createdAt / createdBy / updatedAt / sourcePresetId ——
+ * AgentVersion 自身已有 agentId / versionNumber / publishedAt / publishedBy，不重复。
+ */
+export interface AgentDefinitionSnapshot {
+  origin: AgentOrigin;
+  name: string;
+  description: string;
+  responsibilitySummary: string;
+  roleInstruction: string;
+  owner: string;
+  supportedTaskTemplates: TaskTemplateBinding[];
+  allowedContextSources: AgentContextSource[];
+  contextBindings: AgentContextBinding[];
+  capabilityPreset: string;
+  capabilityDesc?: string;
+  modelPolicyId: string;
+  modelPolicyName?: string;
+  maxAutonomy: MaxAutonomy;
+  maxAutonomyDesc?: string;
+  runtimeTarget: RuntimeTarget;
+}
+
+/**
+ * 唯一 canonical Snapshot Builder：显式逐字段选择允许进入 Snapshot 的内容
+ * （禁止 snapshot: { ...definition }，那会把生命周期字段再次带进去），
+ * 嵌套数组全部深拷贝。AgentDefinition 结构上包含全部 Snapshot 字段，可直接传入；
+ * 传入已有 Snapshot 则等价于不可变克隆。
+ */
+export function buildAgentDefinitionSnapshot(source: AgentDefinitionSnapshot): AgentDefinitionSnapshot {
+  return {
+    origin: source.origin,
+    name: source.name,
+    description: source.description,
+    responsibilitySummary: source.responsibilitySummary,
+    roleInstruction: source.roleInstruction,
+    owner: source.owner,
+    supportedTaskTemplates: source.supportedTaskTemplates.map((binding) => ({ ...binding })),
+    allowedContextSources: [...source.allowedContextSources],
+    contextBindings: source.contextBindings.map((binding) => ({
+      sourceType: binding.sourceType,
+      selectionMode: binding.selectionMode,
+      resourceIds: binding.resourceIds ? [...binding.resourceIds] : undefined
+    })),
+    capabilityPreset: source.capabilityPreset,
+    capabilityDesc: source.capabilityDesc,
+    modelPolicyId: source.modelPolicyId,
+    modelPolicyName: source.modelPolicyName,
+    maxAutonomy: source.maxAutonomy,
+    maxAutonomyDesc: source.maxAutonomyDesc,
+    runtimeTarget: source.runtimeTarget
+  };
+}
+
 export interface AgentVersion {
   versionId: string;
   versionNumber: string; // e.g. "v1.0", "v1.4"
   agentId: string;
-  snapshot: AgentDefinition;
+  snapshot: AgentDefinitionSnapshot;
   publishedAt: string;
   publishedBy: string;
   releaseNotes?: string;
   runtimeRevision: string;
+}
+
+/**
+ * 统一 Draft 更新补丁（V1.1 §28 Draft Update Contract）：
+ * 所有 A03 Section 写入同一个 AgentDraft，不允许第二套保存逻辑。
+ *
+ * 严禁提供：origin / agentKind / runtimeTarget / status / currentPublishedVersion /
+ * currentDraftId / baseVersion / agentId / draftId —— 它们不是普通 Draft Edit 可修改的字段。
+ * （runtimeTarget 由 Capability Template / Platform 决定，不是 Agent Owner 可编辑项。）
+ */
+export interface UpdateAgentDraftPatch {
+  name?: string;
+  /** 普通 A03「主要职责」同时映射 description + responsibilitySummary，不新增 UI 字段 */
+  description?: string;
+  responsibilitySummary?: string;
+  roleInstruction?: string;
+  owner?: string;
+  supportedTaskTemplates?: TaskTemplateBinding[];
+  allowedContextSources?: AgentContextSource[];
+  contextBindings?: AgentContextBinding[];
+  capabilityPreset?: string;
+  capabilityDesc?: string;
+  modelPolicyId?: string;
+  modelPolicyName?: string;
+  maxAutonomy?: MaxAutonomy;
+  maxAutonomyDesc?: string;
 }
 
 export interface AgentRuntimeBinding {
@@ -201,6 +299,8 @@ export interface ManagedAgentPreset {
   selectionSummary: string;
   defaultName: string;
   defaultResponsibility: string;
+  /** Runtime 角色行为说明默认值（≠ defaultResponsibility 业务职责摘要，表达角色行为边界） */
+  defaultRoleInstruction: string;
   defaultOwner: string;
   runtimeTarget: RuntimeTarget;
   runtimeEngineLabel: string;

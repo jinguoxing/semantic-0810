@@ -29,6 +29,9 @@ export function compileKnowledgeAgent(
     name: effective.name,
     description: effective.description,
     agentType: 'agentKind' in agentDefinition ? agentDefinition.agentKind : 'MANAGED',
+    // TODO(Commit 09 / Runtime Profile Mapping)：改用 effective.roleInstruction
+    // （AgentDraft / AgentDefinitionSnapshot 已在 V1.1 Commit 05 落地），
+    // 不再把 responsibilitySummary（用户职责摘要）当作 Runtime 角色指令。本 Commit 不改 Compiler。
     roleInstruction: effective.responsibilitySummary,
     knowledgeScope,
     webSearchEnabled: effective.allowedContextSources.includes('WEB'),
