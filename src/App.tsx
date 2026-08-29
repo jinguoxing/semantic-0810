@@ -559,7 +559,6 @@ export default function App() {
                     releaseTime: '刚刚发布',
                     status: 'ACTIVE',
                     hasDraft: false,
-                    isNewDraft: false,
                     runtimeBinding: 'ACTIVE'
                   };
                 }
@@ -590,7 +589,6 @@ export default function App() {
                     releaseTime: '刚刚发布',
                     status: 'ACTIVE',
                     hasDraft: false,
-                    isNewDraft: false,
                     runtimeBinding: 'ACTIVE'
                   }
                 : null

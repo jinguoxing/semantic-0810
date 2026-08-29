@@ -1405,7 +1405,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               <div className="p-3 bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-[11px] text-[#475569] leading-relaxed">
                 <strong>发布保障：</strong>{' '}
                 {isFirstRelease
-                  ? `发布将首次建立「${agentName}」在 ${runtimeEngine} 中的运行时绑定（当前为 MOCK_RUNTIME 投影），发布后即可在受控范围提供服务。`
+                  ? `发布将首次建立「${agentName}」在 ${runtimeEngine} 中的版本化运行绑定（当前为 MOCK_RUNTIME 模拟集成）；发布后该版本成为当前正式版本，生产运行将在 Runtime 正式接入后生效。`
                   : `候选版本先经 Runtime 校验与激活，全部成功后才切换正式版本；若任一步失败，线上正式版本 ${formalVersion} 保持 ACTIVE 不受影响。`}
               </div>
             </div>

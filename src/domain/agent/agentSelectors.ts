@@ -64,6 +64,12 @@ export interface AgentDefinitionWorkspaceState {
   businessDiffs: AgentBusinessDiff[];
   editable: AgentEditableConfig;
   editableSource: 'DRAFT' | 'PUBLISHED_SNAPSHOT' | 'DEFINITION';
+  /**
+   * 正式基线投影（Implementation Freeze §1）：currentPublishedVersion 对应
+   * AgentVersion.snapshot 的只读事实；未发布时为 null。
+   * 「正式基线」展示一律读此投影——Draft 的任何修改不得混入正式基线。
+   */
+  published: AgentEditableConfig | null;
   lastReleaseTime: string | null;
 }
 
@@ -168,6 +174,8 @@ export const agentSelectors = {
    * A03 Definition Workspace View Projection（V1.1 §20 / Commit 06 TASK 3）。
    * 配置事实优先级：AgentDraft > 当前 Published Snapshot > AgentDefinition；
    * 调用方不依赖 INITIAL_AGENT_DEFINITIONS 之类的展示 Fixture 作为配置 SoT。
+   * `published`（Implementation Freeze §1）固定取 currentPublishedVersion 的
+   * AgentVersion.snapshot——「正式基线」与「当前草稿」从此分离，互不混入。
    */
   getDefinitionWorkspaceState(agentId: string): AgentDefinitionWorkspaceState | null {
     const def = agentRepository.getDefinition(agentId);
@@ -181,8 +189,7 @@ export const agentSelectors = {
     const latestVersion = versions[0];
 
     // 三种来源在 AgentEditableConfig 字段上结构一致
-    const source: AgentEditableConfig = draft ?? publishedSnapshot ?? def;
-    const editable: AgentEditableConfig = {
+    const toEditableConfig = (source: AgentEditableConfig): AgentEditableConfig => ({
       name: source.name,
       description: source.description,
       responsibilitySummary: source.responsibilitySummary,
@@ -201,7 +208,9 @@ export const agentSelectors = {
       modelPolicyName: source.modelPolicyName,
       maxAutonomy: source.maxAutonomy,
       maxAutonomyDesc: source.maxAutonomyDesc
-    };
+    });
+
+    const editable = toEditableConfig(draft ?? publishedSnapshot ?? def);
 
     return {
       agentId: def.agentId,
@@ -216,6 +225,7 @@ export const agentSelectors = {
       businessDiffs: draft?.businessDiffs || [],
       editable,
       editableSource: draft ? 'DRAFT' : publishedSnapshot ? 'PUBLISHED_SNAPSHOT' : 'DEFINITION',
+      published: publishedSnapshot ? toEditableConfig(publishedSnapshot) : null,
       lastReleaseTime: latestVersion ? latestVersion.publishedAt : null
     };
   },

@@ -10,18 +10,13 @@ import {
 } from '../domain/agent/agentTypes';
 import { describeScopeBinding } from './agentScopeOptions';
 
-export interface AgentDraftChange {
-  title: string;
-  description: string;
-}
-
-export interface AgentDraftDetails {
-  author: string;
-  updatedAt: string;
-  changesCount: number;
-  changes: AgentDraftChange[];
-}
-
+/**
+ * A01 Registry ViewModel（Implementation Freeze §4）：
+ * 业务事实（name / responsibility / owner / 支持任务 / formalVersion / hasDraft /
+ * 草稿摘要 / 产品状态）统一由 Agent Domain selector 投影覆盖，
+ * Fixture 仅承载纯视觉信息（avatarType 等）与 Domain 缺失时的兜底展示，
+ * 不再作为这些字段的第二套 SoT；也不再携带演示用的 Skill / Tool 数量。
+ */
 export interface AgentItem {
   id: string;
   name: string;
@@ -40,13 +35,8 @@ export interface AgentItem {
   status: 'ACTIVE' | 'DRAFT' | 'DISABLED';
   owner: string;
   hasDraft: boolean;
-  isNewDraft?: boolean;
-  draftNote?: string;
-  draftDetails?: AgentDraftDetails;
   description: string;
   avatarType: 'data' | 'governance' | 'knowledge';
-  skillsCount: number;
-  toolsCount: number;
   runtimeBinding?: 'ACTIVE' | 'NOT_BOUND' | null;
   runtimeRevision?: string | null;
   templateId?: string;
@@ -137,8 +127,6 @@ export const INITIAL_AGENTS: AgentItem[] = [
     hasDraft: false,
     description: '专注于业务数据消费场景，结合指标语义、数据目录与分析模型，自动执行跨库探查、计算与归因下钻。',
     avatarType: 'data',
-    skillsCount: 6,
-    toolsCount: 12,
   },
   {
     id: 'semantic_governance',
@@ -155,8 +143,6 @@ export const INITIAL_AGENTS: AgentItem[] = [
     hasDraft: false,
     description: '面向数据治理与语义建模专家，提供表/字段语义推理、实体发现、标准映射与口径冲突仲裁能力。',
     avatarType: 'governance',
-    skillsCount: 9,
-    toolsCount: 16,
   },
   {
     id: 'enterprise_knowledge',
@@ -171,26 +157,8 @@ export const INITIAL_AGENTS: AgentItem[] = [
     status: 'ACTIVE',
     owner: '企业知识治理组',
     hasDraft: true,
-    draftNote: '草稿有修改',
-    draftDetails: {
-      author: '王健 (企业知识治理组)',
-      updatedAt: '今天 10:15',
-      changesCount: 2,
-      changes: [
-        {
-          title: '知识空间范围更新',
-          description: '挂载新增「数据治理规范」知识空间，纳入核心数据标准、值域代码与字段血缘规则。',
-        },
-        {
-          title: '能力预设模式升级',
-          description: '能力预设由「精准知识问答」升级为「Wiki + RAG 混合研究」，增强跨文档与拓扑词条多跳推理。',
-        },
-      ],
-    },
     description: '依托企业级 WeKnora 知识引擎，对结构化与非结构化制度、规范、业务字典进行多跳推理与准确回答。',
     avatarType: 'knowledge',
-    skillsCount: 5,
-    toolsCount: 9,
   },
 ];
 
@@ -583,18 +551,8 @@ export function createAgentDraft(agentData: {
     status: 'DRAFT',
     owner: agentData.owner,
     hasDraft: true,
-    isNewDraft: true,
-    draftNote: '首次创建草稿',
-    draftDetails: {
-      author: agentData.owner,
-      updatedAt: '刚刚',
-      changesCount: 0,
-      changes: []
-    },
     description: agentData.responsibility,
     avatarType,
-    skillsCount: isData ? 6 : isGovernance ? 8 : 5,
-    toolsCount: isData ? 12 : isGovernance ? 14 : 8,
     runtimeBinding: null, // 正式运行配置：尚未建立
     runtimeRevision: null,
     templateId: agentData.templateId

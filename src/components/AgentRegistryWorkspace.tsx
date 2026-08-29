@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   Bot,
   Sparkles,
@@ -9,7 +9,6 @@ import {
   ChevronDown,
   MoreHorizontal,
   Plus,
-  Layers,
   Cpu,
   CheckCircle2,
   FileText,
@@ -40,6 +39,7 @@ import {
   getAgentProductStatus
 } from '../data/agentRegistryData';
 import { agentService, agentSelectors } from '../domain/agent';
+import { getTaskTemplateView } from '../domain/agent/agentTypes';
 import { CreateAgentDrawer } from './CreateAgentDrawer';
 
 interface AgentRegistryWorkspaceProps {
@@ -68,8 +68,9 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
   onOpenPublishWorkspace,
   initialOpenCreateDrawer = false
 }) => {
-  // Navigation State
-  const [activeLeftNav, setActiveLeftNav] = useState<'agents' | 'skills'>('agents');
+  // Navigation State（Implementation Freeze §2：删除「能力与技能」假入口，
+  // V1.1 左侧只保留「智能体」一级导航）
+  const [activeLeftNav, setActiveLeftNav] = useState<'agents'>('agents');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Search & Filter State
@@ -99,26 +100,51 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
     }
   };
 
+  // ─────────────────────────────────────────────────────────────
+  // Domain-backed Projection（Implementation Freeze §4）：
+  // A01 业务事实（name / responsibility / owner / 支持任务 / formalVersion /
+  // hasDraft / 发布时间 / 状态 / 产品状态信号）一律从 Agent Domain selector
+  // 实时读取覆盖——INITIAL_AGENTS / AgentItem Fixture 仅保留 avatarType 等
+  // 纯视觉信息与 Domain 缺失时的兜底，不再是这些字段的第二套 SoT。
+  // 每次渲染直接投影（不 memo）：A03 保存草稿后返回 A01 立即与 Domain 一致。
+  // ─────────────────────────────────────────────────────────────
+  const displayAgents: AgentItem[] = [];
   // Domain Active Binding 运行信号（Commit 08 TASK 21）：只用于产品状态推导，
   // Registry 主 UI 不展示 syncStatus / healthStatus / integrationMode 原始 enum
-  const runtimeSignalsById = useMemo(() => {
-    const map = new Map<string, AgentRuntimeSignals>();
-    for (const a of agents) {
-      const display = agentSelectors.getDisplayState(a.id);
-      if (display) {
-        map.set(a.id, {
-          activeBindingVersion: display.activeBindingVersion,
-          syncStatus: display.syncStatus,
-          healthStatus: display.healthStatus
-        });
-      }
+  const runtimeSignalsById = new Map<string, AgentRuntimeSignals>();
+  for (const agent of agents) {
+    const domain = agentSelectors.getDisplayState(agent.id);
+    if (domain) {
+      runtimeSignalsById.set(agent.id, {
+        activeBindingVersion: domain.activeBindingVersion,
+        syncStatus: domain.syncStatus,
+        healthStatus: domain.healthStatus
+      });
     }
-    return map;
-  }, [agents]);
+    const wsState = agentSelectors.getDefinitionWorkspaceState(agent.id);
+    if (!domain || !wsState) {
+      displayAgents.push(agent); // Domain 无定义：兜底展示 Fixture（不应发生）
+      continue;
+    }
+    const enabledTaskNames = wsState.editable.supportedTaskTemplates
+      .filter((t) => t.enabled)
+      .map((t) => getTaskTemplateView(t.taskTemplateId).name);
+    displayAgents.push({
+      ...agent,
+      name: domain.name,
+      responsibility: domain.responsibility,
+      owner: domain.owner,
+      tasks: enabledTaskNames.slice(0, 2),
+      allTasks: enabledTaskNames,
+      formalVersion: domain.formalVersion,
+      releaseTime: domain.lastReleaseTime || '尚未发布',
+      status: domain.status,
+      hasDraft: domain.hasDraft
+    });
+  }
 
   // Filtered List
-  const filteredAgents = useMemo(() => {
-    return agents.filter((agent) => {
+  const filteredAgents = displayAgents.filter((agent) => {
       // Search: 名称 / 职责 / Owner / 支持任务 / 类型标签
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -144,7 +170,6 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
 
       return true;
     });
-  }, [agents, runtimeSignalsById, searchQuery, typeFilter, statusFilter]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -247,34 +272,6 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
             >
               <Bot className="w-4 h-4 shrink-0" />
               {!isSidebarCollapsed && <span>智能体</span>}
-            </button>
-
-            {/* Weak Group Title: 高级管理 */}
-            {!isSidebarCollapsed && (
-              <div className="pt-4 pb-1 px-3">
-                <span className="text-[10px] font-semibold text-[#94A3B8] tracking-wider uppercase">
-                  高级管理
-                </span>
-              </div>
-            )}
-
-            {/* Weak Secondary Entry: 能力与技能 */}
-            <button
-              onClick={() => {
-                setActiveLeftNav('skills');
-                addToast?.('info', '能力与技能', '当前共挂载 18 项平台 Tools、Skill 算子与知识检索连接器');
-              }}
-              className={`w-full flex items-center rounded-lg transition-colors cursor-pointer text-xs ${
-                isSidebarCollapsed ? 'justify-center p-2.5' : 'px-3 py-2 space-x-2.5'
-              } ${
-                activeLeftNav === 'skills'
-                  ? 'bg-[#F1F5F9] text-[#0F172A] font-semibold'
-                  : 'text-[#64748B] hover:bg-[#F8FAFC] hover:text-[#334155]'
-              }`}
-              title="能力与技能"
-            >
-              <Layers className="w-4 h-4 text-[#94A3B8] shrink-0" />
-              {!isSidebarCollapsed && <span>能力与技能</span>}
             </button>
           </div>
         </div>
@@ -406,7 +403,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
           {/* ─────────────────────────────────────────────────────────
               TWELVE. 草稿提醒信息条 (Light Blue Information Strip)
           ───────────────────────────────────────────────────────── */}
-          {agents.some((a) => a.hasDraft) && (
+          {displayAgents.some((a) => a.hasDraft) && (
             <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-start space-x-3">
                 <div className="w-5 h-5 rounded-full bg-[#DBEAFE] text-[#2563EB] flex items-center justify-center shrink-0 mt-0.5">
@@ -414,10 +411,10 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                 </div>
                 <div>
                   <div className="text-xs font-bold text-[#1E40AF]">
-                    {agents.filter((a) => a.hasDraft).length} 个智能体有未发布修改
+                    {displayAgents.filter((a) => a.hasDraft).length} 个智能体有未发布修改
                   </div>
                   <div className="text-xs text-[#3B82F6] mt-0.5 leading-relaxed">
-                    {agents
+                    {displayAgents
                       .filter((a) => a.hasDraft)
                       .map(
                         (a) =>
@@ -432,7 +429,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
 
               <button
                 onClick={() => {
-                  const target = agents.find((a) => a.hasDraft) || agents[0];
+                  const target = displayAgents.find((a) => a.hasDraft) || displayAgents[0];
                   setSelectedDraftAgent(target);
                   setIsDraftDrawerOpen(true);
                 }}
@@ -568,7 +565,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                               className="text-[11px] text-[#2563EB] hover:underline font-medium flex items-center space-x-1 pt-0.5 cursor-pointer"
                             >
                               <GitBranch className="w-3 h-3 text-[#2563EB]" />
-                              <span>{agent.draftNote || (agent.formalVersion ? '草稿有修改' : '未发布草稿')}</span>
+                              <span>{agent.formalVersion ? '草稿有修改' : '未发布草稿'}</span>
                             </button>
                           )}
                         </div>
@@ -646,10 +643,16 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                                 <span>查看草稿</span>
                               </button>
                             )}
+                            {/* Implementation Freeze §5：版本记录进入 A04 发布工作区
+                                （真实 AgentVersion 历史），不再弹固定数量 Toast */}
                             <button
                               onClick={() => {
-                                addToast?.('info', '版本历史', `「${agent.name}」已记录 6 个历史正式发布版本`);
                                 setActiveActionMenuId(null);
+                                if (onOpenPublishWorkspace) {
+                                  onOpenPublishWorkspace(agent);
+                                } else {
+                                  onOpenAgentDefinition?.(agent);
+                                }
                               }}
                               className="w-full px-2.5 py-1.5 text-xs text-[#334155] hover:bg-[#F8FAFC] hover:text-[#0F172A] rounded flex items-center space-x-2 text-left cursor-pointer"
                             >
@@ -684,11 +687,14 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
           SLIDE-OVER DRAWER 1: VIEW DRAFT (查看草稿)
       ───────────────────────────────────────────────────────────── */}
       {isDraftDrawerOpen && (() => {
-        const activeDraftAgent = selectedDraftAgent || agents.find((a) => a.hasDraft) || agents[0];
+        const activeDraftAgent = selectedDraftAgent || displayAgents.find((a) => a.hasDraft) || displayAgents[0];
         const hasFormal = Boolean(activeDraftAgent.formalVersion);
-        const draftAuthor = activeDraftAgent.draftDetails?.author || activeDraftAgent.owner;
-        const draftUpdatedAt = activeDraftAgent.draftDetails?.updatedAt || '刚刚';
-        const changes = activeDraftAgent.draftDetails?.changes || [];
+        // Implementation Freeze §4：草稿事实（编辑人 / 更新时间 / 变更摘要）读 Domain，
+        // businessDiffs 仅作为「已记录变更摘要」，不当作与正式版本的完整 Diff
+        const draftWs = agentSelectors.getDefinitionWorkspaceState(activeDraftAgent.id);
+        const changes = draftWs?.businessDiffs ?? [];
+        const draftAuthor = draftWs?.draftUpdatedBy || activeDraftAgent.owner;
+        const draftUpdatedAt = draftWs?.draftUpdatedAt || '刚刚';
         // 二十一: 版本号由 Domain Service 依据当前正式版本推导，不写死
         const targetNextVersion = agentService.getExpectedNextVersion(activeDraftAgent.id) ?? 'v1.0';
 
@@ -738,37 +744,22 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                     </p>
                   </div>
 
-                  {/* Change list */}
+                  {/* Change list：已记录变更摘要（businessDiffs 仅是编辑时记录的摘要） */}
                   <div className="space-y-3">
                     <div className="text-xs font-bold text-[#0F172A] flex items-center justify-between">
                       <span>
-                        {changes.length > 0 ? `包含 ${changes.length} 项待发布修改 (Changes)` : '草稿初始变更项'}
+                        已记录变更摘要{changes.length > 0 ? `（${changes.length} 项）` : ''}
                       </span>
                       <span className="text-[10px] font-mono text-[#64748B] bg-slate-100 px-1.5 py-0.2 rounded">
-                        DIFF: {changes.length > 0 ? `${changes.length} MODIFICATIONS` : 'INITIAL DRAFT'}
+                        {hasFormal
+                          ? changes.length > 0
+                            ? `${changes.length} RECORDED`
+                            : 'NO SUMMARY'
+                          : 'INITIAL DRAFT'}
                       </span>
                     </div>
 
-                    {changes.length > 0 ? (
-                      changes.map((ch, idx) => (
-                        <div key={idx} className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1.5">
-                          <div className="flex items-center space-x-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
-                            <span className="font-bold text-xs text-[#0F172A]">
-                              {idx + 1}. {ch.field}
-                            </span>
-                          </div>
-                          <p className="text-xs text-[#475569] leading-relaxed pl-3.5">
-                            {ch.detail}
-                          </p>
-                          <div className="pl-3.5 pt-1 text-[11px] font-mono text-[#64748B] flex items-center space-x-2">
-                            <span className="line-through text-red-500">{ch.before}</span>
-                            <span>→</span>
-                            <span className="text-[#16A36A] font-bold">{ch.after}</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
+                    {!hasFormal ? (
                       <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
                         <div className="flex items-center space-x-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
@@ -780,7 +771,43 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                           已初始化支持任务与基础配置，进入定义工作区可继续进行沙盒测试与发布。
                         </p>
                       </div>
+                    ) : changes.length > 0 ? (
+                      changes.map((ch, idx) => (
+                        <div key={idx} className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1.5">
+                          <div className="flex items-center justify-between space-x-2">
+                            <div className="flex items-center space-x-2 min-w-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                              <span className="font-bold text-xs text-[#0F172A] truncate">
+                                {idx + 1}. {ch.field}
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono text-[#2563EB] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 shrink-0">
+                              {ch.tag}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#475569] leading-relaxed pl-3.5">
+                            {ch.changeText}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                          <span className="font-bold text-xs text-[#0F172A]">
+                            尚未生成逐项差异摘要
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#475569] pl-3.5 leading-relaxed">
+                          当前草稿尚未记录任何变更摘要；这不代表草稿与正式版本一致，
+                          各配置项的当前取值以定义工作区为准。
+                        </p>
+                      </div>
                     )}
+
+                    <p className="text-[11px] text-[#94A3B8] leading-relaxed">
+                      变更摘要仅为创建与编辑时记录的业务摘要，不代表草稿与正式版本的完整差异。
+                    </p>
                   </div>
                 </div>
               </div>
@@ -916,18 +943,6 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                       <span className="text-[#64748B]">责任团队 (Owner)</span>
                       <span className="font-medium text-[#334155]">
                         {selectedAgentForDetail.owner}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between p-2.5">
-                      <span className="text-[#64748B]">挂载技能 (Skills)</span>
-                      <span className="font-semibold text-[#0F172A]">
-                        {selectedAgentForDetail.skillsCount} 项已授权技能
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between p-2.5">
-                      <span className="text-[#64748B]">工具算子 (Tools)</span>
-                      <span className="font-semibold text-[#0F172A]">
-                        {selectedAgentForDetail.toolsCount} 项 API/MCP 接口
                       </span>
                     </div>
                   </div>

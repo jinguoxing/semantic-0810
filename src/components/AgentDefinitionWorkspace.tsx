@@ -452,6 +452,26 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
   const isNewCustomDraft = !isBuiltIn && !ws.formalVersion;
   const currentPolicy = modelPolicySelectOptions.find((o) => o.modelPolicyId === ws.editable.modelPolicyId);
 
+  // ── 正式基线（Implementation Freeze §1）────────────────────────
+  // 事实源 = ws.published（currentPublishedVersion 对应 AgentVersion.snapshot）。
+  // Draft 的任何修改不得出现在正式基线中；未发布时 baseline = null。
+  const baseline = ws.published;
+  const baselineEnabledTaskCount = baseline
+    ? baseline.supportedTaskTemplates.filter((t) => t.enabled).length
+    : 0;
+  const baselineScopeBinding =
+    scopeConfig && baseline
+      ? baseline.contextBindings.find((b) => b.sourceType === scopeConfig.sourceType)
+      : undefined;
+  const baselineScopeSummary = baselineScopeBinding
+    ? describeScopeBinding(baselineScopeBinding)
+    : null;
+  const baselinePolicyName = baseline
+    ? MODEL_POLICY_OPTIONS.find((o) => o.modelPolicyId === baseline.modelPolicyId)?.modelPolicyName ??
+      baseline.modelPolicyName ??
+      baseline.modelPolicyId
+    : null;
+
   const saveButton = (
     <button
       onClick={handleSaveDraft}
@@ -783,18 +803,17 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                   </div>
                 </div>
 
-                {/* 正式基线（无 目标运行引擎 / 正式运行配置 / 同步状态） */}
+                {/* 正式基线（Implementation Freeze §1：事实源 = currentPublishedVersion 快照，
+                    Draft 修改不得混入；无 目标运行引擎 / 正式运行配置 / 同步状态） */}
                 <div className="space-y-2 border-b border-[#E2E8F0] pb-5">
                   <div>
                     <h3 className="text-xs font-bold text-[#0F172A]">正式基线</h3>
                     <p className="text-[11px] text-[#64748B] mt-0.5">
                       {ws.formalVersion === null
                         ? '尚未发布正式版本，当前所有配置仅存在于未发布草稿中。'
-                        : !ws.hasDraft
-                          ? `当前线上正式运行的是 ${ws.formalVersion}，当前没有未发布草稿。`
-                          : ws.businessDiffs.length > 0
-                            ? `当前线上正式运行的是 ${ws.formalVersion}，草稿已记录 ${ws.businessDiffs.length} 项变更摘要，尚未影响正式运行。`
-                            : `当前线上正式运行的是 ${ws.formalVersion}，存在未发布草稿，尚未生成逐项差异摘要。`}
+                        : ws.hasDraft
+                          ? `当前线上正式运行的是 ${ws.formalVersion}，正式基线取自该版本快照，草稿修改不影响正式基线。`
+                          : `当前线上正式运行的是 ${ws.formalVersion}，当前没有未发布草稿。`}
                     </p>
                   </div>
                   <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
@@ -812,38 +831,68 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                         </div>
                         <div className="flex items-center justify-between p-3">
                           <dt className="text-[#64748B]">Owner</dt>
-                          <dd className="font-medium text-[#0F172A]">{ws.editable.owner}</dd>
+                          <dd className="font-medium text-[#0F172A]">
+                            {baseline ? (
+                              baseline.owner
+                            ) : (
+                              <span className="text-[#94A3B8]">暂无正式基线</span>
+                            )}
+                          </dd>
                         </div>
                         <div className="flex items-center justify-between p-3">
                           <dt className="text-[#64748B]">支持任务</dt>
                           <dd className="text-[#0F172A]">
-                            {ws.formalVersion ? `${enabledTaskCount} 项启用` : <span className="text-[#94A3B8]">暂无正式基线</span>}
+                            {baseline ? (
+                              `${baselineEnabledTaskCount} 项启用`
+                            ) : (
+                              <span className="text-[#94A3B8]">暂无正式基线</span>
+                            )}
                           </dd>
                         </div>
                         <div className="flex items-center justify-between p-3">
                           <dt className="text-[#64748B]">工作范围</dt>
                           <dd
                             className="font-semibold text-[#0F172A] truncate max-w-[60%]"
-                            title={scopeSummary}
+                            title={baselineScopeSummary ?? undefined}
                           >
-                            {scopeConfigured ? scopeSummary : <span className="text-[#94A3B8] font-normal">未配置</span>}
+                            {baseline ? (
+                              baselineScopeSummary ?? <span className="text-[#94A3B8] font-normal">未配置</span>
+                            ) : (
+                              <span className="text-[#94A3B8] font-normal">暂无正式基线</span>
+                            )}
                           </dd>
                         </div>
                       </div>
                       <div className="divide-y divide-[#F1F5F9]">
                         <div className="flex items-center justify-between p-3">
                           <dt className="text-[#64748B]">能力模式</dt>
-                          <dd className="font-semibold text-[#0F172A]">{ws.editable.capabilityPreset}</dd>
+                          <dd className="font-semibold text-[#0F172A]">
+                            {baseline ? (
+                              baseline.capabilityPreset
+                            ) : (
+                              <span className="text-[#94A3B8] font-normal">暂无正式基线</span>
+                            )}
+                          </dd>
                         </div>
                         <div className="flex items-center justify-between p-3">
                           <dt className="text-[#64748B]">模型策略</dt>
                           <dd className="text-[#0F172A]">
-                            {currentPolicy?.modelPolicyName ?? ws.editable.modelPolicyId}
+                            {baseline && baselinePolicyName ? (
+                              baselinePolicyName
+                            ) : (
+                              <span className="text-[#94A3B8]">暂无正式基线</span>
+                            )}
                           </dd>
                         </div>
                         <div className="flex items-center justify-between p-3">
                           <dt className="text-[#64748B]">最大自主程度</dt>
-                          <dd className="text-[#0F172A]">{MAX_AUTONOMY_VIEWS[ws.editable.maxAutonomy]}</dd>
+                          <dd className="text-[#0F172A]">
+                            {baseline ? (
+                              MAX_AUTONOMY_VIEWS[baseline.maxAutonomy]
+                            ) : (
+                              <span className="text-[#94A3B8]">暂无正式基线</span>
+                            )}
+                          </dd>
                         </div>
                         <div className="flex items-center justify-between p-3">
                           <dt className="text-[#64748B]">最近发布</dt>

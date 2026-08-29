@@ -337,7 +337,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                 选择能力模板
               </h3>
               <p className="text-xs text-[#64748B] leading-relaxed">
-                根据主要职责选择一个起点。模板只提供推荐初始定义，不限制后续调整。
+                根据主要职责选择一个起点。模板提供经过平台验证的初始能力边界，创建后可在模板允许范围内继续调整。
               </p>
               <p className="text-xs text-[#94A3B8] leading-relaxed">
                 一个智能体可以承担多项正式任务，不需要为每个功能单独创建 Agent。
