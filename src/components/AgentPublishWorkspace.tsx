@@ -28,7 +28,11 @@ import {
   ReleaseCheckStatus,
   RELEASE_GATE_KEYS,
   RELEASE_GATE_LABELS,
-  ReleaseGateNotPassedError
+  ReleaseGateNotPassedError,
+  getTaskTemplateView,
+  AGENT_CONTEXT_SOURCE_VIEWS,
+  MODEL_POLICY_OPTIONS,
+  MAX_AUTONOMY_VIEWS
 } from '../domain/agent';
 
 interface AgentPublishWorkspaceProps {
@@ -129,6 +133,30 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
   );
 
   const draftChanges = domain.draft?.businessDiffs ?? [];
+
+  /* ─────────────────────────────────────────────────────────────
+     Commit 07.1 FIX 2：待发布事实一律 Draft-first。
+     vmDef / INITIAL_AGENT_DEFINITIONS 只允许作为非事实性展示 fallback
+     （如名称兜底），发布事实（任务/能力/范围/模型策略/自主程度）
+     全部来自 domain.draft；无 Draft 时按防御性空态展示。
+     ───────────────────────────────────────────────────────────── */
+  const draftEnabledTasks =
+    domain.draft?.supportedTaskTemplates.filter((t) => t.enabled) ?? [];
+  const draftModelPolicyName = domain.draft
+    ? domain.draft.modelPolicyName ??
+      MODEL_POLICY_OPTIONS.find((p) => p.modelPolicyId === domain.draft?.modelPolicyId)
+        ?.modelPolicyName ??
+      domain.draft.modelPolicyId
+    : '—';
+  const draftScopeSummary = domain.draft
+    ? domain.draft.contextBindings
+        .map((b) =>
+          b.selectionMode === 'SELECTED'
+            ? `${AGENT_CONTEXT_SOURCE_VIEWS[b.sourceType].label}（指定 ${b.resourceIds?.length ?? 0} 项）`
+            : `${AGENT_CONTEXT_SOURCE_VIEWS[b.sourceType].label}（全部允许）`
+        )
+        .join('、') || '未配置工作范围'
+    : '—';
 
   /* ─────────────────────────────────────────────────────────────
      二十: Release Validation Model —— 五道发布门
@@ -276,10 +304,6 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
       desc: `当前草稿满足「${agentName}」发布质量基线（配置、行为边界与运行依赖）。`
     }
   ];
-
-  const draftFirstEnabledTask =
-    domain.draft?.supportedTaskTemplates.find((t) => t.enabled)?.taskTemplateId ??
-    domain.def.supportedTaskTemplates.find((t) => t.enabled)?.taskTemplateId;
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#F8FAFC]">
@@ -572,17 +596,18 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       </span>
                     </div>
 
-                    {/* Current Draft */}
+                    {/* Current Draft（FIX 1：状态由 formalVersion/hasDraft 决定，
+                        businessDiffs 只表达「已记录 N 项变更摘要」，禁止推论「与正式版一致」） */}
                     <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
                       <span className="text-[11px] text-[#64748B] block">当前草稿</span>
                       <div className="font-bold text-xs text-[#2563EB]">
                         {!hasDraft
-                          ? '无未发布草稿'
+                          ? '当前无未发布草稿'
                           : isFirstRelease
-                          ? '首发创建草稿'
+                          ? '首发草稿'
                           : draftChanges.length > 0
-                          ? `${draftChanges.length} 项修改`
-                          : '与正式版一致'}
+                          ? `已记录 ${draftChanges.length} 项变更摘要`
+                          : '有未发布草稿'}
                       </div>
                       <span className="text-[10px] text-[#64748B] block truncate">
                         {!hasDraft
@@ -591,7 +616,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           ? '待发布为初始正式版本'
                           : draftChanges.length > 0
                           ? draftChanges.map((d) => d.field).join('、')
-                          : '配置文件已就绪'}
+                          : '尚未生成逐项差异摘要'}
                       </span>
                     </div>
 
@@ -626,12 +651,10 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       {!hasDraft
                         ? '当前没有未发布草稿，暂无变更待审。'
                         : isFirstRelease
-                        ? `首发版本上线，包含 ${
-                            domain.draft?.supportedTaskTemplates.filter((t) => t.enabled).length ?? 0
-                          } 项支持任务与基础能力模式配置。`
+                        ? `首发版本上线，包含 ${draftEnabledTasks.length} 项支持任务与基础能力模式配置。`
                         : draftChanges.length > 0
-                        ? `相比正式版本 ${formalVersion}，本次准备发布以下 ${draftChanges.length} 项业务级修改。`
-                        : `当前草稿与正式版本 ${formalVersion} 保持完全一致，无需额外差异调整。`}
+                        ? `相比正式版本 ${formalVersion}，已记录 ${draftChanges.length} 项变更摘要（非完整逐项 Diff）。`
+                        : '存在未发布草稿，尚未生成逐项差异摘要。'}
                     </p>
                   </div>
 
@@ -648,8 +671,14 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                             NEW DRAFT
                           </span>
                         </div>
+                        {/* FIX 2：首发事实来自 Draft TaskTemplateBinding / capabilityPreset，
+                            不使用 vmDef.tasks / vmDef.capabilityMode */}
                         <div className="text-[11px] text-[#475569] leading-relaxed">
-                          包含支持任务：{(vmDef?.tasks || []).map((t) => t.name).join('、')}；能力模式：{vmDef?.capabilityMode}。
+                          包含支持任务：
+                          {draftEnabledTasks.length > 0
+                            ? draftEnabledTasks.map((t) => getTaskTemplateView(t.taskTemplateId).name).join('、')
+                            : '（无启用任务）'}
+                          ；能力模式：{domain.draft?.capabilityPreset ?? '—'}。
                         </div>
                       </div>
                     ) : draftChanges.length > 0 ? (
@@ -668,7 +697,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       ))
                     ) : (
                       <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg text-[11px] text-[#64748B]">
-                        当前草稿与正式版本 {formalVersion} 保持一致，暂无未发布修改。
+                        存在未发布草稿，尚未生成逐项差异摘要。
                       </div>
                     )}
                   </div>
@@ -762,7 +791,11 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       <div className="space-y-1">
                         <div className="text-[11px] text-[#64748B]">测试运行</div>
                         <div className="font-bold text-xs text-[#0F172A]">
-                          {validation?.testRun === 'PASSED' ? '基础检查通过' : validation?.testRun === 'FAILED' ? '检查未通过' : '待检查'}
+                          {validation?.testRun === 'PASSED'
+                            ? '基础检查通过'
+                            : validation?.testRun === 'FAILED'
+                            ? '基础检查未通过'
+                            : '待检查'}
                         </div>
                         <button
                           onClick={() => setActiveSection('test_run')}
@@ -871,76 +904,110 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                   </div>
                 )}
 
-                {/* Section View: 测试运行（TASK 18：V1.1 为基础运行检查 / Smoke Readiness，
-                    不宣称真实完整 Test Suite；未来测试引擎接入后替换内部实现） */}
+                {/* Section View: 测试运行（Commit 07.1 FIX 3/4：删除伪执行 Test Case——
+                    fixture 案例 / sampleResponse / 回答摘要均无真实 Test Harness 执行证据，
+                    不得因 validation.testRun PASSED 就标成「测试通过」。
+                    V1.1 只展示 Smoke Readiness 的真实检查事实） */}
                 {activeSection === 'test_run' && (
                   <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-4 text-xs">
                     <div className="space-y-0.5">
                       <div className="font-bold text-[#0F172A]">
-                        基础运行检查 ({validation?.testRun === 'PASSED' ? '通过' : validation?.testRun === 'FAILED' ? '未通过' : '待检查'})
+                        基础运行检查 ({validation?.testRun === 'PASSED'
+                          ? '基础检查通过'
+                          : validation?.testRun === 'FAILED'
+                          ? '基础检查未通过'
+                          : '待检查'})
                       </div>
                       <p className="text-[11px] text-[#64748B]">
-                        当前为 V1.1 原型的基础运行检查（Smoke Readiness）：验证草稿具备可执行的运行配置与启用任务；完整测试套件将在测试引擎接入后执行。
+                        当前仅验证草稿具备基本可运行条件，尚未执行真实业务测试用例。
+                        完整测试、回归集与结果对比将在 Test Harness 接入后提供。
                       </p>
                     </div>
-                    <div className="space-y-3">
-                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="font-bold text-[#0F172A]">
-                            {vmDef?.testSandbox?.suggestedQueries?.[0]
-                              ? `测试案例 1：${vmDef.testSandbox.suggestedQueries[0]}`
-                              : `测试案例 1：${agentName} 核心任务能力探查`}
+
+                    {!hasDraft ? (
+                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[11px] text-[#64748B]">
+                        当前没有未发布草稿，无待发布配置可检查。
+                      </div>
+                    ) : (
+                      <>
+                        {/* 真实检查事实：全部来自 Domain Validation 与当前 Draft */}
+                        <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-[#0F172A]">运行配置生成</span>
+                            <span
+                              className={`font-mono font-bold ${
+                                validation?.runtimeCompile === 'PASSED'
+                                  ? 'text-[#16A36A]'
+                                  : validation?.runtimeCompile === 'FAILED'
+                                  ? 'text-red-600'
+                                  : 'text-[#94A3B8]'
+                              }`}
+                            >
+                              {validation?.runtimeCompile ?? 'PENDING'}
+                            </span>
                           </div>
-                          <span
-                            className={`font-semibold px-2 py-0.5 rounded border ${
-                              validation?.testRun === 'PASSED'
-                                ? 'text-[#16A36A] bg-emerald-50 border-emerald-200'
-                                : 'text-amber-700 bg-amber-50 border-amber-200'
-                            }`}
-                          >
-                            {validation?.testRun === 'PASSED' ? '测试通过' : '待执行'}
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-[#0F172A]">运行依赖</span>
+                            <span
+                              className={`font-mono font-bold ${
+                                validation?.runtimeDependencies === 'PASSED'
+                                  ? 'text-[#16A36A]'
+                                  : validation?.runtimeDependencies === 'FAILED'
+                                  ? 'text-red-600'
+                                  : 'text-[#94A3B8]'
+                              }`}
+                            >
+                              {validation?.runtimeDependencies ?? 'PENDING'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between border-t border-[#F1F5F9] pt-2">
+                            <span className="font-medium text-[#0F172A]">启用任务</span>
+                            <span className="text-[#475569]">{draftEnabledTasks.length} 项</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-[#0F172A]">待发布配置</span>
+                            <span className="text-[#475569]">当前 Draft</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-[#0F172A]">集成模式</span>
+                            <span className="font-mono text-[#475569]">
+                              {isMockIntegration ? 'MOCK_RUNTIME' : 'PRODUCTION'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 检查结论 */}
+                        <div
+                          className={`p-3 rounded-lg border text-[11px] font-semibold flex items-center space-x-1.5 ${
+                            validation?.testRun === 'PASSED'
+                              ? 'bg-emerald-50 border-emerald-200 text-[#16A36A]'
+                              : validation?.testRun === 'FAILED'
+                              ? 'bg-red-50 border-red-200 text-red-600'
+                              : 'bg-amber-50 border-amber-200 text-amber-700'
+                          }`}
+                        >
+                          {validation?.testRun === 'PASSED' ? (
+                            <Check className="w-3.5 h-3.5" />
+                          ) : (
+                            <Clock className="w-3.5 h-3.5" />
+                          )}
+                          <span>
+                            检查结论：
+                            {validation?.testRun === 'PASSED'
+                              ? '基础运行条件满足'
+                              : validation?.testRun === 'FAILED'
+                              ? '基础运行条件未满足'
+                              : '待检查'}
                           </span>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-[#64748B] pt-1 border-t border-[#E2E8F0]">
-                          <div>Routing: <span className="font-mono text-[#0F172A]">{draftFirstEnabledTask || '未绑定任务'}</span></div>
-                          <div>Agent: <span className="text-[#0F172A]">{hasDraft ? '当前草稿' : '正式版本'}</span></div>
-                          <div>Runtime: <span className="text-[#0F172A]">{runtimeEngine} · {isMockIntegration ? 'MOCK_RUNTIME' : '验证副本'}</span></div>
-                          <div>Evidence: <span className="font-bold text-[#0F172A]">{releaseSource.allowedContextSources.length} 项允许来源</span></div>
-                        </div>
-                        <div className="text-[11px] text-[#334155] bg-white p-2.5 rounded border border-[#E2E8F0]">
-                          <strong>回答摘要：</strong>{' '}
-                          {vmDef?.testSandbox?.sampleResponses?.[0]?.reply
-                            ? vmDef.testSandbox.sampleResponses[0].reply.split('\n')[0]
-                            : `已通过 ${runtimeEngine} 运行时验证，草稿配置符合业务规范与执行标准。`}
-                        </div>
-                      </div>
 
-                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-[#0F172A]">
-                            {vmDef?.testSandbox?.suggestedQueries?.[1]
-                              ? `测试案例 2：${vmDef.testSandbox.suggestedQueries[1]}`
-                              : `测试案例 2：${vmDef?.tasks?.[0]?.name || '基础支持任务'}边界校验`}
-                          </div>
-                          <div className="text-[11px] text-[#64748B]">命中受管资产：{vmDef?.contextSources?.[0]?.label || '受管业务语义'} · 状态: 正常</div>
-                        </div>
-                        <span className={`font-semibold ${validation?.testRun === 'PASSED' ? 'text-[#16A36A]' : 'text-amber-600'}`}>
-                          {validation?.testRun === 'PASSED' ? '通过' : '待执行'}
-                        </span>
-                      </div>
-
-                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-[#0F172A]">
-                            测试案例 3：{vmDef?.tasks?.[1]?.name || '多维意图与策略识别'}联动执行探查
-                          </div>
-                          <div className="text-[11px] text-[#64748B]">运行引擎：{runtimeEngine} · 自主程度: {releaseSource.maxAutonomyDesc || '建议'}</div>
-                        </div>
-                        <span className={`font-semibold ${validation?.testRun === 'PASSED' ? 'text-[#16A36A]' : 'text-amber-600'}`}>
-                          {validation?.testRun === 'PASSED' ? '通过' : '待执行'}
-                        </span>
-                      </div>
-                    </div>
+                        <p className="text-[10px] text-[#94A3B8] leading-relaxed">
+                          说明：以上结果为发布前的基础运行条件检查（Smoke Readiness），
+                          不代表任何业务测试用例已被执行；测试用例、Prompt、回答与引用命中等
+                          真实执行数据将在 Test Harness 接入后展示。
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -1049,31 +1116,28 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
 
           {/* Compact Parameter List */}
           <div className="space-y-3 text-xs">
-            {/* Formal Baseline */}
+            {/* Formal Baseline（FIX 7：右侧不展示 Runtime Provider，版本号即事实） */}
             <div className="space-y-0.5">
               <span className="text-[11px] text-[#64748B] block">当前正式版本</span>
               <div className="flex items-center justify-between">
                 <span className="font-mono font-bold text-[#0F172A]">
                   {formalVersion || '暂无 (未发布)'}
                 </span>
-                <span className="text-[10px] font-mono text-[#64748B]">
-                  {runtimeEngine} {isMockIntegration ? '· MOCK_RUNTIME' : ''}
-                </span>
               </div>
             </div>
 
-            {/* Target Draft */}
+            {/* Target Draft（FIX 1：状态由 formalVersion/hasDraft 决定） */}
             <div className="space-y-0.5 pt-2 border-t border-[#F1F5F9]">
               <span className="text-[11px] text-[#64748B] block">当前草稿</span>
               <div className="flex items-center justify-between">
                 <span className={`font-semibold ${hasDraft ? 'text-[#2563EB]' : 'text-[#64748B]'}`}>
                   {!hasDraft
-                    ? '无未发布草稿'
+                    ? '当前无未发布草稿'
                     : isFirstRelease
-                    ? '首发创建草稿'
+                    ? '首发草稿'
                     : draftChanges.length > 0
-                    ? `${draftChanges.length} 项修改`
-                    : '与正式版一致'}
+                    ? `已记录 ${draftChanges.length} 项变更摘要`
+                    : '有未发布草稿'}
                 </span>
                 <span className="font-mono font-bold text-[#0F172A]">
                   {hasDraft ? `预计版本：${targetNewVersion}` : '无待发布版本'}
@@ -1081,11 +1145,11 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               </div>
             </div>
 
-            {/* Changes list */}
+            {/* 变更摘要（FIX 1：businessDiffs 只表达已记录摘要，不作完整 Diff 宣称） */}
             <div className="p-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-[11px] space-y-1 text-[#334155]">
-              <div className="font-semibold text-[#0F172A]">本次主要变更：</div>
+              <div className="font-semibold text-[#0F172A]">已记录变更摘要：</div>
               {!hasDraft ? (
-                <div>• 无未发布草稿，配置与线上正式版本一致</div>
+                <div>• 当前无未发布草稿</div>
               ) : isFirstRelease ? (
                 <div>• 首发正式上线并建立运行时绑定</div>
               ) : draftChanges.length > 0 ? (
@@ -1093,26 +1157,34 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                   <div key={i} className="truncate">• {d.field}：{d.changeText}</div>
                 ))
               ) : (
-                <div>• 配置文件与线上正式版本一致</div>
+                <div>• 存在未发布草稿，尚未生成逐项差异摘要</div>
               )}
             </div>
 
-            {/* Runtime Projection */}
+            {/* 运行准备（FIX 7：产品语言，Provider 只出现在检查详情） */}
             <div className="space-y-1 pt-2 border-t border-[#F1F5F9]">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[#64748B]">Runtime</span>
-                <span className="font-semibold text-[#0F172A]">{runtimeEngine}</span>
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#64748B]">运行准备</span>
-                <span className={`font-mono font-bold ${validation?.runtimeCompile === 'PASSED' ? 'text-[#16A36A]' : 'text-amber-600'}`}>
-                  {validation?.runtimeCompile === 'PASSED' ? 'Ready' : '未就绪'}
+                <span className="text-[11px] text-[#64748B]">运行准备</span>
+                <span
+                  className={`font-semibold ${
+                    runtimeReadiness === 'passed'
+                      ? 'text-[#16A36A]'
+                      : runtimeReadiness === 'failed'
+                      ? 'text-red-600'
+                      : 'text-amber-600'
+                  }`}
+                >
+                  {runtimeReadiness === 'passed'
+                    ? '已就绪'
+                    : runtimeReadiness === 'failed'
+                    ? '未就绪'
+                    : '待检查'}
                 </span>
               </div>
               <p className="text-[10px] text-[#94A3B8] leading-tight">
                 {isMockIntegration
-                  ? 'MOCK_RUNTIME 投影：仅用于发布前验证，未接入真实 Runtime API。'
-                  : '仅用于发布前验证，尚未替代当前正式 Runtime。'}
+                  ? '当前为 MOCK_RUNTIME 验证环境，仅用于发布前验证。'
+                  : '发布前验证基于正式运行协议完成。'}
               </p>
             </div>
 
@@ -1199,37 +1271,86 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               </button>
             </div>
 
-            {/* Body */}
+            {/* Body（FIX 8：弹窗事实全部来自当前 Draft，不使用 Fixture） */}
             <div className="p-5 space-y-4 text-xs">
               <div className="flex items-center justify-between p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg">
                 <div>
-                  <span className="text-[11px] text-[#64748B] block">预计生成新版本</span>
+                  <span className="text-[11px] text-[#64748B] block">目标版本</span>
                   <span className="text-sm font-bold font-mono text-[#0F172A] block mt-0.5">
                     {targetNewVersion}
                   </span>
                 </div>
-                <div className="text-right">
-                  <span className="text-[11px] text-[#64748B] block">绑定 Runtime</span>
-                  <span className="font-medium text-[#0F172A] block mt-0.5">
-                    {runtimeEngine}（{isMockIntegration ? 'MOCK_RUNTIME 投影' : '正式连接'}）
-                  </span>
+                <div className="text-right space-y-1">
+                  <div>
+                    <span className="text-[11px] text-[#64748B]">类型：</span>
+                    <span className="font-medium text-[#0F172A]">{kindLabel}</span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-[#64748B]">发布检查：</span>
+                    <span
+                      className={`font-semibold ${
+                        canPublish ? 'text-[#16A36A]' : 'text-amber-600'
+                      }`}
+                    >
+                      {passedGateCount}/5 {canPublish ? '通过' : '未完成'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
+              {/* 待发布配置事实（Draft-first，防御性空态） */}
               <div className="space-y-1.5">
-                <div className="font-bold text-[#0F172A]">本次主要变更：</div>
+                <div className="font-bold text-[#0F172A]">待发布配置（当前草稿）：</div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] text-[#475569]">
+                  <div>
+                    智能体名称：
+                    <span className="font-medium text-[#0F172A]">{domain.draft?.name ?? '—'}</span>
+                  </div>
+                  <div>
+                    启用任务：
+                    <span className="font-medium text-[#0F172A]">{draftEnabledTasks.length} 项</span>
+                  </div>
+                  <div>
+                    能力模式：
+                    <span className="font-medium text-[#0F172A]">{domain.draft?.capabilityPreset ?? '—'}</span>
+                  </div>
+                  <div>
+                    模型策略：
+                    <span className="font-medium text-[#0F172A]">{draftModelPolicyName}</span>
+                  </div>
+                  <div>
+                    自主程度：
+                    <span className="font-medium text-[#0F172A]">
+                      {domain.draft
+                        ? domain.draft.maxAutonomyDesc || MAX_AUTONOMY_VIEWS[domain.draft.maxAutonomy]
+                        : '—'}
+                    </span>
+                  </div>
+                  <div>
+                    发布人：
+                    <span className="font-medium text-[#0F172A]">{publisherName ?? '未记录'}</span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-[#475569]">
+                  工作范围摘要：
+                  <span className="font-medium text-[#0F172A]">{draftScopeSummary}</span>
+                </div>
+              </div>
+
+              {/* 变更摘要（FIX 1：businessDiffs 只表达已记录摘要） */}
+              <div className="space-y-1.5">
+                <div className="font-bold text-[#0F172A]">已记录变更摘要：</div>
                 <ul className="list-disc list-inside space-y-1 text-[#475569] pl-1">
-                  {draftChanges.length > 0 ? (
+                  {isFirstRelease ? (
+                    <li>首发正式上线：发布草稿为初始正式版本</li>
+                  ) : draftChanges.length > 0 ? (
                     draftChanges.map((change, idx) => (
                       <li key={idx}>
                         {change.field}：{change.changeText}
                       </li>
                     ))
                   ) : (
-                    <>
-                      <li>基础配置初始化：设定业务职责与安全规则边界</li>
-                      <li>绑定运行引擎：接入 {runtimeEngine} 运行时执行流</li>
-                    </>
+                    <li>存在未发布草稿，尚未生成逐项差异摘要</li>
                   )}
                 </ul>
               </div>
