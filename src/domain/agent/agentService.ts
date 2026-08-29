@@ -22,7 +22,11 @@ import {
   TaskTemplateBinding,
   UpdateAgentDraftPatch,
   MODEL_POLICY_OPTIONS,
-  buildAgentDefinitionSnapshot
+  buildAgentDefinitionSnapshot,
+  ReleaseGateKey,
+  RELEASE_GATE_LABELS,
+  getFailedReleaseGates,
+  isReleaseGatePassed
 } from './agentTypes';
 import {
   getPresetById,
@@ -182,6 +186,32 @@ export class AgentEditPolicyViolationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'AgentEditPolicyViolationError';
+  }
+}
+
+/**
+ * Release Gate 未通过（Commit 07 §34）：UI Guard ≠ Domain Invariant。
+ * publishDraft() 自行重新执行五道门，任何调用路径都不能绕过。
+ * 携带完整 validation 供 A04 刷新展示（stale canPublish 恢复）。
+ */
+export class ReleaseGateNotPassedError extends Error {
+  constructor(
+    public readonly validation: AgentReleaseValidation,
+    public readonly failedChecks: ReleaseGateKey[]
+  ) {
+    super(`发布验证未通过：${failedChecks.map((key) => RELEASE_GATE_LABELS[key]).join('、')}`);
+    this.name = 'ReleaseGateNotPassedError';
+  }
+}
+
+/**
+ * 发布验证对象已变化（Commit 07 TASK 29）：
+ * Gate 评估的 Draft 与发布开始读取的 Draft 不是同一个——发布期间目标草稿被替换。
+ */
+export class ReleaseDraftChangedError extends Error {
+  constructor(expectedDraftId: string, evaluatedDraftId: string) {
+    super(`发布验证对象已变化，请重新执行发布检查（评估 ${evaluatedDraftId}，当前 ${expectedDraftId}）`);
+    this.name = 'ReleaseDraftChangedError';
   }
 }
 
@@ -365,6 +395,71 @@ function validateAndNormalizeAgentDraftPatch(
   return normalized;
 }
 
+/**
+ * Final-State Configuration Validation（Commit 07 §32 configCheck）：
+ * 验证「整个最终 Draft 当前是否可发布」，与 Commit 06.1 的
+ * validateAndNormalizeAgentDraftPatch（「某个编辑 Patch 是否允许」）是两个不同概念——
+ * 绝不能把整个 Built-in Draft 当作 Update Patch 喂给 Built-in Lock Validator，
+ * 否则内置字段会被误判为「正在编辑」。
+ *
+ * 只检查、不修复、不 normalize（Normalization 属于 Draft Edit 阶段）。
+ * Built-in / Custom 在发布检查使用相同的最终配置合法性规则：
+ * 不判断「用户是否有权编辑」，只判断「最终配置是否可发布」。
+ */
+function validateDraftConfigurationForRelease(def: AgentDefinition, draft: AgentDraft): boolean {
+  // TASK 15（严格方案）：V1.1 Agent Center 正式 Agent 必须有可解析的 sourcePresetId，缺失即 FAILED，不 fallback
+  if (!def.sourcePresetId) return false;
+  const preset = getPresetById(def.sourcePresetId);
+  if (!preset) return false;
+
+  // TASK 7：发布配置完整性（必填文本 + 至少一项启用任务）
+  if (!draft.name.trim()) return false;
+  if (!draft.description.trim()) return false;
+  if (!draft.responsibilitySummary.trim()) return false;
+  if (!draft.roleInstruction.trim()) return false;
+  if (!draft.owner.trim()) return false;
+  if (!draft.modelPolicyId.trim()) return false;
+  if (!draft.supportedTaskTemplates.some((t) => t.enabled)) return false;
+
+  // TASK 9：Final Task Validation——任务 ID 属于模板集合 / 无重复 / version 一致
+  const seenTasks = new Set<string>();
+  for (const binding of draft.supportedTaskTemplates) {
+    const templateBinding = preset.supportedTaskTemplates.find(
+      (t) => t.taskTemplateId === binding.taskTemplateId
+    );
+    if (!templateBinding) return false;
+    if (seenTasks.has(binding.taskTemplateId)) return false;
+    if (binding.version !== templateBinding.version) return false;
+    seenTasks.add(binding.taskTemplateId);
+  }
+
+  // TASK 10：Final Capability Validation——必须在模板受控选项内
+  const capabilityOptions = TEMPLATE_CAPABILITY_OPTIONS[preset.presetId] ?? [];
+  if (!capabilityOptions.some((o) => o.capabilityPreset === draft.capabilityPreset)) return false;
+
+  // TASK 11：Final Model Policy Validation——SoT 是 modelPolicyId（展示名不参与判断）
+  if (!MODEL_POLICY_OPTIONS.some((o) => o.modelPolicyId === draft.modelPolicyId)) return false;
+
+  // TASK 12：Final Autonomy Validation——不得超出模板上限
+  const autonomyOptions = TEMPLATE_AUTONOMY_OPTIONS[preset.presetId] ?? [];
+  if (!autonomyOptions.some((o) => o.maxAutonomy === draft.maxAutonomy)) return false;
+
+  // TASK 13：Final Context Source Validation——允许比模板少，禁止比模板多
+  for (const source of draft.allowedContextSources) {
+    if (!preset.allowedContextSources.includes(source)) return false;
+  }
+
+  // TASK 14：Final Context Binding Validation——只验证，不 normalize、不修改
+  for (const binding of draft.contextBindings) {
+    if (!draft.allowedContextSources.includes(binding.sourceType)) return false;
+    if (binding.selectionMode === 'SELECTED' && (!binding.resourceIds || binding.resourceIds.length === 0)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 class AgentService {
   /**
    * P0: Create new unreleased Agent Definition + Initial Draft from an official preset
@@ -502,7 +597,10 @@ class AgentService {
   }
 
   /**
-   * Release Validation：对当前草稿执行五道发布门检查。
+   * Release Validation：对当前草稿执行五道发布门检查（PURE，无正式状态副作用）。
+   * 允许：读取 Draft / compile transient RuntimeProjection / validate Runtime 依赖；
+   * 禁止：activate Runtime / create AgentVersion / save RuntimeBinding /
+   * update AgentDefinition / remove Draft。
    * 没有未发布草稿时全部保持 PENDING（无可发布内容）。
    */
   public async evaluateReleaseValidation(agentId: string): Promise<AgentReleaseValidation> {
@@ -523,14 +621,11 @@ class AgentService {
 
     const adapter = getRuntimeAdapter(draft.runtimeTarget);
 
-    // 1) 配置完整性：名称 / 责任描述 / 至少一项启用的任务模板 / 模型策略
-    const configPassed =
-      Boolean(draft.name.trim()) &&
-      Boolean(draft.responsibilitySummary.trim()) &&
-      draft.supportedTaskTemplates.some((t) => t.enabled) &&
-      Boolean(draft.modelPolicyId);
+    // 1) 配置检查：最终 Draft 状态的完整发布配置校验（TASK 7–15，Final-State 而非 Patch 校验）
+    const configPassed = validateDraftConfigurationForRelease(def, draft);
 
-    // 2) Runtime 编译：Adapter.compile 抛错即 FAILED
+    // 2) 运行准备（runtimeCompile）：Adapter.compile 抛错即 FAILED；
+    //    Projection 只作为 validation transient artifact，不保存 RuntimeBinding（TASK 16）
     let projection = null;
     let runtimeCompile: AgentReleaseValidation['runtimeCompile'] = 'FAILED';
     try {
@@ -540,7 +635,8 @@ class AgentService {
       runtimeCompile = 'FAILED';
     }
 
-    // 3) Runtime 依赖：Adapter.validate 结构校验
+    // 3) 运行依赖检查（runtimeDependencies）：Adapter.validate 结构校验。
+    //    保持真实：WeKnora 当前仍是 MOCK_RUNTIME，不伪装 PRODUCTION（TASK 17）
     let runtimeDependencies: AgentReleaseValidation['runtimeDependencies'] = 'FAILED';
     if (projection) {
       try {
@@ -551,13 +647,33 @@ class AgentService {
       }
     }
 
-    // 4) 测试运行：沙盒用例可在编译产物上执行（原型环境以结构可执行性为准）
+    // 4) 测试运行（testRun）——V1.1 原型诚实语义（TASK 18）：
+    //    当前没有正式 Test Harness API，本门是「基础运行检查 / Smoke Readiness」：
+    //    projection 存在 + 至少一项启用任务 + 运行依赖检查已通过。
+    //    不宣称真实大规模 Eval Suite 已执行；未来真实 Test Harness 只替换本门内部实现，
+    //    不改变 Release Gate Contract。
     const testRun: AgentReleaseValidation['testRun'] =
-      projection && draft.supportedTaskTemplates.some((t) => t.enabled) ? 'PASSED' : 'FAILED';
+      projection !== null &&
+      draft.supportedTaskTemplates.some((t) => t.enabled) &&
+      runtimeDependencies === 'PASSED'
+        ? 'PASSED'
+        : 'FAILED';
 
-    // 5) 质量评估：责任边界与自治等级声明确认（原型基线）
+    // 5) 质量评估（qualityEvaluation）——V1.1 原型诚实语义（TASK 19）：
+    //    当前没有真实 Evaluation Backend，本门是「Policy / Configuration Baseline Evaluation」：
+    //    配置检查通过 + roleInstruction 非空 + maxAutonomy 合法 + 运行依赖检查通过。
+    //    不产出虚构百分比；未来真实 Eval Backend 只替换本门内部实现。
+    const preset = def.sourcePresetId ? getPresetById(def.sourcePresetId) : undefined;
+    const autonomyValid = preset
+      ? (TEMPLATE_AUTONOMY_OPTIONS[preset.presetId] ?? []).some((o) => o.maxAutonomy === draft.maxAutonomy)
+      : false;
     const qualityEvaluation: AgentReleaseValidation['qualityEvaluation'] =
-      configPassed && Boolean(draft.maxAutonomyDesc) ? 'PASSED' : 'FAILED';
+      configPassed &&
+      Boolean(draft.roleInstruction.trim()) &&
+      autonomyValid &&
+      runtimeDependencies === 'PASSED'
+        ? 'PASSED'
+        : 'FAILED';
 
     return {
       agentId,
@@ -573,9 +689,18 @@ class AgentService {
   /**
    * P0: 发布草稿为不可变版本。
    *
-   * 失败安全规则（顺序不可颠倒）：
-   *   Create candidate AgentVersion → Runtime Validation → Runtime Activation → Switch Published Version
-   * 任何一步失败：正式版本保持不变（旧版本继续 ACTIVE），草稿保留。
+   * Commit 07 §34 —— Release Gate 是 Domain Invariant，UI Guard ≠ 发布授权凭证：
+   * publishDraft() 自行重新执行 Release Gate（不接收 validation / canPublish /
+   * passedGateCount 之类的「UI 自证」参数），任何调用路径都不能绕过。
+   *
+   * 最终顺序（§35，顺序冻结）：
+   *   Read Definition → Read Draft → Evaluate Release Gate → Assert draftId 一致
+   *   → Assert Five Gates PASSED → Create Candidate Definition/Snapshot
+   *   → Compile Runtime Projection → Validate Runtime Dependencies → Activate Runtime
+   *   → Create AgentVersion → Save/Switch Runtime Binding → Update currentPublishedVersion
+   *   → Remove Current Draft
+   * 任何失败：旧正式版本保持不变、当前 Draft 保留、RuntimeBinding 不切换、
+   * AgentVersion 不增加、Registry 不假更新。
    */
   public async publishDraft(params: {
     agentId: string;
@@ -590,6 +715,17 @@ class AgentService {
     const draft = agentRepository.getDraftByAgentId(params.agentId);
     if (!draft) {
       throw new Error('当前没有未发布草稿，无需发布');
+    }
+
+    // ── Step 0: Release Gate（Domain Invariant，每次 publish 重新计算） ──
+    const releaseValidation = await this.evaluateReleaseValidation(params.agentId);
+    // TASK 29：防止 Gate 评估的是旧 Draft 而发布的是另一个 Draft
+    if (releaseValidation.draftId !== draft.draftId) {
+      throw new ReleaseDraftChangedError(draft.draftId, releaseValidation.draftId);
+    }
+    // TASK 4：Gate 判断必须发生在 Candidate Version / Runtime Activation / Repository Write 之前
+    if (!isReleaseGatePassed(releaseValidation)) {
+      throw new ReleaseGateNotPassedError(releaseValidation, getFailedReleaseGates(releaseValidation));
     }
 
     // 期望下一版本号：无正式版本 → v1.0；否则次版本号 +1

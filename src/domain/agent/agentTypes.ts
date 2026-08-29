@@ -280,15 +280,37 @@ export interface AgentReleaseValidation {
   qualityEvaluation: ReleaseCheckStatus;
 }
 
-/** Release Gate：五项检查全部通过才允许发布新版本 */
+/**
+ * Release Gate Keys（Commit 07）：五道门的唯一权威枚举，
+ * 避免仓库各处手写五个字段名（agentId / draftId 不是 Gate 本身，不在此列）。
+ */
+export const RELEASE_GATE_KEYS = [
+  'configCheck',
+  'runtimeCompile',
+  'runtimeDependencies',
+  'testRun',
+  'qualityEvaluation'
+] as const;
+
+export type ReleaseGateKey = (typeof RELEASE_GATE_KEYS)[number];
+
+/** 五道门的普通用户名称（产品语言；技术细节只出现在说明/详情，不出现在主 UI） */
+export const RELEASE_GATE_LABELS: Record<ReleaseGateKey, string> = {
+  configCheck: '配置检查',
+  runtimeCompile: '运行准备',
+  runtimeDependencies: '运行依赖检查',
+  testRun: '测试运行',
+  qualityEvaluation: '质量评估'
+};
+
+/** 未通过的 Gate 列表（按固定顺序）；全部通过返回空数组 */
+export function getFailedReleaseGates(validation: AgentReleaseValidation): ReleaseGateKey[] {
+  return RELEASE_GATE_KEYS.filter((key) => validation[key] !== 'PASSED');
+}
+
+/** Release Gate：五项检查全部通过才允许发布新版本（唯一最终 Boolean 判断） */
 export function isReleaseGatePassed(validation: AgentReleaseValidation): boolean {
-  return (
-    validation.configCheck === 'PASSED' &&
-    validation.runtimeCompile === 'PASSED' &&
-    validation.runtimeDependencies === 'PASSED' &&
-    validation.testRun === 'PASSED' &&
-    validation.qualityEvaluation === 'PASSED'
-  );
+  return RELEASE_GATE_KEYS.every((key) => validation[key] === 'PASSED');
 }
 
 export interface ManagedAgentPreset {

@@ -25,7 +25,10 @@ import {
   agentService,
   isReleaseGatePassed,
   AgentReleaseValidation,
-  ReleaseCheckStatus
+  ReleaseCheckStatus,
+  RELEASE_GATE_KEYS,
+  RELEASE_GATE_LABELS,
+  ReleaseGateNotPassedError
 } from '../domain/agent';
 
 interface AgentPublishWorkspaceProps {
@@ -37,6 +40,11 @@ interface AgentPublishWorkspaceProps {
   onBackToRegistry?: () => void;
   onPublishSuccess?: (newVersion: string) => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
+  /**
+   * 发布人（Commit 07 TASK 24）：Owner ≠ Publisher。
+   * 只有调用方拥有真实 Current User Context 时才传入；当前 App 不传 → publishedBy = 未记录。
+   */
+  publisherName?: string;
 }
 
 /** 单项发布门的状态展示 */
@@ -72,7 +80,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
   onBackToDefinition,
   onBackToRegistry,
   onPublishSuccess,
-  addToast
+  addToast,
+  publisherName
 }) => {
   /* ─────────────────────────────────────────────────────────────
      P0: 全部事实来自 Agent Domain (同一 Repository)：
@@ -96,14 +105,18 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     return INITIAL_AGENT_DEFINITIONS[agentId] ?? null;
   }, [agentId, definition]);
 
-  const agentName = domain.def?.name || vmDef?.name || agent?.name || '受管智能体';
+  // TASK 23：发布的是 Draft——主展示（agentName / owner / tasks / scope / capability）
+  // 一律 Draft 优先，正式 Definition 只作为正式基线；改名后的草稿在 A04 标题显示新名称
+  const releaseSource = domain.draft ?? domain.def;
+  const agentName = domain.draft?.name || domain.def?.name || vmDef?.name || agent?.name || '智能体';
   const runtimeEngine =
     domain.def?.runtimeTarget === 'WEKNORA'
       ? 'WeKnora'
       : domain.def?.runtimeTarget === 'SEMOVIX_NATIVE'
       ? 'Semovix Native'
       : vmDef?.runtimeEngine || agent?.runtimeEngine || 'Semovix Native';
-  const kindLabel = domain.def?.agentKind === 'SYSTEM' ? '系统智能体' : '受管智能体';
+  // TASK 22：类型徽章基于 domain.def.origin，与 A01/A03 统一（不显示 系统智能体/受管智能体）
+  const kindLabel = domain.def?.origin === 'BUILT_IN' ? '内置' : '自定义';
   const formalVersion = domain.def?.currentPublishedVersion ?? null;
   const isFirstRelease = !formalVersion;
   const hasDraft = Boolean(domain.draft);
@@ -133,14 +146,16 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
 
   const canPublish = validation ? isReleaseGatePassed(validation) : false;
   const passedGateCount = validation
-    ? [
-        validation.configCheck,
-        validation.runtimeCompile,
-        validation.runtimeDependencies,
-        validation.testRun,
-        validation.qualityEvaluation
-      ].filter((s) => s === 'PASSED').length
+    ? RELEASE_GATE_KEYS.map((key) => validation[key]).filter((s) => s === 'PASSED').length
     : 0;
+  // TASK 25：A04 是发布验证页不是 Runtime Console——Header 第三状态显示「运行准备」产品语义，
+  // 具体 Runtime Provider 只出现在检查详情 / 弱技术说明中
+  const runtimeReadiness: 'passed' | 'failed' | 'pending' =
+    validation?.runtimeCompile === 'PASSED' && validation?.runtimeDependencies === 'PASSED'
+      ? 'passed'
+      : validation && (validation.runtimeCompile === 'FAILED' || validation.runtimeDependencies === 'FAILED')
+      ? 'failed'
+      : 'pending';
 
   // Left Navigation State: Release Section Workspace
   const [activeSection, setActiveSection] = useState<
@@ -153,8 +168,9 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
 
   /* ─────────────────────────────────────────────────────────────
      二十一: 真实 Publish State —— agentService.publishDraft
-     顺序: 候选版本 → Runtime 校验 → Runtime 激活 → 切换正式版本
+     顺序: Release Gate（Domain Invariant）→ 候选版本 → 运行准备校验 → 激活 → 切换正式版本
      失败: 正式版本保持原状，草稿保留
+     UI 的 validation 只负责展示 / 提前反馈 / 按钮状态，不是发布授权凭证（§34）
      ───────────────────────────────────────────────────────────── */
   const handleConfirmPublish = async () => {
     if (!canPublish || isPublishing) return;
@@ -162,7 +178,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     try {
       const result = await agentService.publishDraft({
         agentId,
-        publishedBy: domain.def?.owner || agent?.owner || '受管团队'
+        // TASK 24：Owner ≠ Publisher；无真实 Current User Context 时不伪造，诚实标注「未记录」
+        publishedBy: publisherName ?? '未记录'
       });
       setRepoTick((t) => t + 1); // 重新从 Repository 读取全部事实
       setIsPublishModalOpen(false);
@@ -174,6 +191,12 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
       );
     } catch (error) {
       setIsPublishModalOpen(false);
+      // TASK 30：stale canPublish 不能绕过 Domain Gate——以 Domain 重新评估结果为准，
+      // 刷新失败 Gate 展示并重读 Repository，不继续显示旧的 5/5
+      if (error instanceof ReleaseGateNotPassedError) {
+        setValidation(error.validation);
+        setRepoTick((t) => t + 1);
+      }
       addToast?.(
         'error',
         '发布失败，正式版本保持不变',
@@ -190,8 +213,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     if (!canPublish) {
       addToast?.(
         'info',
-        'Release Gate 未通过',
-        `发布门 ${passedGateCount}/5 通过，需五项检查全部 PASSED 后才能发布新版本。`
+        '发布检查未通过',
+        `发布检查 ${passedGateCount}/5 通过，需五项检查全部通过后才能发布新版本。`
       );
       return;
     }
@@ -224,31 +247,33 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     );
   }
 
+  // TASK 21：五道门使用普通用户名称（配置检查 / 运行准备 / 运行依赖检查 / 测试运行 / 质量评估）；
+  // Runtime 编译 / Runtime Projection / Runtime 依赖等技术细节只出现在说明或详情中
   const gateList: Array<{ key: keyof AgentReleaseValidation; title: string; desc: string }> = [
     {
       key: 'configCheck',
-      title: '配置检查',
-      desc: 'Agent 定义、任务绑定、上下文范围与模型策略均有效。'
+      title: RELEASE_GATE_LABELS.configCheck,
+      desc: '智能体定义、任务绑定、工作范围、能力模式与模型策略均完整有效。'
     },
     {
       key: 'runtimeCompile',
-      title: 'Runtime 编译',
-      desc: `当前草稿已成功编译为 ${runtimeEngine} Runtime Projection。`
+      title: RELEASE_GATE_LABELS.runtimeCompile,
+      desc: `当前草稿已通过运行准备检查，可生成${runtimeEngine}运行配置（当前为原型投影）。`
     },
     {
       key: 'runtimeDependencies',
-      title: 'Runtime 依赖',
-      desc: '知识范围、Skill、模型策略和 Runtime 依赖均可用。'
+      title: RELEASE_GATE_LABELS.runtimeDependencies,
+      desc: '知识范围、技能与模型策略等运行依赖均可用。'
     },
     {
       key: 'testRun',
-      title: '测试运行',
-      desc: '关键能力与支持任务测试已全部完成。'
+      title: RELEASE_GATE_LABELS.testRun,
+      desc: '基础运行检查：草稿具备可执行的运行配置与启用任务（完整测试套件待测试引擎接入）。'
     },
     {
       key: 'qualityEvaluation',
-      title: '质量评估',
-      desc: `当前草稿满足「${agentName}」正式发布质量标准。`
+      title: RELEASE_GATE_LABELS.qualityEvaluation,
+      desc: `当前草稿满足「${agentName}」发布质量基线（配置、行为边界与运行依赖）。`
     }
   ];
 
@@ -333,20 +358,20 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
             </span>
           </div>
 
-          {/* Status Tag 3: Runtime · 状态 (MOCK_RUNTIME 如实标注) */}
+          {/* Status Tag 3: 运行准备（TASK 25：不重点显示引擎名/MOCK_RUNTIME，Provider 移入检查详情） */}
           <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-white border border-[#E2E8F0] rounded text-xs text-[#334155]">
             <span
               className={`w-2 h-2 rounded-full ${
-                isMockIntegration ? 'bg-amber-500' : formalVersion ? 'bg-[#16A36A]' : 'bg-amber-500'
+                runtimeReadiness === 'passed'
+                  ? 'bg-[#16A36A]'
+                  : runtimeReadiness === 'failed'
+                  ? 'bg-red-500'
+                  : 'bg-amber-500'
               }`}
             />
             <span className="font-medium text-[#0F172A]">
-              {runtimeEngine} ·{' '}
-              {isMockIntegration
-                ? '集成待接入 (MOCK_RUNTIME)'
-                : formalVersion
-                ? '正常'
-                : '待激活'}
+              运行准备 ·{' '}
+              {runtimeReadiness === 'passed' ? '通过' : runtimeReadiness === 'failed' ? '未通过' : '待检查'}
             </span>
           </div>
 
@@ -366,7 +391,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                   ? '当前无未发布草稿'
                   : canPublish
                   ? `发布 ${targetNewVersion}`
-                  : `Release Gate ${passedGateCount}/5，未全部通过`
+                  : `发布检查 ${passedGateCount}/5，未全部通过`
               }
               className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -380,10 +405,10 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
       {/* Sub-header Description bar */}
       <div className="bg-white border-b border-[#E2E8F0] px-6 py-2 text-xs text-[#64748B] flex items-center justify-between">
         <p className="truncate">
-          在正式发布前，对当前草稿的配置、Runtime、测试结果与质量基线进行统一验证。
+          在正式发布前，对当前草稿的配置、运行准备、测试结果与质量基线进行统一验证。
         </p>
         <span className="text-[11px] font-mono text-[#94A3B8] hidden md:inline">
-          Release Gate: {passedGateCount}/5 {canPublish ? 'PASSED' : 'PENDING'} · Target: {targetNewVersion}
+          发布检查 {passedGateCount}/5 {canPublish ? '通过' : '未完成'} · 目标版本 {targetNewVersion}
         </span>
       </div>
 
@@ -584,7 +609,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
 
                   <p className="text-[11px] text-[#94A3B8] pt-1">
                     {!hasDraft
-                      ? '当前没有未发布草稿；从定义工作区发起修改后将在此进入新一轮发布流程。'
+                      ? '当前没有未发布草稿，请返回定义工作区发起修改。'
                       : isFirstRelease
                       ? `发布成功后将正式生成首发版本 ${targetNewVersion}，并建立 ${runtimeEngine} 运行时绑定（当前为 MOCK_RUNTIME 投影，真实 API 待接入）。`
                       : `发布成功后才会生成正式版本 ${targetNewVersion}；当前草稿不会影响正在运行的 ${formalVersion}。`}
@@ -678,16 +703,16 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
 
                     {/* Bottom Gate Highlight */}
                     <div className="pt-2 flex items-center justify-between text-xs">
-                      <span className="text-[#64748B]">发布门禁汇总结果 ({passedGateCount}/5)</span>
+                      <span className="text-[#64748B]">发布检查汇总结果 ({passedGateCount}/5)</span>
                       {canPublish ? (
                         <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-emerald-50 text-[#16A36A] border border-emerald-200/80 rounded font-semibold text-xs">
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Release Gate Passed ｜ 满足发布条件</span>
+                          <span>发布检查通过 ｜ 满足发布条件</span>
                         </div>
                       ) : (
                         <div className="flex items-center space-x-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200/80 rounded font-semibold text-xs">
                           <Clock className="w-3.5 h-3.5" />
-                          <span>Release Gate 未通过 ｜ 暂不可发布</span>
+                          <span>发布检查未通过 ｜ 暂不可发布</span>
                         </div>
                       )}
                     </div>
@@ -725,9 +750,9 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
 
                       {/* Sub-item 2 */}
                       <div className="space-y-1">
-                        <div className="text-[11px] text-[#64748B]">Runtime Projection</div>
+                        <div className="text-[11px] text-[#64748B]">运行准备</div>
                         <div className="font-bold text-xs text-[#0F172A]">
-                          {validation?.runtimeCompile === 'PASSED' ? 'Ready' : '未就绪'}{' '}
+                          {validation?.runtimeCompile === 'PASSED' ? '已就绪' : '未就绪'}{' '}
                           <span className="text-[10px] font-normal text-[#64748B]">({runtimeEngine})</span>
                         </div>
                         <div className="text-[10px] text-[#94A3B8]">发布前验证副本</div>
@@ -737,7 +762,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       <div className="space-y-1">
                         <div className="text-[11px] text-[#64748B]">测试运行</div>
                         <div className="font-bold text-xs text-[#0F172A]">
-                          {validation?.testRun === 'PASSED' ? '关键测试通过' : validation?.testRun === 'FAILED' ? '测试未通过' : '待检查'}
+                          {validation?.testRun === 'PASSED' ? '基础检查通过' : validation?.testRun === 'FAILED' ? '检查未通过' : '待检查'}
                         </div>
                         <button
                           onClick={() => setActiveSection('test_run')}
@@ -762,28 +787,12 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       </div>
                     </div>
 
-                    {/* Lightweight Quality Metrics (原型演示数据，评测后端待接入) */}
-                    <div className="pt-3 border-t border-[#F1F5F9] space-y-2">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
-                        <div>
-                          <span className="text-[#64748B] block">Grounded Answer</span>
-                          <span className="font-mono font-bold text-[#0F172A]">96%</span>
-                        </div>
-                        <div>
-                          <span className="text-[#64748B] block">Citation Correctness</span>
-                          <span className="font-mono font-bold text-[#0F172A]">98%</span>
-                        </div>
-                        <div>
-                          <span className="text-[#64748B] block">Retrieval Relevance</span>
-                          <span className="font-mono font-bold text-[#0F172A]">93%</span>
-                        </div>
-                        <div>
-                          <span className="text-[#64748B] block">No-evidence Honesty</span>
-                          <span className="font-mono font-bold text-[#0F172A]">100%</span>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-[#94A3B8]">
-                        质量指标为原型演示数据，评测后端待接入；发布门以 Release Validation 五项检查结果为准。
+                    {/* 质量评估事实说明（TASK 20：删除固定假百分比，不虚构数值） */}
+                    <div className="pt-3 border-t border-[#F1F5F9] space-y-1.5">
+                      <div className="text-[11px] text-[#0F172A] font-semibold">质量评估说明</div>
+                      <p className="text-[11px] text-[#64748B] leading-relaxed">
+                        当前质量评估基于：配置完整性、行为边界、运行依赖、发布策略基线。
+                        真实离线评测指标将在 Evaluation Backend 接入后展示。
                       </p>
                     </div>
                   </div>
@@ -812,42 +821,42 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                   </button>
                 </div>
 
-                {/* Section View: 配置检查 */}
+                {/* Section View: 配置检查（展示 Draft 优先：releaseSource = draft ?? def） */}
                 {activeSection === 'config_check' && (
                   <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-4 text-xs">
                     <div className="space-y-3">
-                      <div className="font-bold text-[#0F172A]">Agent Definition 校验</div>
+                      <div className="font-bold text-[#0F172A]">智能体定义检查</div>
                       <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-[#0F172A]">名称、主要职责与 Owner</span>
                           <span className={`font-semibold ${validation?.configCheck === 'FAILED' ? 'text-red-600' : 'text-[#16A36A]'}`}>
-                            {validation?.configCheck === 'PASSED' ? 'VALID' : validation?.configCheck === 'FAILED' ? 'INVALID' : 'PENDING'}
+                            {validation?.configCheck === 'PASSED' ? '有效' : validation?.configCheck === 'FAILED' ? '无效' : '待检查'}
                           </span>
                         </div>
                         <p className="text-[11px] text-[#64748B]">
-                          {agentName} · {domain.def.owner} · 职责定义完整 ({domain.def.responsibilitySummary.length}/500)
+                          {agentName} · {releaseSource.owner} · 职责定义完整 ({releaseSource.responsibilitySummary.length}/500)
                         </p>
                       </div>
 
-                      <div className="font-bold text-[#0F172A] pt-2">Context & Capability 校验</div>
+                      <div className="font-bold text-[#0F172A] pt-2">工作范围与能力模式检查</div>
                       <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="font-medium text-[#0F172A]">范围资产与能力模式挂载</span>
                           <span className="font-semibold text-[#16A36A]">
-                            {domain.def.allowedContextSources.length >= 1 ? 'VALID' : 'INVALID'}
+                            {releaseSource.allowedContextSources.length >= 1 ? '有效' : '无效'}
                           </span>
                         </div>
                         <p className="text-[11px] text-[#64748B]">
-                          {domain.def.allowedContextSources.length} 个允许上下文来源（{domain.def.allowedContextSources.join('、')}）；实际运行范围仍由 Permission Matrix 与任务范围收敛。
+                          {releaseSource.allowedContextSources.length} 个允许上下文来源（{releaseSource.allowedContextSources.join('、')}）；实际运行范围仍由用户权限与任务范围收敛。
                         </p>
                       </div>
 
-                      <div className="font-bold text-[#0F172A] pt-2">{runtimeEngine} Runtime 编译投影</div>
+                      <div className="font-bold text-[#0F172A] pt-2">运行准备检查详情</div>
                       <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-[#1E40AF]">Runtime Schema Compatibility</span>
+                          <span className="font-medium text-[#1E40AF]">运行配置兼容性</span>
                           <span className="text-[#2563EB] font-semibold">
-                            {validation?.runtimeCompile === 'PASSED' ? 'PROJECTION READY' : 'NOT READY'}
+                            {validation?.runtimeCompile === 'PASSED' ? '已就绪' : '未就绪'}
                           </span>
                         </div>
                         <p className="text-[11px] text-[#2563EB]">
@@ -855,18 +864,24 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           {isMockIntegration
                             ? 'MOCK_RUNTIME 投影（真实 Runtime API 未接入，仅本地结构校验）'
                             : '已完成协议编译'}
-                          ；Runtime 依赖检查{validation?.runtimeDependencies === 'PASSED' ? '通过' : '未通过'}。
+                          ；运行依赖检查{validation?.runtimeDependencies === 'PASSED' ? '通过' : '未通过'}。
                         </p>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Section View: 测试运行 */}
+                {/* Section View: 测试运行（TASK 18：V1.1 为基础运行检查 / Smoke Readiness，
+                    不宣称真实完整 Test Suite；未来测试引擎接入后替换内部实现） */}
                 {activeSection === 'test_run' && (
                   <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-4 text-xs">
-                    <div className="font-bold text-[#0F172A]">
-                      关键测试运行集 ({validation?.testRun === 'PASSED' ? '通过' : validation?.testRun === 'FAILED' ? '未通过' : '待检查'})
+                    <div className="space-y-0.5">
+                      <div className="font-bold text-[#0F172A]">
+                        基础运行检查 ({validation?.testRun === 'PASSED' ? '通过' : validation?.testRun === 'FAILED' ? '未通过' : '待检查'})
+                      </div>
+                      <p className="text-[11px] text-[#64748B]">
+                        当前为 V1.1 原型的基础运行检查（Smoke Readiness）：验证草稿具备可执行的运行配置与启用任务；完整测试套件将在测试引擎接入后执行。
+                      </p>
                     </div>
                     <div className="space-y-3">
                       <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-2">
@@ -889,8 +904,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-[#64748B] pt-1 border-t border-[#E2E8F0]">
                           <div>Routing: <span className="font-mono text-[#0F172A]">{draftFirstEnabledTask || '未绑定任务'}</span></div>
                           <div>Agent: <span className="text-[#0F172A]">{hasDraft ? '当前草稿' : '正式版本'}</span></div>
-                          <div>Runtime: <span className="text-[#0F172A]">{runtimeEngine} · {isMockIntegration ? 'MOCK_RUNTIME' : 'Draft Projection'}</span></div>
-                          <div>Evidence: <span className="font-bold text-[#0F172A]">{domain.def.allowedContextSources.length} 项允许来源</span></div>
+                          <div>Runtime: <span className="text-[#0F172A]">{runtimeEngine} · {isMockIntegration ? 'MOCK_RUNTIME' : '验证副本'}</span></div>
+                          <div>Evidence: <span className="font-bold text-[#0F172A]">{releaseSource.allowedContextSources.length} 项允许来源</span></div>
                         </div>
                         <div className="text-[11px] text-[#334155] bg-white p-2.5 rounded border border-[#E2E8F0]">
                           <strong>回答摘要：</strong>{' '}
@@ -919,7 +934,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           <div className="font-semibold text-[#0F172A]">
                             测试案例 3：{vmDef?.tasks?.[1]?.name || '多维意图与策略识别'}联动执行探查
                           </div>
-                          <div className="text-[11px] text-[#64748B]">运行引擎：{runtimeEngine} · 自主程度: {domain.def.maxAutonomyDesc || '建议'}</div>
+                          <div className="text-[11px] text-[#64748B]">运行引擎：{runtimeEngine} · 自主程度: {releaseSource.maxAutonomyDesc || '建议'}</div>
                         </div>
                         <span className={`font-semibold ${validation?.testRun === 'PASSED' ? 'text-[#16A36A]' : 'text-amber-600'}`}>
                           {validation?.testRun === 'PASSED' ? '通过' : '待执行'}
@@ -934,7 +949,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                   <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-4 text-xs">
                     <div className="flex items-center justify-between">
                       <div className="font-bold text-[#0F172A]">
-                        标准基线评测集 ({validation?.qualityEvaluation === 'PASSED' ? '满足发布标准' : '待评估'})
+                        发布质量基线 ({validation?.qualityEvaluation === 'PASSED' ? '满足发布标准' : validation?.qualityEvaluation === 'FAILED' ? '未达基线' : '待评估'})
                       </div>
                       <span
                         className={`text-xs font-bold px-2 py-0.5 rounded border ${
@@ -947,31 +962,20 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded">
-                        <span className="text-[11px] text-[#64748B] block">Grounded Answer Rate</span>
-                        <span className="text-base font-bold font-mono text-[#0F172A]">96%</span>
-                        <span className="text-[10px] text-[#16A36A] block">基线: ≥90% (达标)</span>
-                      </div>
-                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded">
-                        <span className="text-[11px] text-[#64748B] block">Citation Correctness</span>
-                        <span className="text-base font-bold font-mono text-[#0F172A]">98%</span>
-                        <span className="text-[10px] text-[#16A36A] block">基线: ≥95% (达标)</span>
-                      </div>
-                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded">
-                        <span className="text-[11px] text-[#64748B] block">Retrieval Relevance</span>
-                        <span className="text-base font-bold font-mono text-[#0F172A]">93%</span>
-                        <span className="text-[10px] text-[#16A36A] block">基线: ≥88% (达标)</span>
-                      </div>
-                      <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded">
-                        <span className="text-[11px] text-[#64748B] block">No-evidence Honesty</span>
-                        <span className="text-base font-bold font-mono text-[#0F172A]">100%</span>
-                        <span className="text-[10px] text-[#16A36A] block">无推测 (达标)</span>
-                      </div>
+                    {/* TASK 19/20：V1.1 为 Policy / Configuration Baseline Evaluation，
+                        不虚构评测百分比；真实 Eval Backend 接入后替换本视图内部实现 */}
+                    <div className="space-y-2">
+                      <div className="text-[11px] font-semibold text-[#0F172A]">当前质量评估基于</div>
+                      <ul className="list-disc list-inside space-y-1 text-[11px] text-[#475569]">
+                        <li>配置完整性：定义、任务、工作范围、能力模式与模型策略全部有效</li>
+                        <li>行为边界：角色行为说明完整，自主程度不超过能力模板上限</li>
+                        <li>运行依赖：目标运行时的依赖检查已通过</li>
+                        <li>发布策略基线：满足平台发布门禁策略</li>
+                      </ul>
                     </div>
 
                     <p className="text-[10px] text-[#94A3B8]">
-                      以上为原型演示基线数据（评测后端待接入）；质量发布门以 Release Validation 检查结果为准。
+                      真实离线评测指标将在 Evaluation Backend 接入后展示；质量发布门以发布检查结果为准。
                     </p>
                   </div>
                 )}
@@ -1100,7 +1104,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                 <span className="font-semibold text-[#0F172A]">{runtimeEngine}</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="text-[#64748B]">Draft Projection</span>
+                <span className="text-[#64748B]">运行准备</span>
                 <span className={`font-mono font-bold ${validation?.runtimeCompile === 'PASSED' ? 'text-[#16A36A]' : 'text-amber-600'}`}>
                   {validation?.runtimeCompile === 'PASSED' ? 'Ready' : '未就绪'}
                 </span>
@@ -1143,7 +1147,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                   ? '当前无未发布草稿'
                   : canPublish
                   ? `发布 ${targetNewVersion}`
-                  : `Release Gate ${passedGateCount}/5，未全部通过`
+                  : `发布检查 ${passedGateCount}/5，未全部通过`
               }
               className="w-full py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded text-xs font-semibold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -1235,11 +1239,11 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                   {(
                     [
-                      ['配置检查', validation?.configCheck],
-                      ['Runtime 编译', validation?.runtimeCompile],
-                      ['Runtime 依赖', validation?.runtimeDependencies],
-                      ['测试运行', validation?.testRun],
-                      ['质量评估', validation?.qualityEvaluation]
+                      [RELEASE_GATE_LABELS.configCheck, validation?.configCheck],
+                      [RELEASE_GATE_LABELS.runtimeCompile, validation?.runtimeCompile],
+                      [RELEASE_GATE_LABELS.runtimeDependencies, validation?.runtimeDependencies],
+                      [RELEASE_GATE_LABELS.testRun, validation?.testRun],
+                      [RELEASE_GATE_LABELS.qualityEvaluation, validation?.qualityEvaluation]
                     ] as Array<[string, ReleaseCheckStatus | undefined]>
                   ).map(([label, status]) => (
                     <div
