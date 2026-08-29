@@ -34,11 +34,12 @@ import {
   INITIAL_AGENTS,
   AgentDefinitionDetail,
   AgentProductStatusKey,
+  AgentRuntimeSignals,
   createAgentDraft,
   getAgentOriginLabel,
   getAgentProductStatus
 } from '../data/agentRegistryData';
-import { agentService } from '../domain/agent';
+import { agentService, agentSelectors } from '../domain/agent';
 import { CreateAgentDrawer } from './CreateAgentDrawer';
 
 interface AgentRegistryWorkspaceProps {
@@ -98,6 +99,23 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
     }
   };
 
+  // Domain Active Binding 运行信号（Commit 08 TASK 21）：只用于产品状态推导，
+  // Registry 主 UI 不展示 syncStatus / healthStatus / integrationMode 原始 enum
+  const runtimeSignalsById = useMemo(() => {
+    const map = new Map<string, AgentRuntimeSignals>();
+    for (const a of agents) {
+      const display = agentSelectors.getDisplayState(a.id);
+      if (display) {
+        map.set(a.id, {
+          activeBindingVersion: display.activeBindingVersion,
+          syncStatus: display.syncStatus,
+          healthStatus: display.healthStatus
+        });
+      }
+    }
+    return map;
+  }, [agents]);
+
   // Filtered List
   const filteredAgents = useMemo(() => {
     return agents.filter((agent) => {
@@ -119,12 +137,14 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
 
       // Status Filter (产品状态投影)
       if (statusFilter !== 'ALL') {
-        if (getAgentProductStatus(agent).key !== statusFilter) return false;
+        if (getAgentProductStatus(agent, runtimeSignalsById.get(agent.id)).key !== statusFilter) {
+          return false;
+        }
       }
 
       return true;
     });
-  }, [agents, searchQuery, typeFilter, statusFilter]);
+  }, [agents, runtimeSignalsById, searchQuery, typeFilter, statusFilter]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -557,7 +577,10 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                       {/* Column 5: 状态 (产品状态投影：正常 / 未发布 / 有未发布修改 / 需关注 / 已停用) */}
                       <td className="py-3.5 px-4 align-top">
                         {(() => {
-                          const productStatus = getAgentProductStatus(agent);
+                          const productStatus = getAgentProductStatus(
+                            agent,
+                            runtimeSignalsById.get(agent.id)
+                          );
                           const statusStyle = getProductStatusStyle(productStatus.key);
                           return (
                             <div className="flex items-center space-x-1.5 pt-0.5">
@@ -842,7 +865,10 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                         ? `正式版本 ${selectedAgentForDetail.formalVersion}`
                         : '尚未发布正式版本'}
                       {' · '}
-                      {getAgentProductStatus(selectedAgentForDetail).label}
+                      {getAgentProductStatus(
+                        selectedAgentForDetail,
+                        runtimeSignalsById.get(selectedAgentForDetail.id)
+                      ).label}
                     </p>
                   </div>
                 </div>

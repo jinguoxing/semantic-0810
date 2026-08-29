@@ -20,7 +20,12 @@ class AgentRepository {
   private definitions: Map<string, AgentDefinition> = new Map();
   private drafts: Map<string, AgentDraft> = new Map();
   private versions: Map<string, AgentVersion[]> = new Map(); // agentId -> immutable AgentVersion[]
-  private runtimeBindings: Map<string, AgentRuntimeBinding> = new Map();
+  /**
+   * Version-scoped Runtime Binding 历史（Commit 08 §39）：
+   * agentId -> AgentRuntimeBinding[]，同一 Agent 最多一个 active=true，
+   * 旧版本 Binding 以 active=false 保留为历史，不物理覆盖。
+   */
+  private runtimeBindings: Map<string, AgentRuntimeBinding[]> = new Map();
 
   constructor() {
     this.seedInitialDomainData();
@@ -66,15 +71,25 @@ class AgentRepository {
       updatedAt: '昨天'
     };
     this.definitions.set(dataDef.agentId, dataDef);
-    this.runtimeBindings.set(dataDef.agentId, {
-      bindingId: 'bind_data_01',
-      agentId: 'data_intelligence',
-      runtimeTarget: 'SEMOVIX_NATIVE',
-      runtimeInstanceId: 'inst_data_native',
-      runtimeStatus: 'READY',
-      syncRevision: 'r24',
-      lastSyncedAt: '昨天'
-    });
+    // Version-scoped Binding（Commit 08 TASK 18）：绑定正式 v1.3；
+    // integrationMode 如实 MOCK_RUNTIME，不虚构生产连接与 Runtime Agent ID
+    this.runtimeBindings.set(dataDef.agentId, [
+      {
+        bindingId: 'bind_data_01',
+        agentId: 'data_intelligence',
+        agentVersion: 'v1.3',
+        runtimeType: 'SEMOVIX_NATIVE',
+        runtimeAgentId: undefined,
+        integrationMode: 'MOCK_RUNTIME',
+        syncStatus: 'SYNCED',
+        healthStatus: 'HEALTHY',
+        runtimeConfigRevision: 'r24', // 迁移自原 syncRevision
+        active: true,
+        lastSyncedAt: '昨天',
+        lastCheckedAt: '昨天',
+        syncError: undefined
+      }
+    ]);
 
     // 2. Semantic Governance Agent
     const govDef: AgentDefinition = {
@@ -113,15 +128,23 @@ class AgentRepository {
       updatedAt: '3 天前'
     };
     this.definitions.set(govDef.agentId, govDef);
-    this.runtimeBindings.set(govDef.agentId, {
-      bindingId: 'bind_gov_01',
-      agentId: 'semantic_governance',
-      runtimeTarget: 'SEMOVIX_NATIVE',
-      runtimeInstanceId: 'inst_gov_native',
-      runtimeStatus: 'READY',
-      syncRevision: 'r19',
-      lastSyncedAt: '3 天前'
-    });
+    this.runtimeBindings.set(govDef.agentId, [
+      {
+        bindingId: 'bind_gov_01',
+        agentId: 'semantic_governance',
+        agentVersion: 'v1.2',
+        runtimeType: 'SEMOVIX_NATIVE',
+        runtimeAgentId: undefined,
+        integrationMode: 'MOCK_RUNTIME',
+        syncStatus: 'SYNCED',
+        healthStatus: 'HEALTHY',
+        runtimeConfigRevision: 'r19', // 迁移自原 syncRevision
+        active: true,
+        lastSyncedAt: '3 天前',
+        lastCheckedAt: '3 天前',
+        syncError: undefined
+      }
+    ]);
 
     // 3. Enterprise Knowledge Agent (has active draft with clean business-level diffs)
     const entKnowledgeDef: AgentDefinition = {
@@ -222,18 +245,27 @@ class AgentRepository {
     };
     this.drafts.set(entDraft.draftId, entDraft);
 
-    // WeKnora 绑定：真实 API 未接入，如实标注 MOCK_RUNTIME，
-    // 不再宣称 inst_weknora_ent / r37 / 已同步。
-    this.runtimeBindings.set('enterprise_knowledge', {
-      bindingId: 'bind_ent_01',
-      agentId: 'enterprise_knowledge',
-      runtimeTarget: 'WEKNORA',
-      runtimeInstanceId: undefined,
-      runtimeStatus: 'MOCK_RUNTIME',
-      integrationMode: 'MOCK_RUNTIME',
-      syncRevision: undefined,
-      lastSyncedAt: undefined
-    });
+    // WeKnora 绑定：真实 API 未接入，如实标注 MOCK_RUNTIME。
+    // Commit 08 TASK 19：Binding 只绑定正式 v1.4；
+    // draft_ent_knowledge_v1_5 不建立任何 RuntimeBinding，
+    // Draft 仅在 A04 发布验证时产生 transient RuntimeProjection。
+    this.runtimeBindings.set('enterprise_knowledge', [
+      {
+        bindingId: 'bind_ent_01',
+        agentId: 'enterprise_knowledge',
+        agentVersion: 'v1.4',
+        runtimeType: 'WEKNORA',
+        runtimeAgentId: undefined,
+        integrationMode: 'MOCK_RUNTIME',
+        syncStatus: 'SYNCED',
+        healthStatus: 'HEALTHY',
+        runtimeConfigRevision: undefined,
+        active: true,
+        lastSyncedAt: undefined,
+        lastCheckedAt: undefined,
+        syncError: undefined
+      }
+    ]);
 
     // 补齐各智能体的历史版本种子，使 A04 发布记录统一从 Repository 读取
     this.versions.set('data_intelligence', [
@@ -344,12 +376,48 @@ class AgentRepository {
     ]);
   }
 
-  public getRuntimeBinding(agentId: string): AgentRuntimeBinding | undefined {
-    return this.runtimeBindings.get(agentId);
+  /* ─────────────────────────────────────────────────────────────
+     Version-scoped Runtime Binding API（Commit 08 §39）
+     返回值一律浅拷贝（{ ...binding }）：字段基本为 primitive，
+     仍不泄露内部可变引用，外部修改无法反向篡改 Binding 历史。
+     旧的单一 getRuntimeBinding / saveRuntimeBinding 已删除，
+     不保留第二套语义（调用方全部迁移到下列 API）。
+     ───────────────────────────────────────────────────────────── */
+
+  /** 某智能体的全部 Binding 历史（含 active=false 旧版本），按入库顺序 */
+  public getRuntimeBindings(agentId: string): AgentRuntimeBinding[] {
+    return (this.runtimeBindings.get(agentId) || []).map((binding) => ({ ...binding }));
   }
 
-  public saveRuntimeBinding(binding: AgentRuntimeBinding): void {
-    this.runtimeBindings.set(binding.agentId, { ...binding });
+  /** 当前 active Binding（同一 agentId 最多一个） */
+  public getActiveRuntimeBinding(agentId: string): AgentRuntimeBinding | undefined {
+    const found = (this.runtimeBindings.get(agentId) || []).find((b) => b.active);
+    return found ? { ...found } : undefined;
+  }
+
+  /** 按正式版本号取 Binding（历史版本查询） */
+  public getRuntimeBindingForVersion(agentId: string, versionNumber: string): AgentRuntimeBinding | undefined {
+    const found = (this.runtimeBindings.get(agentId) || []).find(
+      (b) => b.agentVersion === versionNumber
+    );
+    return found ? { ...found } : undefined;
+  }
+
+  /**
+   * 切换 Active Binding（发布成功的最后一步才调用）：
+   * 1. 旧 active Binding 标记 active=false（保留历史，不物理覆盖）；
+   * 2. 保存新 Binding（active=true）；
+   * 3. 保证同一 agentId 最多一个 active=true。
+   */
+  public activateRuntimeBinding(binding: AgentRuntimeBinding): void {
+    const list = this.runtimeBindings.get(binding.agentId) || [];
+    const next = list.map((b) => (b.active ? { ...b, active: false } : b));
+    // 同一版本重复激活：替换旧记录而不是产生第二个 active
+    const withoutSameVersion = next.filter((b) => b.agentVersion !== binding.agentVersion);
+    this.runtimeBindings.set(binding.agentId, [
+      ...withoutSameVersion,
+      { ...binding, active: true }
+    ]);
   }
 }
 

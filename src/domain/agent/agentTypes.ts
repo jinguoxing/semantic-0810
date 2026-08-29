@@ -27,6 +27,33 @@ export type RuntimeTarget =
   | 'SEMOVIX_NATIVE'
   | 'WEKNORA';
 
+/* ─────────────────────────────────────────────────────────────
+   Runtime 三维度共享状态类型（Commit 08 §39）：
+   集成模式 / 同步状态 / 健康状态是三个独立维度，
+   禁止再混合进单一 runtimeStatus enum。
+   定义在 Agent Domain（agentTypes），runtimeTypes.ts 只从此处
+   import，避免 agentTypes ↔ runtimeTypes 循环依赖。
+   ───────────────────────────────────────────────────────────── */
+
+/** 集成模式：MOCK_RUNTIME = 原型内存模拟；PRODUCTION = 真实后端连接（当前未接入） */
+export type RuntimeIntegrationMode = 'MOCK_RUNTIME' | 'PRODUCTION';
+
+/**
+ * 运行同步状态：Binding 代表的正式 AgentVersion 配置
+ * 与目标 Runtime 实例之间的同步进度。
+ * OUT_OF_SYNC 是真实 Domain 状态（如 Runtime 侧配置被外部改动），
+ * 即使当前种子未使用，Selectors / 诊断必须能处理。
+ */
+export type RuntimeSyncStatus =
+  | 'PENDING'
+  | 'SYNCING'
+  | 'SYNCED'
+  | 'FAILED'
+  | 'OUT_OF_SYNC';
+
+/** 运行健康状态：目标 Runtime 实例本身的可用性（与集成模式无关） */
+export type RuntimeHealthStatus = 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
+
 /**
  * Agent 允许的上下文来源类型 (业务真实模型)。
  * 实际运行上下文 = 智能体允许范围 ∩ 当前用户权限 ∩ 当前任务范围；
@@ -249,19 +276,35 @@ export interface UpdateAgentDraftPatch {
   maxAutonomyDesc?: string;
 }
 
+/**
+ * AgentRuntimeBinding 最终契约（V1.1 §39，Commit 08）：
+ * Binding = 某个正式不可变 AgentVersion 的运行绑定。
+ *
+ * - agentVersion 必填：未发布 Agent 不允许拥有 RuntimeBinding（Domain Invariant）；
+ * - Draft 不拥有正式 Binding——Draft 只在发布验证时产生 transient RuntimeProjection；
+ * - integrationMode / syncStatus / healthStatus 三个独立维度，
+ *   SYNCED / HEALTHY 只描述当前 Mock Integration Instance 内部状态，
+ *   绝不能被 UI 翻译为「已连接生产 Runtime」；
+ * - 同一 agentId 最多一个 active=true 的 Binding（activateRuntimeBinding 保证），
+ *   旧版本 Binding 保留为 active=false 的历史。
+ */
 export interface AgentRuntimeBinding {
   bindingId: string;
   agentId: string;
-  runtimeTarget: RuntimeTarget;
-  runtimeInstanceId?: string;
-  /**
-   * MOCK_RUNTIME = 原型内存绑定（真实 Runtime API 未接入时的诚实标注），
-   * 不得与 SYNCED / READY（真实连接）混用。
-   */
-  runtimeStatus: 'READY' | 'DRAFT_PROJECTION' | 'SYNCED' | 'MOCK_RUNTIME' | 'UNBOUND' | 'ERROR';
-  integrationMode?: 'MOCK_RUNTIME' | 'PRODUCTION';
-  syncRevision?: string;
+  /** Binding 必须绑定某个正式不可变 AgentVersion（必填，无 undefined） */
+  agentVersion: string;
+  runtimeType: RuntimeTarget;
+  /** 目标 Runtime 侧的 Agent 实例 ID；Mock 环境不虚构，保持 undefined */
+  runtimeAgentId?: string;
+  integrationMode: RuntimeIntegrationMode;
+  syncStatus: RuntimeSyncStatus;
+  healthStatus: RuntimeHealthStatus;
+  /** 进入 Runtime 的配置修订号（发布时来自激活成功的 Projection） */
+  runtimeConfigRevision?: string;
+  active: boolean;
   lastSyncedAt?: string;
+  lastCheckedAt?: string;
+  syncError?: string;
 }
 
 /**

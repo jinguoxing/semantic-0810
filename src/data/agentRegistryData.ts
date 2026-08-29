@@ -4,7 +4,9 @@ import {
   AgentContextSource as AgentContextSourceType,
   AgentContextBinding,
   AGENT_CONTEXT_SOURCE_VIEWS,
-  getTaskTemplateView
+  getTaskTemplateView,
+  RuntimeSyncStatus,
+  RuntimeHealthStatus
 } from '../domain/agent/agentTypes';
 import { describeScopeBinding } from './agentScopeOptions';
 
@@ -68,20 +70,45 @@ export interface AgentProductStatusView {
 }
 
 /**
- * 轻量 View Projection：由 Registry ViewModel 推导用户可见状态。
- * - 未发布：新建、从未发布 (formalVersion = null)
- * - 有未发布修改：已发布且存在草稿
- * - 正常：已发布、无草稿、无运行异常
- * - 需关注：Runtime / 集成明确异常 (ERROR / FAILED / OUT_OF_SYNC)；
- *   当前原型数据无该态信号，MOCK_RUNTIME 集成待接入不代表不可用，不映射为此态
- * - 已停用：DISABLED
+ * 来自 Domain Active Binding 的运行信号（Commit 08 TASK 21）：
+ * 只用于产品状态推导，不在普通 UI 展示原始 enum。
  */
-export function getAgentProductStatus(agent: AgentItem): AgentProductStatusView {
+export interface AgentRuntimeSignals {
+  activeBindingVersion: string | null;
+  syncStatus: RuntimeSyncStatus | null;
+  healthStatus: RuntimeHealthStatus | null;
+}
+
+/**
+ * 轻量 View Projection：由 Registry ViewModel + Domain Active Binding 信号推导用户可见状态。
+ * 优先级（Commit 08 TASK 21）：
+ * - 已停用：DISABLED
+ * - 未发布：formalVersion = null（无 Binding 不算需关注）
+ * - 需关注：已发布但 Active Binding 缺失 / agentVersion 与 currentPublishedVersion 错配 /
+ *   syncStatus FAILED / OUT_OF_SYNC / healthStatus UNAVAILABLE。
+ *   integrationMode = MOCK_RUNTIME 本身不触发需关注（原型即 Mock Integration）
+ * - 有未发布修改：已发布且存在草稿
+ * - 正常：其余
+ */
+export function getAgentProductStatus(
+  agent: AgentItem,
+  runtimeSignals?: AgentRuntimeSignals | null
+): AgentProductStatusView {
   if (agent.status === 'DISABLED') {
     return { key: 'DISABLED', label: '已停用' };
   }
   if (agent.formalVersion === null) {
     return { key: 'UNPUBLISHED', label: '未发布' };
+  }
+  if (
+    runtimeSignals &&
+    (runtimeSignals.activeBindingVersion === null ||
+      runtimeSignals.activeBindingVersion !== agent.formalVersion ||
+      runtimeSignals.syncStatus === 'FAILED' ||
+      runtimeSignals.syncStatus === 'OUT_OF_SYNC' ||
+      runtimeSignals.healthStatus === 'UNAVAILABLE')
+  ) {
+    return { key: 'NEEDS_ATTENTION', label: '需关注' };
   }
   if (agent.hasDraft) {
     return { key: 'PENDING_CHANGES', label: '有未发布修改' };

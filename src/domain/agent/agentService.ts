@@ -462,12 +462,16 @@ function validateDraftConfigurationForRelease(def: AgentDefinition, draft: Agent
 
 class AgentService {
   /**
-   * P0: Create new unreleased Agent Definition + Initial Draft from an official preset
+   * P0: Create new unreleased Agent Definition + Initial Draft from an official preset.
+   *
+   * Commit 08 TASK 5：创建自定义 Agent = Create AgentDefinition + Create AgentDraft，
+   * 到此为止——不创建 AgentRuntimeBinding（未发布 Agent 没有 AgentVersion，
+   * Binding.agentVersion 必填，因此版本化之前不可能存在 Binding）。
+   * Draft 的运行验证走 A04 的 transient RuntimeProjection。
    */
   public createDraftFromPreset(input: CreateDraftFromPresetInput): {
     definition: AgentDefinition;
     draft: AgentDraft;
-    runtimeBinding: AgentRuntimeBinding;
   } {
     // V1.1: 非法 presetId 必须显式失败，禁止静默 fallback 成知识模板
     const preset = getPresetById(input.presetId);
@@ -568,22 +572,11 @@ class AgentService {
       updatedBy: definition.owner
     };
 
-    // 3. Runtime Binding (Unbound / Draft Projection)
-    const runtimeBinding: AgentRuntimeBinding = {
-      bindingId: `bind_${agentId}`,
-      agentId,
-      runtimeTarget: preset.runtimeTarget,
-      runtimeStatus: 'DRAFT_PROJECTION',
-      syncRevision: 'r0-draft',
-      lastSyncedAt: undefined
-    };
-
-    // Persist in repository
+    // Persist in repository（只有 Definition + Draft，无 RuntimeBinding）
     agentRepository.saveDefinition(definition);
     agentRepository.saveDraft(draft);
-    agentRepository.saveRuntimeBinding(runtimeBinding);
 
-    return { definition, draft, runtimeBinding };
+    return { definition, draft };
   }
 
   /**
@@ -775,15 +768,20 @@ class AgentService {
       throw new AgentPublishError('Runtime 编译失败，发布中止', 'VALIDATION');
     }
 
-    // ── Step 3: Runtime Activation（激活成功才允许切换正式版本） ──
+    // ── Step 3: Runtime Activation（版本化 Binding；激活成功才允许切换正式版本） ──
+    // Commit 08：targetVersionNumber 由 Domain Service 显式传给 Adapter，
+    // Adapter 不猜测 currentPublishedVersion；Activation 成功之前不持久化新 Binding
     let runtimeBinding: AgentRuntimeBinding;
     try {
-      runtimeBinding = await adapter.activate(projection);
+      runtimeBinding = await adapter.activate(projection, targetVersionNumber);
     } catch {
+      // Failure Contract（TASK 17）：旧 active Binding 保持 active=true，
+      // 新 Binding 不入库、AgentVersion 不创建、Draft 保留、currentPublishedVersion 不变
       throw new AgentPublishError('Runtime 激活失败，发布中止', 'ACTIVATION');
     }
 
-    // ── Step 4: 切换正式版本（以上全部成功后才写仓库） ──
+    // ── Step 4: 切换正式版本（以上全部成功后才写仓库；顺序见 §35/Commit 08 TASK 15） ──
+    // AgentVersion.runtimeRevision 优先取 Binding 的 runtimeConfigRevision（TASK 16）
     const version: AgentVersion = {
       versionId: `ver_${params.agentId}_${Date.now().toString(36)}`,
       versionNumber: targetVersionNumber,
@@ -794,12 +792,13 @@ class AgentService {
       publishedAt: '刚刚',
       publishedBy: params.publishedBy,
       releaseNotes: params.releaseNotes || `正式发布版本 ${targetVersionNumber}`,
-      runtimeRevision: runtimeBinding.syncRevision ?? targetVersionNumber
+      runtimeRevision: runtimeBinding.runtimeConfigRevision ?? targetVersionNumber
     };
 
-    agentRepository.saveDefinition(candidateDef);
     agentRepository.addVersion(version);
-    agentRepository.saveRuntimeBinding(runtimeBinding);
+    // 版本化 Binding 切换：旧 active → active=false（保留历史），新 Binding → active=true
+    agentRepository.activateRuntimeBinding(runtimeBinding);
+    agentRepository.saveDefinition(candidateDef);
     agentRepository.removeDraft(draft.draftId);
 
     return { version, definition: candidateDef, runtimeBinding };

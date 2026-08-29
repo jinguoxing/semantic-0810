@@ -98,7 +98,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     return {
       def,
       draft: def ? agentRepository.getDraftByAgentId(agentId) : undefined,
-      binding: agentRepository.getRuntimeBinding(agentId),
+      // Commit 08 TASK 24：只读 Active Binding（Draft 不拥有正式 Binding）
+      binding: def ? agentRepository.getActiveRuntimeBinding(agentId) : undefined,
       versions: agentRepository.getVersions(agentId)
     };
   }, [agentId, repoTick]);
@@ -900,6 +901,18 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           ；运行依赖检查{validation?.runtimeDependencies === 'PASSED' ? '通过' : '未通过'}。
                         </p>
                       </div>
+
+                      {/* Commit 08 TASK 24：Active Binding 与 currentPublishedVersion 错配 → 弱提示 */}
+                      {formalVersion &&
+                        (!domain.binding || domain.binding.agentVersion !== formalVersion) && (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded space-y-0.5">
+                            <span className="font-medium text-amber-800">运行绑定需关注</span>
+                            <p className="text-[11px] text-amber-700">
+                              当前正式版本 {formalVersion} 与 Active Binding（
+                              {domain.binding?.agentVersion ?? '无'}）不一致，请在发布前确认运行绑定状态。
+                            </p>
+                          </div>
+                        )}
                     </div>
                   </div>
                 )}

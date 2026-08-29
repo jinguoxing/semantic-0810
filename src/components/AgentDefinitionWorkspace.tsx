@@ -387,25 +387,24 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
 
   // ─────────────────────────────────────────────────────────────
   // 高级信息 → 运行与诊断（仅 showRuntimeDiagnostics=true 可达；
-  // 复用 Runtime Adapter / Health Logic，Runtime Domain 不删不改）
+  // 复用 Runtime Adapter / Health Logic，Runtime Domain 不删不改）。
+  // Commit 08：读 Active Binding（Draft 不拥有正式 Binding；
+  // 未发布自定义 Agent 无 Binding → 显示「尚无正式运行绑定」）
   // ─────────────────────────────────────────────────────────────
   const [isRuntimeModalOpen, setIsRuntimeModalOpen] = useState(false);
   const [runtimeHealth, setRuntimeHealth] = useState<RuntimeHealth | null>(null);
-  const runtimeBinding = ws ? agentRepository.getRuntimeBinding(ws.agentId) : undefined;
+  const runtimeBinding = ws ? agentRepository.getActiveRuntimeBinding(ws.agentId) : undefined;
   // WeKnora 真实 API 未接入 —— 诊断视图如实标注 MOCK_RUNTIME，不伪装已同步
   const runtimeEngineLabel = ws?.runtimeTarget === 'WEKNORA' ? 'WeKnora' : 'Semovix Native';
 
   useEffect(() => {
     if (!isRuntimeModalOpen || !ws) return;
+    // 切换智能体 / 重新打开时清空上一份健康快照，避免陈旧数据
+    setRuntimeHealth(null);
+    if (!runtimeBinding) return; // 无正式 Binding（未发布）→ 诊断视图展示空态
     let cancelled = false;
     getRuntimeAdapter(ws.runtimeTarget)
-      .getHealth({
-        bindingId: runtimeBinding?.bindingId ?? `view_${ws.agentId}`,
-        agentId: ws.agentId,
-        runtimeTarget: ws.runtimeTarget,
-        runtimeStatus: runtimeBinding?.runtimeStatus ?? 'MOCK_RUNTIME',
-        integrationMode: runtimeBinding?.integrationMode ?? 'MOCK_RUNTIME'
-      })
+      .getHealth(runtimeBinding)
       .then((health) => {
         if (!cancelled) setRuntimeHealth(health);
       })
@@ -416,7 +415,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRuntimeModalOpen, ws?.agentId, ws?.runtimeTarget]);
+  }, [isRuntimeModalOpen, ws?.agentId, ws?.runtimeTarget, runtimeBinding?.bindingId]);
 
   // ─────────────────────────────────────────────────────────────
   // 未找到智能体（Domain 中无定义）：诚实空态，不从 UI Fixture 反推
@@ -1594,42 +1593,68 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                   <span className="text-[#64748B]">运行引擎</span>
                   <span className="font-semibold text-[#0F172A]">{runtimeEngineLabel}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B]">集成模式</span>
-                  <span
-                    className={`font-semibold ${
-                      runtimeHealth?.integrationMode === 'PRODUCTION' ? 'text-[#16A36A]' : 'text-amber-600'
-                    }`}
-                  >
-                    {runtimeHealth?.integrationMode ?? runtimeBinding?.integrationMode ?? 'MOCK_RUNTIME'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B]">Runtime 健康状态</span>
-                  <span className="font-semibold text-[#0F172A]">
-                    {runtimeHealth ? runtimeHealth.status : (runtimeBinding?.runtimeStatus ?? '读取中...')}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B]">绑定正式版本</span>
-                  <span className="font-mono text-[#0F172A]">{ws.formalVersion || '暂无 (待发布)'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B]">Runtime Revision</span>
-                  <span className="font-mono text-[#0F172A]">
-                    {runtimeBinding?.syncRevision || '— (未接入真实 API)'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#64748B]">最近同步</span>
-                  <span className="text-[#475569]">{runtimeBinding?.lastSyncedAt || '尚未同步'}</span>
-                </div>
+                {runtimeBinding ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-[#64748B]">绑定正式版本</span>
+                      <span className="font-mono font-semibold text-[#0F172A]">
+                        {runtimeBinding.agentVersion}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#64748B]">集成模式</span>
+                      <span
+                        className={`font-semibold ${
+                          runtimeBinding.integrationMode === 'PRODUCTION' ? 'text-[#16A36A]' : 'text-amber-600'
+                        }`}
+                      >
+                        {runtimeHealth?.integrationMode ?? runtimeBinding.integrationMode}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#64748B]">同步状态</span>
+                      <span className="font-mono font-semibold text-[#0F172A]">
+                        {runtimeBinding.syncStatus}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#64748B]">运行健康</span>
+                      <span className="font-mono font-semibold text-[#0F172A]">
+                        {runtimeHealth?.healthStatus ?? runtimeBinding.healthStatus}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#64748B]">Runtime Config Revision</span>
+                      <span className="font-mono text-[#0F172A]">
+                        {runtimeBinding.runtimeConfigRevision || '—'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-[#64748B]">最近同步</span>
+                      <span className="text-[#475569]">{runtimeBinding.lastSyncedAt || '尚未同步'}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="pt-1 pb-0.5 text-[11px] text-[#475569] leading-relaxed">
+                    尚无正式运行绑定——当前智能体未发布，
+                    发布成功后才会建立首个版本化运行绑定。
+                  </div>
+                )}
               </div>
+
+              {/* Commit 08 TASK 23：明确区分正式 Binding 与 Draft transient Projection，
+                  不让用户误以为 Draft 已同步 */}
+              {runtimeBinding && ws.hasDraft && (
+                <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-[11px] text-[#1E40AF] leading-relaxed">
+                  正式运行绑定 → {runtimeBinding.agentVersion}；当前草稿（{ws.draftId}）尚未建立正式运行绑定，
+                  测试时仅使用临时编译的 RuntimeProjection，不会切换正式 Binding。
+                </div>
+              )}
 
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 leading-relaxed">
                 {runtimeHealth?.message
                   ? `${runtimeHealth.message}（来自 AgentRuntimeAdapter.getHealth，非实时探测数据）`
-                  : '正在从 Runtime Adapter 读取健康信息...（WeKnora 真实 API 未接入，集成模式如实标注 MOCK_RUNTIME）'}
+                  : '正在从 Runtime Adapter 读取健康信息...（当前为模拟集成，如实标注 MOCK_RUNTIME，不伪装生产连接）'}
               </div>
 
               <div className="text-[11px] text-[#64748B] leading-relaxed">

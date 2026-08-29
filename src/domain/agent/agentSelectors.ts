@@ -14,6 +14,9 @@ import {
   AgentContextSource,
   MaxAutonomy,
   RuntimeTarget,
+  RuntimeIntegrationMode,
+  RuntimeSyncStatus,
+  RuntimeHealthStatus,
   TaskTemplateBinding
 } from './agentTypes';
 import { agentRepository } from './agentRepository';
@@ -78,8 +81,15 @@ export interface AgentDisplayState {
   draftId?: string;
   status: 'ACTIVE' | 'DRAFT' | 'DISABLED';
   runtimeEngine: 'Semovix' | 'Semovix Native' | 'WeKnora';
-  runtimeBindingStatus: 'READY' | 'DRAFT_PROJECTION' | 'SYNCED' | 'MOCK_RUNTIME' | 'UNBOUND' | 'ERROR';
-  runtimeRevision: string | null;
+  /**
+   * Runtime 三维度诊断投影（Commit 08 TASK 20）：仅供技术诊断 / A01 产品状态推导，
+   * 普通 UI 不直接展示原始 enum。无 Binding（未发布）时全部为 null。
+   */
+  activeBindingVersion: string | null;
+  integrationMode: RuntimeIntegrationMode | null;
+  syncStatus: RuntimeSyncStatus | null;
+  healthStatus: RuntimeHealthStatus | null;
+  runtimeConfigRevision: string | null;
   lastReleaseTime: string | null;
   lastSyncTime: string | null;
   businessDiffs: AgentBusinessDiff[];
@@ -95,7 +105,8 @@ export const agentSelectors = {
     if (!def) return null;
 
     const draft = agentRepository.getDraftByAgentId(agentId);
-    const binding = agentRepository.getRuntimeBinding(agentId);
+    // Commit 08 TASK 20：读 Active Binding（未发布 Agent → undefined → 三维度 null）
+    const binding: AgentRuntimeBinding | undefined = agentRepository.getActiveRuntimeBinding(agentId);
     const versions = agentRepository.getVersions(agentId);
     const latestVersion = versions[0];
 
@@ -124,8 +135,11 @@ export const agentSelectors = {
       draftId: draft?.draftId,
       status: def.status,
       runtimeEngine,
-      runtimeBindingStatus: binding?.runtimeStatus || 'UNBOUND',
-      runtimeRevision: binding?.syncRevision || null,
+      activeBindingVersion: binding?.agentVersion ?? null,
+      integrationMode: binding?.integrationMode ?? null,
+      syncStatus: binding?.syncStatus ?? null,
+      healthStatus: binding?.healthStatus ?? null,
+      runtimeConfigRevision: binding?.runtimeConfigRevision ?? null,
       lastReleaseTime: latestVersion ? latestVersion.publishedAt : null,
       lastSyncTime: binding?.lastSyncedAt || null,
       businessDiffs: draft?.businessDiffs || [],

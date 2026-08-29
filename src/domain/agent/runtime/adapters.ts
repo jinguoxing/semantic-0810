@@ -26,18 +26,28 @@ function nextProjectionId(runtimeTarget: RuntimeTarget, agentId: string): string
   return `${runtimeTarget === 'WEKNORA' ? 'weknora' : 'native'}-${agentId}-p${projectionSeq}`;
 }
 
-function buildBinding(
-  projection: RuntimeProjection,
-  runtimeStatus: AgentRuntimeBinding['runtimeStatus']
-): AgentRuntimeBinding {
+/**
+ * buildBinding 最终契约（Commit 08 TASK 14）：
+ * Binding 必须携带 agentVersion（由 Domain Service 显式传入）；
+ * Mock 环境 runtimeAgentId 保持 undefined，不虚构真实 Runtime Agent ID。
+ * syncStatus=SYNCED / healthStatus=HEALTHY 只描述当前 Mock Integration
+ * Instance 内部状态，绝不能被解释为「已连接生产 Runtime」。
+ */
+function buildBinding(projection: RuntimeProjection, agentVersion: string): AgentRuntimeBinding {
   return {
     bindingId: `binding-${projection.projectionId}`,
     agentId: projection.agentId,
-    runtimeTarget: projection.runtimeTarget,
-    runtimeInstanceId: undefined,
-    runtimeStatus,
-    syncRevision: `projection:${projection.projectionId}`,
-    lastSyncedAt: undefined
+    agentVersion,
+    runtimeType: projection.runtimeTarget,
+    runtimeAgentId: undefined,
+    integrationMode: 'MOCK_RUNTIME',
+    syncStatus: 'SYNCED',
+    healthStatus: 'HEALTHY',
+    runtimeConfigRevision: `projection:${projection.projectionId}`,
+    active: true,
+    lastSyncedAt: '刚刚',
+    lastCheckedAt: undefined,
+    syncError: undefined
   };
 }
 
@@ -58,6 +68,8 @@ export class SemovixNativeRuntimeAdapter implements AgentRuntimeAdapter {
     return {
       projectionId: nextProjectionId('SEMOVIX_NATIVE', draft.agentId),
       agentId: draft.agentId,
+      // Commit 08 TASK 13：Projection 必须知道自己由哪个 Draft 编译出来
+      draftId: draft.draftId,
       runtimeTarget: 'SEMOVIX_NATIVE',
       integrationMode: 'MOCK_RUNTIME',
       compiledAt: '刚刚编译',
@@ -91,16 +103,20 @@ export class SemovixNativeRuntimeAdapter implements AgentRuntimeAdapter {
     };
   }
 
-  async activate(projection: RuntimeProjection): Promise<AgentRuntimeBinding> {
+  async activate(projection: RuntimeProjection, agentVersion: string): Promise<AgentRuntimeBinding> {
     // 平台自有运行时：原型环境内存激活，不宣称生产集群部署
-    return buildBinding(projection, 'MOCK_RUNTIME');
+    return buildBinding(projection, agentVersion);
   }
 
-  async getHealth(): Promise<RuntimeHealth> {
+  async getHealth(binding: AgentRuntimeBinding): Promise<RuntimeHealth> {
     return {
-      status: 'MOCK_RUNTIME',
-      integrationMode: 'MOCK_RUNTIME',
-      message: 'Semovix Native 原型运行时（平台内内存实现，未连接生产集群）'
+      healthStatus: binding.healthStatus,
+      integrationMode: binding.integrationMode,
+      checkedAt: '刚刚检查',
+      message:
+        binding.integrationMode === 'MOCK_RUNTIME'
+          ? 'Semovix Native 原型运行时（模拟集成，平台内内存实现，未连接生产集群）'
+          : 'Semovix Native 运行时'
     };
   }
 }
@@ -113,6 +129,8 @@ export class WeKnoraRuntimeAdapterMock implements AgentRuntimeAdapter {
     return {
       projectionId: nextProjectionId('WEKNORA', draft.agentId),
       agentId: draft.agentId,
+      // Commit 08 TASK 13：Projection 必须知道自己由哪个 Draft 编译出来
+      draftId: draft.draftId,
       runtimeTarget: 'WEKNORA',
       integrationMode: 'MOCK_RUNTIME',
       compiledAt: '刚刚编译',
@@ -146,16 +164,20 @@ export class WeKnoraRuntimeAdapterMock implements AgentRuntimeAdapter {
     };
   }
 
-  async activate(projection: RuntimeProjection): Promise<AgentRuntimeBinding> {
+  async activate(projection: RuntimeProjection, agentVersion: string): Promise<AgentRuntimeBinding> {
     // Mock 激活：仅生成本地绑定记录，绝不宣称已同步真实 WeKnora 实例
-    return buildBinding(projection, 'MOCK_RUNTIME');
+    return buildBinding(projection, agentVersion);
   }
 
-  async getHealth(): Promise<RuntimeHealth> {
+  async getHealth(binding: AgentRuntimeBinding): Promise<RuntimeHealth> {
     return {
-      status: 'MOCK_RUNTIME',
-      integrationMode: 'MOCK_RUNTIME',
-      message: 'Runtime integration pending — 未接入真实 WeKnora API，当前为 MOCK_RUNTIME 投影'
+      healthStatus: binding.healthStatus,
+      integrationMode: binding.integrationMode,
+      checkedAt: '刚刚检查',
+      message:
+        binding.integrationMode === 'MOCK_RUNTIME'
+          ? 'Runtime integration pending — 未接入真实 WeKnora API，当前为模拟集成（MOCK_RUNTIME）'
+          : 'WeKnora Runtime 连接正常'
     };
   }
 }
