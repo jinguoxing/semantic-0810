@@ -121,6 +121,13 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
   const [editModelPolicyId, setEditModelPolicyId] = useState('');
   const [editMaxAutonomy, setEditMaxAutonomy] = useState<MaxAutonomy>('SUGGEST');
   const [isRoleInstructionOpen, setIsRoleInstructionOpen] = useState(false); // 高级角色说明默认折叠
+  /**
+   * 工作范围 Draft 启用状态（Commit 06.2）：只作用于本地编辑态，不改 Domain Contract。
+   * - scopeActivationRequested：用户点击「在草稿中启用」待保存
+   * - scopeTouched：用户真的操作过工作范围（防误写，见 buildPatch）
+   */
+  const [scopeActivationRequested, setScopeActivationRequested] = useState(false);
+  const [scopeTouched, setScopeTouched] = useState(false);
 
   const scopeConfig = useMemo(
     () => (ws?.sourcePresetId ? TEMPLATE_SCOPE_CONFIGS[ws.sourcePresetId] : undefined),
@@ -142,13 +149,25 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
     setEditCapabilityPreset(ws.editable.capabilityPreset);
     setEditModelPolicyId(ws.editable.modelPolicyId);
     setEditMaxAutonomy(ws.editable.maxAutonomy);
+    // Workspace State 重新载入（切换智能体 / 保存成功后 domainTick 重读）时重置启用状态
+    setScopeActivationRequested(false);
+    setScopeTouched(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ws]);
 
-  /** 主范围可编辑：模板主范围来源必须在当前允许来源内（Domain 校验为最终裁决，UI 只提前 disable） */
-  const scopeEditable = Boolean(
+  // ── 工作范围三态（Commit 06.2）：区分 当前配置 / 模板最大边界 / 可在草稿中启用 ──
+  /** A. 当前配置（Draft 优先，其次正式快照）已启用该主范围来源 → 正常编辑 */
+  const scopeCurrentlyAllowed = Boolean(
     ws && scopeConfig && ws.editable.allowedContextSources.includes(scopeConfig.sourceType)
   );
+  /** 模板最大边界：Capability Template 允许该主范围来源 */
+  const scopeAllowedByTemplate = Boolean(
+    preset && scopeConfig && preset.allowedContextSources.includes(scopeConfig.sourceType)
+  );
+  /** B. 当前配置未启用但模板允许 → 可在草稿中启用（不与 C「模板不允许」混为一谈） */
+  const scopeCanBeEnabledInDraft = !scopeCurrentlyAllowed && scopeAllowedByTemplate;
+  /** 当前会话可编辑的工作范围：已启用，或用户已请求在草稿中启用 */
+  const scopeIsActiveForEditing = scopeCurrentlyAllowed || scopeActivationRequested;
 
   // ── 受控选项目录（模板边界） ──
   const capabilityOptions = useMemo(() => {
@@ -201,16 +220,26 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
       patch.supportedTaskTemplates = editTasks.map((b) => ({ ...b }));
     }
     patch.owner = editOwner;
-    if (scopeConfig && scopeEditable) {
+    // 工作范围 Patch 防误写（P0）：「模板允许」≠「用户已启用」——
+    // 未发生用户操作（scopeTouched=false）或未请求启用时，绝不写入 allowedContextSources / contextBindings，
+    // 只改 Owner 等其他字段的保存不能把 BUSINESS_DOMAIN 自动带进 Draft。
+    if (scopeConfig && scopeTouched && scopeIsActiveForEditing) {
       const primary: AgentContextBinding = {
         sourceType: scopeConfig.sourceType,
         selectionMode: editScopeMode,
         resourceIds: editScopeMode === 'SELECTED' ? [...editScopeResourceIds] : undefined
       };
+      // 替换主范围 Binding，保留其他 Context Bindings；Domain 负责最终校验
       patch.contextBindings = [
         ...ws.editable.contextBindings.filter((b) => b.sourceType !== scopeConfig.sourceType),
         primary
       ];
+      if (scopeCanBeEnabledInDraft && scopeActivationRequested) {
+        // 新启用：Draft 允许来源并入主范围来源（去重）；Domain Edit Policy 保证不超模板最大边界
+        patch.allowedContextSources = Array.from(
+          new Set([...ws.editable.allowedContextSources, scopeConfig.sourceType])
+        );
+      }
     }
     if (capabilityOptions.length > 1) {
       const selected = capabilityOptions.find((o) => o.capabilityPreset === editCapabilityPreset);
@@ -227,7 +256,9 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
   };
 
   const scopeIncomplete =
-    scopeEditable && editScopeMode === 'SELECTED' && editScopeResourceIds.length === 0;
+    scopeIsActiveForEditing &&
+    editScopeMode === 'SELECTED' &&
+    editScopeResourceIds.length === 0;
 
   /**
    * 支持任务展示列表（TASK 15）：Draft 绑定 ∪ 模板任务集合；
@@ -372,6 +403,40 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
       <span>保存草稿</span>
     </button>
   );
+
+  /** 在草稿中启用（TASK 6）：只改本地编辑状态，默认 ALL_ALLOWED，不直接触碰 Domain */
+  const activateScopeInDraft = () => {
+    setScopeActivationRequested(true);
+    setScopeTouched(true);
+    setEditScopeMode('ALL_ALLOWED');
+    setEditScopeResourceIds([]);
+  };
+
+  /** 取消启用（TASK 7）：保存前的弱操作，不产生任何 Domain 变化 */
+  const cancelScopeActivation = () => {
+    setScopeActivationRequested(false);
+    setScopeTouched(false);
+    setEditScopeMode('ALL_ALLOWED');
+    setEditScopeResourceIds([]);
+  };
+
+  /** 只读状态下的当前 Context Bindings 展示（启用 CTA / 模板不允许分支共用） */
+  const currentBindingsList =
+    ws.editable.contextBindings.length > 0 ? (
+      <div className="space-y-1.5">
+        {ws.editable.contextBindings.map((binding, i) => (
+          <div
+            key={i}
+            className="p-2.5 bg-white border border-[#E2E8F0] rounded-md flex items-center justify-between"
+          >
+            <span className="font-medium text-[#0F172A]">
+              {AGENT_CONTEXT_SOURCE_VIEWS[binding.sourceType].label}
+            </span>
+            <span className="text-[11px] text-[#64748B]">{describeScopeBinding(binding)}</span>
+          </div>
+        ))}
+      </div>
+    ) : null;
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#F8FAFC]">
@@ -1005,8 +1070,22 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                         {scopeConfig ? scopeConfig.sectionTitle : '主要工作范围'}
                       </div>
 
-                      {scopeConfig && scopeEditable ? (
+                      {scopeConfig && scopeIsActiveForEditing ? (
                         <>
+                          {/* 草稿启用模式提示 + 保存前取消（弱操作，无 Modal） */}
+                          {!scopeCurrentlyAllowed && scopeActivationRequested && (
+                            <div className="flex items-center justify-between gap-3 p-2.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md">
+                              <span className="text-[11px] text-[#1E40AF] leading-relaxed">
+                                本次配置仅写入草稿，不影响当前正式版本。
+                              </span>
+                              <button
+                                onClick={cancelScopeActivation}
+                                className="text-[11px] font-semibold text-[#64748B] hover:text-[#0F172A] underline underline-offset-2 cursor-pointer shrink-0"
+                              >
+                                取消启用
+                              </button>
+                            </div>
+                          )}
                           <div className="space-y-2">
                             <label
                               className={`flex items-start space-x-2 p-2.5 rounded-md border cursor-pointer transition-colors ${
@@ -1018,7 +1097,10 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                               <input
                                 type="radio"
                                 checked={editScopeMode === 'ALL_ALLOWED'}
-                                onChange={() => setEditScopeMode('ALL_ALLOWED')}
+                                onChange={() => {
+                                  setEditScopeMode('ALL_ALLOWED');
+                                  setScopeTouched(true);
+                                }}
                                 className="mt-0.5 w-3.5 h-3.5 accent-[#2563EB] cursor-pointer"
                               />
                               <div>
@@ -1038,7 +1120,10 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                               <input
                                 type="radio"
                                 checked={editScopeMode === 'SELECTED'}
-                                onChange={() => setEditScopeMode('SELECTED')}
+                                onChange={() => {
+                                  setEditScopeMode('SELECTED');
+                                  setScopeTouched(true);
+                                }}
                                 className="mt-0.5 w-3.5 h-3.5 accent-[#2563EB] cursor-pointer"
                               />
                               <div>
@@ -1068,13 +1153,14 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                                     <input
                                       type="checkbox"
                                       checked={editScopeResourceIds.includes(option.resourceId)}
-                                      onChange={(e) =>
+                                      onChange={(e) => {
+                                        setScopeTouched(true);
                                         setEditScopeResourceIds((prev) =>
                                           e.target.checked
                                             ? [...prev, option.resourceId]
                                             : prev.filter((id) => id !== option.resourceId)
-                                        )
-                                      }
+                                        );
+                                      }}
                                       className="w-3.5 h-3.5 accent-[#2563EB] cursor-pointer"
                                     />
                                     <span className="font-medium">{option.name}</span>
@@ -1091,30 +1177,33 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
 
                           <div className="pt-1 flex justify-end">{saveButton}</div>
                         </>
+                      ) : scopeConfig && scopeCanBeEnabledInDraft ? (
+                        /* B. 当前正式配置尚未启用但能力模板允许：可在草稿中启用（不与「模板不允许」混淆） */
+                        <div className="space-y-2">
+                          <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-md space-y-2">
+                            <div className="text-xs font-semibold text-amber-900">
+                              当前正式版本尚未启用此工作范围
+                            </div>
+                            <p className="text-[11px] text-amber-800 leading-relaxed">
+                              该工作范围已在当前能力模板的允许范围内。你可以在草稿中启用，完成测试与发布后才会正式生效。
+                            </p>
+                            <button
+                              onClick={activateScopeInDraft}
+                              className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-md text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+                            >
+                              在草稿中启用
+                            </button>
+                          </div>
+                          {currentBindingsList}
+                        </div>
                       ) : scopeConfig ? (
-                        /* 模板主范围来源不在当前允许来源内：UI 提前只读（Domain 校验为最终裁决） */
+                        /* C. 能力模板不允许该来源：不可配置（Domain 校验为最终裁决） */
                         <div className="space-y-2">
                           <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-[#475569] leading-relaxed">
-                            当前{ws.formalVersion ? `正式版本 ${ws.formalVersion}` : '配置'}的允许来源不包含「
-                            {AGENT_CONTEXT_SOURCE_VIEWS[scopeConfig.sourceType].label}
-                            」，{scopeConfig.sectionTitle}
-                            暂不开放配置；可使用的支撑来源见下方。
+                            该工作范围（{AGENT_CONTEXT_SOURCE_VIEWS[scopeConfig.sourceType].label}
+                            ）不在当前能力模板的允许范围内，不可配置；可使用的支撑来源见下方。
                           </div>
-                          {ws.editable.contextBindings.length > 0 && (
-                            <div className="space-y-1.5">
-                              {ws.editable.contextBindings.map((binding, i) => (
-                                <div
-                                  key={i}
-                                  className="p-2.5 bg-white border border-[#E2E8F0] rounded-md flex items-center justify-between"
-                                >
-                                  <span className="font-medium text-[#0F172A]">
-                                    {AGENT_CONTEXT_SOURCE_VIEWS[binding.sourceType].label}
-                                  </span>
-                                  <span className="text-[11px] text-[#64748B]">{describeScopeBinding(binding)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          {currentBindingsList}
                         </div>
                       ) : (
                         /* 未知模板：只读展示当前 Bindings */
