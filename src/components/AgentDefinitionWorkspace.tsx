@@ -423,21 +423,24 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
             )}
           </div>
 
-          {/* Tag 2: 草稿状态 */}
+          {/* Tag 2: 草稿状态（事实源 = formalVersion + hasDraft；businessDiffs 仅作变更摘要附注，不作为状态依据） */}
           {ws.formalVersion === null ? (
             <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
               <GitBranch className="w-3 h-3 text-amber-600" />
               <span className="font-semibold">未发布草稿</span>
             </div>
-          ) : ws.businessDiffs.length > 0 ? (
+          ) : ws.hasDraft ? (
             <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 bg-[#EFF6FF] border border-[#BFDBFE] rounded text-xs text-[#1E40AF]">
               <GitBranch className="w-3 h-3 text-[#2563EB]" />
-              <span className="font-semibold">草稿有 {ws.businessDiffs.length} 项修改</span>
+              <span className="font-semibold">
+                有未发布草稿
+                {ws.businessDiffs.length > 0 ? ` · 已记录 ${ws.businessDiffs.length} 项变更摘要` : ''}
+              </span>
             </div>
           ) : (
             <div className="hidden sm:flex items-center space-x-1.5 px-2.5 py-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#334155]">
               <GitBranch className="w-3 h-3 text-[#64748B]" />
-              <span className="font-semibold">与正式版本一致</span>
+              <span className="font-semibold">当前无未发布草稿</span>
             </div>
           )}
 
@@ -663,9 +666,11 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                     <p className="text-[11px] text-[#64748B] mt-0.5">
                       {ws.formalVersion === null
                         ? '尚未发布正式版本，当前所有配置仅存在于未发布草稿中。'
-                        : ws.businessDiffs.length > 0
-                          ? `当前线上正式运行的是 ${ws.formalVersion}，草稿有 ${ws.businessDiffs.length} 项修改尚未影响正式运行。`
-                          : `当前线上正式运行的是 ${ws.formalVersion}，草稿与正式版一致。`}
+                        : !ws.hasDraft
+                          ? `当前线上正式运行的是 ${ws.formalVersion}，当前没有未发布草稿。`
+                          : ws.businessDiffs.length > 0
+                            ? `当前线上正式运行的是 ${ws.formalVersion}，草稿已记录 ${ws.businessDiffs.length} 项变更摘要，尚未影响正式运行。`
+                            : `当前线上正式运行的是 ${ws.formalVersion}，存在未发布草稿，尚未生成逐项差异摘要。`}
                     </p>
                   </div>
                   <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
@@ -727,16 +732,18 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                   </div>
                 </div>
 
-                {/* 当前草稿（businessDiffs 仅为展示摘要，配置 SoT 永远是 AgentDraft） */}
+                {/* 当前草稿（状态事实源 = formalVersion + hasDraft；businessDiffs 仅是下方「已记录的变更摘要」列表） */}
                 <div className="space-y-2 border-b border-[#E2E8F0] pb-5">
                   <div>
                     <h3 className="text-xs font-bold text-[#0F172A]">当前草稿</h3>
                     <p className="text-[11px] text-[#64748B] mt-0.5">
                       {ws.formalVersion === null
-                        ? '当前智能体处于「首次创建未发布草稿」状态。'
-                        : ws.businessDiffs.length > 0
-                          ? `当前草稿相对正式版本 ${ws.formalVersion} 有 ${ws.businessDiffs.length} 项修改。`
-                          : `当前草稿与正式版本 ${ws.formalVersion} 保持一致，暂无未发布修改。`}
+                        ? '首次创建未发布草稿。'
+                        : !ws.hasDraft
+                          ? '当前没有未发布草稿。'
+                          : ws.businessDiffs.length > 0
+                            ? `存在未发布草稿，当前已记录 ${ws.businessDiffs.length} 项变更摘要。`
+                            : '存在未发布草稿，尚未生成逐项差异摘要。'}
                     </p>
                   </div>
 
@@ -760,8 +767,15 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                         <div>测试草稿通过发布验证后，即可发布为首个正式版本 (v1.0)。</div>
                       </div>
                     </div>
+                  ) : !ws.hasDraft ? (
+                    <div className="p-4 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#64748B]">
+                      当前没有未发布草稿，线上正式版本 {ws.formalVersion} 正在稳定运行。
+                    </div>
                   ) : ws.businessDiffs.length > 0 ? (
                     <div className="space-y-2">
+                      <div className="text-[11px] font-semibold text-[#475569]">
+                        已记录的变更摘要（{ws.businessDiffs.length} 项）
+                      </div>
                       {ws.businessDiffs.map((diff, index) => (
                         <div
                           key={index}
@@ -781,13 +795,15 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                     </div>
                   ) : (
                     <div className="p-4 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#64748B]">
-                      当前草稿与正式版本 {ws.formalVersion} 保持一致，暂无未发布修改。
+                      存在未发布草稿，尚未生成逐项差异摘要。
                     </div>
                   )}
 
-                  <p className="text-[11px] text-[#94A3B8] pt-1">
-                    草稿修改不会影响当前正式运行，完成测试与发布后才会生效。
-                  </p>
+                  {(ws.formalVersion === null || ws.hasDraft) && (
+                    <p className="text-[11px] text-[#94A3B8] pt-1">
+                      草稿修改不会影响当前正式运行，完成测试与发布后才会生效。
+                    </p>
+                  )}
                 </div>
               </>
             ) : (
@@ -1341,12 +1357,12 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
             </div>
           </div>
 
-          {/* 底部：单一「测试草稿」入口（不提供绕过自动保存的第二入口） */}
+          {/* 底部：单一「测试草稿」入口（状态事实源 = formalVersion + hasDraft，不用 businessDiffs 推导一致） */}
           <div
             className={`p-3 rounded-lg space-y-2 ${
               ws.formalVersion === null
                 ? 'bg-amber-50/80 border border-amber-200'
-                : ws.businessDiffs.length > 0
+                : ws.hasDraft
                   ? 'bg-[#EFF6FF] border border-[#BFDBFE]'
                   : 'bg-[#F8FAFC] border border-[#E2E8F0]'
             }`}
@@ -1355,7 +1371,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
               className={`flex items-center space-x-1.5 text-xs font-bold ${
                 ws.formalVersion === null
                   ? 'text-amber-900'
-                  : ws.businessDiffs.length > 0
+                  : ws.hasDraft
                     ? 'text-[#1E40AF]'
                     : 'text-[#334155]'
               }`}
@@ -1364,7 +1380,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                 className={`w-3.5 h-3.5 ${
                   ws.formalVersion === null
                     ? 'text-amber-700'
-                    : ws.businessDiffs.length > 0
+                    : ws.hasDraft
                       ? 'text-[#2563EB]'
                       : 'text-[#64748B]'
                 }`}
@@ -1372,16 +1388,20 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
               <span>
                 {ws.formalVersion === null
                   ? '未发布草稿 (首次创建)'
-                  : ws.businessDiffs.length > 0
-                    ? `${ws.businessDiffs.length} 项未发布修改`
-                    : '草稿与正式版本一致'}
+                  : ws.hasDraft
+                    ? ws.businessDiffs.length > 0
+                      ? `有未发布草稿 · ${ws.businessDiffs.length} 项变更摘要`
+                      : '有未发布草稿'
+                    : '当前无未发布草稿'}
               </span>
             </div>
             <p className="text-[11px] leading-relaxed opacity-80">
               {ws.formalVersion === null
                 ? '完成定义后测试草稿，通过发布验证发布首个正式版本。'
-                : ws.businessDiffs.length > 0
-                  ? `草稿与线上正式版本 ${ws.formalVersion} 存在差异，发布后生效。`
+                : ws.hasDraft
+                  ? ws.businessDiffs.length > 0
+                    ? `存在未发布草稿（已记录 ${ws.businessDiffs.length} 项变更摘要），发布后生效。`
+                    : '存在未发布草稿，尚未生成逐项差异摘要。'
                   : `线上正式版本 ${ws.formalVersion} 正在稳定运行。`}
             </p>
             <button

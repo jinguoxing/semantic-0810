@@ -616,7 +616,9 @@ export default function App() {
             const targetId = selectedAgentId || currentSelectedAgent?.id;
             if (!targetId) return false;
             try {
-              agentService.updateAgentDraft(targetId, patch, 'agent_center_user');
+              // 不伪造审计身份：当前无真实 Current User Context，
+              // updatedBy 由 Domain 以「未记录」诚实标注（Owner ≠ updatedBy）
+              agentService.updateAgentDraft(targetId, patch);
               const display = agentSelectors.getDisplayState(targetId);
               if (display) {
                 setSelectedAgent((prev) =>

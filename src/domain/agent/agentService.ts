@@ -19,10 +19,16 @@ import {
   AgentContextSource,
   AGENT_CONTEXT_SOURCE_VIEWS,
   ManagedAgentPreset,
+  TaskTemplateBinding,
   UpdateAgentDraftPatch,
+  MODEL_POLICY_OPTIONS,
   buildAgentDefinitionSnapshot
 } from './agentTypes';
-import { getPresetById } from './agentPresets';
+import {
+  getPresetById,
+  TEMPLATE_AUTONOMY_OPTIONS,
+  TEMPLATE_CAPABILITY_OPTIONS
+} from './agentPresets';
 import { agentRepository } from './agentRepository';
 import { getRuntimeAdapter } from './runtime/adapters';
 
@@ -157,6 +163,206 @@ export class AgentPublishedVersionNotFoundError extends Error {
     super(`未找到智能体 ${agentId} 的正式版本快照: ${versionNumber}`);
     this.name = 'AgentPublishedVersionNotFoundError';
   }
+}
+
+/**
+ * 违反 Agent / Template 治理策略（Commit 06.1 Edit Policy）：
+ * - Built-in 锁定字段被修改
+ * - Task 超出 Capability Template 范围
+ * - Capability Preset / Model Policy 非法
+ * - Autonomy 超出模板上限
+ * - allowedContextSources 越界
+ *
+ * 与既有错误的语义边界：
+ * AgentDraftValidationError          → 数据自身非法（如空字符串）
+ * AgentContextBindingValidationError → Context Contract 非法
+ * AgentEditPolicyViolationError      → 违反 Agent / Template 治理策略
+ */
+export class AgentEditPolicyViolationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AgentEditPolicyViolationError';
+  }
+}
+
+/**
+ * 无真实编辑人上下文时的诚实标注。
+ * Owner ≠ updatedBy：没有 Current User Context 就不伪造审计身份（不把 Owner 当 Editor）。
+ */
+const UNKNOWN_EDITOR = '未记录';
+
+/** Built-in 锁定字段：不属于普通 Built-in Agent Owner 可编辑 Contract（Patch 显式包含即拒绝，不比较值是否变化） */
+const BUILT_IN_LOCKED_PATCH_FIELDS = [
+  'name',
+  'description',
+  'responsibilitySummary',
+  'roleInstruction',
+  'supportedTaskTemplates'
+] as const;
+
+const BUILT_IN_LOCKED_FIELD_LABELS: Record<(typeof BUILT_IN_LOCKED_PATCH_FIELDS)[number], string> = {
+  name: '智能体名称',
+  description: '描述',
+  responsibilitySummary: '主要职责',
+  roleInstruction: '高级角色说明',
+  supportedTaskTemplates: '支持任务绑定'
+};
+
+/**
+ * Agent Edit Policy（Commit 06.1 FIX 10）：统一校验 + canonical normalization。
+ * 在写入 AgentDraft 之前执行，保证「UI Constraint + Domain Constraint」双层边界——
+ * 绕过 A03 UI 直接调用 Service 也无法写入非法配置。
+ *
+ * 校验顺序（FIX 9）：Template Edit Policy → effectiveAllowedContextSources → Context Binding Validation。
+ * 本函数只负责 Edit Policy；Context Binding 校验仍由 validateAndNormalizeContextBindingsAgainst() 承担。
+ *
+ * @param def   目标 AgentDefinition（origin / sourcePresetId 以 Definition 为准）
+ * @param draft 当前草稿；尚无草稿时传 undefined（基线退化为 Definition）
+ * @param patch 调用方传入的 UpdateAgentDraftPatch
+ * @returns 经过治理规则验证并完成 canonical normalization 的新 Patch（canonical desc/name 由 SoT 决定，不信任调用方）
+ */
+function validateAndNormalizeAgentDraftPatch(
+  def: AgentDefinition,
+  draft: AgentDraft | undefined,
+  patch: UpdateAgentDraftPatch
+): UpdateAgentDraftPatch {
+  // FIX 3：Domain Policy 只以 AgentDefinition.sourcePresetId 解析模板，
+  // 不从名称 / runtimeTarget / avatar / UI 类型推断；找不到就不 fallback。
+  const preset = def.sourcePresetId ? getPresetById(def.sourcePresetId) : undefined;
+
+  // FIX 2：Built-in Domain Lock —— 只要 Patch 明确包含锁定字段即拒绝
+  if (def.origin === 'BUILT_IN') {
+    for (const field of BUILT_IN_LOCKED_PATCH_FIELDS) {
+      if (patch[field] !== undefined) {
+        throw new AgentEditPolicyViolationError(
+          `内置智能体的「${BUILT_IN_LOCKED_FIELD_LABELS[field]}」由平台内置定义，不属于普通 Draft 编辑合同`
+        );
+      }
+    }
+  }
+
+  const normalized: UpdateAgentDraftPatch = { ...patch };
+
+  // FIX 4：Custom Task Boundary —— 只能来自当前 Capability Template 的任务集合
+  if (patch.supportedTaskTemplates !== undefined) {
+    if (!preset) {
+      throw new AgentEditPolicyViolationError(
+        `智能体 ${def.agentId} 缺少合法能力模板（sourcePresetId: ${def.sourcePresetId ?? '缺失'}），不允许修改支持任务`
+      );
+    }
+    const seen = new Set<string>();
+    const normalizedTasks: TaskTemplateBinding[] = [];
+    for (const binding of patch.supportedTaskTemplates) {
+      const templateBinding = preset.supportedTaskTemplates.find(
+        (t) => t.taskTemplateId === binding.taskTemplateId
+      );
+      if (!templateBinding) {
+        throw new AgentEditPolicyViolationError(
+          `任务 ${binding.taskTemplateId} 不在能力模板 ${preset.presetId} 允许的任务集合内`
+        );
+      }
+      if (seen.has(binding.taskTemplateId)) {
+        throw new AgentEditPolicyViolationError(`任务 ${binding.taskTemplateId} 重复，不允许重复绑定`);
+      }
+      if (binding.version !== templateBinding.version) {
+        throw new AgentEditPolicyViolationError(
+          `任务 ${binding.taskTemplateId} 的 version 必须是模板正式版本 ${templateBinding.version}（收到 ${binding.version}）`
+        );
+      }
+      seen.add(binding.taskTemplateId);
+      normalizedTasks.push({
+        taskTemplateId: binding.taskTemplateId,
+        version: templateBinding.version,
+        enabled: binding.enabled === true
+      });
+    }
+    normalized.supportedTaskTemplates = normalizedTasks;
+  }
+
+  // FIX 5：Capability Preset 必须在模板受控目录内；capabilityDesc 由所选模式 canonical 决定
+  if (patch.capabilityDesc !== undefined && patch.capabilityPreset === undefined) {
+    throw new AgentEditPolicyViolationError(
+      '不允许单独修改 capabilityDesc：能力模式描述由所选能力模式决定，不是自由文本配置入口'
+    );
+  }
+  if (patch.capabilityPreset !== undefined) {
+    if (!preset) {
+      throw new AgentEditPolicyViolationError(
+        `智能体 ${def.agentId} 缺少合法能力模板（sourcePresetId: ${def.sourcePresetId ?? '缺失'}），不允许修改能力模式`
+      );
+    }
+    const option = (TEMPLATE_CAPABILITY_OPTIONS[preset.presetId] ?? []).find(
+      (o) => o.capabilityPreset === patch.capabilityPreset
+    );
+    if (!option) {
+      throw new AgentEditPolicyViolationError(
+        `能力模式「${patch.capabilityPreset}」不在能力模板 ${preset.presetId} 的受控选项内`
+      );
+    }
+    normalized.capabilityPreset = option.capabilityPreset;
+    normalized.capabilityDesc = option.capabilityDesc;
+  }
+
+  // FIX 6：Model Policy 只允许平台正式策略；modelPolicyName 由 SoT（modelPolicyId）canonical 决定
+  if (patch.modelPolicyName !== undefined && patch.modelPolicyId === undefined) {
+    throw new AgentEditPolicyViolationError(
+      '不允许单独修改 modelPolicyName：正式 SoT 是 modelPolicyId，展示名由平台策略目录决定'
+    );
+  }
+  if (patch.modelPolicyId !== undefined) {
+    const option = MODEL_POLICY_OPTIONS.find((o) => o.modelPolicyId === patch.modelPolicyId);
+    if (!option) {
+      throw new AgentEditPolicyViolationError(
+        `模型策略 ${patch.modelPolicyId} 不是平台正式策略（正式 SoT 是 modelPolicyId，不是展示名）`
+      );
+    }
+    normalized.modelPolicyId = option.modelPolicyId;
+    normalized.modelPolicyName = option.modelPolicyName;
+  }
+
+  // FIX 7：Autonomy 不得超出模板上限；EXECUTE_WITHIN_POLICY 不对普通 Agent Owner 开放
+  if (patch.maxAutonomyDesc !== undefined && patch.maxAutonomy === undefined) {
+    throw new AgentEditPolicyViolationError(
+      '不允许单独修改 maxAutonomyDesc：自主程度说明由所选自主程度决定，不是自由文本策略'
+    );
+  }
+  if (patch.maxAutonomy !== undefined) {
+    if (!preset) {
+      throw new AgentEditPolicyViolationError(
+        `智能体 ${def.agentId} 缺少合法能力模板（sourcePresetId: ${def.sourcePresetId ?? '缺失'}），不允许修改自主程度`
+      );
+    }
+    const option = (TEMPLATE_AUTONOMY_OPTIONS[preset.presetId] ?? []).find(
+      (o) => o.maxAutonomy === patch.maxAutonomy
+    );
+    if (!option) {
+      throw new AgentEditPolicyViolationError(
+        `自主程度 ${patch.maxAutonomy} 超出能力模板 ${preset.presetId} 的 V1.1 上限` +
+          `（EXECUTE_WITHIN_POLICY 不对普通 Agent Owner 开放）`
+      );
+    }
+    normalized.maxAutonomy = option.maxAutonomy;
+    normalized.maxAutonomyDesc = option.desc;
+  }
+
+  // FIX 8：allowedContextSources 允许缩小、禁止扩大
+  // 有合法 preset → 上限 = preset.allowedContextSources；无 preset → 上限 = 当前草稿/定义基线
+  if (patch.allowedContextSources !== undefined) {
+    const maxAllowed = preset
+      ? preset.allowedContextSources
+      : (draft ?? def).allowedContextSources;
+    const boundaryLabel = preset ? `能力模板 ${preset.presetId}` : '当前配置';
+    for (const source of patch.allowedContextSources) {
+      if (!maxAllowed.includes(source)) {
+        throw new AgentEditPolicyViolationError(
+          `上下文来源 ${source} 超出${boundaryLabel}的最大允许范围（允许缩小，禁止扩大）`
+        );
+      }
+    }
+    normalized.allowedContextSources = [...patch.allowedContextSources];
+  }
+
+  return normalized;
 }
 
 class AgentService {
@@ -523,11 +729,14 @@ class AgentService {
    * 所有 A03 Section 写入同一个 AgentDraft，禁止出现第二套保存逻辑。
    *
    * A. 找 AgentDefinition，不存在 → explicit error
-   * B. 找当前 Draft；不存在且已有 Published Version → createDraftFromPublishedVersion()
-   * C. 应用 patch（必填字段空字符串 → AgentDraftValidationError，不静默吞掉）
-   * D. task / context / model 数组全部深拷贝，绝不保存调用方引用
-   * E. updatedAt 更新
-   * F. updatedBy：仅调用方显式提供时更新（Owner 修改不自动当成编辑人）
+   * B. Agent Edit Policy（FIX 1–8/10）：治理边界 + canonical normalization，
+   *    在创建/写入 Draft 之前执行——校验失败不留任何 Draft 副作用
+   * C. 必填字段空字符串 → AgentDraftValidationError，不静默吞掉
+   * D. 无 Draft 且已有 Published Version → createDraftFromPublishedVersion()
+   *    （无真实 editor → 诚实标注「未记录」，不把 Owner 当 Editor）
+   * E. Context Domain Validation（FIX 9：Policy → effectiveAllowed → Binding 校验）
+   * F. task / context / model 数组全部深拷贝，绝不保存调用方引用
+   * G. updatedAt 更新；updatedBy 仅调用方显式提供时更新（Owner 修改不自动当成编辑人）
    */
   public updateAgentDraft(
     agentId: string,
@@ -539,15 +748,15 @@ class AgentService {
       throw new Error(`Agent definition not found for id: ${agentId}`);
     }
 
-    let draft = agentRepository.getDraftByAgentId(agentId);
-    if (!draft) {
-      if (!def.currentPublishedVersion) {
-        throw new AgentDraftValidationError(
-          `智能体 ${agentId} 没有可编辑草稿，也没有可开新草稿的正式版本`
-        );
-      }
-      draft = this.createDraftFromPublishedVersion(agentId, updatedBy ?? def.owner);
+    const existingDraft = agentRepository.getDraftByAgentId(agentId);
+    if (!existingDraft && !def.currentPublishedVersion) {
+      throw new AgentDraftValidationError(
+        `智能体 ${agentId} 没有可编辑草稿，也没有可开新草稿的正式版本`
+      );
     }
+
+    // Agent Edit Policy：Built-in 锁 / 模板受控目录 / canonical normalization（FIX 1–8/10）
+    const normalizedPatch = validateAndNormalizeAgentDraftPatch(def, existingDraft, patch);
 
     // 必填文本字段：显式传入空字符串 → 明确失败（禁止 trim() || oldValue 静默吞掉非法编辑）
     const requiredTextFields: Array<
@@ -560,40 +769,56 @@ class AgentService {
       ['modelPolicyId', '模型策略']
     ];
     for (const [field, label] of requiredTextFields) {
-      const value = patch[field];
+      const value = normalizedPatch[field];
       if (value !== undefined && value.trim() === '') {
         throw new AgentDraftValidationError(`${label}不能为空`);
       }
     }
 
-    // Context Domain Validation（与创建路径同一套规则）：
+    // 全部校验通过后才创建新草稿：失败路径不产生 Draft 副作用（FIX 17）
+    const draft =
+      existingDraft ??
+      this.createDraftFromPublishedVersion(agentId, updatedBy ?? UNKNOWN_EDITOR);
+
+    // Context Domain Validation（与创建路径同一套规则，FIX 9 执行顺序）：
     // effectiveAllowed = patch.allowedContextSources ?? draft.allowedContextSources；
     // 校验 patch.contextBindings（未传则以现有 draft.contextBindings 复核），
     // 因此「缩小 allowedContextSources 导致既有 Binding 非法」会显式失败，不留 Domain 不一致。
-    const effectiveAllowed = patch.allowedContextSources ?? draft.allowedContextSources;
-    const bindingsToCheck = patch.contextBindings ?? draft.contextBindings;
+    const effectiveAllowed =
+      normalizedPatch.allowedContextSources ?? draft.allowedContextSources;
+    const bindingsToCheck = normalizedPatch.contextBindings ?? draft.contextBindings;
     const normalizedBindings = validateAndNormalizeContextBindingsAgainst(bindingsToCheck, effectiveAllowed);
 
     const updatedDraft: AgentDraft = {
       ...draft,
-      ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-      ...(patch.description !== undefined ? { description: patch.description } : {}),
-      ...(patch.responsibilitySummary !== undefined
-        ? { responsibilitySummary: patch.responsibilitySummary.trim() }
+      ...(normalizedPatch.name !== undefined ? { name: normalizedPatch.name.trim() } : {}),
+      ...(normalizedPatch.description !== undefined ? { description: normalizedPatch.description } : {}),
+      ...(normalizedPatch.responsibilitySummary !== undefined
+        ? { responsibilitySummary: normalizedPatch.responsibilitySummary.trim() }
         : {}),
-      ...(patch.roleInstruction !== undefined ? { roleInstruction: patch.roleInstruction.trim() } : {}),
-      ...(patch.owner !== undefined ? { owner: patch.owner.trim() } : {}),
-      ...(patch.capabilityPreset !== undefined ? { capabilityPreset: patch.capabilityPreset } : {}),
-      ...(patch.capabilityDesc !== undefined ? { capabilityDesc: patch.capabilityDesc } : {}),
-      ...(patch.modelPolicyId !== undefined ? { modelPolicyId: patch.modelPolicyId.trim() } : {}),
-      ...(patch.modelPolicyName !== undefined ? { modelPolicyName: patch.modelPolicyName } : {}),
-      ...(patch.maxAutonomy !== undefined ? { maxAutonomy: patch.maxAutonomy } : {}),
-      ...(patch.maxAutonomyDesc !== undefined ? { maxAutonomyDesc: patch.maxAutonomyDesc } : {}),
-      ...(patch.supportedTaskTemplates !== undefined
-        ? { supportedTaskTemplates: patch.supportedTaskTemplates.map((binding) => ({ ...binding })) }
+      ...(normalizedPatch.roleInstruction !== undefined
+        ? { roleInstruction: normalizedPatch.roleInstruction.trim() }
         : {}),
-      ...(patch.allowedContextSources !== undefined
-        ? { allowedContextSources: [...patch.allowedContextSources] }
+      ...(normalizedPatch.owner !== undefined ? { owner: normalizedPatch.owner.trim() } : {}),
+      ...(normalizedPatch.capabilityPreset !== undefined
+        ? { capabilityPreset: normalizedPatch.capabilityPreset }
+        : {}),
+      ...(normalizedPatch.capabilityDesc !== undefined ? { capabilityDesc: normalizedPatch.capabilityDesc } : {}),
+      ...(normalizedPatch.modelPolicyId !== undefined
+        ? { modelPolicyId: normalizedPatch.modelPolicyId.trim() }
+        : {}),
+      ...(normalizedPatch.modelPolicyName !== undefined
+        ? { modelPolicyName: normalizedPatch.modelPolicyName }
+        : {}),
+      ...(normalizedPatch.maxAutonomy !== undefined ? { maxAutonomy: normalizedPatch.maxAutonomy } : {}),
+      ...(normalizedPatch.maxAutonomyDesc !== undefined
+        ? { maxAutonomyDesc: normalizedPatch.maxAutonomyDesc }
+        : {}),
+      ...(normalizedPatch.supportedTaskTemplates !== undefined
+        ? { supportedTaskTemplates: normalizedPatch.supportedTaskTemplates.map((binding) => ({ ...binding })) }
+        : {}),
+      ...(normalizedPatch.allowedContextSources !== undefined
+        ? { allowedContextSources: [...normalizedPatch.allowedContextSources] }
         : {}),
       // 归一化后的 Binding（去重 / ALL_ALLOWED 去 resourceIds），独立新数组
       contextBindings: normalizedBindings,
