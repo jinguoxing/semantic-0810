@@ -670,11 +670,18 @@ class AgentService {
   }
 
   /**
-   * P0: Create new edit draft from an existing published version.
-   * V1.1：以 currentPublishedVersion 对应 AgentVersion 的不可变 Snapshot 为正式配置来源，
-   * 不再把 mutable AgentDefinition 当作发布版本配置快照使用。
+   * PURE / NON-PERSISTING（Commit 06.3）：从 currentPublishedVersion 对应
+   * AgentVersion.snapshot 构造 Transient Draft Candidate。
+   *
+   * Candidate ≠ Persisted Draft：
+   * - 不调用 saveDraft()
+   * - 不修改 definition.currentDraftId
+   * - 不产生任何 Repository 写操作
+   *
+   * Published Snapshot 仍是正式配置 SoT——Policy / Context Validation 的
+   * 基线一律先由本 Candidate 从 Snapshot 构造，不退化为 mutable AgentDefinition。
    */
-  public createDraftFromPublishedVersion(agentId: string, editorName: string): AgentDraft {
+  private buildDraftCandidateFromPublishedVersion(agentId: string, editorName: string): AgentDraft {
     const def = agentRepository.getDefinition(agentId);
     if (!def) {
       throw new Error(`Agent not found: ${agentId}`);
@@ -692,7 +699,7 @@ class AgentService {
     // Snapshot → New AgentDraft（深拷贝，Draft 与历史版本互不影响）
     const snap = buildAgentDefinitionSnapshot(version.snapshot);
     const draftId = `draft_${agentId}_${Date.now().toString(36)}`;
-    const draft: AgentDraft = {
+    return {
       draftId,
       agentId,
       baseVersion: versionNumber,
@@ -716,27 +723,51 @@ class AgentService {
       updatedAt: '刚刚',
       updatedBy: editorName
     };
+  }
 
-    def.currentDraftId = draftId;
+  /**
+   * P0: Create new edit draft from an existing published version（显式创建编辑草稿的公开业务操作）。
+   * V1.1：以 currentPublishedVersion 对应 AgentVersion 的不可变 Snapshot 为正式配置来源，
+   * 不再把 mutable AgentDefinition 当作发布版本配置快照使用。
+   * Commit 06.3：实现 = Transient Candidate + 持久化（save Draft → 写 currentDraftId → save Definition）。
+   */
+  public createDraftFromPublishedVersion(agentId: string, editorName: string): AgentDraft {
+    const candidate = this.buildDraftCandidateFromPublishedVersion(agentId, editorName);
+    const def = agentRepository.getDefinition(agentId);
+    if (!def) {
+      throw new Error(`Agent not found: ${agentId}`);
+    }
+
+    def.currentDraftId = candidate.draftId;
     agentRepository.saveDefinition(def);
-    agentRepository.saveDraft(draft);
+    agentRepository.saveDraft(candidate);
 
-    return draft;
+    return candidate;
   }
 
   /**
    * V1.1 §28 Draft Update Contract：唯一统一的 Draft 编辑入口。
    * 所有 A03 Section 写入同一个 AgentDraft，禁止出现第二套保存逻辑。
    *
-   * A. 找 AgentDefinition，不存在 → explicit error
-   * B. Agent Edit Policy（FIX 1–8/10）：治理边界 + canonical normalization，
-   *    在创建/写入 Draft 之前执行——校验失败不留任何 Draft 副作用
-   * C. 必填字段空字符串 → AgentDraftValidationError，不静默吞掉
-   * D. 无 Draft 且已有 Published Version → createDraftFromPublishedVersion()
-   *    （无真实 editor → 诚实标注「未记录」，不把 Owner 当 Editor）
-   * E. Context Domain Validation（FIX 9：Policy → effectiveAllowed → Binding 校验）
-   * F. task / context / model 数组全部深拷贝，绝不保存调用方引用
-   * G. updatedAt 更新；updatedBy 仅调用方显式提供时更新（Owner 修改不自动当成编辑人）
+   * Commit 06.3 Command Semantics —— Validation Failure Must Be Side-effect Free：
+   * 任何校验失败（Edit Policy / Required Field / Context Binding / Task /
+   * Capability / Model / Autonomy / Scope）都不得创建 Draft、写 currentDraftId、
+   * 修改 Definition / Version / RuntimeBinding。
+   *
+   * A. 读取 AgentDefinition，不存在 → explicit error
+   * B. 读取 Existing Draft
+   * C. 无 Existing Draft：从 Published Snapshot 构造 Transient Draft Candidate（不保存）
+   * D. baseDraft = existingDraft ?? transientDraftCandidate（基线 = Published Snapshot SoT）
+   * E. 全部校验：Agent Edit Policy → Required Field → Context Binding Validation
+   * F. 构造 updatedDraft（验证完成前 Repository 不发生任何写操作）
+   * G. 全部验证成功后才持久化：
+   *    原无 Draft → save Draft → definition.currentDraftId = draftId → save Definition；
+   *    原有 Draft → 只更新 Draft
+   * H. return updatedDraft
+   *
+   * No-op 语义（UI 被绕过时的 Domain 安全网）：
+   * - Published Agent + 无 Draft + 空 Patch → AgentDraftValidationError，不创建空 Draft
+   * - 已有 Draft + 空 Patch → 直接返回 existingDraft，不改 updatedAt / updatedBy
    */
   public updateAgentDraft(
     agentId: string,
@@ -755,8 +786,23 @@ class AgentService {
       );
     }
 
+    // No-op is No-op：空 Patch 不制造「假编辑」。
+    // 已有 Draft → 原样返回（updatedAt / updatedBy 不变）；无 Draft → 明确失败，不创建空 Draft。
+    if (Object.keys(patch).length === 0) {
+      if (existingDraft) {
+        return existingDraft;
+      }
+      throw new AgentDraftValidationError('当前没有草稿，且未提供任何配置修改');
+    }
+
+    // C/D：无 Existing Draft 时构造 Transient Candidate（PURE，不落库），
+    // 后续 Policy / Context Validation 基线一律来自 Published Snapshot。
+    const baseDraft =
+      existingDraft ??
+      this.buildDraftCandidateFromPublishedVersion(agentId, updatedBy ?? UNKNOWN_EDITOR);
+
     // Agent Edit Policy：Built-in 锁 / 模板受控目录 / canonical normalization（FIX 1–8/10）
-    const normalizedPatch = validateAndNormalizeAgentDraftPatch(def, existingDraft, patch);
+    const normalizedPatch = validateAndNormalizeAgentDraftPatch(def, baseDraft, patch);
 
     // 必填文本字段：显式传入空字符串 → 明确失败（禁止 trim() || oldValue 静默吞掉非法编辑）
     const requiredTextFields: Array<
@@ -775,22 +821,18 @@ class AgentService {
       }
     }
 
-    // 全部校验通过后才创建新草稿：失败路径不产生 Draft 副作用（FIX 17）
-    const draft =
-      existingDraft ??
-      this.createDraftFromPublishedVersion(agentId, updatedBy ?? UNKNOWN_EDITOR);
-
     // Context Domain Validation（与创建路径同一套规则，FIX 9 执行顺序）：
-    // effectiveAllowed = patch.allowedContextSources ?? draft.allowedContextSources；
+    // effectiveAllowed = patch.allowedContextSources ?? baseDraft.allowedContextSources；
     // 校验 patch.contextBindings（未传则以现有 draft.contextBindings 复核），
     // 因此「缩小 allowedContextSources 导致既有 Binding 非法」会显式失败，不留 Domain 不一致。
     const effectiveAllowed =
-      normalizedPatch.allowedContextSources ?? draft.allowedContextSources;
-    const bindingsToCheck = normalizedPatch.contextBindings ?? draft.contextBindings;
+      normalizedPatch.allowedContextSources ?? baseDraft.allowedContextSources;
+    const bindingsToCheck = normalizedPatch.contextBindings ?? baseDraft.contextBindings;
     const normalizedBindings = validateAndNormalizeContextBindingsAgainst(bindingsToCheck, effectiveAllowed);
 
+    // F：构造 updatedDraft —— 到这里为止 Repository 未发生任何写操作
     const updatedDraft: AgentDraft = {
-      ...draft,
+      ...baseDraft,
       ...(normalizedPatch.name !== undefined ? { name: normalizedPatch.name.trim() } : {}),
       ...(normalizedPatch.description !== undefined ? { description: normalizedPatch.description } : {}),
       ...(normalizedPatch.responsibilitySummary !== undefined
@@ -823,9 +865,14 @@ class AgentService {
       // 归一化后的 Binding（去重 / ALL_ALLOWED 去 resourceIds），独立新数组
       contextBindings: normalizedBindings,
       updatedAt: '刚刚',
-      updatedBy: updatedBy ?? draft.updatedBy
+      updatedBy: updatedBy ?? baseDraft.updatedBy
     };
 
+    // G：全部验证成功后才持久化（内存原型顺序：save Draft → 写指针 → save Definition）
+    if (!existingDraft) {
+      def.currentDraftId = updatedDraft.draftId;
+      agentRepository.saveDefinition(def);
+    }
     agentRepository.saveDraft(updatedDraft);
     return updatedDraft;
   }

@@ -68,6 +68,25 @@ type SectionKey =
   | 'capabilities'
   | 'model_autonomy';
 
+/**
+ * 任务绑定稳定比较（Commit 06.3）：按 taskTemplateId 归一后逐项比较 version / enabled。
+ * 不依赖数组引用，不依赖 UI 展示顺序——只打开「支持任务」不改任何勾选时视为无变化。
+ */
+const areTaskBindingsEqual = (a: TaskTemplateBinding[], b: TaskTemplateBinding[]): boolean => {
+  if (a.length !== b.length) return false;
+  const byId = new Map(b.map((binding) => [binding.taskTemplateId, binding]));
+  return a.every((binding) => {
+    const other = byId.get(binding.taskTemplateId);
+    return (
+      other !== undefined && other.version === binding.version && other.enabled === binding.enabled
+    );
+  });
+};
+
+/** Patch 非空判定（Commit 06.3）：UpdateAgentDraftPatch 是 flat top-level contract，key 数即可 */
+const hasDraftPatchChanges = (patch: UpdateAgentDraftPatch): boolean =>
+  Object.keys(patch).length > 0;
+
 /** 只读展示字段（内置锁定项）：readonly + lock icon + 「平台内置定义」提示，不用 Disabled 大灰块 */
 const LockedField: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="space-y-1">
@@ -206,20 +225,37 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
   }, [ws]);
 
   // ─────────────────────────────────────────────────────────────
-  // Save Contract（TASK 27 / TASK 28）：本次可编辑字段统一构造 Domain Patch；
+  // Save Contract（TASK 27 / TASK 28）+ Dirty Patch Builder（Commit 06.3）：
+  // User Changed What → Patch Contains What。
+  // 基本信息通过「本地编辑态 vs ws.editable 当前 Domain 态」值比较生成脏字段，
+  // 不新增 nameTouched / ownerTouched 等大量 touch 状态；
+  // Scope 因存在「模板允许但当前未启用」的 Activation UX，继续保留
+  // scopeTouched / scopeActivationRequested（Commit 06.2 语义不变）。
   // Built-in 锁定字段（名称 / 职责 / 角色说明 / 任务绑定）不进入 Patch。
   // ─────────────────────────────────────────────────────────────
   const buildPatch = (): UpdateAgentDraftPatch => {
     if (!ws) return {};
     const patch: UpdateAgentDraftPatch = {};
     if (!isBuiltIn) {
-      patch.name = editName;
-      patch.description = editResponsibility; // 「主要职责」同时映射 description + responsibilitySummary，不新增 UI 字段
-      patch.responsibilitySummary = editResponsibility;
-      patch.roleInstruction = editRoleInstruction;
-      patch.supportedTaskTemplates = editTasks.map((b) => ({ ...b }));
+      if (editName !== ws.editable.name) {
+        patch.name = editName;
+      }
+      // 「主要职责」同时映射 description + responsibilitySummary，不新增 UI 字段
+      if (editResponsibility !== ws.editable.responsibilitySummary) {
+        patch.description = editResponsibility;
+        patch.responsibilitySummary = editResponsibility;
+      }
+      if (editRoleInstruction !== ws.editable.roleInstruction) {
+        patch.roleInstruction = editRoleInstruction;
+      }
+      if (!areTaskBindingsEqual(editTasks, ws.editable.supportedTaskTemplates)) {
+        patch.supportedTaskTemplates = editTasks.map((b) => ({ ...b }));
+      }
     }
-    patch.owner = editOwner;
+    // Owner：Built-in + Custom 都可改；没改不写（不要每次 Save 都提交 Owner）
+    if (editOwner !== ws.editable.owner) {
+      patch.owner = editOwner;
+    }
     // 工作范围 Patch 防误写（P0）：「模板允许」≠「用户已启用」——
     // 未发生用户操作（scopeTouched=false）或未请求启用时，绝不写入 allowedContextSources / contextBindings，
     // 只改 Owner 等其他字段的保存不能把 BUSINESS_DOMAIN 自动带进 Draft。
@@ -241,17 +277,24 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
         );
       }
     }
-    if (capabilityOptions.length > 1) {
-      const selected = capabilityOptions.find((o) => o.capabilityPreset === editCapabilityPreset);
+    // Capability：没改不写（不因模板有多个合法选项就每次 Save 都写当前 capability）
+    if (editCapabilityPreset !== ws.editable.capabilityPreset) {
       patch.capabilityPreset = editCapabilityPreset;
+      const selected = capabilityOptions.find((o) => o.capabilityPreset === editCapabilityPreset);
       patch.capabilityDesc = selected?.capabilityDesc ?? ws.editable.capabilityDesc;
     }
-    const policy = modelPolicySelectOptions.find((o) => o.modelPolicyId === editModelPolicyId);
-    patch.modelPolicyId = editModelPolicyId;
-    patch.modelPolicyName = policy?.modelPolicyName ?? ws.editable.modelPolicyName;
-    const autonomy = autonomyOptions.find((o) => o.maxAutonomy === editMaxAutonomy);
-    patch.maxAutonomy = editMaxAutonomy;
-    patch.maxAutonomyDesc = autonomy?.desc ?? ws.editable.maxAutonomyDesc;
+    // Model Policy：没改不写；modelPolicyName 仍从 MODEL_POLICY_OPTIONS canonical 投影
+    if (editModelPolicyId !== ws.editable.modelPolicyId) {
+      patch.modelPolicyId = editModelPolicyId;
+      const policy = modelPolicySelectOptions.find((o) => o.modelPolicyId === editModelPolicyId);
+      patch.modelPolicyName = policy?.modelPolicyName ?? ws.editable.modelPolicyName;
+    }
+    // Autonomy：没改不写；maxAutonomyDesc 继续来自 TEMPLATE_AUTONOMY_OPTIONS canonical option
+    if (editMaxAutonomy !== ws.editable.maxAutonomy) {
+      patch.maxAutonomy = editMaxAutonomy;
+      const autonomy = autonomyOptions.find((o) => o.maxAutonomy === editMaxAutonomy);
+      patch.maxAutonomyDesc = autonomy?.desc ?? ws.editable.maxAutonomyDesc;
+    }
     return patch;
   };
 
@@ -282,14 +325,20 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
     });
   };
 
-  /** 保存草稿：A03 所有编辑统一经 updateAgentDraft 写入同一个 AgentDraft */
+  /** 保存草稿：A03 所有编辑统一经 updateAgentDraft 写入同一个 AgentDraft。无变更 → 轻量「无需保存」，不触发 Domain Update */
   const handleSaveDraft = () => {
     if (!ws || !onSaveDraftPatch) return;
     if (scopeIncomplete) {
       addToast?.('error', '工作范围不完整', '指定范围必须至少选择一个资源');
       return;
     }
-    const ok = onSaveDraftPatch(buildPatch());
+    const patch = buildPatch();
+    if (!hasDraftPatchChanges(patch)) {
+      // No-op Save：不调用 onSaveDraftPatch、不创建 Draft（Published Agent 首存空 Patch 尤其不能开草稿）
+      addToast?.('info', '无需保存', '当前没有新的配置修改。');
+      return;
+    }
+    const ok = onSaveDraftPatch(patch);
     if (ok) {
       setDomainTick((t) => t + 1); // 从 Repository 重读最新 Draft（Domain 是 SoT）
       addToast?.(
@@ -304,24 +353,35 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
 
   /**
    * 测试草稿：唯一测试 / 发布入口（TASK 11 / AC-15）。
-   * 先自动保存全部草稿配置 → 保存成功才进入 A04；Domain 校验失败则停留本页。
+   * - 有未保存修改：先经 Domain 保存成功再进入 A04；Domain 校验失败则停留本页
+   * - 已有 Draft 且无新修改：直接进入 A04（既有草稿就是当前测试对象，不重复 update）
+   * - 无 Draft 且无修改：不进入发布链——A04 是 Draft Test & Publish
    */
   const handleTestDraft = () => {
     if (!onNavigateToPublish) return;
-    if (onSaveDraftPatch) {
-      if (scopeIncomplete) {
-        addToast?.('error', '工作范围不完整', '指定范围必须至少选择一个资源');
-        return;
-      }
-      const ok = onSaveDraftPatch(buildPatch());
-      if (!ok) return; // Domain 校验失败：不进入 A04
-      setDomainTick((t) => t + 1);
-      addToast?.(
-        'info',
-        '草稿已自动保存',
-        `「${editName || ws?.editable.name || '智能体'}」草稿已自动保存，正在进入测试与发布工作区`
-      );
+    if (scopeIncomplete) {
+      addToast?.('error', '工作范围不完整', '指定范围必须至少选择一个资源');
+      return;
     }
+    const patch = buildPatch();
+    if (!hasDraftPatchChanges(patch)) {
+      if (ws?.hasDraft) {
+        onNavigateToPublish();
+      } else {
+        // 无未发布草稿不进入发布链（首次创建的 Custom Agent 本就已存在 Draft，不受影响）
+        addToast?.('info', '当前没有未发布草稿', '请先修改配置并保存后再测试。');
+      }
+      return;
+    }
+    if (!onSaveDraftPatch) return;
+    const ok = onSaveDraftPatch(patch);
+    if (!ok) return; // Domain 校验失败：不进入 A04
+    setDomainTick((t) => t + 1);
+    addToast?.(
+      'info',
+      '草稿已自动保存',
+      `「${editName || ws?.editable.name || '智能体'}」草稿已自动保存，正在进入测试与发布工作区`
+    );
     onNavigateToPublish();
   };
 
