@@ -323,7 +323,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                 </span>
               </div>
               <p className="text-xs text-[#64748B] mt-1 leading-relaxed">
-                管理平台内置和组织自定义的智能体，查看它们的工作职责、支持任务与正式状态。
+                管理平台内置和组织自定义的智能体，查看它们的工作职责、工作任务与正式状态。
               </p>
             </div>
 
@@ -459,7 +459,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                   <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] font-semibold text-[#475569]">
                     <th className="py-3 px-4 w-[280px]">智能体</th>
                     <th className="py-3 px-4 w-[90px]">类型</th>
-                    <th className="py-3 px-4 w-[220px]">支持任务</th>
+                    <th className="py-3 px-4 w-[220px]">工作任务</th>
                     <th className="py-3 px-4 w-[160px]">正式版本</th>
                     <th className="py-3 px-4 w-[130px]">状态</th>
                     <th className="py-3 px-4 w-[140px]">Owner</th>
@@ -503,7 +503,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                         </span>
                       </td>
 
-                      {/* Column 2: 支持任务 (Task Chips, max 2 + rest as +N) */}
+                      {/* Column 2: 工作任务 (Task Chips, max 2 + rest as +N) */}
                       <td className="py-3.5 px-4 align-top">
                         <div className="flex items-center flex-wrap gap-1.5">
                           {agent.tasks.slice(0, 2).map((task, idx) => (
@@ -532,7 +532,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                               {hoveredExtraTasksAgentId === agent.id && (
                                 <div className="absolute left-0 bottom-full mb-1.5 z-40 w-48 bg-white border border-[#E2E8F0] rounded-lg shadow-lg p-2 text-left">
                                   <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5">
-                                    全部支持任务 ({agent.allTasks.length})
+                                    全部工作任务 ({agent.allTasks.length})
                                   </div>
                                   <div className="flex flex-wrap gap-1">
                                     {agent.allTasks.map((t, i) => (
@@ -637,7 +637,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                               className="w-full px-2.5 py-1.5 text-xs text-[#334155] hover:bg-[#F8FAFC] hover:text-[#0F172A] rounded flex items-center space-x-2 text-left cursor-pointer"
                             >
                               <FileText className="w-3.5 h-3.5 text-[#64748B]" />
-                              <span>查看定义工作区</span>
+                              <span>查看工作定义</span>
                             </button>
                             {agent.hasDraft && (
                               <button
@@ -775,7 +775,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                           </span>
                         </div>
                         <p className="text-xs text-[#475569] pl-3.5">
-                          已初始化支持任务与基础配置，进入定义工作区可继续完善配置，并进行发布前验证。
+                          已根据能力模板生成初始工作定义，可进入智能体工作定义继续检查和调整，完成发布验证后发布首个正式版本。
                         </p>
                       </div>
                     ) : changes.length > 0 ? (
@@ -807,7 +807,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                         </div>
                         <p className="text-xs text-[#475569] pl-3.5 leading-relaxed">
                           当前草稿尚未记录任何变更摘要；这不代表草稿与正式版本一致，
-                          各配置项的当前取值以定义工作区为准。
+                          当前配置以智能体工作定义为准。
                         </p>
                       </div>
                     )}
@@ -831,7 +831,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                   className="px-3 py-1.5 bg-white hover:bg-slate-100 text-[#2563EB] border border-[#BFDBFE] rounded-md text-xs font-semibold flex items-center space-x-1.5 cursor-pointer"
                 >
                   <FileText className="w-3.5 h-3.5 text-[#2563EB]" />
-                  <span>进入定义工作区</span>
+                  <span>进入工作定义</span>
                 </button>
 
                 <div className="flex items-center space-x-2">
@@ -955,9 +955,9 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                   </div>
                 </div>
 
-                {/* 全量支持任务 */}
+                {/* 工作任务 */}
                 <div className="space-y-2">
-                  <span className="text-xs font-bold text-[#0F172A]">全量支持业务任务 ({selectedAgentForDetail.allTasks.length})</span>
+                  <span className="text-xs font-bold text-[#0F172A]">工作任务（{selectedAgentForDetail.allTasks.length}）</span>
                   <div className="flex flex-wrap gap-1.5">
                     {selectedAgentForDetail.allTasks.map((task, i) => (
                       <span

@@ -152,7 +152,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
   /* ─────────────────────────────────────────────────────────────
      Commit 07.1 FIX 2：待发布事实一律 Draft-first。
      vmDef / INITIAL_AGENT_DEFINITIONS 只允许作为非事实性展示 fallback
-     （如名称兜底），发布事实（任务/能力/范围/模型策略/自主程度）
+     （如名称兜底），发布事实（任务/执行方式/范围/判断原则/行动边界）
      全部来自 domain.draft；无 Draft 时按防御性空态展示。
      ───────────────────────────────────────────────────────────── */
   const draftEnabledTasks =
@@ -299,7 +299,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     {
       key: 'configCheck',
       title: RELEASE_GATE_LABELS.configCheck,
-      desc: '智能体定义、任务绑定、工作范围、能力模式与模型策略均完整有效。'
+      desc: '智能体定义、任务绑定、工作范围、执行方式与判断原则均完整有效。'
     },
     {
       key: 'runtimeCompile',
@@ -310,7 +310,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     {
       key: 'runtimeDependencies',
       title: RELEASE_GATE_LABELS.runtimeDependencies,
-      desc: '工作范围、模型策略与运行配置依赖均已通过检查。'
+      desc: '工作范围、判断原则与运行配置依赖均已通过检查。'
     },
     {
       key: 'testRun',
@@ -320,7 +320,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     {
       key: 'qualityEvaluation',
       title: RELEASE_GATE_LABELS.qualityEvaluation,
-      desc: `当前草稿满足「${agentName}」发布质量基线（配置、行为边界与运行依赖）。`
+      desc: `当前草稿满足「${agentName}」发布质量基线（配置、行动边界与运行依赖）。`
     }
   ];
 
@@ -335,7 +335,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
           <button
             onClick={onBackToDefinition}
             className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md text-xs font-semibold text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors cursor-pointer border border-[#E2E8F0] shrink-0"
-            title="返回智能体定义工作区"
+            title="返回智能体工作定义"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>{agentName}</span>
@@ -424,7 +424,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               onClick={onBackToDefinition}
               className="px-3 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#CBD5E1] rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs"
             >
-              <span>返回定义页</span>
+              <span>返回工作定义</span>
             </button>
             <button
               onClick={openPublishModal}
@@ -653,7 +653,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
 
                   <p className="text-[11px] text-[#94A3B8] pt-1">
                     {!hasDraft
-                      ? '当前没有未发布草稿，请返回定义工作区发起修改。'
+                      ? '当前没有未发布草稿，请返回工作定义发起修改。'
                       : isFirstRelease
                       ? `发布成功后将正式生成首发版本 ${targetNewVersion}，并建立正式运行绑定（当前为模拟集成环境，正式运行接入待后续版本提供）。`
                       : `发布成功后才会生成正式版本 ${targetNewVersion}；当前草稿不会影响正在运行的 ${formalVersion}。`}
@@ -670,7 +670,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       {!hasDraft
                         ? '当前没有未发布草稿，暂无变更待审。'
                         : isFirstRelease
-                        ? `首发版本上线，包含 ${draftEnabledTasks.length} 项支持任务与基础能力模式配置。`
+                        ? `首发版本上线，包含 ${draftEnabledTasks.length} 项工作任务与基础执行方式配置。`
                         : draftChanges.length > 0
                         ? `相比正式版本 ${formalVersion}，已记录 ${draftChanges.length} 项变更摘要（非完整逐项 Diff）。`
                         : '存在未发布草稿，尚未生成逐项差异摘要。'}
@@ -680,7 +680,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                   <div className="space-y-2 text-xs">
                     {!hasDraft ? (
                       <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg text-[11px] text-[#64748B]">
-                        最近一次发布已完成，草稿已关闭；如需继续迭代请返回定义工作区编辑。
+                        最近一次发布已完成，草稿已关闭；如需继续迭代请返回工作定义编辑。
                       </div>
                     ) : isFirstRelease ? (
                       <div className="p-3 bg-white border border-blue-200 rounded-lg space-y-1">
@@ -693,11 +693,11 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                         {/* FIX 2：首发事实来自 Draft TaskTemplateBinding / capabilityPreset，
                             不使用 vmDef.tasks / vmDef.capabilityMode */}
                         <div className="text-[11px] text-[#475569] leading-relaxed">
-                          包含支持任务：
+                          包含工作任务：
                           {draftEnabledTasks.length > 0
                             ? draftEnabledTasks.map((t) => getTaskTemplateView(t.taskTemplateId).name).join('、')
                             : '（无启用任务）'}
-                          ；能力模式：{domain.draft?.capabilityPreset ?? '—'}。
+                          ；执行方式：{domain.draft?.capabilityPreset ?? '—'}。
                         </div>
                       </div>
                     ) : draftChanges.length > 0 ? (
@@ -889,10 +889,10 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                         </p>
                       </div>
 
-                      <div className="font-bold text-[#0F172A] pt-2">工作范围与能力模式检查</div>
+                      <div className="font-bold text-[#0F172A] pt-2">工作范围与执行方式检查</div>
                       <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-1">
                         <div className="flex items-center justify-between">
-                          <span className="font-medium text-[#0F172A]">范围资产与能力模式挂载</span>
+                          <span className="font-medium text-[#0F172A]">范围资产与执行方式挂载</span>
                           <span className="font-semibold text-[#16A36A]">
                             {releaseSource.allowedContextSources.length >= 1 ? '有效' : '无效'}
                           </span>
@@ -1077,8 +1077,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                     <div className="space-y-2">
                       <div className="text-[11px] font-semibold text-[#0F172A]">当前发布质量基线基于</div>
                       <ul className="list-disc list-inside space-y-1 text-[11px] text-[#475569]">
-                        <li>配置完整性：定义、任务、工作范围、能力模式与模型策略全部有效</li>
-                        <li>行为边界：角色行为说明完整，自主程度不超过能力模板上限</li>
+                        <li>配置完整性：定义、任务、工作范围、执行方式与判断原则全部有效</li>
+                        <li>行动边界：高级角色说明完整，且不超出能力模板允许上限</li>
                         <li>运行依赖：目标运行时的依赖检查已通过</li>
                         <li>发布策略基线：满足平台发布检查策略</li>
                       </ul>
@@ -1354,15 +1354,15 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                     <span className="font-medium text-[#0F172A]">{draftEnabledTasks.length} 项</span>
                   </div>
                   <div>
-                    能力模式：
+                    执行方式：
                     <span className="font-medium text-[#0F172A]">{domain.draft?.capabilityPreset ?? '—'}</span>
                   </div>
                   <div>
-                    模型策略：
+                    判断原则：
                     <span className="font-medium text-[#0F172A]">{draftModelPolicyName}</span>
                   </div>
                   <div>
-                    自主程度：
+                    行动边界：
                     <span className="font-medium text-[#0F172A]">
                       {domain.draft
                         ? domain.draft.maxAutonomyDesc || MAX_AUTONOMY_VIEWS[domain.draft.maxAutonomy]

@@ -1464,7 +1464,8 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                         ))}
                       </div>
                       <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-                        以上来源由平台按能力模板统一授权（暂不逐项配置）；实际可使用的信息还会受到当前用户权限和具体任务范围限制。
+                        以上是当前能力模板允许使用的信息来源类型；
+                        实际可使用的信息仍受当前用户权限和具体任务范围限制。
                       </p>
                     </div>
 
@@ -1636,7 +1637,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                         </div>
                       )}
                       <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-                        行动边界只约束智能体的行为方式，永远不能提升用户权限。
+                        行动边界只约束智能体自身的行动，永远不会扩大用户权限。
                       </p>
                       <div className="pt-1 flex justify-end">{saveButton}</div>
                     </div>

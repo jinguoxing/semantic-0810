@@ -19,7 +19,8 @@ import {
   MANAGED_AGENT_PRESETS,
   getTaskTemplateView,
   AgentContextBinding,
-  ContextSelectionMode
+  ContextSelectionMode,
+  MAX_AUTONOMY_VIEWS
 } from '../domain/agent';
 import {
   TemplateScopeConfig,
@@ -42,7 +43,7 @@ export interface AgentTemplateDefinition {
   /** 展示标签投影：真实数据为 preset.supportedTaskTemplates (TaskTemplateBinding[]) */
   supportedTaskLabels: string[];
   supportedTaskTemplateIds: string[];
-  /** V1.1 §18 自治产品语言：只展示行为结果，不展示底层 enum */
+  /** 默认行动边界标签：投影 Domain MAX_AUTONOMY_VIEWS，不展示底层 enum */
   behaviorLabel: string;
   /** V1.1 Stage 2 工作范围区块配置（按能力模板动态变化） */
   scopeConfig: TemplateScopeConfig;
@@ -54,15 +55,11 @@ export interface AgentTemplateDefinition {
 }
 
 /**
- * V1.1 §18 自治产品语言映射（用户行为结果）：
- * SUGGEST → 提供答案与建议 / PROPOSE → 生成待确认方案 / EXECUTE_WITHIN_POLICY → 可在授权范围内执行
+ * 默认行动边界标签：直接投影 Domain MAX_AUTONOMY_VIEWS，与 A03「决策与行动边界」使用同一语言；
+ * 不展示底层自治 enum（SUGGEST / PROPOSE / EXECUTE_WITHIN_POLICY）
  */
 function behaviorLabelFor(preset: ManagedAgentPreset): string {
-  if (preset.defaultMaxAutonomy === 'EXECUTE_WITHIN_POLICY') return '可在授权范围内执行';
-  if (preset.defaultMaxAutonomy === 'PROPOSE') return '生成待确认的治理方案';
-  return preset.presetId === 'ENTERPRISE_KNOWLEDGE'
-    ? '提供答案与建议，并给出可追溯依据'
-    : '提供数据结果、分析方案与解释';
+  return MAX_AUTONOMY_VIEWS[preset.defaultMaxAutonomy];
 }
 
 /** Stage 1 展示前 3 个任务，+N 由真实任务数动态计算 */
@@ -419,7 +416,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
 
                     {/* Middle: Supported Task Chips (Muted gray/subtle blue, <= 3 chips) */}
                     <div className="pt-2 flex items-center space-x-1.5 flex-wrap">
-                      <span className="text-[11px] text-[#64748B] mr-1">支持任务：</span>
+                      <span className="text-[11px] text-[#64748B] mr-1">工作任务：</span>
                       {tmpl.supportedTaskLabels.slice(0, STAGE1_SHOWN_TASKS).map((taskName) => (
                         <span
                           key={taskName}
@@ -435,11 +432,11 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                       )}
                     </div>
 
-                    {/* Bottom Metadata: 默认行为（用户行为结果，不展示底层自治 enum / 运行引擎） */}
+                    {/* Bottom Metadata: 默认行动边界（用户行动边界结果，不展示底层自治 enum / 运行引擎） */}
                     <div className="pt-2 border-t border-[#E2E8F0]/70 flex items-center justify-between text-xs text-[#64748B]">
                       <div className="flex items-center space-x-3">
                         <span>
-                          默认行为：<strong className="text-[#0F172A] font-semibold">{tmpl.behaviorLabel}</strong>
+                          默认行动边界：<strong className="text-[#0F172A] font-semibold">{tmpl.behaviorLabel}</strong>
                         </span>
                       </div>
 
@@ -480,9 +477,9 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
 
                 {/* 3-Item Lightweight Summary Grid (不展示运行引擎) */}
                 <div className="grid grid-cols-3 gap-3 pt-1 text-xs">
-                  {/* 1. 支持任务 */}
+                  {/* 1. 工作任务 */}
                   <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
-                    <span className="text-[11px] text-[#64748B] block">支持任务</span>
+                    <span className="text-[11px] text-[#64748B] block">工作任务</span>
                     <span className="font-bold text-[#0F172A] text-xs block">
                       {selectedTemplate.supportedTaskLabels.length} 项
                     </span>
@@ -491,9 +488,9 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                     </span>
                   </div>
 
-                  {/* 2. 能力模式 */}
+                  {/* 2. 执行方式 */}
                   <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
-                    <span className="text-[11px] text-[#64748B] block">能力模式</span>
+                    <span className="text-[11px] text-[#64748B] block">执行方式</span>
                     <span className="font-bold text-[#0F172A] text-xs block truncate">
                       {selectedTemplate.capabilityPreset}
                     </span>
@@ -502,9 +499,9 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                     </span>
                   </div>
 
-                  {/* 3. 默认行为 (V1.1 §18 用户行为结果语言，不展示底层自治 enum) */}
+                  {/* 3. 默认行动边界 (用户行动边界结果语言，不展示底层自治 enum) */}
                   <div className="bg-white border border-[#E2E8F0] rounded-md p-2.5 space-y-0.5">
-                    <span className="text-[11px] text-[#64748B] block">默认行为</span>
+                    <span className="text-[11px] text-[#64748B] block">默认行动边界</span>
                     <span className="font-bold text-[#0F172A] text-xs block leading-snug">
                       {selectedTemplate.behaviorLabel}
                     </span>
@@ -670,7 +667,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                         </div>
                       )}
                       <p className="text-[11px] text-[#64748B]">
-                        Owner 负责该智能体的配置、测试和正式版本管理。
+                        Owner 负责该智能体的配置、发布验证和正式版本管理。
                       </p>
                     </div>
 
@@ -800,7 +797,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[11px] text-[#64748B] block">主要任务</span>
+                        <span className="text-[11px] text-[#64748B] block">工作任务</span>
                         <span className="font-semibold text-[#0F172A] block leading-relaxed">
                           {activeTemplate.supportedTaskLabels.join(' · ')}
                         </span>
@@ -814,7 +811,14 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[11px] text-[#64748B] block">行为方式</span>
+                        <span className="text-[11px] text-[#64748B] block">执行方式</span>
+                        <span className="font-semibold text-[#0F172A] block leading-relaxed">
+                          {activeTemplate.capabilityPreset}
+                        </span>
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <span className="text-[11px] text-[#64748B] block">默认行动边界</span>
                         <span className="font-semibold text-[#0F172A] block leading-relaxed">
                           {activeTemplate.behaviorLabel}
                         </span>
@@ -866,10 +870,10 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
           {currentStep === 1 ? (
             <button
               type="button"
-              disabled={!selectedTemplateId}
+              disabled={!selectedTemplate}
               onClick={handleGoToBasicDefinition}
               className={`px-5 py-2 rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-all shadow-2xs ${
-                selectedTemplateId
+                selectedTemplate
                   ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white cursor-pointer'
                   : 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'
               }`}

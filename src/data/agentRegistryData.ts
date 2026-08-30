@@ -274,7 +274,7 @@ export const INITIAL_AGENT_DEFINITIONS: Record<string, AgentDefinitionDetail> = 
     maxAutonomyDesc: '以提供方案与可追溯依据为主',
     draftChanges: [
       { field: '知识范围', changeText: '+ 新增：数据治理规范', tag: 'CONTEXT ADDED' },
-      { field: '能力模式', changeText: '精准知识问答 → Wiki + RAG 混合研究', tag: 'MODE UPGRADE' },
+      { field: '执行方式', changeText: '精准知识问答 → Wiki + RAG 混合研究', tag: 'MODE UPGRADE' },
     ],
     testSandbox: {
       welcomeMessage: '您好，我是「企业知识伙伴 (草稿环境 · v1.4+Draft)」。当前已挂载 3 个知识空间（含草稿新增的《数据治理规范》）及 Wiki + RAG 混合检索。请输入您想验证的知识查询。',
@@ -594,7 +594,7 @@ export function createAgentDraft(agentData: {
       sampleResponses: [
         {
           trigger: '测试',
-          reply: `已收到对「${agentData.name}」的查看请求。\n当前草稿配置：\n- 目标运行引擎：${runtimeEngine}\n- 支持任务：${allTaskNames.join('、')}\n- 能力模式：${capabilityMode}\n- 正式版本：尚未发布\n当前版本尚未执行真实业务测试，需进入发布验证完成基础运行检查与发布质量基线检查。`,
+          reply: `已收到对「${agentData.name}」的查看请求。\n当前草稿配置：\n- 目标运行引擎：${runtimeEngine}\n- 工作任务：${allTaskNames.join('、')}\n- 执行方式：${capabilityMode}\n- 正式版本：尚未发布\n当前版本尚未执行真实业务测试，需进入发布验证完成基础运行检查与发布质量基线检查。`,
           sources: ['当前草稿配置（未执行真实测试）']
         }
       ],
