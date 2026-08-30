@@ -102,6 +102,49 @@ const LockedField: React.FC<{ label: string; value: string }> = ({ label, value 
   </div>
 );
 
+/**
+ * 行动边界的用户理解说明（V1.2 §33）：现有 MaxAutonomy enum 的用户化解释，
+ * 纯 UI 投影——不是新 Domain 状态，保存时仍只写 maxAutonomy / maxAutonomyDesc。
+ */
+const MAX_AUTONOMY_BOUNDARY_NOTES: Record<
+  MaxAutonomy,
+  { can: string; wontLabel: string; wont: string }
+> = {
+  SUGGEST: {
+    can: '理解、分析、回答、提供建议',
+    wontLabel: '不会',
+    wont: '自行执行业务变更'
+  },
+  PROPOSE: {
+    can: '理解、分析、形成候选、生成待确认方案',
+    wontLabel: '正式变更',
+    wont: '仍需确认后才能生效'
+  },
+  EXECUTE_WITHIN_POLICY: {
+    can: '在平台策略、当前用户权限和任务范围内执行',
+    wontLabel: '不能',
+    wont: '扩大用户权限或绕过平台安全策略'
+  }
+};
+
+/**
+ * 执行方式说明去技术化（V1.2 §29）：capabilityDesc 末尾的括号技术标注
+ * （如 "(Schema Semantic Alignment)" / "(WeKnora Bridge)"）是底层引擎表达，
+ * 普通 UI 主文案只取用户可理解的前半段；原文保留在 tooltip 中。
+ */
+const toFriendlyCapabilityDesc = (desc?: string): string => {
+  if (!desc) return '';
+  return desc
+    .replace(/\s*[(（][^)）]*[)）]\s*$/, '')
+    .trim();
+};
+
+/** 列表压缩（V1.2 §16）：前 shown 项 + 「等 N {unit}」，保证 Operating Flow 可快速扫描 */
+const compressNameList = (items: string[], shown: number, unit: string): string =>
+  items.length > shown
+    ? `${items.slice(0, shown).join(' · ')} 等 ${items.length} ${unit}`
+    : items.join(' · ');
+
 export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> = ({
   agentId,
   showRuntimeDiagnostics = false,
@@ -151,6 +194,10 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
    * 脏 Patch 时弹轻量确认（继续编辑 / 放弃修改并离开），无脏 Patch 直接离开。
    */
   const [pendingLeave, setPendingLeave] = useState<null | (() => void)>(null);
+  /** Overview D：正式版本配置弱折叠（V1.2 §20，默认收起，不再占据大型默认区域） */
+  const [isPublishedDetailOpen, setIsPublishedDetailOpen] = useState(false);
+  /** Overview D：草稿变更摘要弱折叠（V1.2 §21，businessDiffs 只是已记录摘要，不是完整 Diff） */
+  const [isDiffSummaryOpen, setIsDiffSummaryOpen] = useState(false);
 
   const scopeConfig = useMemo(
     () => (ws?.sourcePresetId ? TEMPLATE_SCOPE_CONFIGS[ws.sourcePresetId] : undefined),
@@ -462,8 +509,53 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
     primaryScopeBinding &&
       (primaryScopeBinding.selectionMode === 'ALL_ALLOWED' || (primaryScopeBinding.resourceIds?.length ?? 0) > 0)
   );
-  const isNewCustomDraft = !isBuiltIn && !ws.formalVersion;
   const currentPolicy = modelPolicySelectOptions.find((o) => o.modelPolicyId === ws.editable.modelPolicyId);
+
+  // ─────────────────────────────────────────────────────────────
+  // Operating Flow 投影（V1.2 §14–§16）：这个智能体如何工作。
+  // 全部由现有 Domain Projection（editable + preset + 展示目录）派生，
+  // 不新增 AgentOperatingModel / 数据库字段 / 第二套 SoT——只是 UI Projection。
+  // ─────────────────────────────────────────────────────────────
+  /** 工作类别词：从能力模板 categoryTag 动态投影（数据智能→数据工作 / 企业知识→知识工作 / 语义治理→治理工作） */
+  const workCategoryWord =
+    preset?.categoryTag === '数据智能'
+      ? '数据工作'
+      : preset?.categoryTag === '企业知识'
+        ? '知识工作'
+        : preset?.categoryTag === '语义治理'
+          ? '治理工作'
+          : '工作';
+  /** 任务压缩（§16）：前 3 项名称 + 等 N 项工作 */
+  const flowTaskSub = compressNameList(enabledTaskNames, 3, '项工作');
+  /** 主范围摘要：授权范围内的{来源} / N 个指定{来源}，未知模板退回 N 类授权信息 */
+  const flowScopeMain = primaryScopeBinding
+    ? primaryScopeBinding.selectionMode === 'ALL_ALLOWED'
+      ? `授权范围内的${AGENT_CONTEXT_SOURCE_VIEWS[primaryScopeBinding.sourceType].label}`
+      : `${primaryScopeBinding.resourceIds?.length ?? 0} 个指定${AGENT_CONTEXT_SOURCE_VIEWS[primaryScopeBinding.sourceType].label}`
+    : `${ws.editable.allowedContextSources.length} 类授权信息`;
+  /** 支撑来源：allowedContextSources 去掉主范围来源后压缩（≤3 项全显，>3 显示 等 N 类信息） */
+  const supportingSourceLabels = ws.editable.allowedContextSources
+    .filter((sourceType) => !primaryScopeBinding || sourceType !== primaryScopeBinding.sourceType)
+    .map((sourceType) => AGENT_CONTEXT_SOURCE_VIEWS[sourceType].label);
+  const flowScopeSub = compressNameList(supportingSourceLabels, 3, '类信息');
+  /** 判断原则展示名：MODEL_POLICY_OPTIONS canonical 优先，历史数据回退 editable.modelPolicyName */
+  const policyDisplayName = currentPolicy?.modelPolicyName ?? ws.editable.modelPolicyName ?? ws.editable.modelPolicyId;
+  const policyDisplayDesc = currentPolicy?.desc ?? '';
+  /** 行动边界说明：模板选项 desc 优先，回退 editable.maxAutonomyDesc */
+  const autonomyDescDisplay =
+    autonomyOptions.find((o) => o.maxAutonomy === ws.editable.maxAutonomy)?.desc ??
+    ws.editable.maxAutonomyDesc ??
+    '';
+  const friendlyCapabilityDesc = toFriendlyCapabilityDesc(ws.editable.capabilityDesc);
+  /** 当前工作定义来源说明（V1.2 §18）：明确告知用户当前看到的是草稿还是正式版本 */
+  const editableSourceNote =
+    ws.editableSource === 'DRAFT'
+      ? ws.formalVersion
+        ? `当前展示未发布草稿；正式版本 ${ws.formalVersion} 仍保持生效。`
+        : '以下为当前未发布草稿配置。'
+      : ws.editableSource === 'PUBLISHED_SNAPSHOT'
+        ? '以下为当前正式版本配置。'
+        : '以下为当前定义基线配置。';
 
   // ── 正式基线（Implementation Freeze §1）────────────────────────
   // 事实源 = ws.published（currentPublishedVersion 对应 AgentVersion.snapshot）。
@@ -638,22 +730,23 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
 
       <div className="flex-1 flex overflow-hidden">
         {/* ─────────────────────────────────────────────────────────
-            COLUMN A. 左侧导航：概览 / 基本信息 / 支持任务 / 工作范围 / 能力 / 模型与自主程度
+            COLUMN A. 左侧导航（V1.2 §9：SectionKey 内部完全不变，只改用户展示）
+            概览 / 角色与职责 / 工作任务 / 数据与知识范围 / 执行方式 / 决策与行动边界
             （普通一级导航无「运行引擎」；Runtime 仅在高级信息弱入口）
         ───────────────────────────────────────────────────────── */}
         <aside className="w-[200px] bg-white border-r border-[#E2E8F0] flex flex-col justify-between p-3 shrink-0 select-none overflow-y-auto">
           <div className="space-y-1">
             <div className="px-3 py-1 text-[10px] font-semibold text-[#94A3B8] tracking-wider uppercase">
-              定义配置
+              智能体工作定义
             </div>
             {(
               [
                 { key: 'overview', label: '概览', icon: FileText },
-                { key: 'basic_info', label: '基本信息', icon: Info },
-                { key: 'tasks', label: '支持任务', icon: Layers },
-                { key: 'scope', label: '工作范围', icon: Database },
-                { key: 'capabilities', label: '能力', icon: Sparkles },
-                { key: 'model_autonomy', label: '模型与自主程度', icon: Sliders }
+                { key: 'basic_info', label: '角色与职责', icon: Info },
+                { key: 'tasks', label: '工作任务', icon: Layers },
+                { key: 'scope', label: '数据与知识范围', icon: Database },
+                { key: 'capabilities', label: '执行方式', icon: Sparkles },
+                { key: 'model_autonomy', label: '决策与行动边界', icon: Sliders }
               ] as Array<{ key: SectionKey; label: string; icon: React.ElementType }>
             ).map(({ key, label, icon: Icon }) => (
               <button
@@ -712,329 +805,295 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                 <div>
                   <h2 className="text-base font-bold text-[#0F172A] tracking-tight">概览</h2>
                   <p className="text-xs text-[#64748B] mt-0.5">
-                    查看「{ws.editable.name}」当前职责、类型、草稿状态与行为边界。
+                    快速理解「{ws.editable.name}」的工作定义：它负责什么、如何工作，以及当前处于什么版本状态。
                   </p>
                 </div>
 
-                {/* 新建自定义智能体的轻量 Guidance（TASK 31：无 Stepper / KPI / 进度条） */}
-                {isNewCustomDraft && (
-                  <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-lg space-y-1.5">
-                    <div className="flex items-center space-x-1.5 text-xs font-bold text-amber-900">
-                      <GitBranch className="w-3.5 h-3.5 text-amber-700" />
-                      <span>智能体草稿已创建，还需要完成发布验证</span>
-                    </div>
-                    <div className="text-[11px] text-amber-800 flex items-center flex-wrap gap-x-4 gap-y-1">
-                      <span>
-                        基础定义 <span className="font-semibold text-amber-900">已完成</span>
-                      </span>
-                      <span>
-                        工作范围{' '}
-                        <span className="font-semibold text-amber-900">{scopeConfigured ? '已配置' : '待完善'}</span>
-                      </span>
-                      <span>
-                        发布验证 <span className="font-semibold text-amber-900">待完成</span>
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-amber-700/90">
-                      完善定义后进入发布验证，通过全部发布检查并正式发布后才会生效。
-                    </p>
-                  </div>
-                )}
-
-                {/* 智能体职责 */}
-                <div className="space-y-2 border-b border-[#E2E8F0] pb-5">
-                  <h3 className="text-xs font-bold text-[#0F172A]">智能体职责</h3>
+                {/* A. 角色与工作目标（V1.2 §12：第一块直接回答「这个智能体是干什么的」） */}
+                <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 space-y-2.5 shadow-2xs">
+                  <h3 className="text-xs font-bold text-[#0F172A]">角色与工作目标</h3>
+                  <div className="text-sm font-bold text-[#0F172A] tracking-tight">{ws.editable.name}</div>
                   <p className="text-xs text-[#334155] leading-relaxed text-justify">
                     {ws.editable.responsibilitySummary}
                   </p>
-                  <p className="text-[11px] text-[#94A3B8] pt-1">
-                    角色说明由 Agent Definition 管理；平台安全、权限与执行协议由 Semovix 统一控制。
+                  <p className="text-[11px] text-[#94A3B8]">
+                    类型：{originLabel} · Owner：{ws.editable.owner}
                   </p>
                 </div>
 
-                {/* 理解当前智能体定义（§06：轻量认知说明，纯文本 2×3，不做卡片墙 / Stepper / KPI） */}
-                <div className="bg-white border border-[#E2E8F0] rounded-lg px-4 py-3 shadow-2xs">
-                  <div className="text-xs font-bold text-[#0F172A]">理解当前智能体定义</div>
-                  <p className="text-[11px] text-[#94A3B8] mt-0.5">
-                    这些配置共同决定智能体负责什么、可以使用哪些信息，以及能够自主做到什么程度。
-                  </p>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 mt-2.5 text-[11px]">
-                    <div>
-                      <span className="font-semibold text-[#334155]">职责</span>
-                      <span className="text-[#64748B]"> — 它为什么存在</span>
-                    </div>
-                    <div>
-                      <span className="font-semibold text-[#334155]">支持任务</span>
-                      <span className="text-[#64748B]"> — 它负责完成哪些事情</span>
-                    </div>
-                    <div>
-                      <span className="font-semibold text-[#334155]">工作范围</span>
-                      <span className="text-[#64748B]"> — 它可以在哪些数据或知识范围内工作</span>
-                    </div>
-                    <div>
-                      <span className="font-semibold text-[#334155]">能力</span>
-                      <span className="text-[#64748B]"> — 它采用什么受控方式完成这些任务</span>
-                    </div>
-                    <div>
-                      <span className="font-semibold text-[#334155]">模型策略</span>
-                      <span className="text-[#64748B]"> — 平台如何为它选择和使用模型</span>
-                    </div>
-                    <div>
-                      <span className="font-semibold text-[#334155]">自主程度</span>
-                      <span className="text-[#64748B]"> — 它最多可以自行做到哪一步</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 当前定义摘要（无 Runtime 项；§07 按 editableSource 动态命名：
-                    DRAFT=待发布配置 / 首创草稿，PUBLISHED_SNAPSHOT=正式配置） */}
-                <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-2xs space-y-3">
+                {/* B. 这个智能体如何工作（V1.2 §13–§16：一条横向 Operating Flow 投影当前真实
+                    Operating Model，替代原抽象概念教学块；单一 Surface，非卡片墙） */}
+                <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 space-y-3 shadow-2xs">
                   <div>
-                    <h3 className="text-xs font-bold text-[#0F172A]">
-                      {ws.editableSource === 'DRAFT'
-                        ? ws.formalVersion
-                          ? '当前待发布配置'
-                          : '当前草稿配置'
-                        : ws.editableSource === 'PUBLISHED_SNAPSHOT'
-                          ? '当前正式配置'
-                          : '当前定义摘要'}
-                    </h3>
+                    <h3 className="text-xs font-bold text-[#0F172A]">这个智能体如何工作</h3>
                     <p className="text-[11px] text-[#64748B] mt-0.5">
-                      {ws.editableSource === 'DRAFT'
-                        ? ws.formalVersion
-                          ? '以下为当前草稿配置，尚未影响正式版本。'
-                          : '以下为未发布草稿的当前配置。'
-                        : ws.editableSource === 'PUBLISHED_SNAPSHOT'
-                          ? '以下来自当前正式版本；首次修改后将创建新的未发布草稿。'
-                          : '基于定义基线'}
+                      由当前工作定义自动汇总；在左侧各分区修改并保存后，此处同步更新。
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-[#F1F5F9]">
-                    <div className="space-y-1">
-                      <div className="text-[11px] text-[#64748B]">支持任务</div>
-                      <div className="text-xs font-bold text-[#0F172A]">{enabledTaskCount} 项启用</div>
-                      <div
+                  <div className="flex items-stretch overflow-x-auto pb-1">
+                    {(
+                      [
+                        {
+                          stage: '处理',
+                          main: `${enabledTaskCount} 项${workCategoryWord}`,
+                          sub: flowTaskSub,
+                          title: enabledTaskNames.join(' · ')
+                        },
+                        {
+                          stage: '使用',
+                          main: flowScopeMain,
+                          sub: flowScopeSub,
+                          title: [scopeSummary, ...supportingSourceLabels].join(' · ')
+                        },
+                        {
+                          stage: '采用',
+                          main: ws.editable.capabilityPreset,
+                          sub: friendlyCapabilityDesc,
+                          title: ws.editable.capabilityDesc
+                        },
+                        {
+                          stage: '遵循',
+                          main: policyDisplayName,
+                          sub: policyDisplayDesc,
+                          title: policyDisplayDesc
+                        },
+                        {
+                          stage: '最多',
+                          main: MAX_AUTONOMY_VIEWS[ws.editable.maxAutonomy],
+                          sub: autonomyDescDisplay,
+                          title: autonomyDescDisplay
+                        }
+                      ] as Array<{ stage: string; main: string; sub?: string; title?: string }>
+                    ).map((node, index) => (
+                      <React.Fragment key={node.stage}>
+                        {index > 0 && (
+                          <div className="flex items-center px-1 text-[#CBD5E1] shrink-0">
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                        <div
+                          className="min-w-[148px] max-w-[210px] flex-1 px-3 py-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1"
+                          title={node.title}
+                        >
+                          <div className="text-[10px] font-semibold text-[#94A3B8] tracking-wider">
+                            {node.stage}
+                          </div>
+                          <div className="text-xs font-bold text-[#0F172A] leading-snug">{node.main}</div>
+                          {node.sub && (
+                            <div className="text-[10px] text-[#64748B] leading-relaxed">{node.sub}</div>
+                          )}
+                        </div>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+
+                {/* C. 当前工作定义（V1.2 §17/§18：统一替代原「当前定义摘要 / 当前配置摘要」，
+                    两列紧凑 Definition List 回答五个问题；明确标注当前展示 Draft 还是正式版本） */}
+                <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 space-y-3 shadow-2xs">
+                  <div>
+                    <h3 className="text-xs font-bold text-[#0F172A]">当前工作定义</h3>
+                    <p className="text-[11px] mt-0.5 font-medium text-[#475569]">{editableSourceNote}</p>
+                  </div>
+                  <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5 pt-3 border-t border-[#F1F5F9] text-xs">
+                    <div className="space-y-0.5">
+                      <dt className="text-[11px] text-[#64748B]">工作任务</dt>
+                      <dd className="font-bold text-[#0F172A]">{enabledTaskCount} 项已启用</dd>
+                      <dd className="text-[10px] text-[#94A3B8] truncate" title={enabledTaskNames.join(' · ')}>
+                        {flowTaskSub}
+                      </dd>
+                    </div>
+                    <div className="space-y-0.5">
+                      <dt className="text-[11px] text-[#64748B]">数据与知识范围</dt>
+                      <dd
+                        className="font-bold text-[#0F172A] truncate"
+                        title={scopeConfigured ? scopeSummary : undefined}
+                      >
+                        {scopeConfigured ? scopeSummary : '尚未配置主工作范围'}
+                      </dd>
+                      <dd
                         className="text-[10px] text-[#94A3B8] truncate"
-                        title={ws.editable.supportedTaskTemplates
-                          .map((t) => getTaskTemplateView(t.taskTemplateId).name)
-                          .join(' · ')}
+                        title={supportingSourceLabels.join(' · ')}
                       >
-                        {ws.editable.supportedTaskTemplates
-                          .map((t) => getTaskTemplateView(t.taskTemplateId).name)
-                          .join(' · ')}
-                      </div>
+                        {flowScopeSub ? `另可使用：${flowScopeSub}` : ' '}
+                      </dd>
                     </div>
-                    <div className="space-y-1">
-                      <div className="text-[11px] text-[#64748B]">工作范围</div>
-                      <div className="text-xs font-bold text-[#0F172A]">
-                        {scopeConfigured
-                          ? primaryScopeBinding?.selectionMode === 'ALL_ALLOWED'
-                            ? '按权限动态'
-                            : `${primaryScopeBinding?.resourceIds?.length ?? 0} 项指定`
-                          : '未配置'}
-                      </div>
-                      <div className="text-[10px] text-[#94A3B8] truncate" title={scopeSummary}>
-                        {scopeSummary}
-                      </div>
+                    <div className="space-y-0.5">
+                      <dt className="text-[11px] text-[#64748B]">执行方式</dt>
+                      <dd className="font-bold text-[#0F172A]">{ws.editable.capabilityPreset}</dd>
+                      <dd className="text-[10px] text-[#94A3B8] truncate" title={ws.editable.capabilityDesc}>
+                        {friendlyCapabilityDesc}
+                      </dd>
                     </div>
-                    <div className="space-y-1">
-                      <div className="text-[11px] text-[#64748B]">能力模式</div>
-                      <div
-                        className="text-xs font-bold text-[#2563EB] truncate"
-                        title={ws.editable.capabilityPreset}
-                      >
-                        {ws.editable.capabilityPreset}
-                      </div>
-                      <div
-                        className="text-[10px] text-[#94A3B8] truncate"
-                        title={ws.editable.capabilityDesc}
-                      >
-                        {ws.editable.capabilityDesc}
-                      </div>
+                    <div className="space-y-0.5">
+                      <dt className="text-[11px] text-[#64748B]">判断原则</dt>
+                      <dd className="font-bold text-[#0F172A]">{policyDisplayName}</dd>
+                      <dd className="text-[10px] text-[#94A3B8]">{policyDisplayDesc}</dd>
                     </div>
-                    <div className="space-y-1">
-                      <div className="text-[11px] text-[#64748B]">模型与自主程度</div>
-                      <div className="text-xs font-bold text-[#0F172A]">
-                        {currentPolicy?.modelPolicyName ?? ws.editable.modelPolicyId}
-                      </div>
-                      <div className="text-[10px] text-[#94A3B8] truncate">
+                    <div className="space-y-0.5">
+                      <dt className="text-[11px] text-[#64748B]">行动边界</dt>
+                      <dd className="font-bold text-[#0F172A]">
                         {MAX_AUTONOMY_VIEWS[ws.editable.maxAutonomy]}
-                      </div>
+                      </dd>
+                      <dd className="text-[10px] text-[#94A3B8]">{autonomyDescDisplay}</dd>
                     </div>
-                  </div>
+                  </dl>
                 </div>
 
-                {/* 正式基线（Implementation Freeze §1：事实源 = currentPublishedVersion 快照，
-                    Draft 修改不得混入；无 目标运行引擎 / 正式运行配置 / 同步状态） */}
-                <div className="space-y-2 border-b border-[#E2E8F0] pb-5">
-                  <div>
-                    <h3 className="text-xs font-bold text-[#0F172A]">正式基线</h3>
-                    <p className="text-[11px] text-[#64748B] mt-0.5">
-                      {ws.formalVersion === null
-                        ? '尚未发布正式版本，当前所有配置仅存在于未发布草稿中。'
-                        : ws.hasDraft
-                          ? `当前线上正式运行的是 ${ws.formalVersion}，正式基线取自该版本快照，草稿修改不影响正式基线。`
-                          : `当前线上正式运行的是 ${ws.formalVersion}，当前没有未发布草稿。`}
-                    </p>
-                  </div>
-                  <div className="bg-white border border-[#E2E8F0] rounded-lg overflow-hidden">
-                    <dl className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-[#F1F5F9] text-xs">
-                      <div className="divide-y divide-[#F1F5F9]">
-                        <div className="flex items-center justify-between p-3">
-                          <dt className="text-[#64748B]">正式版本</dt>
-                          <dd className="font-mono font-semibold text-[#0F172A]">
-                            {ws.formalVersion ?? <span className="text-[#94A3B8]">暂无 (未发布)</span>}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between p-3">
-                          <dt className="text-[#64748B]">类型</dt>
-                          <dd className="font-medium text-[#0F172A]">{originLabel}</dd>
-                        </div>
-                        <div className="flex items-center justify-between p-3">
-                          <dt className="text-[#64748B]">Owner</dt>
-                          <dd className="font-medium text-[#0F172A]">
-                            {baseline ? (
-                              baseline.owner
-                            ) : (
-                              <span className="text-[#94A3B8]">暂无正式基线</span>
-                            )}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between p-3">
-                          <dt className="text-[#64748B]">支持任务</dt>
-                          <dd className="text-[#0F172A]">
-                            {baseline ? (
-                              `${baselineEnabledTaskCount} 项启用`
-                            ) : (
-                              <span className="text-[#94A3B8]">暂无正式基线</span>
-                            )}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between p-3">
-                          <dt className="text-[#64748B]">工作范围</dt>
-                          <dd
-                            className="font-semibold text-[#0F172A] truncate max-w-[60%]"
-                            title={baselineScopeSummary ?? undefined}
-                          >
-                            {baseline ? (
-                              baselineScopeSummary ?? <span className="text-[#94A3B8] font-normal">未配置</span>
-                            ) : (
-                              <span className="text-[#94A3B8] font-normal">暂无正式基线</span>
-                            )}
-                          </dd>
-                        </div>
+                {/* D. 版本与状态（V1.2 §19–§21：原「正式基线 + 当前草稿」两个大块降级为紧凑状态区；
+                    businessDiffs 只是已记录变更摘要，不当作完整 Diff 铺开） */}
+                <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 space-y-3 shadow-2xs">
+                  <h3 className="text-xs font-bold text-[#0F172A]">版本与状态</h3>
+                  {ws.formalVersion === null ? (
+                    <dl className="grid grid-cols-3 gap-3 text-xs">
+                      <div className="p-2.5 bg-amber-50/70 border border-amber-200/70 rounded-md space-y-0.5">
+                        <dt className="text-[10px] text-[#92700A]">当前状态</dt>
+                        <dd className="font-bold text-amber-900">未发布草稿</dd>
                       </div>
-                      <div className="divide-y divide-[#F1F5F9]">
-                        <div className="flex items-center justify-between p-3">
-                          <dt className="text-[#64748B]">能力模式</dt>
-                          <dd className="font-semibold text-[#0F172A]">
-                            {baseline ? (
-                              baseline.capabilityPreset
-                            ) : (
-                              <span className="text-[#94A3B8] font-normal">暂无正式基线</span>
-                            )}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between p-3">
-                          <dt className="text-[#64748B]">模型策略</dt>
-                          <dd className="text-[#0F172A]">
-                            {baseline && baselinePolicyName ? (
-                              baselinePolicyName
-                            ) : (
-                              <span className="text-[#94A3B8]">暂无正式基线</span>
-                            )}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between p-3">
-                          <dt className="text-[#64748B]">最大自主程度</dt>
-                          <dd className="text-[#0F172A]">
-                            {baseline ? (
-                              MAX_AUTONOMY_VIEWS[baseline.maxAutonomy]
-                            ) : (
-                              <span className="text-[#94A3B8]">暂无正式基线</span>
-                            )}
-                          </dd>
-                        </div>
-                        <div className="flex items-center justify-between p-3">
-                          <dt className="text-[#64748B]">最近发布</dt>
-                          <dd className="text-[#64748B]">
-                            {ws.lastReleaseTime || <span className="text-[#94A3B8]">暂无发布记录</span>}
-                          </dd>
-                        </div>
+                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-0.5">
+                        <dt className="text-[10px] text-[#94A3B8]">正式版本</dt>
+                        <dd className="font-bold text-[#94A3B8]">暂无</dd>
+                      </div>
+                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-0.5">
+                        <dt className="text-[10px] text-[#94A3B8]">发布验证</dt>
+                        <dd className="font-bold text-[#0F172A]">待完成</dd>
                       </div>
                     </dl>
-                  </div>
-                </div>
-
-                {/* 当前草稿（状态事实源 = formalVersion + hasDraft；businessDiffs 仅是下方「已记录的变更摘要」列表） */}
-                <div className="space-y-2 border-b border-[#E2E8F0] pb-5">
-                  <div>
-                    <h3 className="text-xs font-bold text-[#0F172A]">当前草稿</h3>
-                    <p className="text-[11px] text-[#64748B] mt-0.5">
-                      {ws.formalVersion === null
-                        ? '首次创建未发布草稿。'
-                        : !ws.hasDraft
-                          ? '当前没有未发布草稿。'
-                          : ws.businessDiffs.length > 0
-                            ? `存在未发布草稿，当前已记录 ${ws.businessDiffs.length} 项变更摘要。`
-                            : '存在未发布草稿，尚未生成逐项差异摘要。'}
-                    </p>
-                  </div>
-
-                  {ws.formalVersion === null ? (
-                    <div className="p-4 bg-white border border-amber-200/80 rounded-lg space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <span className="w-2 h-2 rounded-full bg-amber-500" />
-                          <span className="font-bold text-xs text-[#0F172A]">未发布草稿 (首次创建)</span>
-                        </div>
-                        <span className="text-[10px] font-mono text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-semibold">
-                          NEW DRAFT
-                        </span>
-                      </div>
-                      <p className="text-xs text-[#475569] leading-relaxed">
-                        已根据所选能力模板初始化基本定义，支持任务（{enabledTaskCount} 项启用：
-                        {enabledTaskNames.join('、')}）与能力模式预设已载入。
-                      </p>
-                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-[11px] text-[#64748B] space-y-1">
-                        <div className="font-semibold text-[#0F172A]">发布验证：待完成</div>
-                        <div>完成发布验证并通过全部检查后，即可发布为首个正式版本 (v1.0)。</div>
-                      </div>
-                    </div>
-                  ) : !ws.hasDraft ? (
-                    <div className="p-4 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#64748B]">
-                      当前没有未发布草稿，线上正式版本 {ws.formalVersion} 正在稳定运行。
-                    </div>
-                  ) : ws.businessDiffs.length > 0 ? (
-                    <div className="space-y-2">
-                      <div className="text-[11px] font-semibold text-[#475569]">
-                        已记录的变更摘要（{ws.businessDiffs.length} 项）
-                      </div>
-                      {ws.businessDiffs.map((diff, index) => (
-                        <div
-                          key={index}
-                          className="p-3 bg-white border border-[#E2E8F0] rounded-lg flex items-center justify-between text-xs"
-                        >
-                          <div className="space-y-0.5">
-                            <div className="font-bold text-[#0F172A]">{diff.field}</div>
-                            <div className="font-mono text-[#2563EB] font-semibold text-[11px]">
-                              {diff.changeText}
-                            </div>
-                          </div>
-                          <span className="text-[10px] font-mono text-[#2563EB] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                            {diff.tag}
+                  ) : ws.hasDraft ? (
+                    <dl className="grid grid-cols-3 gap-3 text-xs">
+                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-0.5">
+                        <dt className="text-[10px] text-[#94A3B8]">正式版本</dt>
+                        <dd className="font-bold text-[#0F172A]">
+                          <span className="font-mono">{ws.formalVersion}</span>
+                          <span className="block text-[10px] font-normal text-[#16A36A]">
+                            当前仍保持生效
                           </span>
-                        </div>
-                      ))}
-                    </div>
+                        </dd>
+                      </div>
+                      <div className="p-2.5 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md space-y-0.5">
+                        <dt className="text-[10px] text-[#2563EB]/70">当前草稿</dt>
+                        <dd className="font-bold text-[#1E40AF]">有未发布修改</dd>
+                      </div>
+                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-0.5">
+                        <dt className="text-[10px] text-[#94A3B8]">最近发布</dt>
+                        <dd className="font-medium text-[#475569] truncate" title={ws.lastReleaseTime ?? ''}>
+                          {ws.lastReleaseTime || '—'}
+                        </dd>
+                      </div>
+                    </dl>
                   ) : (
-                    <div className="p-4 bg-white border border-[#E2E8F0] rounded-lg text-xs text-[#64748B]">
-                      存在未发布草稿，尚未生成逐项差异摘要。
+                    <dl className="grid grid-cols-3 gap-3 text-xs">
+                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-0.5">
+                        <dt className="text-[10px] text-[#94A3B8]">当前状态</dt>
+                        <dd className="font-bold text-[#16A36A]">正常</dd>
+                      </div>
+                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-0.5">
+                        <dt className="text-[10px] text-[#94A3B8]">正式版本</dt>
+                        <dd className="font-bold font-mono text-[#0F172A]">{ws.formalVersion}</dd>
+                      </div>
+                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-0.5">
+                        <dt className="text-[10px] text-[#94A3B8]">当前草稿</dt>
+                        <dd className="font-bold text-[#94A3B8]">无</dd>
+                      </div>
+                    </dl>
+                  )}
+
+                  {/* 正式版本配置弱折叠（§20：formalVersion && hasDraft 时提供，事实源仍是 ws.published，
+                      绝不混入 Draft；不再默认占据大型「正式基线」区域） */}
+                  {ws.formalVersion && ws.hasDraft && baseline && (
+                    <div className="border-t border-[#F1F5F9] pt-2.5 space-y-2">
+                      <button
+                        onClick={() => setIsPublishedDetailOpen((v) => !v)}
+                        className="flex items-center space-x-1 text-[11px] font-semibold text-[#64748B] hover:text-[#0F172A] transition-colors cursor-pointer"
+                      >
+                        {isPublishedDetailOpen ? (
+                          <ChevronDown className="w-3 h-3" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3" />
+                        )}
+                        <span>查看正式版本配置（{ws.formalVersion}）</span>
+                      </button>
+                      {isPublishedDetailOpen && (
+                        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs">
+                          <div className="flex items-center justify-between">
+                            <dt className="text-[#64748B]">Owner</dt>
+                            <dd className="font-medium text-[#0F172A]">{baseline.owner}</dd>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <dt className="text-[#64748B]">任务数量</dt>
+                            <dd className="font-medium text-[#0F172A]">{baselineEnabledTaskCount} 项已启用</dd>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <dt className="text-[#64748B]">范围</dt>
+                            <dd
+                              className="font-medium text-[#0F172A] truncate max-w-[60%]"
+                              title={baselineScopeSummary ?? undefined}
+                            >
+                              {baselineScopeSummary ?? '未配置'}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <dt className="text-[#64748B]">执行方式</dt>
+                            <dd className="font-medium text-[#0F172A]">{baseline.capabilityPreset}</dd>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <dt className="text-[#64748B]">判断原则</dt>
+                            <dd className="font-medium text-[#0F172A]">
+                              {baselinePolicyName ?? baseline.modelPolicyId}
+                            </dd>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <dt className="text-[#64748B]">行动边界</dt>
+                            <dd className="font-medium text-[#0F172A]">
+                              {MAX_AUTONOMY_VIEWS[baseline.maxAutonomy]}
+                            </dd>
+                          </div>
+                        </dl>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 草稿变更摘要弱折叠（§21：businessDiffs 只是「已记录的变更摘要」，
+                      不是完整 Diff；无摘要时不显示「与正式版本一致」之类推断） */}
+                  {ws.hasDraft && ws.businessDiffs.length > 0 && (
+                    <div className="border-t border-[#F1F5F9] pt-2.5 space-y-2">
+                      <button
+                        onClick={() => setIsDiffSummaryOpen((v) => !v)}
+                        className="flex items-center space-x-1 text-[11px] font-semibold text-[#64748B] hover:text-[#0F172A] transition-colors cursor-pointer"
+                      >
+                        {isDiffSummaryOpen ? (
+                          <ChevronDown className="w-3 h-3" />
+                        ) : (
+                          <ChevronRight className="w-3 h-3" />
+                        )}
+                        <span>已记录 {ws.businessDiffs.length} 项草稿变更摘要 · 查看变更摘要</span>
+                      </button>
+                      {isDiffSummaryOpen && (
+                        <div className="space-y-1.5">
+                          {ws.businessDiffs.map((diff, index) => (
+                            <div
+                              key={index}
+                              className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md flex items-center justify-between text-xs"
+                            >
+                              <div className="space-y-0.5 min-w-0">
+                                <div className="font-bold text-[#0F172A]">{diff.field}</div>
+                                <div className="text-[11px] text-[#475569] truncate">{diff.changeText}</div>
+                              </div>
+                              <span className="text-[10px] font-mono text-[#2563EB] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 shrink-0">
+                                {diff.tag}
+                              </span>
+                            </div>
+                          ))}
+                          <p className="text-[10px] text-[#94A3B8] leading-relaxed">
+                            变更摘要仅为创建与编辑时记录的业务摘要，不代表草稿与正式版本的完整差异。
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {(ws.formalVersion === null || ws.hasDraft) && (
-                    <p className="text-[11px] text-[#94A3B8] pt-1">
+                    <p className="text-[11px] text-[#94A3B8]">
                       草稿修改不会影响当前正式运行，完成发布验证并正式发布后才会生效。
                     </p>
                   )}
@@ -1045,14 +1104,18 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                 <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
                   <div>
                     <h2 className="text-base font-bold text-[#0F172A] tracking-tight">
-                      {activeSection === 'basic_info' && '基本信息'}
-                      {activeSection === 'tasks' && '支持任务'}
-                      {activeSection === 'scope' && '工作范围'}
-                      {activeSection === 'capabilities' && '能力'}
-                      {activeSection === 'model_autonomy' && '模型与自主程度'}
+                      {activeSection === 'basic_info' && '角色与职责'}
+                      {activeSection === 'tasks' && '工作任务'}
+                      {activeSection === 'scope' && '数据与知识范围'}
+                      {activeSection === 'capabilities' && '执行方式'}
+                      {activeSection === 'model_autonomy' && '决策与行动边界'}
                     </h2>
                     <p className="text-xs text-[#64748B] mt-0.5">
-                      智能体定义工作区 · {ws.editable.name} · {originLabel}
+                      {activeSection === 'basic_info' && '这个智能体是谁，为什么存在，谁负责它？'}
+                      {activeSection === 'tasks' && '哪些工作可以交给这个智能体？'}
+                      {activeSection === 'scope' && '这个智能体工作时可以使用哪些业务信息？'}
+                      {activeSection === 'capabilities' && '面对这些工作，这个智能体默认如何完成？'}
+                      {activeSection === 'model_autonomy' && '它如何判断？它最多可以做到哪里？'}
                     </p>
                   </div>
                   <button
@@ -1063,7 +1126,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                   </button>
                 </div>
 
-                {/* ───────────── 基本信息（Built-in 锁定 / Custom 可编辑 + 高级角色说明） ───────────── */}
+                {/* ───────────── 角色与职责（Built-in 锁定 / Custom 可编辑 + 高级角色说明；编辑逻辑不变） ───────────── */}
                 {activeSection === 'basic_info' && (
                   <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-4 text-xs">
                     {isBuiltIn ? (
@@ -1140,7 +1203,8 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                             />
                           )}
                           <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-                            定义智能体如何履行职责。平台安全、权限与执行协议不可在此覆盖。
+                            高级角色说明用于定义智能体履行职责时的专业行为规则；
+                            平台安全、权限和任务协议不可在此覆盖。
                           </p>
                         </div>
                       )}
@@ -1150,14 +1214,14 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                   </div>
                 )}
 
-                {/* ───────────── 支持任务（Built-in 锁定 / Custom 模板集合内启停） ───────────── */}
+                {/* ───────────── 工作任务（Built-in 锁定 / Custom 模板集合内启停；不虚构 Output Contract） ───────────── */}
                 {activeSection === 'tasks' && (
                   <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-3 text-xs">
                     <div className="font-bold text-[#0F172A]">
-                      支持任务（{displayTasks.filter((t) => t.enabled).length}/{displayTasks.length} 启用）
+                      工作任务（{displayTasks.filter((t) => t.enabled).length}/{displayTasks.length} 已启用）
                     </div>
                     <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-[11px] text-[#64748B] leading-relaxed">
-                      任务执行流程与输入输出规则由任务引擎统一管理。
+                      这里决定哪些工作可以交给当前智能体。具体任务流程和执行规则由 Semovix 统一管理。
                     </div>
                     <div className="space-y-2">
                       {displayTasks.map((task, idx) => {
@@ -1213,14 +1277,12 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                   </div>
                 )}
 
-                {/* ───────────── 工作范围（A 主范围 / B 支撑来源 / C 权限说明） ───────────── */}
+                {/* ───────────── 数据与知识范围（A 主要工作范围 / B 工作时可以使用 / C 权限说明；保存逻辑不变） ───────────── */}
                 {activeSection === 'scope' && (
                   <div className="space-y-4">
                     {/* A. 主要工作范围 */}
                     <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-3 text-xs">
-                      <div className="font-bold text-[#0F172A]">
-                        {scopeConfig ? scopeConfig.sectionTitle : '主要工作范围'}
-                      </div>
+                      <div className="font-bold text-[#0F172A]">主要工作范围</div>
 
                       {scopeConfig && scopeIsActiveForEditing ? (
                         <>
@@ -1381,9 +1443,10 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                       )}
                     </div>
 
-                    {/* B. 可使用的支撑来源（Read-first 投影，不做成 Permission Matrix） */}
+                    {/* B. 工作时可以使用（allowedContextSources Read-first 投影；
+                        不叫「模板允许的支撑来源」，不做成权限矩阵） */}
                     <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-3 text-xs">
-                      <div className="font-bold text-[#0F172A]">可使用的支撑来源</div>
+                      <div className="font-bold text-[#0F172A]">工作时可以使用</div>
                       <div className="flex flex-wrap gap-2">
                         {ws.editable.allowedContextSources.map((sourceType) => (
                           <div
@@ -1401,28 +1464,31 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                         ))}
                       </div>
                       <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-                        模板允许使用的支撑来源（V1.1 暂不逐项配置）；实际可达范围由用户权限与任务范围在运行时收敛。
+                        以上来源由平台按能力模板统一授权（暂不逐项配置）；实际可使用的信息还会受到当前用户权限和具体任务范围限制。
                       </p>
                     </div>
 
-                    {/* C. 权限说明 */}
+                    {/* C. 权限说明（普通用户语言；收敛公式放 title tooltip，主 UI 不出现权限矩阵/任务引擎等平台内部概念） */}
                     <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-1.5 text-xs">
-                      <div className="font-bold text-[#0F172A]">权限说明</div>
-                      <div className="font-mono text-[11px] text-[#2563EB] bg-[#F8FAFC] border border-[#BFDBFE] rounded px-2 py-1.5 leading-relaxed">
-                        实际运行上下文 = 智能体允许范围 ∩ 当前用户权限 ∩ 当前任务范围
+                      <div
+                        className="font-bold text-[#0F172A] cursor-help"
+                        title="实际运行上下文 = 智能体允许范围 ∩ 当前用户权限 ∩ 当前任务范围"
+                      >
+                        权限说明
                       </div>
                       <p className="text-[11px] text-[#64748B] leading-relaxed">
-                        工作范围不能扩大用户权限：用户权限由 Permission Matrix
-                        统一裁决，任务范围由 Task Engine 下发，Agent Center 不复制权限矩阵。
+                        实际可使用的信息还会受到当前用户权限和具体任务范围限制。
+                        智能体的工作范围不会扩大用户原有权限。
                       </p>
                     </div>
                   </div>
                 )}
 
-                {/* ───────────── 能力（受控 Capability Preset；单一选项时只读，不提供假下拉） ───────────── */}
+                {/* ───────────── 执行方式（受控 Capability Preset；单一选项时只读，不提供假下拉；
+                      底层引擎表达不进入主文案，capabilityDesc 原文保留在 tooltip） ───────────── */}
                 {activeSection === 'capabilities' && (
                   <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-4 text-xs">
-                    <div className="font-bold text-[#0F172A]">能力模式</div>
+                    <div className="font-bold text-[#0F172A]">执行方式</div>
                     {capabilityOptions.length > 1 ? (
                       <>
                         <div className="space-y-2">
@@ -1441,39 +1507,47 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                                 onChange={() => setEditCapabilityPreset(option.capabilityPreset)}
                                 className="mt-0.5 w-3.5 h-3.5 accent-[#2563EB] cursor-pointer"
                               />
-                              <div>
+                              <div title={option.capabilityDesc}>
                                 <div className="font-semibold text-[#0F172A]">{option.capabilityPreset}</div>
-                                <div className="text-[11px] text-[#64748B] mt-0.5">{option.capabilityDesc}</div>
+                                <div className="text-[11px] text-[#64748B] mt-0.5">
+                                  {toFriendlyCapabilityDesc(option.capabilityDesc)}
+                                </div>
                               </div>
                             </label>
                           ))}
                         </div>
                         <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-                          只能在平台为该能力模板验证过的能力模式内选择；检索与推理参数由平台统一管理。
+                          只能在平台为该能力模板验证过的执行方式内选择；检索与推理参数由平台统一管理。
                         </p>
                         <div className="pt-1 flex justify-end">{saveButton}</div>
                       </>
                     ) : (
                       <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md space-y-1">
                         <div className="font-semibold text-[#1E40AF]">{ws.editable.capabilityPreset}</div>
-                        <p className="text-[11px] text-[#2563EB]">{ws.editable.capabilityDesc}</p>
+                        <p className="text-[11px] text-[#2563EB]" title={ws.editable.capabilityDesc}>
+                          {friendlyCapabilityDesc}
+                        </p>
                         <p className="text-[11px] text-[#94A3B8]">
-                          当前能力模板只提供这一种已验证的能力模式（平台模板约束）。
+                          当前能力模板只提供这一种平台已验证的执行方式。
                         </p>
                       </div>
                     )}
                   </div>
                 )}
 
-                {/* ───────────── 模型与自主程度（受控 Select + 模板上限；不暴露底层参数） ───────────── */}
+                {/* ───────────── 决策与行动边界（A 判断原则：modelPolicyId SoT；B 行动边界：MaxAutonomy SoT。
+                      用户只看产品语义文案，不出现 SUGGEST / PROPOSE enum 与底层模型参数） ───────────── */}
                 {activeSection === 'model_autonomy' && (
-                  <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-5 text-xs">
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-[#0F172A]">模型策略</label>
+                  <div className="space-y-4">
+                    <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-1.5 text-xs">
+                      <div className="font-bold text-[#0F172A]">判断原则</div>
+                      <p className="text-[11px] text-[#64748B]">
+                        它依据什么原则做出判断？底层模型与参数由平台统一管理，不在此配置。
+                      </p>
                       <select
                         value={editModelPolicyId}
                         onChange={(e) => setEditModelPolicyId(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs text-[#0F172A] cursor-pointer"
+                        className="w-full px-3 py-2 mt-1 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-xs text-[#0F172A] cursor-pointer"
                       >
                         {modelPolicySelectOptions.map((option) => (
                           <option key={option.modelPolicyId} value={option.modelPolicyId}>
@@ -1481,59 +1555,91 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                           </option>
                         ))}
                       </select>
-                      <p className="text-[11px] text-[#94A3B8]">
+                      <p className="text-[11px] text-[#94A3B8] leading-relaxed">
                         {modelPolicySelectOptions.find((o) => o.modelPolicyId === editModelPolicyId)?.desc ||
-                          '只允许选择平台正式策略；模型底层参数由平台统一管理。'}
+                          '只允许选择平台正式判断原则。'}
                       </p>
                     </div>
 
-                    <div className="space-y-2">
-                      <div className="font-bold text-[#0F172A]">最大自主程度</div>
+                    <div className="bg-white border border-[#E2E8F0] rounded-lg p-5 space-y-3 text-xs">
+                      <div className="font-bold text-[#0F172A]">行动边界</div>
+                      <p className="text-[11px] text-[#64748B]">它最多可以自主做到哪一步？</p>
                       {autonomyOptions.length > 1 ? (
                         <div className="space-y-2">
-                          {autonomyOptions.map((option) => (
-                            <label
-                              key={option.maxAutonomy}
-                              className={`flex items-start space-x-2 p-3 rounded-md border cursor-pointer transition-colors ${
-                                editMaxAutonomy === option.maxAutonomy
-                                  ? 'bg-[#EFF6FF] border-[#BFDBFE]'
-                                  : 'bg-[#F8FAFC] border-[#E2E8F0]'
-                              }`}
-                            >
-                              <input
-                                type="radio"
-                                checked={editMaxAutonomy === option.maxAutonomy}
-                                onChange={() => setEditMaxAutonomy(option.maxAutonomy)}
-                                className="mt-0.5 w-3.5 h-3.5 accent-[#2563EB] cursor-pointer"
-                              />
-                              <div>
-                                <div className="font-semibold text-[#0F172A]">
-                                  {MAX_AUTONOMY_VIEWS[option.maxAutonomy]}
+                          {autonomyOptions.map((option) => {
+                            const boundary = MAX_AUTONOMY_BOUNDARY_NOTES[option.maxAutonomy];
+                            return (
+                              <label
+                                key={option.maxAutonomy}
+                                className={`flex items-start space-x-2 p-3 rounded-md border cursor-pointer transition-colors ${
+                                  editMaxAutonomy === option.maxAutonomy
+                                    ? 'bg-[#EFF6FF] border-[#BFDBFE]'
+                                    : 'bg-[#F8FAFC] border-[#E2E8F0]'
+                                }`}
+                              >
+                                <input
+                                  type="radio"
+                                  checked={editMaxAutonomy === option.maxAutonomy}
+                                  onChange={() => setEditMaxAutonomy(option.maxAutonomy)}
+                                  className="mt-0.5 w-3.5 h-3.5 accent-[#2563EB] cursor-pointer"
+                                />
+                                <div className="space-y-1">
+                                  <div className="font-semibold text-[#0F172A]">
+                                    {MAX_AUTONOMY_VIEWS[option.maxAutonomy]}
+                                  </div>
+                                  <div className="text-[11px] text-[#64748B]">{option.desc}</div>
+                                  <div className="text-[11px] leading-relaxed space-y-0.5">
+                                    <div className="text-[#334155]">
+                                      <span className="font-semibold">可以：</span>
+                                      {boundary.can}
+                                    </div>
+                                    <div className="text-[#64748B]">
+                                      <span className="font-semibold">{boundary.wontLabel}：</span>
+                                      {boundary.wont}
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="text-[11px] text-[#64748B] mt-0.5">{option.desc}</div>
-                              </div>
-                            </label>
-                          ))}
+                              </label>
+                            );
+                          })}
                         </div>
                       ) : (
-                        <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1">
+                        <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1.5">
                           <div className="font-semibold text-[#0F172A]">
                             {MAX_AUTONOMY_VIEWS[autonomyOptions[0]?.maxAutonomy ?? ws.editable.maxAutonomy]}
                           </div>
                           <p className="text-[11px] text-[#64748B]">
                             {autonomyOptions[0]?.desc ?? ws.editable.maxAutonomyDesc}
                           </p>
+                          <div className="text-[11px] leading-relaxed space-y-0.5">
+                            <div className="text-[#334155]">
+                              <span className="font-semibold">可以：</span>
+                              {MAX_AUTONOMY_BOUNDARY_NOTES[
+                                autonomyOptions[0]?.maxAutonomy ?? ws.editable.maxAutonomy
+                              ].can}
+                            </div>
+                            <div className="text-[#64748B]">
+                              <span className="font-semibold">
+                                {MAX_AUTONOMY_BOUNDARY_NOTES[
+                                  autonomyOptions[0]?.maxAutonomy ?? ws.editable.maxAutonomy
+                                ].wontLabel}
+                                ：
+                              </span>
+                              {MAX_AUTONOMY_BOUNDARY_NOTES[
+                                autonomyOptions[0]?.maxAutonomy ?? ws.editable.maxAutonomy
+                              ].wont}
+                            </div>
+                          </div>
                           <p className="text-[11px] text-[#94A3B8]">
-                            V1.1 该能力模板的自主程度上限由平台控制，不开放更高自主。
+                            当前能力模板的行动边界由平台控制，不开放更高自主。
                           </p>
                         </div>
                       )}
                       <p className="text-[11px] text-[#94A3B8] leading-relaxed">
-                        自主程度只约束智能体的行为方式，永远不能提升用户权限。
+                        行动边界只约束智能体的行为方式，永远不能提升用户权限。
                       </p>
+                      <div className="pt-1 flex justify-end">{saveButton}</div>
                     </div>
-
-                    <div className="pt-1 flex justify-end">{saveButton}</div>
                   </div>
                 )}
               </div>
@@ -1542,15 +1648,17 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
         </main>
 
         {/* ─────────────────────────────────────────────────────────
-            COLUMN C. 右侧草稿速览（无 目标 / 引擎 / 运行状态）
+            COLUMN C. 右侧栏（V1.2 §22）：只负责 当前状态 + 生命周期 + 下一步操作。
+            工作定义主体在中央「当前工作定义」，不再在右栏重复
+            任务 / 范围 / 执行方式 / 判断原则 / 行动边界。
         ───────────────────────────────────────────────────────── */}
         <aside className="w-[290px] bg-white border-l border-[#E2E8F0] p-4 shrink-0 overflow-y-auto select-none space-y-4">
           <div className="pb-2 border-b border-[#F1F5F9]">
-            <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">当前草稿</h3>
+            <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">当前状态</h3>
             <p className="text-[11px] text-[#64748B] mt-0.5">
               {ws.editableSource === 'DRAFT'
-                ? '基于未发布草稿配置'
-                : '基于正式版本配置（编辑后生成草稿）'}
+                ? '当前展示未发布草稿配置'
+                : '当前展示正式版本配置（编辑后生成草稿）'}
             </p>
           </div>
 
@@ -1560,40 +1668,34 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
               <span className="font-bold text-[#0F172A]">{originLabel}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[#64748B]">支持任务</span>
-              <span className="font-bold text-[#0F172A]">
-                {enabledTaskCount}/{ws.editable.supportedTaskTemplates.length} 启用
+              <span className="text-[#64748B]">Owner</span>
+              <span className="font-bold text-[#0F172A] truncate max-w-[150px]" title={ws.editable.owner}>
+                {ws.editable.owner}
               </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[#64748B]">工作范围</span>
-              <span className="font-bold text-[#0F172A] truncate max-w-[150px]" title={scopeSummary}>
-                {scopeConfigured ? scopeSummary : '未配置'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[#64748B]">能力模式</span>
-              <span
-                className="font-bold text-[#2563EB] truncate max-w-[140px]"
-                title={ws.editable.capabilityPreset}
-              >
-                {ws.editable.capabilityPreset}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[#64748B]">模型策略</span>
-              <span className="font-medium text-[#0F172A]">
-                {currentPolicy?.modelPolicyName ?? ws.editable.modelPolicyId}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[#64748B]">自主程度</span>
-              <span className="font-medium text-[#0F172A]">{MAX_AUTONOMY_VIEWS[ws.editable.maxAutonomy]}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-[#64748B]">正式版本</span>
               <span className="font-mono font-semibold text-[#0F172A]">
                 {ws.formalVersion ?? <span className="text-[#94A3B8] font-sans">暂无</span>}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[#64748B]">草稿</span>
+              <span className="font-bold text-[#0F172A]">
+                {ws.formalVersion === null
+                  ? '未发布草稿'
+                  : ws.hasDraft
+                    ? '有未发布修改'
+                    : '无'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[#64748B]">最近更新</span>
+              <span
+                className="font-medium text-[#475569] truncate max-w-[150px]"
+                title={ws.draftUpdatedAt ?? ws.lastReleaseTime ?? ''}
+              >
+                {ws.draftUpdatedAt ?? ws.lastReleaseTime ?? '—'}
               </span>
             </div>
           </div>

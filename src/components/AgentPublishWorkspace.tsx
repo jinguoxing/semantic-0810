@@ -304,7 +304,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     {
       key: 'runtimeCompile',
       title: RELEASE_GATE_LABELS.runtimeCompile,
-      desc: `当前草稿已通过运行准备检查，可生成${runtimeEngine}运行配置（当前为模拟集成环境）。`
+      // V1.2 §35：普通 Gate 描述不突出 Runtime Provider；具体引擎只在检查详情展示
+      desc: '当前草稿已通过运行准备检查，可以生成所需运行配置。'
     },
     {
       key: 'runtimeDependencies',
@@ -607,10 +608,10 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       </div>
                       <span className="text-[10px] text-[#64748B] block truncate">
                         {formalVersion
-                          ? `${runtimeEngine} · ${
-                              isMockIntegration ? '模拟集成环境' : '正式运行环境'
-                            }`
-                          : `${runtimeEngine} · 尚未建立正式运行配置`}
+                          ? isMockIntegration
+                            ? '正式版本运行中 · 模拟集成环境'
+                            : '正式版本运行中'
+                          : '尚未建立正式运行配置'}
                       </span>
                     </div>
 
@@ -654,7 +655,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                     {!hasDraft
                       ? '当前没有未发布草稿，请返回定义工作区发起修改。'
                       : isFirstRelease
-                      ? `发布成功后将正式生成首发版本 ${targetNewVersion}，并建立 ${runtimeEngine} 运行时绑定（当前为模拟集成环境，正式运行接入待后续版本提供）。`
+                      ? `发布成功后将正式生成首发版本 ${targetNewVersion}，并建立正式运行绑定（当前为模拟集成环境，正式运行接入待后续版本提供）。`
                       : `发布成功后才会生成正式版本 ${targetNewVersion}；当前草稿不会影响正在运行的 ${formalVersion}。`}
                   </p>
                 </div>
@@ -799,8 +800,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       <div className="space-y-1">
                         <div className="text-[11px] text-[#64748B]">运行准备</div>
                         <div className="font-bold text-xs text-[#0F172A]">
-                          {validation?.runtimeCompile === 'PASSED' ? '已就绪' : '未就绪'}{' '}
-                          <span className="text-[10px] font-normal text-[#64748B]">({runtimeEngine})</span>
+                          {validation?.runtimeCompile === 'PASSED' ? '已就绪' : '未就绪'}
                         </div>
                         <div className="text-[10px] text-[#94A3B8]">基于当前草稿生成，不影响正式版本</div>
                       </div>
@@ -1435,7 +1435,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               <div className="p-3 bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-[11px] text-[#475569] leading-relaxed">
                 <strong>发布保障：</strong>{' '}
                 {isFirstRelease
-                  ? `发布将首次建立「${agentName}」在 ${runtimeEngine} 中的版本化运行绑定（当前为模拟集成环境）；发布后该版本成为当前正式版本，正式运行将在运行环境正式接入后生效。`
+                  ? `发布将首次建立「${agentName}」的版本化运行绑定（当前为模拟集成环境）；发布后该版本成为当前正式版本，正式运行将在运行环境正式接入后生效。`
                   : `候选版本先经运行准备校验与激活，全部成功后才切换正式版本；若任一步失败，线上正式版本 ${formalVersion} 保持不变，不受影响。`}
               </div>
             </div>

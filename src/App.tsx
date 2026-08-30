@@ -540,7 +540,7 @@ export default function App() {
             setCurrentNav('agent_definition');
             setViewTab('agent_definition');
             const name = currentSelectedAgent?.name || currentSelectedDefinition?.name || '智能体';
-            addToast('info', name, '已返回智能体定义工作区');
+            addToast('info', name, '已返回智能体工作定义');
           }}
           onBackToRegistry={() => {
             setCurrentNav('agents');
@@ -701,7 +701,7 @@ export default function App() {
             }
             setCurrentNav('agent_definition');
             setViewTab('agent_definition');
-            addToast('info', agent.name, `已载入「${agent.name}」智能体定义工作区`);
+            addToast('info', agent.name, `已载入「${agent.name}」智能体工作定义`);
           }}
           onOpenPublishWorkspace={(agent, opts) => {
             setSelectedAgentId(agent.id);

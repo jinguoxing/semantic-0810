@@ -120,7 +120,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
   initialStep = 1,
   initialTemplateId = null
 }) => {
-  // Stage state: 1 = 选择能力模板, 2 = 定义用途与工作范围
+  // Stage state: 1 = 选择能力模板, 2 = 确认用途与工作范围
   const [currentStep, setCurrentStep] = useState<1 | 2>(initialStep);
 
   // Template selection state: null by default (unselected), require explicit selection
@@ -254,7 +254,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               创建自定义智能体
             </h2>
             <p className="text-xs text-[#64748B] leading-relaxed max-w-[760px]">
-              选择一个能力模板作为起点，并定义该智能体的业务用途与工作范围。创建后先生成未发布草稿，通过发布验证并正式发布后才会正式生效。
+              选择一个能力模板作为起点，并确认该智能体的业务用途与工作范围。创建后先生成未发布草稿，通过发布验证并正式发布后才会正式生效。
             </p>
           </div>
           <button
@@ -292,7 +292,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
 
             <span className="text-[#CBD5E1] text-xs">→</span>
 
-            {/* Step 2: 定义用途与工作范围 */}
+            {/* Step 2: 确认用途与工作范围 */}
             <div
               className={`flex items-center space-x-1.5 ${
                 currentStep === 2 ? 'text-[#2563EB] font-semibold' : 'text-[#94A3B8]'
@@ -303,7 +303,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                   currentStep === 2 ? 'bg-[#2563EB]' : 'bg-[#CBD5E1]'
                 }`}
               />
-              <span>定义用途与工作范围</span>
+              <span>确认用途与工作范围</span>
             </div>
           </div>
 
@@ -325,7 +325,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
         {/* ─────────────────────────────────────────────────────────
             3. DRAWER BODY
             Stage 1: 选择模板 (Selection Rows + Selected Preset Summary)
-            Stage 2: 定义用途与工作范围 (Basic Info + Work Scope)
+            Stage 2: 确认用途与工作范围 (Basic Info + Work Scope)
         ───────────────────────────────────────────────────────── */}
         {currentStep === 1 ? (
           <div className="flex-1 overflow-y-auto px-8 py-6 bg-white space-y-6">
@@ -337,7 +337,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                 选择能力模板
               </h3>
               <p className="text-xs text-[#64748B] leading-relaxed">
-                根据主要职责选择一个起点。模板提供经过平台验证的初始能力边界，创建后可在模板允许范围内继续调整。
+                根据主要职责选择一个起点。模板提供经过平台验证的初始工作边界，创建后可在模板允许范围内继续调整。
               </p>
               <p className="text-xs text-[#94A3B8] leading-relaxed">
                 一个智能体可以承担多项正式任务，不需要为每个功能单独创建 Agent。
@@ -517,7 +517,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                 {/* Auxiliary Note */}
                 <div className="pt-2 border-t border-[#E2E8F0] flex items-center space-x-1.5 text-[11px] text-[#64748B]">
                   <Info className="w-3.5 h-3.5 text-[#2563EB] shrink-0" />
-                  <span>模板只提供推荐初始值，创建 Draft 后可继续调整。</span>
+                  <span>模板提供经过平台验证的初始工作边界，创建后可在模板允许范围内继续调整。</span>
                 </div>
               </div>
             ) : (
@@ -534,7 +534,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
           </div>
         ) : (
           /* ─────────────────────────────────────────────────────
-              STAGE 2: 定义用途与工作范围 (PURPOSE & WORK SCOPE FORM)
+              STAGE 2 (确认用途与工作范围): Basic Info + Work Scope
           ───────────────────────────────────────────────────── */
           (() => {
             // Bug B 修复：未显式选择模板时不隐式回退到任何预设，给出引导态
@@ -572,10 +572,12 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
 
                   <div className="space-y-1">
                     <h3 className="font-bold text-xs text-[#0F172A] tracking-tight">
-                      定义用途与工作范围
+                      确认用途与工作范围
                     </h3>
-                    <p className="text-xs text-[#64748B]">
-                      填写智能体的基础业务身份，并确定它的实际工作范围。任务绑定与运行配置将在创建后在定义工作区继续配置。
+                    <p className="text-xs text-[#64748B] leading-relaxed">
+                      Semovix 已根据所选能力模板生成推荐定义。
+                      请确认智能体名称、主要职责、责任组织和工作范围；
+                      创建后仍可在模板允许范围内继续调整。
                     </p>
                   </div>
 
@@ -828,7 +830,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
                   </div>
 
                   <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg text-[11px] text-[#1E40AF] leading-relaxed">
-                    以上是能力模板提供的初始定义。创建草稿后，可以在“智能体定义”工作区继续调整支持任务、工作范围、能力、模型策略与自主程度。
+                    以上是能力模板提供的初始工作定义。创建后可在智能体工作定义页面继续检查和调整。
                   </div>
                 </div>
               </div>
@@ -876,19 +878,24 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           ) : (
-            <button
-              type="submit"
-              form="create-agent-form"
-              disabled={isScopeIncomplete}
-              className={`px-5 py-2 rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors shadow-2xs ${
-                isScopeIncomplete
-                  ? 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'
-                  : 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white cursor-pointer'
-              }`}
-            >
-              <span>创建草稿并继续配置</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex flex-col items-end space-y-1.5">
+              <button
+                type="submit"
+                form="create-agent-form"
+                disabled={isScopeIncomplete}
+                className={`px-5 py-2 rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors shadow-2xs ${
+                  isScopeIncomplete
+                    ? 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'
+                    : 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white cursor-pointer'
+                }`}
+              >
+                <span>创建智能体草稿</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-[10px] text-[#94A3B8] max-w-[430px] text-right leading-relaxed">
+                创建后进入智能体工作定义，可继续检查和调整工作任务、数据与知识范围、执行方式及行动边界。
+              </span>
+            </div>
           )}
         </div>
       </div>

@@ -987,7 +987,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
 
       {/* ─────────────────────────────────────────────────────────────
           A02: CREATE CUSTOM AGENT DRAWER (880–940px)
-          Stage 1: 选择能力模板 -> Stage 2: 定义用途与工作范围
+          Stage 1: 选择能力模板 -> Stage 2: 确认用途与工作范围
       ───────────────────────────────────────────────────────────── */}
       <CreateAgentDrawer
         isOpen={isCreateDrawerOpen}
@@ -1011,7 +1011,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
           addToast?.(
             'success',
             '已创建智能体草稿',
-            `已基于模板生成「${agentData.name}」未发布草稿，已进入定义工作区继续配置`
+            `已基于能力模板生成「${agentData.name}」未发布草稿，已进入智能体工作定义`
           );
 
           if (onOpenAgentDefinition) {
