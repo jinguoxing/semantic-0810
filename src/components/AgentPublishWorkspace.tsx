@@ -35,11 +35,24 @@ import {
   MAX_AUTONOMY_VIEWS
 } from '../domain/agent';
 
+/** A04 左侧导航分区 Key（§03：内部 Key 保持不变，仅产品化展示名） */
+export type AgentPublishSectionKey =
+  | 'release_overview'
+  | 'config_check'
+  | 'test_run'
+  | 'quality_eval'
+  | 'release_history';
+
 interface AgentPublishWorkspaceProps {
   /** P0: 必须由外部传入 agentId，本工作区从 Agent Domain 读取全部事实 */
   agentId: string;
   agent?: AgentItem;
   definition?: AgentDefinitionDetail;
+  /**
+   * 初始分区（§15）：A01「版本记录」进入时传 release_history 直达发布记录；
+   * 普通进入发布验证不传（默认 release_overview）。
+   */
+  initialSection?: AgentPublishSectionKey;
   onBackToDefinition: () => void;
   onBackToRegistry?: () => void;
   onPublishSuccess?: (newVersion: string) => void;
@@ -81,6 +94,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
   agentId,
   agent,
   definition,
+  initialSection,
   onBackToDefinition,
   onBackToRegistry,
   onPublishSuccess,
@@ -186,10 +200,13 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
       ? 'failed'
       : 'pending';
 
-  // Left Navigation State: Release Section Workspace
-  const [activeSection, setActiveSection] = useState<
-    'release_overview' | 'config_check' | 'test_run' | 'quality_eval' | 'release_history'
-  >('release_overview');
+  // Left Navigation State: Release Section Workspace（§15：initialSection 直达分区，默认发布概览）
+  const [activeSection, setActiveSection] = useState<AgentPublishSectionKey>(
+    initialSection ?? 'release_overview'
+  );
+  useEffect(() => {
+    if (initialSection) setActiveSection(initialSection);
+  }, [initialSection]);
 
   // Publish Modal State
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
@@ -230,8 +247,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
         'error',
         '发布失败，正式版本保持不变',
         error instanceof Error
-          ? `${error.message}。当前正式版本 ${formalVersion || '（无）'} 保持 ACTIVE 不受影响。`
-          : `发布过程中断，当前正式版本 ${formalVersion || '（无）'} 保持 ACTIVE 不受影响。`
+          ? `${error.message}。当前正式版本 ${formalVersion || '（无）'} 保持不变，不受影响。`
+          : `发布过程中断，当前正式版本 ${formalVersion || '（无）'} 保持不变，不受影响。`
       );
     } finally {
       setIsPublishing(false);
@@ -268,7 +285,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
             <AlertCircle className="w-8 h-8 text-[#CBD5E1] mx-auto" />
             <div className="text-sm font-bold text-[#0F172A]">未找到智能体定义</div>
             <p className="text-xs text-[#64748B]">
-              Agent Repository 中不存在 ID 为 <span className="font-mono">{agentId}</span> 的智能体。
+              智能体注册表中不存在 ID 为 <span className="font-mono">{agentId}</span> 的智能体。
             </p>
           </div>
         </div>
@@ -276,7 +293,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     );
   }
 
-  // TASK 21：五道门使用普通用户名称（配置检查 / 运行准备 / 运行依赖检查 / 测试运行 / 质量评估）；
+  // TASK 21：五道门使用普通用户名称（配置检查 / 运行准备 / 运行依赖检查 / 基础运行检查 / 发布质量基线）；
   // Runtime 编译 / Runtime Projection / Runtime 依赖等技术细节只出现在说明或详情中
   const gateList: Array<{ key: keyof AgentReleaseValidation; title: string; desc: string }> = [
     {
@@ -287,17 +304,17 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
     {
       key: 'runtimeCompile',
       title: RELEASE_GATE_LABELS.runtimeCompile,
-      desc: `当前草稿已通过运行准备检查，可生成${runtimeEngine}运行配置（当前为原型投影）。`
+      desc: `当前草稿已通过运行准备检查，可生成${runtimeEngine}运行配置（当前为模拟集成环境）。`
     },
     {
       key: 'runtimeDependencies',
       title: RELEASE_GATE_LABELS.runtimeDependencies,
-      desc: '知识范围、技能与模型策略等运行依赖均可用。'
+      desc: '工作范围、模型策略与运行配置依赖均已通过检查。'
     },
     {
       key: 'testRun',
       title: RELEASE_GATE_LABELS.testRun,
-      desc: '基础运行检查：草稿具备可执行的运行配置与启用任务（完整测试套件待测试引擎接入）。'
+      desc: '基础运行检查：草稿具备可执行的运行配置与启用任务。'
     },
     {
       key: 'qualityEvaluation',
@@ -342,11 +359,11 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                 {agentName}
               </span>
               <span>/</span>
-              <span className="text-[#0F172A] font-medium">测试与发布</span>
+              <span className="text-[#0F172A] font-medium">发布验证</span>
             </div>
             <div className="flex items-center space-x-2 mt-0.5">
               <h1 className="text-sm font-bold text-[#0F172A] tracking-tight truncate">
-                {agentName} · 测试与发布
+                {agentName} · 发布验证
               </h1>
               <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-blue-50 text-[#2563EB] border border-blue-200/60 shrink-0">
                 {kindLabel}
@@ -430,7 +447,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
       {/* Sub-header Description bar */}
       <div className="bg-white border-b border-[#E2E8F0] px-6 py-2 text-xs text-[#64748B] flex items-center justify-between">
         <p className="truncate">
-          在正式发布前，对当前草稿的配置、运行准备、测试结果与质量基线进行统一验证。
+          在正式发布前，对当前草稿的配置、运行准备、基础运行检查与发布质量基线进行统一验证。
         </p>
         <span className="text-[11px] font-mono text-[#94A3B8] hidden md:inline">
           发布检查 {passedGateCount}/5 {canPublish ? '通过' : '未完成'} · 目标版本 {targetNewVersion}
@@ -487,7 +504,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               </div>
             </button>
 
-            {/* Nav 3: 测试运行 */}
+            {/* Nav 3: 基础运行检查（§03：产品化命名，内部 Key test_run 不变） */}
             <button
               onClick={() => setActiveSection('test_run')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-xs text-left transition-all cursor-pointer relative ${
@@ -501,14 +518,14 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               )}
               <PlayCircle className="w-3.5 h-3.5 shrink-0" />
               <div className="flex items-center justify-between flex-1 min-w-0">
-                <span>测试运行</span>
+                <span>基础运行检查</span>
                 {validation && validation.testRun === 'PASSED' && (
                   <Check className="w-3 h-3 text-[#16A36A]" />
                 )}
               </div>
             </button>
 
-            {/* Nav 4: 质量评估 */}
+            {/* Nav 4: 发布质量基线（§03：产品化命名，内部 Key quality_eval 不变） */}
             <button
               onClick={() => setActiveSection('quality_eval')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-md text-xs text-left transition-all cursor-pointer relative ${
@@ -522,7 +539,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               )}
               <BarChart3 className="w-3.5 h-3.5 shrink-0" />
               <div className="flex items-center justify-between flex-1 min-w-0">
-                <span>质量评估</span>
+                <span>发布质量基线</span>
                 {validation && validation.qualityEvaluation === 'PASSED' && (
                   <Check className="w-3 h-3 text-[#16A36A]" />
                 )}
@@ -550,7 +567,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
           <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-[11px] text-[#64748B] space-y-1">
             <div className="font-semibold text-[#0F172A] flex items-center space-x-1">
               <Shield className="w-3 h-3 text-[#2563EB]" />
-              <span>安全发布门控</span>
+              <span>安全发布保障</span>
             </div>
             <p className="text-[10px] text-[#94A3B8] leading-tight">
               若发布遇阻或中断，线上正式版将自动维持原状，杜绝环境降级。
@@ -591,7 +608,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       <span className="text-[10px] text-[#64748B] block truncate">
                         {formalVersion
                           ? `${runtimeEngine} · ${
-                              isMockIntegration ? 'MOCK_RUNTIME 投影' : '正式运行配置'
+                              isMockIntegration ? '模拟集成环境' : '正式运行环境'
                             }`
                           : `${runtimeEngine} · 尚未建立正式运行配置`}
                       </span>
@@ -637,7 +654,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                     {!hasDraft
                       ? '当前没有未发布草稿，请返回定义工作区发起修改。'
                       : isFirstRelease
-                      ? `发布成功后将正式生成首发版本 ${targetNewVersion}，并建立 ${runtimeEngine} 运行时绑定（当前为 MOCK_RUNTIME 投影，真实 API 待接入）。`
+                      ? `发布成功后将正式生成首发版本 ${targetNewVersion}，并建立 ${runtimeEngine} 运行时绑定（当前为模拟集成环境，正式运行接入待后续版本提供）。`
                       : `发布成功后才会生成正式版本 ${targetNewVersion}；当前草稿不会影响正在运行的 ${formalVersion}。`}
                   </p>
                 </div>
@@ -785,12 +802,12 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           {validation?.runtimeCompile === 'PASSED' ? '已就绪' : '未就绪'}{' '}
                           <span className="text-[10px] font-normal text-[#64748B]">({runtimeEngine})</span>
                         </div>
-                        <div className="text-[10px] text-[#94A3B8]">发布前验证副本</div>
+                        <div className="text-[10px] text-[#94A3B8]">基于当前草稿生成，不影响正式版本</div>
                       </div>
 
                       {/* Sub-item 3 */}
                       <div className="space-y-1">
-                        <div className="text-[11px] text-[#64748B]">测试运行</div>
+                        <div className="text-[11px] text-[#64748B]">基础运行检查</div>
                         <div className="font-bold text-xs text-[#0F172A]">
                           {validation?.testRun === 'PASSED'
                             ? '基础检查通过'
@@ -802,13 +819,13 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           onClick={() => setActiveSection('test_run')}
                           className="text-[11px] text-[#2563EB] hover:underline cursor-pointer"
                         >
-                          查看测试结果 →
+                          查看基础运行检查 →
                         </button>
                       </div>
 
                       {/* Sub-item 4 */}
                       <div className="space-y-1">
-                        <div className="text-[11px] text-[#64748B]">质量评估</div>
+                        <div className="text-[11px] text-[#64748B]">发布质量基线</div>
                         <div className="font-bold text-xs text-[#0F172A]">
                           {validation?.qualityEvaluation === 'PASSED' ? '满足发布标准' : validation?.qualityEvaluation === 'FAILED' ? '未达基线' : '待评估'}
                         </div>
@@ -816,17 +833,17 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           onClick={() => setActiveSection('quality_eval')}
                           className="text-[11px] text-[#2563EB] hover:underline cursor-pointer"
                         >
-                          查看质量评估 →
+                          查看发布质量基线 →
                         </button>
                       </div>
                     </div>
 
                     {/* 质量评估事实说明（TASK 20：删除固定假百分比，不虚构数值） */}
                     <div className="pt-3 border-t border-[#F1F5F9] space-y-1.5">
-                      <div className="text-[11px] text-[#0F172A] font-semibold">质量评估说明</div>
+                      <div className="text-[11px] text-[#0F172A] font-semibold">发布质量基线说明</div>
                       <p className="text-[11px] text-[#64748B] leading-relaxed">
                         当前质量评估基于：配置完整性、行为边界、运行依赖、发布策略基线。
-                        真实离线评测指标将在 Evaluation Backend 接入后展示。
+                        当前版本仅执行发布质量基线检查，暂不提供离线评测指标。
                       </p>
                     </div>
                   </div>
@@ -838,13 +855,13 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                 <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
                   <div>
                     <h2 className="text-base font-bold text-[#0F172A] tracking-tight">
-                      {activeSection === 'config_check' && '配置检查 (Configuration Validation)'}
-                      {activeSection === 'test_run' && '测试运行 (Test Run & Verification)'}
-                      {activeSection === 'quality_eval' && '质量评估 (Quality Baseline Evaluation)'}
-                      {activeSection === 'release_history' && '发布记录 (Version Release History)'}
+                      {activeSection === 'config_check' && '配置检查'}
+                      {activeSection === 'test_run' && '基础运行检查'}
+                      {activeSection === 'quality_eval' && '发布质量基线'}
+                      {activeSection === 'release_history' && '发布记录'}
                     </h2>
                     <p className="text-xs text-[#64748B] mt-0.5">
-                      {agentName} 发布前验证 · 独立 Section 视图
+                      {agentName} 发布验证 · 独立分区视图
                     </p>
                   </div>
                   <button
@@ -896,19 +913,25 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                         <p className="text-[11px] text-[#2563EB]">
                           目标引擎 {runtimeEngine} ·{' '}
                           {isMockIntegration
-                            ? 'MOCK_RUNTIME 投影（真实 Runtime API 未接入，仅本地结构校验）'
-                            : '已完成协议编译'}
-                          ；运行依赖检查{validation?.runtimeDependencies === 'PASSED' ? '通过' : '未通过'}。
+                            ? '模拟集成环境（真实运行 API 未接入，仅本地结构校验）'
+                            : '已完成正式运行协议校验'}
+                          ；运行依赖检查
+                          {validation?.runtimeDependencies === 'PASSED'
+                            ? '通过'
+                            : validation?.runtimeDependencies === 'FAILED'
+                              ? '未通过'
+                              : '待检查'}
+                          。
                         </p>
                       </div>
 
-                      {/* Commit 08 TASK 24：Active Binding 与 currentPublishedVersion 错配 → 弱提示 */}
+                      {/* Commit 08 TASK 24：运行绑定与 currentPublishedVersion 错配 → 弱提示（§19：产品语言） */}
                       {formalVersion &&
                         (!domain.binding || domain.binding.agentVersion !== formalVersion) && (
                           <div className="p-3 bg-amber-50 border border-amber-200 rounded space-y-0.5">
                             <span className="font-medium text-amber-800">运行绑定需关注</span>
                             <p className="text-[11px] text-amber-700">
-                              当前正式版本 {formalVersion} 与 Active Binding（
+                              当前正式版本 {formalVersion} 与运行绑定版本（
                               {domain.binding?.agentVersion ?? '无'}）不一致，请在发布前确认运行绑定状态。
                             </p>
                           </div>
@@ -932,8 +955,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           : '待检查'})
                       </div>
                       <p className="text-[11px] text-[#64748B]">
-                        当前仅验证草稿具备基本可运行条件，尚未执行真实业务测试用例。
-                        完整测试、回归集与结果对比将在 Test Harness 接入后提供。
+                        当前版本仅提供基础运行检查，验证草稿具备基本可运行条件；尚未执行真实业务测试用例。
                       </p>
                     </div>
 
@@ -943,12 +965,13 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                       </div>
                     ) : (
                       <>
-                        {/* 真实检查事实：全部来自 Domain Validation 与当前 Draft */}
+                        {/* 真实检查事实：全部来自 Domain Validation 与当前 Draft
+                            （§17：不显示 PASSED/FAILED/PENDING 原始枚举 → 通过/未通过/待检查） */}
                         <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-[#0F172A]">运行配置生成</span>
                             <span
-                              className={`font-mono font-bold ${
+                              className={`font-bold ${
                                 validation?.runtimeCompile === 'PASSED'
                                   ? 'text-[#16A36A]'
                                   : validation?.runtimeCompile === 'FAILED'
@@ -956,13 +979,17 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                                   : 'text-[#94A3B8]'
                               }`}
                             >
-                              {validation?.runtimeCompile ?? 'PENDING'}
+                              {validation?.runtimeCompile === 'PASSED'
+                                ? '通过'
+                                : validation?.runtimeCompile === 'FAILED'
+                                ? '未通过'
+                                : '待检查'}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-[#0F172A]">运行依赖</span>
                             <span
-                              className={`font-mono font-bold ${
+                              className={`font-bold ${
                                 validation?.runtimeDependencies === 'PASSED'
                                   ? 'text-[#16A36A]'
                                   : validation?.runtimeDependencies === 'FAILED'
@@ -970,7 +997,11 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                                   : 'text-[#94A3B8]'
                               }`}
                             >
-                              {validation?.runtimeDependencies ?? 'PENDING'}
+                              {validation?.runtimeDependencies === 'PASSED'
+                                ? '通过'
+                                : validation?.runtimeDependencies === 'FAILED'
+                                ? '未通过'
+                                : '待检查'}
                             </span>
                           </div>
                           <div className="flex items-center justify-between border-t border-[#F1F5F9] pt-2">
@@ -979,12 +1010,12 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-[#0F172A]">待发布配置</span>
-                            <span className="text-[#475569]">当前 Draft</span>
+                            <span className="text-[#475569]">当前草稿</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="font-medium text-[#0F172A]">集成模式</span>
-                            <span className="font-mono text-[#475569]">
-                              {isMockIntegration ? 'MOCK_RUNTIME' : 'PRODUCTION'}
+                            <span className="font-medium text-[#0F172A]">运行环境</span>
+                            <span className="text-[#475569]">
+                              {isMockIntegration ? '模拟集成环境' : '正式运行环境'}
                             </span>
                           </div>
                         </div>
@@ -1015,9 +1046,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                         </div>
 
                         <p className="text-[10px] text-[#94A3B8] leading-relaxed">
-                          说明：以上结果为发布前的基础运行条件检查（Smoke Readiness），
-                          不代表任何业务测试用例已被执行；测试用例、Prompt、回答与引用命中等
-                          真实执行数据将在 Test Harness 接入后展示。
+                          说明：以上为发布前的基础运行检查结果，不代表任何业务测试用例已被执行；
+                          真实业务测试用例与执行结果将在后续版本提供。
                         </p>
                       </>
                     )}
@@ -1045,17 +1075,17 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                     {/* TASK 19/20：V1.1 为 Policy / Configuration Baseline Evaluation，
                         不虚构评测百分比；真实 Eval Backend 接入后替换本视图内部实现 */}
                     <div className="space-y-2">
-                      <div className="text-[11px] font-semibold text-[#0F172A]">当前质量评估基于</div>
+                      <div className="text-[11px] font-semibold text-[#0F172A]">当前发布质量基线基于</div>
                       <ul className="list-disc list-inside space-y-1 text-[11px] text-[#475569]">
                         <li>配置完整性：定义、任务、工作范围、能力模式与模型策略全部有效</li>
                         <li>行为边界：角色行为说明完整，自主程度不超过能力模板上限</li>
                         <li>运行依赖：目标运行时的依赖检查已通过</li>
-                        <li>发布策略基线：满足平台发布门禁策略</li>
+                        <li>发布策略基线：满足平台发布检查策略</li>
                       </ul>
                     </div>
 
                     <p className="text-[10px] text-[#94A3B8]">
-                      真实离线评测指标将在 Evaluation Backend 接入后展示；质量发布门以发布检查结果为准。
+                      当前版本仅执行发布质量基线检查，暂不提供离线评测指标；质量发布门以发布检查结果为准。
                     </p>
                   </div>
                 )}
@@ -1076,7 +1106,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                             <th className="py-2.5 px-4 font-semibold">版本</th>
                             <th className="py-2.5 px-4 font-semibold">状态</th>
                             <th className="py-2.5 px-4 font-semibold">发布时间</th>
-                            <th className="py-2.5 px-4 font-semibold">Runtime</th>
+                            <th className="py-2.5 px-4 font-semibold">运行环境</th>
                             <th className="py-2.5 px-4 font-semibold">说明</th>
                           </tr>
                         </thead>
@@ -1100,8 +1130,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
                                   )}
                                 </td>
                                 <td className="py-3 px-4 text-[#475569]">{v.publishedAt}</td>
-                                <td className="py-3 px-4 font-mono text-[#64748B]">
-                                  {v.snapshot.runtimeTarget === 'WEKNORA' ? 'WeKnora · MOCK_RUNTIME' : 'Semovix Native'}
+                                <td className="py-3 px-4 text-[#64748B]">
+                                  {v.snapshot.runtimeTarget === 'WEKNORA' ? 'WeKnora · 模拟集成环境' : 'Semovix Native'}
                                 </td>
                                 <td className="py-3 px-4 text-[#334155]">{v.releaseNotes || '—'}</td>
                               </tr>
@@ -1196,15 +1226,15 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               </div>
               <p className="text-[10px] text-[#94A3B8] leading-tight">
                 {isMockIntegration
-                  ? '当前为 MOCK_RUNTIME 验证环境，仅用于发布前验证。'
+                  ? '当前为模拟集成环境，仅用于验证发布流程。'
                   : '发布前验证基于正式运行协议完成。'}
               </p>
             </div>
 
-            {/* Release Gate Highlight */}
+            {/* Release Gate Highlight（§20：产品语言「发布检查」） */}
             <div className="pt-2 border-t border-[#F1F5F9] space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[#64748B]">发布门</span>
+                <span className="text-[11px] text-[#64748B]">发布检查</span>
                 <span className="font-bold text-[#0F172A]">{passedGateCount} / 5 已通过</span>
               </div>
 
@@ -1216,7 +1246,7 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               ) : (
                 <div className="p-2.5 bg-amber-50 border border-amber-200 text-amber-700 rounded text-xs font-bold flex items-center justify-center space-x-1.5">
                   <Clock className="w-3.5 h-3.5" />
-                  <span>门禁未满足 ｜ 不可发布</span>
+                  <span>发布检查未通过 ｜ 暂不可发布</span>
                 </div>
               )}
             </div>
@@ -1405,8 +1435,8 @@ export const AgentPublishWorkspace: React.FC<AgentPublishWorkspaceProps> = ({
               <div className="p-3 bg-[#F1F5F9] border border-[#E2E8F0] rounded-lg text-[11px] text-[#475569] leading-relaxed">
                 <strong>发布保障：</strong>{' '}
                 {isFirstRelease
-                  ? `发布将首次建立「${agentName}」在 ${runtimeEngine} 中的版本化运行绑定（当前为 MOCK_RUNTIME 模拟集成）；发布后该版本成为当前正式版本，生产运行将在 Runtime 正式接入后生效。`
-                  : `候选版本先经 Runtime 校验与激活，全部成功后才切换正式版本；若任一步失败，线上正式版本 ${formalVersion} 保持 ACTIVE 不受影响。`}
+                  ? `发布将首次建立「${agentName}」在 ${runtimeEngine} 中的版本化运行绑定（当前为模拟集成环境）；发布后该版本成为当前正式版本，正式运行将在运行环境正式接入后生效。`
+                  : `候选版本先经运行准备校验与激活，全部成功后才切换正式版本；若任一步失败，线上正式版本 ${formalVersion} 保持不变，不受影响。`}
               </div>
             </div>
 

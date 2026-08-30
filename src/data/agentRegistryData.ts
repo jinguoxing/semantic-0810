@@ -586,19 +586,21 @@ export function createAgentDraft(agentData: {
       { field: '初始草稿', changeText: `基于能力模板「${isData ? '数据查找与分析' : isGovernance ? '语义治理与审查' : '企业知识问答与研究'}」生成未发布草稿`, tag: 'NEW DRAFT', isNew: true },
       { field: '工作范围', changeText: scopeDesc, tag: 'SCOPE', isNew: true }
     ],
+    // §04/§05：testSandbox 仅保留结构占位，不再伪造「沙盒执行通过」类测试结论；
+    // 真实发布结论以 A04 发布验证（Domain Release Validation）为准
     testSandbox: {
-      welcomeMessage: `您好，我是新创建的草稿智能体「${agentData.name} (未发布草稿)」。工作范围：${scopeDesc}。当前运行于测试沙盒环境，尚未建立正式运行配置。请输入测试语句验证意图理解与任务支持。`,
+      welcomeMessage: `您好，我是新创建的草稿智能体「${agentData.name} (未发布草稿)」。工作范围：${scopeDesc}。当前尚未建立正式运行配置，需通过发布验证并正式发布后才会生成首个正式版本。`,
       suggestedQueries,
       sampleResponses: [
         {
           trigger: '测试',
-          reply: `[沙盒试运行反馈]\n已收到对「${agentData.name}」的测试请求。\n当前草稿配置：\n- 目标运行引擎：${runtimeEngine}\n- 支持任务：${allTaskNames.join('、')}\n- 能力模式：${capabilityMode}\n- 正式版本：尚未发布\n沙盒执行通过，可进入发布验证工作区发布为首个正式版本 (v1.0)。`,
-          sources: ['草稿测试沙盒 (Sandbox Execution)']
+          reply: `已收到对「${agentData.name}」的查看请求。\n当前草稿配置：\n- 目标运行引擎：${runtimeEngine}\n- 支持任务：${allTaskNames.join('、')}\n- 能力模式：${capabilityMode}\n- 正式版本：尚未发布\n当前版本尚未执行真实业务测试，需进入发布验证完成基础运行检查与发布质量基线检查。`,
+          sources: ['当前草稿配置（未执行真实测试）']
         }
       ],
       defaultResponse: {
-        reply: `[沙盒试运行反馈] 已接收指令。智能体「${agentData.name}」基于模板初始配置解析成功，待发布正式版本后建立线上生产运行。`,
-        sources: ['草稿测试沙盒 (Sandbox Execution)']
+        reply: `已接收指令。智能体「${agentData.name}」基于模板初始配置解析成功，待通过发布验证并发布正式版本后建立线上运行。`,
+        sources: ['当前草稿配置（未执行真实测试）']
       }
     }
   };

@@ -41,6 +41,7 @@ import {
 import { agentService, agentSelectors } from '../domain/agent';
 import { getTaskTemplateView } from '../domain/agent/agentTypes';
 import { CreateAgentDrawer } from './CreateAgentDrawer';
+import type { AgentPublishSectionKey } from './AgentPublishWorkspace';
 
 interface AgentRegistryWorkspaceProps {
   agents?: AgentItem[];
@@ -51,8 +52,12 @@ interface AgentRegistryWorkspaceProps {
   onNavigateToMetrics?: () => void;
   onNavigateToMarketplace?: () => void;
   onOpenAgentDefinition?: (agent: AgentItem, definition?: AgentDefinitionDetail) => void;
-  /** 前往测试与发布工作区 (A04 是唯一发布入口，Registry 不再本地发布) */
-  onOpenPublishWorkspace?: (agent: AgentItem) => void;
+  /**
+   * 前往发布验证工作区 (A04 是唯一发布入口，Registry 不再本地发布)。
+   * opts.initialSection 用于直达分区（§15：A01「版本记录」→ release_history）；
+   * 缺省进入 release_overview。
+   */
+  onOpenPublishWorkspace?: (agent: AgentItem, opts?: { initialSection?: AgentPublishSectionKey }) => void;
   initialOpenCreateDrawer?: boolean;
 }
 
@@ -171,11 +176,13 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
       return true;
     });
 
+  // §11：列表事实由 Domain 投影实时读取，刷新只是重读当前状态——
+  // 不宣称「已同步 / 已更新至最新」，Toast 只说明页面状态已刷新
   const handleRefresh = () => {
     setIsRefreshing(true);
     setTimeout(() => {
       setIsRefreshing(false);
-      addToast?.('success', '状态已同步', '所有智能体的正式版本与状态已更新至最新');
+      addToast?.('info', '页面状态已刷新', '已重新读取当前智能体状态。');
     }, 450);
   };
 
@@ -385,6 +392,8 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                   <option value="NORMAL">正常</option>
                   <option value="UNPUBLISHED">未发布</option>
                   <option value="PENDING_CHANGES">有未发布修改</option>
+                  <option value="NEEDS_ATTENTION">需关注</option>
+                  <option value="DISABLED">已停用</option>
                 </select>
                 <ChevronDown className="w-3 h-3 text-[#94A3B8] absolute right-2 top-2.5 pointer-events-none" />
               </div>
@@ -411,7 +420,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                 </div>
                 <div>
                   <div className="text-xs font-bold text-[#1E40AF]">
-                    {displayAgents.filter((a) => a.hasDraft).length} 个智能体有未发布修改
+                    {displayAgents.filter((a) => a.hasDraft).length} 个智能体有待处理草稿
                   </div>
                   <div className="text-xs text-[#3B82F6] mt-0.5 leading-relaxed">
                     {displayAgents
@@ -419,8 +428,8 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                       .map(
                         (a) =>
                           a.formalVersion
-                            ? `${a.name} 当前正式版本 ${a.formalVersion} 仍正常使用，存在未发布草稿`
-                            : `${a.name} 为新创建智能体，尚未发布首个正式版本`
+                            ? `${a.name} 当前正式版本 ${a.formalVersion} 仍正常使用，存在未发布草稿。`
+                            : `${a.name} 为新创建智能体，尚未发布首个正式版本。`
                       )
                       .join('；')}
                   </div>
@@ -643,13 +652,13 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                                 <span>查看草稿</span>
                               </button>
                             )}
-                            {/* Implementation Freeze §5：版本记录进入 A04 发布工作区
-                                （真实 AgentVersion 历史），不再弹固定数量 Toast */}
+                            {/* Implementation Freeze §5 + §15：版本记录进入 A04 发布验证工作区
+                                并直达「发布记录」分区（真实 AgentVersion 历史），不再弹固定数量 Toast */}
                             <button
                               onClick={() => {
                                 setActiveActionMenuId(null);
                                 if (onOpenPublishWorkspace) {
-                                  onOpenPublishWorkspace(agent);
+                                  onOpenPublishWorkspace(agent, { initialSection: 'release_history' });
                                 } else {
                                   onOpenAgentDefinition?.(agent);
                                 }
@@ -675,9 +684,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
               <span className="font-medium text-[#475569]">
                 共 {filteredAgents.length} 个智能体
               </span>
-              <span className="text-[11px] text-[#94A3B8]">
-                Semovix 智能体平台 · 全量在线
-              </span>
+              <span className="text-[11px] text-[#94A3B8]">状态以当前列表为准</span>
             </div>
           </div>
         </div>
@@ -739,8 +746,8 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                     </div>
                     <p className="text-[#3B82F6] text-[11px]">
                       {hasFormal
-                        ? `该草稿已通过本地离线评估集，尚未发布，线上用户仍由 ${activeDraftAgent.formalVersion} 正式版服务。`
-                        : '该智能体为新创建草稿，配置尚未发布为正式版本。'}
+                        ? '该草稿尚未发布，当前正式版本仍保持生效。草稿将在发布验证通过后才会成为新的正式版本。'
+                        : '该智能体目前仅存在未发布草稿，通过发布验证并正式发布后才会生成首个正式版本。'}
                     </p>
                   </div>
 
@@ -768,7 +775,7 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                           </span>
                         </div>
                         <p className="text-xs text-[#475569] pl-3.5">
-                          已初始化支持任务与基础配置，进入定义工作区可继续进行沙盒测试与发布。
+                          已初始化支持任务与基础配置，进入定义工作区可继续完善配置，并进行发布前验证。
                         </p>
                       </div>
                     ) : changes.length > 0 ? (
@@ -847,14 +854,14 @@ export const AgentRegistryWorkspace: React.FC<AgentRegistryWorkspaceProps> = ({
                       }
                       addToast?.(
                         'info',
-                        '前往测试与发布',
-                        `「${activeDraftAgent.name}」草稿需在测试与发布工作区通过 Release Gate 验证后才能发布为 ${targetNextVersion}`
+                        '前往发布验证',
+                        `「${activeDraftAgent.name}」草稿需通过发布验证的全部发布检查后才能发布为 ${targetNextVersion}`
                       );
                     }}
                     className="px-3.5 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold flex items-center space-x-1.5 cursor-pointer shadow-2xs"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>前往测试与发布 (预计 {targetNextVersion})</span>
+                    <span>前往发布验证 (预计 {targetNextVersion})</span>
                   </button>
                 </div>
               </div>

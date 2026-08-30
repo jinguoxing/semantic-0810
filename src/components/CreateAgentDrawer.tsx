@@ -254,7 +254,7 @@ export const CreateAgentDrawer: React.FC<CreateAgentDrawerProps> = ({
               创建自定义智能体
             </h2>
             <p className="text-xs text-[#64748B] leading-relaxed max-w-[760px]">
-              选择一个能力模板作为起点，并定义该智能体的业务用途与工作范围。创建后先生成未发布草稿，通过测试与发布后才会正式生效。
+              选择一个能力模板作为起点，并定义该智能体的业务用途与工作范围。创建后先生成未发布草稿，通过发布验证并正式发布后才会正式生效。
             </p>
           </div>
           <button

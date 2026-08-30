@@ -337,13 +337,14 @@ export const RELEASE_GATE_KEYS = [
 
 export type ReleaseGateKey = (typeof RELEASE_GATE_KEYS)[number];
 
-/** 五道门的普通用户名称（产品语言；技术细节只出现在说明/详情，不出现在主 UI） */
+/** 五道门的普通用户名称（产品语言；技术细节只出现在说明/详情，不出现在主 UI）。
+ *  §03/§20 统一行动语言：仅改展示文案，Gate Key / 校验逻辑（Release Gate Domain）不变 */
 export const RELEASE_GATE_LABELS: Record<ReleaseGateKey, string> = {
   configCheck: '配置检查',
   runtimeCompile: '运行准备',
   runtimeDependencies: '运行依赖检查',
-  testRun: '测试运行',
-  qualityEvaluation: '质量评估'
+  testRun: '基础运行检查',
+  qualityEvaluation: '发布质量基线'
 };
 
 /** 未通过的 Gate 列表（按固定顺序）；全部通过返回空数组 */

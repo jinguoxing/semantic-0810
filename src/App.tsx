@@ -51,7 +51,7 @@ import { MyAccessRequestsWorkspace } from './components/MyAccessRequestsWorkspac
 import { DataApiDetailWorkspace } from './components/DataApiDetailWorkspace';
 import { AgentRegistryWorkspace } from './components/AgentRegistryWorkspace';
 import { AgentDefinitionWorkspace } from './components/AgentDefinitionWorkspace';
-import { AgentPublishWorkspace } from './components/AgentPublishWorkspace';
+import { AgentPublishWorkspace, type AgentPublishSectionKey } from './components/AgentPublishWorkspace';
 import {
   AgentItem,
   AgentDefinitionDetail,
@@ -101,6 +101,8 @@ export default function App() {
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<AgentItem | null>(null);
   const [selectedAgentDefinition, setSelectedAgentDefinition] = useState<AgentDefinitionDetail | null>(null);
+  // §15：A04 初始分区——A01「版本记录」→ release_history；普通进入发布验证不设置（默认发布概览）
+  const [publishInitialSection, setPublishInitialSection] = useState<AgentPublishSectionKey | undefined>(undefined);
 
   // Derived current selected agent and definition
   const currentSelectedAgent = useMemo(() => {
@@ -532,6 +534,7 @@ export default function App() {
           agentId={selectedAgentId || currentSelectedAgent?.id || ''}
           agent={currentSelectedAgent}
           definition={currentSelectedDefinition}
+          initialSection={publishInitialSection}
           addToast={addToast}
           onBackToDefinition={() => {
             setCurrentNav('agent_definition');
@@ -607,8 +610,10 @@ export default function App() {
           onNavigateToPublish={() => {
             setCurrentNav('agent_publish');
             setViewTab('agent_publish');
+            // §15：A03「进入发布验证」为普通进入——落到发布概览，不沿用上次「版本记录」直达分区
+            setPublishInitialSection(undefined);
             const name = currentSelectedAgent?.name || currentSelectedDefinition?.name || '智能体';
-            addToast('info', '测试与发布', `已进入「${name}」发布前验证工作区`);
+            addToast('info', '发布验证', `已进入「${name}」发布验证工作区`);
           }}
           onSaveDraftPatch={(patch) => {
             const targetId = selectedAgentId || currentSelectedAgent?.id;
@@ -698,15 +703,16 @@ export default function App() {
             setViewTab('agent_definition');
             addToast('info', agent.name, `已载入「${agent.name}」智能体定义工作区`);
           }}
-          onOpenPublishWorkspace={(agent) => {
+          onOpenPublishWorkspace={(agent, opts) => {
             setSelectedAgentId(agent.id);
             setSelectedDraftId(agent.hasDraft ? `draft_${agent.id}` : null);
             setSelectedAgent(agent);
             const def = agentDefinitions[agent.id] || INITIAL_AGENT_DEFINITIONS[agent.id];
             setSelectedAgentDefinition(def || null);
+            setPublishInitialSection(opts?.initialSection);
             setCurrentNav('agent_publish');
             setViewTab('agent_publish');
-            addToast('info', '测试与发布', `已进入「${agent.name}」发布前验证工作区，发布需通过 Release Gate`);
+            addToast('info', '发布验证', `已进入「${agent.name}」发布验证工作区`);
           }}
         />
       ) : currentNav === 'my_requests' || viewTab === 'my_requests' ? (

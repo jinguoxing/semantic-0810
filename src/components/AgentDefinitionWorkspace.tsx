@@ -4,7 +4,6 @@ import {
   GitBranch,
   Play,
   Save,
-  ExternalLink,
   FileText,
   Info,
   Layers,
@@ -49,7 +48,7 @@ export interface AgentDefinitionWorkspaceProps {
    */
   showRuntimeDiagnostics?: boolean;
   onBackToRegistry: () => void;
-  /** 进入 A04 的唯一正常入口（由「测试草稿」在自动保存成功后调用） */
+  /** 进入 A04 的唯一正常入口（由「进入发布验证」在自动保存成功后调用） */
   onNavigateToPublish?: () => void;
   /**
    * 唯一保存合同（V1.1 §28）：各 Section 的修改统一构造 UpdateAgentDraftPatch，
@@ -147,6 +146,11 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
    */
   const [scopeActivationRequested, setScopeActivationRequested] = useState(false);
   const [scopeTouched, setScopeTouched] = useState(false);
+  /**
+   * 未保存离开保护（§10）：离开 A03 前用 buildPatch()+hasDraftPatchChanges() 判脏；
+   * 脏 Patch 时弹轻量确认（继续编辑 / 放弃修改并离开），无脏 Patch 直接离开。
+   */
+  const [pendingLeave, setPendingLeave] = useState<null | (() => void)>(null);
 
   const scopeConfig = useMemo(
     () => (ws?.sourcePresetId ? TEMPLATE_SCOPE_CONFIGS[ws.sourcePresetId] : undefined),
@@ -298,6 +302,15 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
     return patch;
   };
 
+  /** 离开保护（§10）：脏 Patch → 轻量确认弹窗；无脏 Patch 直接离开 */
+  const requestLeave = (leave: () => void) => {
+    if (hasDraftPatchChanges(buildPatch())) {
+      setPendingLeave(() => leave);
+    } else {
+      leave();
+    }
+  };
+
   const scopeIncomplete =
     scopeIsActiveForEditing &&
     editScopeMode === 'SELECTED' &&
@@ -352,10 +365,10 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
   };
 
   /**
-   * 测试草稿：唯一测试 / 发布入口（TASK 11 / AC-15）。
+   * 进入发布验证：唯一发布验证 / 发布入口（TASK 11 / AC-15）。
    * - 有未保存修改：先经 Domain 保存成功再进入 A04；Domain 校验失败则停留本页
-   * - 已有 Draft 且无新修改：直接进入 A04（既有草稿就是当前测试对象，不重复 update）
-   * - 无 Draft 且无修改：不进入发布链——A04 是 Draft Test & Publish
+   * - 已有 Draft 且无新修改：直接进入 A04（既有草稿就是当前验证对象，不重复 update）
+   * - 无 Draft 且无修改：不进入发布链——A04 是 Draft 发布验证工作区
    */
   const handleTestDraft = () => {
     if (!onNavigateToPublish) return;
@@ -369,7 +382,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
         onNavigateToPublish();
       } else {
         // 无未发布草稿不进入发布链（首次创建的 Custom Agent 本就已存在 Draft，不受影响）
-        addToast?.('info', '当前没有未发布草稿', '请先修改配置并保存后再测试。');
+        addToast?.('info', '当前没有未发布草稿', '请先修改配置并保存后再进入发布验证。');
       }
       return;
     }
@@ -380,7 +393,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
     addToast?.(
       'info',
       '草稿已自动保存',
-      `「${editName || ws?.editable.name || '智能体'}」草稿已自动保存，正在进入测试与发布工作区`
+      `「${editName || ws?.editable.name || '智能体'}」草稿已自动保存，正在进入发布验证工作区`
     );
     onNavigateToPublish();
   };
@@ -525,7 +538,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
       <header className="h-[68px] bg-white border-b border-[#E2E8F0] px-6 flex items-center justify-between shrink-0 shadow-2xs z-20">
         <div className="flex items-center space-x-4 min-w-0">
           <button
-            onClick={onBackToRegistry}
+            onClick={() => requestLeave(onBackToRegistry)}
             className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md text-xs font-semibold text-[#475569] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors cursor-pointer border border-[#E2E8F0] shrink-0"
             title="返回智能体中心列表"
           >
@@ -535,7 +548,10 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
           <div className="h-5 w-px bg-[#E2E8F0] shrink-0" />
           <div className="min-w-0">
             <div className="flex items-center space-x-2 text-[11px] text-[#64748B]">
-              <span onClick={onBackToRegistry} className="hover:text-[#0F172A] cursor-pointer transition-colors">
+              <span
+                onClick={() => requestLeave(onBackToRegistry)}
+                className="hover:text-[#0F172A] cursor-pointer transition-colors"
+              >
                 智能体中心
               </span>
               <span>/</span>
@@ -588,16 +604,16 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
             </div>
           )}
 
-          {/* Actions：只有 保存草稿 / 测试草稿（测试草稿 = 唯一 A04 入口） */}
+          {/* Actions：只有 保存草稿 / 进入发布验证（发布验证 = 唯一 A04 入口） */}
           <div className="flex items-center space-x-2 pl-2 border-l border-[#E2E8F0]">
             <button
               onClick={handleTestDraft}
               disabled={!onNavigateToPublish || !onSaveDraftPatch}
-              title="自动保存草稿并进入测试与发布工作区"
+              title="自动保存草稿并进入发布验证"
               className="px-3 py-1.5 bg-white hover:bg-[#F8FAFC] text-[#334155] border border-[#CBD5E1] rounded-md text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play className="w-3 h-3 text-[#2563EB]" />
-              <span>测试草稿</span>
+              <span>进入发布验证</span>
             </button>
             <button
               onClick={handleSaveDraft}
@@ -720,7 +736,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                       </span>
                     </div>
                     <p className="text-[11px] text-amber-700/90">
-                      完善定义后测试草稿，通过发布验证后才会正式生效。
+                      完善定义后进入发布验证，通过全部发布检查并正式发布后才会生效。
                     </p>
                   </div>
                 )}
@@ -736,15 +752,60 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                   </p>
                 </div>
 
-                {/* 当前定义摘要（无 Runtime 项） */}
+                {/* 理解当前智能体定义（§06：轻量认知说明，纯文本 2×3，不做卡片墙 / Stepper / KPI） */}
+                <div className="bg-white border border-[#E2E8F0] rounded-lg px-4 py-3 shadow-2xs">
+                  <div className="text-xs font-bold text-[#0F172A]">理解当前智能体定义</div>
+                  <p className="text-[11px] text-[#94A3B8] mt-0.5">
+                    这些配置共同决定智能体负责什么、可以使用哪些信息，以及能够自主做到什么程度。
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1.5 mt-2.5 text-[11px]">
+                    <div>
+                      <span className="font-semibold text-[#334155]">职责</span>
+                      <span className="text-[#64748B]"> — 它为什么存在</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-[#334155]">支持任务</span>
+                      <span className="text-[#64748B]"> — 它负责完成哪些事情</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-[#334155]">工作范围</span>
+                      <span className="text-[#64748B]"> — 它可以在哪些数据或知识范围内工作</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-[#334155]">能力</span>
+                      <span className="text-[#64748B]"> — 它采用什么受控方式完成这些任务</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-[#334155]">模型策略</span>
+                      <span className="text-[#64748B]"> — 平台如何为它选择和使用模型</span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-[#334155]">自主程度</span>
+                      <span className="text-[#64748B]"> — 它最多可以自行做到哪一步</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 当前定义摘要（无 Runtime 项；§07 按 editableSource 动态命名：
+                    DRAFT=待发布配置 / 首创草稿，PUBLISHED_SNAPSHOT=正式配置） */}
                 <div className="bg-white border border-[#E2E8F0] rounded-lg p-4 shadow-2xs space-y-3">
                   <div>
-                    <h3 className="text-xs font-bold text-[#0F172A]">当前定义摘要</h3>
+                    <h3 className="text-xs font-bold text-[#0F172A]">
+                      {ws.editableSource === 'DRAFT'
+                        ? ws.formalVersion
+                          ? '当前待发布配置'
+                          : '当前草稿配置'
+                        : ws.editableSource === 'PUBLISHED_SNAPSHOT'
+                          ? '当前正式配置'
+                          : '当前定义摘要'}
+                    </h3>
                     <p className="text-[11px] text-[#64748B] mt-0.5">
                       {ws.editableSource === 'DRAFT'
-                        ? '基于当前草稿配置'
+                        ? ws.formalVersion
+                          ? '以下为当前草稿配置，尚未影响正式版本。'
+                          : '以下为未发布草稿的当前配置。'
                         : ws.editableSource === 'PUBLISHED_SNAPSHOT'
-                          ? '基于当前正式版本快照（编辑后将生成草稿）'
+                          ? '以下来自当前正式版本；首次修改后将创建新的未发布草稿。'
                           : '基于定义基线'}
                     </p>
                   </div>
@@ -937,7 +998,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                       </p>
                       <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-[11px] text-[#64748B] space-y-1">
                         <div className="font-semibold text-[#0F172A]">发布验证：待完成</div>
-                        <div>测试草稿通过发布验证后，即可发布为首个正式版本 (v1.0)。</div>
+                        <div>完成发布验证并通过全部检查后，即可发布为首个正式版本 (v1.0)。</div>
                       </div>
                     </div>
                   ) : !ws.hasDraft ? (
@@ -974,7 +1035,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
 
                   {(ws.formalVersion === null || ws.hasDraft) && (
                     <p className="text-[11px] text-[#94A3B8] pt-1">
-                      草稿修改不会影响当前正式运行，完成测试与发布后才会生效。
+                      草稿修改不会影响当前正式运行，完成发布验证并正式发布后才会生效。
                     </p>
                   )}
                 </div>
@@ -1096,8 +1157,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                       支持任务（{displayTasks.filter((t) => t.enabled).length}/{displayTasks.length} 启用）
                     </div>
                     <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-[11px] text-[#64748B] leading-relaxed">
-                      任务定义（Workflow、步骤与输入输出契约）由 Task Engine 统一管理；Agent Center
-                      仅维护绑定关系与启用状态，不在此编辑任务内容。
+                      任务执行流程与输入输出规则由任务引擎统一管理。
                     </div>
                     <div className="space-y-2">
                       {displayTasks.map((task, idx) => {
@@ -1111,32 +1171,16 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                                 : 'bg-[#F8FAFC] border border-[#E2E8F0]'
                             }`}
                           >
-                            <div className="min-w-0">
+                            {/* §08：taskTemplateId 移入 tooltip，普通卡片只显示 名称/说明/启用状态 */}
+                            <div className="min-w-0" title={task.taskTemplateId}>
                               <div className="font-semibold text-[#0F172A] flex items-center space-x-2">
                                 <span className="truncate">
                                   {idx + 1}. {view.name}
-                                </span>
-                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-[#475569] border border-[#E2E8F0] shrink-0">
-                                  {task.taskTemplateId}
                                 </span>
                               </div>
                               <div className="text-[11px] text-[#64748B] mt-0.5">{view.desc}</div>
                             </div>
                             <div className="flex items-center space-x-2.5 shrink-0">
-                              <button
-                                onClick={() =>
-                                  addToast?.(
-                                    'info',
-                                    `任务定义 · ${task.taskTemplateId}`,
-                                    '该任务由 Task Engine 管理，请在任务模板中心查看任务定义与版本详情'
-                                  )
-                                }
-                                className="flex items-center space-x-1 text-[11px] font-semibold text-[#2563EB] hover:underline cursor-pointer"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                <span>查看任务定义</span>
-                              </button>
-
                               {isBuiltIn ? (
                                 /* 内置：核心 Task 锁定，不显示无法点击的假开关 */
                                 <span className="text-[10px] px-2 py-0.5 rounded font-medium border bg-violet-50 text-violet-700 border-violet-200/60">
@@ -1293,7 +1337,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                               当前正式版本尚未启用此工作范围
                             </div>
                             <p className="text-[11px] text-amber-800 leading-relaxed">
-                              该工作范围已在当前能力模板的允许范围内。你可以在草稿中启用，完成测试与发布后才会正式生效。
+                              该工作范围已在当前能力模板的允许范围内。你可以在草稿中启用，完成发布验证并正式发布后才会生效。
                             </p>
                             <button
                               onClick={activateScopeInDraft}
@@ -1554,7 +1598,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
             </div>
           </div>
 
-          {/* 底部：单一「测试草稿」入口（状态事实源 = formalVersion + hasDraft，不用 businessDiffs 推导一致） */}
+          {/* 底部：单一「进入发布验证」入口（状态事实源 = formalVersion + hasDraft，不用 businessDiffs 推导一致） */}
           <div
             className={`p-3 rounded-lg space-y-2 ${
               ws.formalVersion === null
@@ -1594,7 +1638,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
             </div>
             <p className="text-[11px] leading-relaxed opacity-80">
               {ws.formalVersion === null
-                ? '完成定义后测试草稿，通过发布验证发布首个正式版本。'
+                ? '完成定义后进入发布验证，通过全部检查后发布首个正式版本。'
                 : ws.hasDraft
                   ? ws.businessDiffs.length > 0
                     ? `存在未发布草稿（已记录 ${ws.businessDiffs.length} 项变更摘要），发布后生效。`
@@ -1607,7 +1651,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
               className="w-full py-1.5 bg-white hover:bg-slate-50 text-[#334155] border border-[#CBD5E1] rounded text-xs font-semibold flex items-center justify-center space-x-1 transition-colors cursor-pointer shadow-2xs disabled:opacity-50"
             >
               <Play className="w-3 h-3 text-[#2563EB]" />
-              <span>测试草稿 (进入测试与发布)</span>
+              <span>进入发布验证</span>
             </button>
           </div>
         </aside>
@@ -1707,7 +1751,7 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
               </div>
 
               <div className="text-[11px] text-[#64748B] leading-relaxed">
-                草稿配置未同步至线上引擎，草稿修改仅在沙盒中生效；正式运行以已发布版本为准。
+                草稿配置不会写入正式运行环境，草稿修改仅在发布验证环境中生效；正式运行以已发布版本为准。
               </div>
             </div>
 
@@ -1717,6 +1761,42 @@ export const AgentDefinitionWorkspace: React.FC<AgentDefinitionWorkspaceProps> =
                 className="px-4 py-1.5 bg-[#F8FAFC] hover:bg-slate-100 text-[#334155] border border-[#CBD5E1] rounded-md text-xs font-semibold cursor-pointer"
               >
                 关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          未保存离开保护确认（§10：脏 Patch 时弹轻量确认，不用原生 alert）
+          ───────────────────────────────────────────────────────────── */}
+      {pendingLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            onClick={() => setPendingLeave(null)}
+          />
+          <div className="relative z-10 w-full max-w-sm bg-white rounded-xl shadow-2xl border border-[#E2E8F0] p-5 space-y-4">
+            <h3 className="text-sm font-bold text-[#0F172A]">有未保存的修改</h3>
+            <p className="text-xs text-[#475569] leading-relaxed">
+              当前修改尚未保存到草稿。离开后，本次未保存内容将丢失。
+            </p>
+            <div className="flex justify-end space-x-2 pt-1">
+              <button
+                onClick={() => setPendingLeave(null)}
+                className="px-3 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-md text-xs font-semibold cursor-pointer shadow-2xs"
+              >
+                继续编辑
+              </button>
+              <button
+                onClick={() => {
+                  const leave = pendingLeave;
+                  setPendingLeave(null);
+                  leave();
+                }}
+                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-[#475569] border border-[#CBD5E1] rounded-md text-xs font-semibold cursor-pointer"
+              >
+                放弃修改并离开
               </button>
             </div>
           </div>
