@@ -20,6 +20,7 @@ import { ObjectModelingModal } from './components/ObjectModelingModal';
 import { EnterpriseLauncher } from './components/EnterpriseLauncher';
 import { PersonalCenterPanel } from './components/PersonalCenterPanel';
 import { XinoHomeWorkspace } from './components/XinoHomeWorkspace';
+import { DataAssistantFindDataWorkspace } from './components/DataAssistantFindDataWorkspace';
 import { BusinessObjectDiscoveryWorkspace } from './components/BusinessObjectDiscoveryWorkspace';
 import { BusinessObjectModelingWorkspace } from './components/BusinessObjectModelingWorkspace';
 import { DataAssetsCatalogWorkspace } from './components/DataAssetsCatalogWorkspace';
@@ -51,6 +52,7 @@ import { MyAccessRequestsWorkspace } from './components/MyAccessRequestsWorkspac
 import { AgentRegistryWorkspace } from './components/AgentRegistryWorkspace';
 import { AgentDefinitionWorkspace } from './components/AgentDefinitionWorkspace';
 import { AgentPublishWorkspace } from './components/AgentPublishWorkspace';
+import { BusinessObjectAuthoringWorkspace } from './components/BusinessObjectAuthoringWorkspace';
 import {
   AgentItem,
   AgentDefinitionDetail,
@@ -62,8 +64,9 @@ import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData, MetricDraftInitialData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('agents');
-  const [viewTab, setViewTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('agents');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
+  const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
+  const [dataAssistantInitialQuery, setDataAssistantInitialQuery] = useState<string>('');
   const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
   const [authoringInitialDraft, setAuthoringInitialDraft] = useState<MetricDraftInitialData | undefined>(undefined);
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
@@ -138,9 +141,9 @@ export default function App() {
       setViewTab('table');
       addToast('success', '已切换至 数据治理', '已载入 pop_service_hotline 表语义理解与治理工作台');
     } else if (moduleKey === 'business_semantics') {
-      setCurrentNav('metrics');
-      setViewTab('metrics');
-      addToast('success', '已切换至 业务语义 · 指标', '已载入 Metric Registry 指标语义注册表');
+      setCurrentNav('create_business_object');
+      setViewTab('create_business_object');
+      addToast('success', '已切换至 业务语义 · 业务对象', '已进入「热线坐席」业务对象创建工作台');
     } else if (moduleKey === 'data_market' || moduleKey === 'data_marketplace') {
       setCurrentNav('marketplace');
       setViewTab('marketplace');
@@ -1019,6 +1022,30 @@ export default function App() {
             addToast('info', 'AI 工作台', '已进入 Xino AI 协同工作台');
           }}
         />
+      ) : currentNav === 'create_business_object' || currentNav === 'business_object_authoring' || viewTab === 'create_business_object' || viewTab === 'business_object_authoring' ? (
+        <BusinessObjectAuthoringWorkspace
+          onCancel={() => {
+            setCurrentNav('governance');
+            setViewTab('discovery');
+            addToast('info', '已取消新建', '已返回业务对象列表');
+          }}
+          onSaveDraft={() => {
+            addToast('success', '草稿保存成功', '已保存「热线坐席」业务对象草稿至企业语义资产库');
+          }}
+          onPublish={() => {
+            addToast('info', '发布业务对象', '已提交业务对象审核与发布流程');
+          }}
+          onNavigateToSemantics={() => {
+            setCurrentNav('create_business_object');
+            setViewTab('create_business_object');
+          }}
+          onNavigateToObjectsList={() => {
+            setCurrentNav('governance');
+            setViewTab('discovery');
+            addToast('info', '业务对象', '已返回业务对象列表');
+          }}
+          addToast={addToast}
+        />
       ) : currentNav === 'create_metric' || viewTab === 'create_metric' ? (
         <MetricAuthoringWorkspace
           initialMode={authoringMode}
@@ -1420,14 +1447,35 @@ export default function App() {
           onViewLineage={() => setIsLineageModalOpen(true)}
           addToast={addToast}
         />
-      ) : currentNav === 'home' ? (
-        <XinoHomeWorkspace
-          onNavigateToGovernance={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-          }}
-          onOpenLauncher={() => setIsLauncherOpen(true)}
-        />
+      ) : currentNav === 'home' || viewTab === 'home' || viewTab === 'data_assistant' ? (
+        viewTab === 'data_assistant' ? (
+          <DataAssistantFindDataWorkspace
+            initialQuery={dataAssistantInitialQuery}
+            onBackToHome={() => {
+              setViewTab('home');
+              setCurrentNav('home');
+              addToast('info', 'AI 工作台', '已返回 Xino 协同工作台首页');
+            }}
+            onNavigateToNav={(nav) => {
+              setCurrentNav(nav as any);
+              setViewTab(nav as any);
+            }}
+          />
+        ) : (
+          <XinoHomeWorkspace
+            onNavigateToGovernance={() => {
+              setCurrentNav('governance');
+              setViewTab('discovery');
+              addToast('info', '切换工作台', '已进入数据治理中心');
+            }}
+            onNavigateToDataAssistant={(query) => {
+              setDataAssistantInitialQuery(query || '');
+              setViewTab('data_assistant');
+              addToast('success', '进入数据助手', '已进入「数据助手 · 找数据」多轮智能交互工作台');
+            }}
+            onOpenLauncher={() => setIsLauncherOpen(true)}
+          />
+        )
       ) : (
         <>
           {/* Breadcrumb & Workflow Stage Status Bar */}

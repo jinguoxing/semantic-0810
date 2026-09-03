@@ -25,15 +25,15 @@ interface HeaderProps {
   onOpenLauncher?: () => void;
   onOpenProfile?: () => void;
   isProfileOpen?: boolean;
-  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_definition' | 'agent_detail' | 'agent_publish';
-  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents') => void;
+  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_definition' | 'agent_detail' | 'agent_publish';
+  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents') => void;
   batchCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenLauncher,
   onOpenProfile,
-  currentNav = 'marketplace_resources',
+  currentNav = 'create_business_object',
   onSelectNav,
 }) => {
   const [isSemanticsDropdownOpen, setIsSemanticsDropdownOpen] = useState(false);
@@ -49,7 +49,15 @@ export const Header: React.FC<HeaderProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const isSemanticsActive = currentNav === 'governance' || currentNav === 'metrics' || currentNav === 'create_metric' || currentNav === 'business_object_detail' || currentNav === 'semantics' || currentNav === 'data_standards';
+  const isSemanticsActive =
+    currentNav === 'create_business_object' ||
+    currentNav === 'business_object_authoring' ||
+    currentNav === 'governance' ||
+    currentNav === 'metrics' ||
+    currentNav === 'create_metric' ||
+    currentNav === 'business_object_detail' ||
+    currentNav === 'semantics' ||
+    currentNav === 'data_standards';
 
   return (
     <header className="h-[64px] bg-white border-b border-[#E2E8F0] px-5 flex items-center justify-between sticky top-0 z-30 shrink-0 select-none">
@@ -67,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* 2. Semovix Logo */}
           <div 
-            onClick={() => onSelectNav && onSelectNav('home')}
+            onClick={() => onSelectNav && onSelectNav('create_business_object')}
             className="flex items-center space-x-2.5 cursor-pointer"
           >
             <div className="w-8 h-8 rounded-md bg-[#2563EB] flex items-center justify-center text-white font-bold shadow-2xs">
@@ -81,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* 3. Primary Top Navigation Menu */}
         <nav className="hidden lg:flex items-center space-x-1 text-xs font-semibold text-[#475569]">
-          {/* 1. Xino 智能伙伴 */}
+          {/* 1. AI工作台 */}
           <button
             onClick={() => onSelectNav && onSelectNav('home')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
@@ -90,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
             }`}
           >
-            Xino 智能伙伴
+            AI工作台
           </button>
 
           {/* 2. 任务中心 */}
@@ -101,10 +109,11 @@ export const Header: React.FC<HeaderProps> = ({
             任务中心
           </button>
           
-          {/* 3. 业务语义 (带二级菜单下拉) */}
+          {/* 3. 业务语义 (带二级菜单下拉，当前高亮) */}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => {
+                if (onSelectNav) onSelectNav('create_business_object');
                 setIsSemanticsDropdownOpen(!isSemanticsDropdownOpen);
               }}
               onMouseEnter={() => setIsSemanticsDropdownOpen(true)}
@@ -134,14 +143,14 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  {/* 二级菜单 1: 业务对象 */}
+                  {/* 二级菜单 1: 业务对象 (新建业务对象) */}
                   <button
                     onClick={() => {
                       setIsSemanticsDropdownOpen(false);
-                      onSelectNav && onSelectNav('governance');
+                      onSelectNav && onSelectNav('create_business_object');
                     }}
                     className={`w-full p-2.5 rounded-lg flex items-center space-x-3 transition-all text-left group cursor-pointer ${
-                      currentNav === 'governance' || currentNav === 'business_object_detail'
+                      currentNav === 'create_business_object' || currentNav === 'governance' || currentNav === 'business_object_detail'
                         ? 'bg-[#FFFBEB] border border-[#FDE68A]'
                         : 'hover:bg-[#FFFBEB]/60 hover:border-[#FDE68A]/60 border border-transparent'
                     }`}
@@ -155,11 +164,11 @@ export const Header: React.FC<HeaderProps> = ({
                           业务对象
                         </span>
                         <span className="text-[10px] font-bold text-[#D97706] bg-[#FFFBEB] px-1.5 py-0.2 rounded-full border border-[#FDE68A]">
-                          24 实体
+                          热线坐席 · 新建
                         </span>
                       </div>
                       <p className="text-[11px] text-[#64748B] truncate mt-0.5">
-                        自然人、企业、工单等业务概念建模与拓扑
+                        企业业务主体定义、语义对齐与实体建模
                       </p>
                     </div>
                   </button>
@@ -282,19 +291,7 @@ export const Header: React.FC<HeaderProps> = ({
             数据治理
           </button>
 
-          {/* 6. 智能体中心 (⭐ 当前高亮状态支持) */}
-          <button
-            onClick={() => onSelectNav && onSelectNav('agents')}
-            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-              currentNav === 'agents' || currentNav === 'agent_definition' || currentNav === 'agent_detail' || currentNav === 'agent_publish'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
-            }`}
-          >
-            智能体中心
-          </button>
-
-          {/* 7. 管理中心 */}
+          {/* 6. 管理中心 */}
           <button
             onClick={() => onSelectNav && onSelectNav('access_review')}
             className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
@@ -309,7 +306,7 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Global Search Bar (Center) */}
-      <div className="relative hidden md:block w-72 lg:w-80">
+      <div className="relative hidden md:block w-64 lg:w-72">
         <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#94A3B8]" />
         <input
           type="text"
@@ -321,8 +318,8 @@ export const Header: React.FC<HeaderProps> = ({
         </kbd>
       </div>
 
-      {/* Right Area: Notifications, Help, User Avatar & Name */}
-      <div className="flex items-center space-x-3.5 text-xs font-medium text-[#475569]">
+      {/* Right Area: Notifications, Help, Xino｜犀诺, User Avatar & Name */}
+      <div className="flex items-center space-x-3 text-xs font-medium text-[#475569]">
         {/* Notification Bell */}
         <button
           onClick={() => alert('通知中心：暂无未读告警')}
@@ -340,6 +337,16 @@ export const Header: React.FC<HeaderProps> = ({
           title="帮助与文档"
         >
           <HelpCircle className="w-4 h-4" />
+        </button>
+
+        {/* Xino｜犀诺 */}
+        <button
+          onClick={onOpenLauncher}
+          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-[#2563EB] font-bold text-xs cursor-pointer transition-all shadow-2xs"
+          title="Xino 智能伙伴协同"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+          <span>Xino｜犀诺</span>
         </button>
 
         <div className="h-4 w-[1px] bg-[#E2E8F0] hidden sm:block" />

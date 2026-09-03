@@ -24,13 +24,15 @@ import {
 
 interface XinoHomeWorkspaceProps {
   onNavigateToGovernance?: () => void;
+  onNavigateToDataAssistant?: (initialQuery?: string) => void;
   onOpenLauncher?: () => void;
 }
 
-type ModeType = 'auto' | 'data' | 'knowledge' | 'governance';
+type ModeType = 'auto' | 'data_assistant' | 'data' | 'knowledge' | 'governance';
 
 export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
-  onNavigateToGovernance
+  onNavigateToGovernance,
+  onNavigateToDataAssistant
 }) => {
   const [promptInput, setPromptInput] = useState('');
   const [searchHistory, setSearchHistory] = useState('');
@@ -66,6 +68,14 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
       badge: '默认'
     },
     {
+      id: 'data_assistant' as ModeType,
+      name: '数据助手',
+      description: '智能找数据、指标方案构建、权限判定与分析计划编制',
+      icon: Bot,
+      iconColor: 'text-[#2563EB]',
+      badge: '找数据'
+    },
+    {
       id: 'data' as ModeType,
       name: '数据工作',
       description: '查找数据、查询指标、分析和比较业务数据',
@@ -90,8 +100,8 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
 
   const historySessions = [
     { id: '1', title: '企业数据治理主要目标是什么？', time: '10分钟前', category: '今天', active: true },
-    { id: '2', title: '分析闵行区老年人口趋势', time: '2小时前', category: '今天' },
-    { id: '3', title: '找人口服务相关数据', time: '昨天', category: '昨天' },
+    { id: '2', title: '分析闵行区老年人口趋势', time: '2小时前', category: '今天', isDataAssistant: true },
+    { id: '3', title: '找人口服务相关数据', time: '昨天', category: '昨天', isDataAssistant: true },
     { id: '4', title: '老龄人口指标口径分析', time: '昨天', category: '昨天' },
     { id: '5', title: '数据集与数据资源有什么区别', time: '3天前', category: '更早' }
   ];
@@ -102,6 +112,8 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
 
   const getModeLabel = (mode: ModeType) => {
     switch (mode) {
+      case 'data_assistant':
+        return '数据助手';
       case 'data':
         return '数据工作';
       case 'knowledge':
@@ -121,6 +133,33 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
   const handleSelectMode = (mode: ModeType) => {
     setSelectedMode(mode);
     setIsModePopoverOpen(false);
+  };
+
+  const handleSend = () => {
+    const text = promptInput.trim();
+    if (!text) return;
+
+    if (selectedMode === 'data_assistant' || selectedMode === 'data') {
+      onNavigateToDataAssistant?.(text);
+    } else if (selectedMode === 'governance') {
+      onNavigateToGovernance?.();
+    } else if (selectedMode === 'auto') {
+      if (
+        text.includes('找数据') ||
+        text.includes('数据助手') ||
+        text.includes('养老') ||
+        text.includes('老年人口') ||
+        text.includes('床位') ||
+        text.includes('指标') ||
+        text.includes('公共服务热线')
+      ) {
+        onNavigateToDataAssistant?.(text);
+      } else {
+        onNavigateToGovernance?.();
+      }
+    } else {
+      onNavigateToGovernance?.();
+    }
   };
 
   return (
@@ -184,7 +223,13 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
               {filteredHistory.map((session) => (
                 <div
                   key={session.id}
-                  onClick={onNavigateToGovernance}
+                  onClick={() => {
+                    if ((session as any).isDataAssistant) {
+                      onNavigateToDataAssistant?.(session.title);
+                    } else {
+                      onNavigateToGovernance?.();
+                    }
+                  }}
                   className={`p-2.5 rounded-lg text-xs transition-all cursor-pointer group flex items-center justify-between ${
                     session.active
                       ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
@@ -268,12 +313,29 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
               <textarea
                 value={promptInput}
                 onChange={(e) => setPromptInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
                 onFocus={() => setIsInputFocused(true)}
                 onBlur={() => setIsInputFocused(false)}
-                placeholder="描述你想完成的事情…"
+                placeholder={
+                  selectedMode === 'data_assistant'
+                    ? '描述你要查找的数据或分析目标（如：评估闵行区老年人口规模与养老床位供给水平）…'
+                    : '描述你想完成的事情…'
+                }
                 rows={3}
                 className="w-full text-xs md:text-sm text-[#0F172A] placeholder-[#94A3B8] border-none focus:outline-none resize-none bg-transparent leading-relaxed"
               />
+
+              {selectedMode === 'data_assistant' && (
+                <div className="flex items-center space-x-1.5 text-[11px] text-[#2563EB] bg-[#EFF6FF] px-2.5 py-1 rounded-lg w-fit font-medium border border-[#BFDBFE]/60 animate-in fade-in-50 duration-200">
+                  <Sparkles className="w-3 h-3 text-[#2563EB] shrink-0" />
+                  <span>已就绪「数据助手」模式 · 输入需求后按 Enter 或点击发送进入智能找数据工作台</span>
+                </div>
+              )}
 
               {/* Composer Bottom Toolbar: 📎 | 自动 ▾ | 上海市闵行区 | 发送 */}
               <div className="flex items-center justify-between pt-1">
@@ -297,7 +359,7 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
                       setIsInputFocused(true);
                     }}
                     className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-all border ${
-                      isModePopoverOpen
+                      isModePopoverOpen || selectedMode === 'data_assistant'
                         ? 'bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]'
                         : 'bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#334155] border-[#E2E8F0]'
                     }`}
@@ -377,7 +439,7 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
 
               {/* 4. Send Button */}
               <button
-                onClick={onNavigateToGovernance}
+                onClick={handleSend}
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-2xs ${
                   promptInput.trim().length > 0
                     ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white'
@@ -394,11 +456,17 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
           {/* Quick Action Capsules (找数据 | 问数据 | 做分析 | 问知识) */}
           <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
             <button
-              onClick={() => handlePillClick('查找公共服务热线相关的全量表与业务字段')}
-              className="px-3.5 py-1.5 rounded-full bg-white hover:bg-[#EFF6FF] border border-[#E2E8F0] hover:border-[#BFDBFE] text-xs text-[#334155] hover:text-[#2563EB] font-medium flex items-center space-x-1.5 shadow-2xs transition-all cursor-pointer"
+              onClick={() => {
+                setSelectedMode('data_assistant');
+                setPromptInput('评估 2025 年 9 月至 2026 年 8 月闵行区各街镇老年人口规模与养老床位供给水平');
+              }}
+              className="px-3.5 py-1.5 rounded-full bg-white hover:bg-[#EFF6FF] border border-[#E2E8F0] hover:border-[#BFDBFE] text-xs text-[#334155] hover:text-[#2563EB] font-medium flex items-center space-x-1.5 shadow-2xs transition-all cursor-pointer group"
             >
               <Database className="w-3.5 h-3.5 text-[#2563EB]" />
               <span>找数据</span>
+              <span className="text-[10px] text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded font-semibold group-hover:bg-[#2563EB] group-hover:text-white transition-colors">
+                数据助手
+              </span>
             </button>
 
             <button
@@ -429,12 +497,19 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
           {/* Continuation Bar: 继续上次工作 (Max 1 bar) */}
           <div className="pt-2">
             <div
-              onClick={onNavigateToGovernance}
+              onClick={() => {
+                onNavigateToDataAssistant?.('上海老年人口趋势分析');
+              }}
               className="w-full p-3.5 rounded-xl bg-white border border-[#E2E8F0] hover:border-[#BFDBFE] shadow-2xs flex items-center justify-between text-left cursor-pointer transition-all hover:bg-[#EFF6FF]/40 group"
             >
               <div className="space-y-1">
-                <div className="text-[11px] font-bold text-[#64748B] tracking-tight">
-                  继续上次工作
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-[11px] font-bold text-[#64748B] tracking-tight">
+                    继续上次工作
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#EFF6FF] text-[#2563EB] font-semibold">
+                    数据助手
+                  </span>
                 </div>
                 <div className="text-xs font-bold text-[#0F172A] group-hover:text-[#2563EB] transition-colors">
                   上海老年人口趋势分析
@@ -446,7 +521,7 @@ export const XinoHomeWorkspace: React.FC<XinoHomeWorkspaceProps> = ({
               </div>
 
               <div className="flex items-center space-x-1 text-xs font-bold text-[#2563EB] group-hover:underline">
-                <span>继续</span>
+                <span>继续工作</span>
                 <ArrowRight className="w-3.5 h-3.5 text-[#2563EB]" />
               </div>
             </div>

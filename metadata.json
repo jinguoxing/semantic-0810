@@ -1,6 +1,6 @@
 {
   "name": "Semovix 企业 AI 原生语义智能平台",
-  "description": "Semovix Enterprise AI Launcher 与数据语义治理工作台 - 包含应用中心、Xino 智能伙伴、业务语义、数据治理与智能体中心",
+  "description": "Semovix 数据助手 · 找数据 (Data Assistant · Find Data) - 企业 AI 原生语义智能平台数据工作对话与按需工作区协同",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
