@@ -150,50 +150,53 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
           </span>
         </div>
 
-        {/* Execution Results View */}
+        {/* Execution Results View - Text based presentation, no cards */}
         {hasExecuted && lastRunResult?.resultArtifact && (
-          <div className="p-4 bg-[#F0FDF4]/60 border border-[#86EFAC] rounded-xl space-y-3 animate-in fade-in">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-xs font-bold text-[#166534]">
+          <div className="pt-4 pb-2 border-t border-[#E2E8F0] space-y-3.5 text-xs animate-in fade-in">
+            <div className="flex items-center justify-between pb-1.5 border-b border-[#F1F5F9]">
+              <div className="flex items-center space-x-2 font-bold text-[#0F172A]">
                 <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
-                <span>分析执行完成 · 基线核查结果</span>
+                <span className="text-sm">分析执行结论与基线核查</span>
               </div>
-              <span className="text-[10px] text-[#64748B]">2026.08 最新月度</span>
+              <span className="text-[11px] text-[#64748B]">2026.08 最新月度</span>
             </div>
 
-            <div className="space-y-2 text-xs">
-              <div className="p-2.5 bg-white rounded-lg border border-[#DCFCE7] space-y-1">
-                <div className="font-bold text-[#0F172A] flex items-center justify-between">
-                  <span>全区加权平均供给水平：</span>
-                  <span className="font-mono text-[#2563EB]">
-                    {lastRunResult.resultArtifact.districtWeightedAverage}
-                  </span>
-                </div>
-                <div className="text-[11px] text-[#64748B]">
-                  全区 60 岁以上常住人口约 {lastRunResult.resultArtifact.totalPopulation}，在营可用养老床位共{' '}
-                  {lastRunResult.resultArtifact.totalBeds}。
-                </div>
-              </div>
+            {/* Core Finding Text */}
+            <div className="space-y-1 text-xs text-[#1E293B] leading-relaxed">
+              <div className="font-semibold text-[#0F172A]">全区基准供给水平：</div>
+              <p className="text-[#334155] leading-relaxed">
+                全区加权平均供给水平为{' '}
+                <strong className="font-mono text-sm text-[#2563EB] font-bold">
+                  {lastRunResult.resultArtifact.districtWeightedAverage}
+                </strong>
+                。全区 60 岁以上常住人口约 {lastRunResult.resultArtifact.totalPopulation}，在营可用养老床位共{' '}
+                {lastRunResult.resultArtifact.totalBeds}。
+              </p>
+            </div>
 
-              <div className="p-2.5 bg-white rounded-lg border border-[#DCFCE7] space-y-1.5">
-                <div className="font-bold text-[#0F172A]">识别相对供给水平偏低街镇（建议进一步核查）：</div>
-                <div className="space-y-1 text-[11px]">
-                  {lastRunResult.resultArtifact.lowSupplyTowns.map((town, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-1.5 bg-[#F8FAFC] rounded">
-                      <span className="font-medium text-[#334155]">{town.townName}</span>
-                      <span className="font-mono text-[#D97706] font-semibold">
-                        {town.supplyRatio}（{town.differencePct}）
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            {/* Low Supply Towns Text List */}
+            <div className="space-y-1.5 text-xs text-[#1E293B] leading-relaxed">
+              <div className="font-semibold text-[#0F172A]">
+                识别相对供给水平偏低街镇（建议进一步核查）：
               </div>
+              <ul className="space-y-1.5 pl-1">
+                {lastRunResult.resultArtifact.lowSupplyTowns.map((town, idx) => (
+                  <li key={idx} className="flex items-baseline space-x-2 text-xs">
+                    <span className="text-[#94A3B8]">•</span>
+                    <span className="font-medium text-[#0F172A]">{town.townName}：</span>
+                    <span className="font-mono font-bold text-[#D97706]">{town.supplyRatio}</span>
+                    <span className="text-[11px] text-[#64748B]">（{town.differencePct}）</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-              {/* Strict Conclusion Boundary Notice */}
-              <div className="p-2.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg text-[11px] text-[#92400E] leading-relaxed">
-                <span className="font-bold block mb-0.5">结论合规与边界声明：</span>
+            {/* Strict Conclusion Boundary Notice as Plain Text */}
+            <div className="pt-2 text-[11px] text-[#64748B] leading-relaxed border-t border-[#F1F5F9] space-y-1">
+              <div className="font-semibold text-[#475569]">结论合规与边界声明：</div>
+              <p className="text-[#64748B] leading-relaxed">
                 {lastRunResult.resultArtifact.boundaryNotice}
-              </div>
+              </p>
             </div>
           </div>
         )}

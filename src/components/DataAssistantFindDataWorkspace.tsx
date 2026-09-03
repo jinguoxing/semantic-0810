@@ -194,6 +194,25 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         type: 'ASK_RUN_COMPLETED',
         payload: { result: runResult }
       });
+
+      if (runResult.resultArtifact) {
+        const artifact = runResult.resultArtifact;
+        const conclusionText = `### 分析基线核查结论（2026.08 最新月度）\n\n- **全区加权平均供给水平**：**${artifact.districtWeightedAverage}**（全区 60 岁以上常住人口约 ${artifact.totalPopulation}，在营可用养老床位共 ${artifact.totalBeds}）。\n- **相对供给偏低街镇（建议进一步核查）**：\n${artifact.lowSupplyTowns.map((t) => `  • **${t.townName}**：供给水平为 **${t.supplyRatio}**（${t.differencePct}）`).join('\n')}\n\n**结论合规与边界声明**：\n${artifact.boundaryNotice}`;
+
+        dispatch({
+          type: 'ASSISTANT_TURN_RECEIVED',
+          payload: {
+            turnId: `turn_conclusion_${Date.now()}`,
+            blocks: [
+              {
+                type: 'TEXT',
+                id: `txt_conclusion_${Date.now()}`,
+                content: conclusionText
+              }
+            ]
+          }
+        });
+      }
     } else {
       dispatch({
         type: 'ASK_RUN_FAILED',
@@ -498,7 +517,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                           ) : (
                             <div
                               key={block.id}
-                              className="p-4 rounded-2xl bg-white border border-[#E2E8F0] shadow-2xs text-xs"
+                              className="py-1 text-xs text-[#0F172A] leading-relaxed w-full"
                             >
                               <AssistantTextBlock content={block.content} />
                             </div>

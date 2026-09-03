@@ -234,22 +234,27 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
           </div>
         </div>
 
-        {/* Gaps / Limitations */}
+        {/* Gaps / Limitations - Text presentation, no card */}
         {gaps && gaps.length > 0 && (
-          <div className="p-3.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl space-y-2 text-[#92400E]">
-            <div className="flex items-center space-x-1.5 font-bold text-xs">
+          <div className="space-y-2 text-xs pt-3 border-t border-[#F1F5F9]">
+            <div className="flex items-center space-x-1.5 font-bold text-xs text-[#0F172A]">
               <AlertCircle className="w-4 h-4 text-[#D97706] shrink-0" />
               <span>当前方案声明缺口与约束：</span>
             </div>
-            {gaps.map((g) => (
-              <div key={g.id} className="space-y-1 text-[11px] leading-relaxed">
-                <span className="font-semibold text-[#B45309]">{g.title}：</span>
-                <span>{g.description}</span>
-                <div className="text-[10px] text-[#B45309]/80 pt-0.5">
-                  缓解应对：{g.mitigation}
-                </div>
-              </div>
-            ))}
+            <ul className="space-y-2 text-[11px] text-[#475569] pl-1">
+              {gaps.map((g) => (
+                <li key={g.id} className="space-y-0.5">
+                  <div className="leading-relaxed">
+                    <span className="text-[#D97706] font-bold mr-1.5">•</span>
+                    <span className="font-semibold text-[#1E293B]">{g.title}：</span>
+                    <span>{g.description}</span>
+                  </div>
+                  <div className="text-[10px] text-[#64748B] pl-3.5">
+                    缓解应对：{g.mitigation}
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

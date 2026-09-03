@@ -1254,13 +1254,13 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
             {/* Drawer Content Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
               
-              {/* 核心结论卡 */}
-              <div className="p-4 bg-[#FFFBEB] border border-[#FDE68A] rounded-lg space-y-2">
-                <div className="flex items-center space-x-2 text-[#92400E] font-bold text-sm">
+              {/* 核心评估结论 - 纯文本呈现 */}
+              <div className="space-y-1.5 pb-3 border-b border-[#F1F5F9]">
+                <div className="flex items-center space-x-2 text-[#0F172A] font-bold text-sm">
                   <AlertTriangle className="w-4 h-4 text-[#D97706]" />
-                  <span>数据可用性评估：适度可用 (存在新鲜度提醒)</span>
+                  <span>数据可用性评估结论：适度可用 (存在新鲜度提醒)</span>
                 </div>
-                <p className="text-xs text-[#92400E] leading-relaxed">
+                <p className="text-xs text-[#475569] leading-relaxed pl-6">
                   当前数据可以用于历史人口、人口结构和老龄化分析；如果用于当日实时统计，建议先确认最新同步状态。
                 </p>
               </div>

@@ -61,14 +61,14 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar text-xs">
-        {/* Recommendation Banner */}
-        <div className="p-3.5 bg-[#EFF6FF]/60 border border-[#BFDBFE] rounded-xl space-y-1.5 text-xs text-[#1E3A8A]">
-          <div className="flex items-center space-x-1.5 font-bold">
+        {/* Recommendation & Conclusion - Pure Text Representation */}
+        <div className="space-y-1 text-xs text-[#334155] leading-relaxed pb-2 border-b border-[#F1F5F9]">
+          <div className="flex items-center space-x-1.5 font-bold text-[#0F172A]">
             <Info className="w-4 h-4 text-[#2563EB] shrink-0" />
-            <span>语义引擎比对结论与推荐建议：</span>
+            <span>比对结论与推荐建议：</span>
           </div>
-          <p className="text-[11px] leading-relaxed text-[#1E3A8A]/90">
-            本次分析覆盖过去 12 个月（2025.09 — 2026.08），推荐将「{resB.name}」作为可选下钻资源；
+          <p className="text-[11px] leading-relaxed text-[#475569] pl-5">
+            本次分析覆盖过去 12 个月（2025.09 — 2026.08），推荐将「<strong className="text-[#0F172A]">{resB.name}</strong>」作为可选下钻资源；
             而「{resA.name}」仅含实时最新状态、无历史月度切片，且权限需申请，不建议纳入本次分析方案。
           </p>
         </div>

@@ -14,10 +14,10 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
   const { title, candidates, keyPoints, primaryAction, secondaryAction, textLinkAction } = block;
 
   return (
-    <div className="p-3.5 bg-white border border-[#E2E8F0] rounded-xl text-xs space-y-2.5 shadow-2xs select-none">
+    <div className="pt-1 text-xs space-y-2 select-none w-full">
       {/* Title & Badge */}
-      <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2">
-        <span className="font-bold text-[#0F172A] tracking-tight truncate">
+      <div className="flex items-center justify-between pb-1 border-b border-[#F1F5F9]">
+        <span className="font-semibold text-[#0F172A] tracking-tight truncate">
           {title}
         </span>
         {candidates && candidates.length > 0 && (
@@ -27,24 +27,22 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
         )}
       </div>
 
-      {/* Content Area (bounded height 144-168px with custom scrollbar) */}
-      <div className="max-h-[168px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+      {/* Content Area */}
+      <div className="space-y-2">
         {candidates && candidates.length > 0 ? (
-          <div className="space-y-1.5 divide-y divide-[#F1F5F9]">
+          <div className="space-y-2">
             {candidates.map((cand) => (
-              <div key={cand.resourceId} className="pt-1.5 first:pt-0 space-y-0.5">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center space-x-1.5 truncate">
-                    <span className="font-semibold text-[#1E293B] truncate">{cand.title}</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#EFF6FF] text-[#2563EB] font-medium border border-[#BFDBFE] shrink-0">
-                      {cand.typeBadge}
-                    </span>
-                  </div>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#F0FDF4] text-[#16A34A] font-medium border border-[#DCFCE7] shrink-0 ml-2">
+              <div key={cand.resourceId} className="space-y-0.5 pl-2.5 border-l-2 border-[#2563EB]/40 py-0.5">
+                <div className="flex items-center space-x-2 text-xs">
+                  <span className="font-medium text-[#0F172A]">{cand.title}</span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#EFF6FF] text-[#2563EB] font-medium border border-[#BFDBFE] shrink-0">
+                    {cand.typeBadge}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#F0FDF4] text-[#16A34A] font-medium border border-[#DCFCE7] shrink-0">
                     {cand.statusBadge}
                   </span>
                 </div>
-                <div className="text-[11px] text-[#64748B] line-clamp-1">
+                <div className="text-[11px] text-[#64748B] leading-relaxed">
                   {cand.description}
                 </div>
               </div>
@@ -64,13 +62,13 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
 
       {/* Actions (Max 1 Primary + 1 Secondary + 1 Text Link) */}
       {(primaryAction || secondaryAction || textLinkAction) && (
-        <div className="pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-xs">
+        <div className="pt-2 flex flex-wrap items-center justify-between text-xs gap-2">
           <div className="flex items-center space-x-2">
             {primaryAction && (
               <button
                 type="button"
                 onClick={() => onActionClick?.(primaryAction.actionCode, primaryAction.payload)}
-                className="px-3 py-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-semibold rounded-lg transition-colors cursor-pointer flex items-center space-x-1 text-xs"
+                className="px-2.5 py-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-medium rounded-lg transition-colors cursor-pointer flex items-center space-x-1 text-xs"
               >
                 <span>{primaryAction.label}</span>
                 <ChevronRight className="w-3 h-3" />
@@ -81,7 +79,7 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
               <button
                 type="button"
                 onClick={() => onActionClick?.(secondaryAction.actionCode, secondaryAction.payload)}
-                className="px-3 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0] font-medium rounded-lg transition-colors cursor-pointer text-xs"
+                className="px-2.5 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0] font-medium rounded-lg transition-colors cursor-pointer text-xs"
               >
                 {secondaryAction.label}
               </button>
@@ -92,7 +90,7 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
             <button
               type="button"
               onClick={() => onActionClick?.(textLinkAction.actionCode, textLinkAction.payload)}
-              className="text-[11px] text-[#2563EB] hover:underline cursor-pointer flex items-center space-x-0.5"
+              className="text-[11px] text-[#2563EB] hover:underline cursor-pointer flex items-center space-x-0.5 ml-auto"
             >
               <span>{textLinkAction.label}</span>
               <ExternalLink className="w-3 h-3" />

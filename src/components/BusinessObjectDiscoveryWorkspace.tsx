@@ -321,18 +321,13 @@ export const BusinessObjectDiscoveryWorkspace: React.FC<
             </div>
           </div>
 
-          {/* AI 发现结论 Box (Light Blue Tint) */}
-          <div className="bg-[#F0F5FF] rounded-lg border border-[#D0E1FD] p-4 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-1.5 text-xs font-bold text-[#0F172A]">
-                <Sparkles className="w-4 h-4 text-[#2563EB]" />
-                <span>AI 发现结论</span>
-              </div>
-              <span className="text-xs font-bold text-[#2563EB]">
-                推荐：创建业务对象
-              </span>
+          {/* AI 发现结论 - 纯文本展示，不使用卡片 */}
+          <div className="space-y-1 text-xs text-[#334155] leading-relaxed pb-3 border-b border-[#F1F5F9]">
+            <div className="flex items-center space-x-1.5 text-xs font-bold text-[#0F172A]">
+              <Sparkles className="w-4 h-4 text-[#2563EB]" />
+              <span>AI 发现结论：推荐创建业务对象</span>
             </div>
-            <p className="text-xs text-[#334155] leading-relaxed">
+            <p className="text-xs text-[#475569] leading-relaxed pl-5.5">
               该数据资产稳定表达了一个独立的“服务工单”业务过程。<br />
               其稳定业务身份、完整生命周期、一致的数据粒度以及明确的业务关系，共同支持形成独立业务对象。
             </p>
@@ -736,8 +731,8 @@ export const BusinessObjectDiscoveryWorkspace: React.FC<
                 </div>
               </div>
 
-              <div className="p-3 bg-[#FFF7ED] rounded-lg border border-[#FFEDD5] text-xs text-[#EA580C]">
-                AI结论：两者的主业务标识与过程粒度不重叠，相似度 64% 处于低复用区间，建议创建独立业务对象。
+              <div className="text-xs text-[#EA580C] leading-relaxed py-1">
+                <span className="font-bold">AI 结论：</span>两者的主业务标识与过程粒度不重叠，相似度 64% 处于低复用区间，建议创建独立业务对象。
               </div>
 
               <div className="flex justify-end pt-2">
