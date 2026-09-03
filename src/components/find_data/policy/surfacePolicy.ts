@@ -14,6 +14,7 @@ export interface SurfaceCommand {
   mode?: 'QUICK_PREVIEW' | 'WORKBENCH';
   resourceIds?: ResourceId[];
   openedBy?: 'USER_EXPLICIT' | 'ACTION_CLICK' | 'TASK_REQUIRED';
+  blockedReason?: string;
 }
 
 /**
@@ -28,7 +29,6 @@ export function determineInteractionIntent(
   const normalized = text.trim();
 
   // Explicit surface opening directives:
-  // e.g. "打开完整字段列表", "查看全部字段", "打开资源比较", "展开这两张表比较", "打开当前数据方案", "查看权限差异", "进入民政数据目录", "打开分析计划"
   const isOpenExplicitDirective =
     /^(打开|展开|进入|切到|切换到|显示|跳到)/.test(normalized) ||
     normalized.includes('打开完整字段列表') ||
@@ -45,7 +45,6 @@ export function determineInteractionIntent(
   }
 
   // Pure informational questions:
-  // e.g. "这个表有哪些字段？", "这个资源适合当前分析吗？", "为什么推荐它？", "当前缺什么？", "它能覆盖过去 12 个月吗？"
   const isQuestion =
     /\?|？$/.test(normalized) ||
     normalized.includes('有哪些') ||
@@ -61,55 +60,102 @@ export function determineInteractionIntent(
     return 'QUESTION';
   }
 
-  // Default to general question
   return 'QUESTION';
 }
 
 /**
  * Central Surface Policy Engine:
- * Dictates whether and which surface should be opened, preserved, or closed.
+ * P0-05: Enforces strict credibility checks without blind fallbacks.
  */
 export function evaluateSurfacePolicy(
   intent: InteractionIntent,
   actionCode?: string,
   currentSurface?: SurfaceState,
   task?: FindDataTaskState,
-  text?: string
+  text?: string,
+  actionPayload?: Record<string, unknown>
 ): SurfaceCommand {
   const activeSurfaceType = currentSurface?.type || 'CLOSED';
 
   // 1. Handle Typed Action Codes (from button clicks)
   if (actionCode) {
     switch (actionCode) {
-      case 'OPEN_COMPARE':
+      case 'OPEN_COMPARE': {
+        const candidateIds =
+          (actionPayload?.resourceIds as ResourceId[]) ||
+          task?.comparisonModel?.resourceIds ||
+          (task?.activeSurface?.type === 'COMPARE' ? task?.activeSurface?.resourceIds : undefined) ||
+          [];
+
+        if (candidateIds.length < 2) {
+          // If task has at least 2 discoverable resources, we can compare them
+          const discoverableIds = Object.keys(task?.resources || {}).filter(
+            (id) => task?.resources[id]?.availabilityByAction.discover !== 'DENIED'
+          );
+          if (discoverableIds.length < 2) {
+            return {
+              action: 'NO_CHANGE',
+              blockedReason: '当前至少需要 2 项可比数据资源才能展开对比视图。'
+            };
+          }
+        }
+
+        const idsToCompare = candidateIds.length >= 2 ? candidateIds : Object.keys(task?.resources || {}).slice(0, 2);
+
         return {
           action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
           surface: 'COMPARE',
+          mode: 'QUICK_PREVIEW',
           openedBy: 'ACTION_CLICK',
-          resourceIds: ['r02', 'r03']
+          resourceIds: idsToCompare
         };
+      }
 
       case 'OPEN_FIELDS': {
-        const targetResId = task?.activeResourceId || 'r03';
+        const targetResId =
+          (actionPayload?.resourceId as ResourceId) ||
+          task?.activeResourceId ||
+          (task && Object.keys(task.resources).length > 0 ? Object.keys(task.resources)[0] : undefined);
+
+        if (!targetResId || !task?.resources[targetResId]) {
+          return {
+            action: 'NO_CHANGE',
+            blockedReason: '请先从当前结果中选择一个资源。'
+          };
+        }
+
         return {
           action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
           surface: 'FIELDS',
+          mode: 'WORKBENCH',
           openedBy: 'ACTION_CLICK',
           resourceIds: [targetResId]
         };
       }
 
-      case 'OPEN_SOLUTION':
+      case 'OPEN_SOLUTION': {
+        const hasItems = (task?.dataSolution.items.length || 0) > 0;
+        const hasGaps = (task?.dataSolution.gaps.length || 0) > 0;
+        if (!hasItems && !hasGaps) {
+          return {
+            action: 'NO_CHANGE',
+            blockedReason: '当前任务尚未生成有效的数据方案。'
+          };
+        }
+
         return {
           action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
           surface: 'SOLUTION',
+          mode: 'WORKBENCH',
           openedBy: 'ACTION_CLICK'
         };
+      }
 
       case 'OPEN_ACCESS':
         return {
           action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
           surface: 'ACCESS',
+          mode: 'WORKBENCH',
           openedBy: 'ACTION_CLICK'
         };
 
@@ -117,20 +163,27 @@ export function evaluateSurfacePolicy(
         return {
           action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
           surface: 'CATALOG',
+          mode: 'WORKBENCH',
           openedBy: 'ACTION_CLICK'
         };
 
       case 'PREPARE_ASK_PLAN':
-      case 'OPEN_ASK_PLAN':
+      case 'OPEN_ASK_PLAN': {
+        if (!task?.askPlan) {
+          return {
+            action: 'NO_CHANGE',
+            blockedReason: '当前尚未形成可执行的分析计划。'
+          };
+        }
         return {
           action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
           surface: 'ASK_PLAN',
+          mode: 'WORKBENCH',
           openedBy: 'ACTION_CLICK'
         };
+      }
 
       case 'KEEP_AS_GAP':
-        // Rule: KEEP_AS_GAP only updates DataSolution.gaps.
-        // It MUST NOT automatically open SOLUTION surface!
         return {
           action: 'NO_CHANGE'
         };
@@ -138,7 +191,9 @@ export function evaluateSurfacePolicy(
       case 'SELECT_RESOURCE':
       case 'EXPAND_SCOPE':
       case 'KEEP_MINIMAL_PLAN':
-        // Functional state changes that don't forcefully open new surfaces unless requested
+      case 'EVALUATE_AND_ADD':
+      case 'SUBMIT_CLARIFICATION':
+      case 'CREATE_PERMISSION_REQUEST':
         return {
           action: 'NO_CHANGE'
         };
@@ -168,28 +223,56 @@ export function evaluateSurfacePolicy(
     const norm = text.toLowerCase();
 
     if (norm.includes('字段')) {
-      const targetResId = task?.activeResourceId || 'r03';
+      const targetResId =
+        task?.activeResourceId ||
+        (task && Object.keys(task.resources).length > 0 ? Object.keys(task.resources)[0] : undefined);
+      if (!targetResId || !task?.resources[targetResId]) {
+        return {
+          action: 'NO_CHANGE',
+          blockedReason: '请先从当前结果中选择一个资源。'
+        };
+      }
       return {
         action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
         surface: 'FIELDS',
+        mode: 'WORKBENCH',
         openedBy: 'USER_EXPLICIT',
         resourceIds: [targetResId]
       };
     }
 
     if (norm.includes('比较') || norm.includes('对比')) {
+      const candidateIds =
+        task?.comparisonModel?.resourceIds ||
+        Object.keys(task?.resources || {}).slice(0, 2);
+      if (candidateIds.length < 2) {
+        return {
+          action: 'NO_CHANGE',
+          blockedReason: '当前至少需要 2 项可比数据资源才能展开对比视图。'
+        };
+      }
       return {
         action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
         surface: 'COMPARE',
+        mode: 'QUICK_PREVIEW',
         openedBy: 'USER_EXPLICIT',
-        resourceIds: ['r02', 'r03']
+        resourceIds: candidateIds
       };
     }
 
     if (norm.includes('方案')) {
+      const hasItems = (task?.dataSolution.items.length || 0) > 0;
+      const hasGaps = (task?.dataSolution.gaps.length || 0) > 0;
+      if (!hasItems && !hasGaps) {
+        return {
+          action: 'NO_CHANGE',
+          blockedReason: '当前任务尚未生成有效的数据方案。'
+        };
+      }
       return {
         action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
         surface: 'SOLUTION',
+        mode: 'WORKBENCH',
         openedBy: 'USER_EXPLICIT'
       };
     }
@@ -198,6 +281,7 @@ export function evaluateSurfacePolicy(
       return {
         action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
         surface: 'ACCESS',
+        mode: 'WORKBENCH',
         openedBy: 'USER_EXPLICIT'
       };
     }
@@ -206,14 +290,22 @@ export function evaluateSurfacePolicy(
       return {
         action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
         surface: 'CATALOG',
+        mode: 'WORKBENCH',
         openedBy: 'USER_EXPLICIT'
       };
     }
 
     if (norm.includes('计划') || norm.includes('计算') || norm.includes('分析')) {
+      if (!task?.askPlan) {
+        return {
+          action: 'NO_CHANGE',
+          blockedReason: '当前尚未形成可执行的分析计划。'
+        };
+      }
       return {
         action: activeSurfaceType === 'CLOSED' ? 'OPEN' : 'REPLACE',
         surface: 'ASK_PLAN',
+        mode: 'WORKBENCH',
         openedBy: 'USER_EXPLICIT'
       };
     }

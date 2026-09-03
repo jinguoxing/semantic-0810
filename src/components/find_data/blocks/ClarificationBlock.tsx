@@ -1,22 +1,29 @@
 import React, { useState } from 'react';
-import { Check, HelpCircle } from 'lucide-react';
+import { Check, HelpCircle, ArrowRight } from 'lucide-react';
 import { ClarificationQuestion } from '../model/FindDataTask';
 
-interface ClarificationBlockProps {
+export interface ClarificationBlockProps {
   question: ClarificationQuestion;
-  onSelectionChange?: (selectedIds: string[]) => void;
+  maxSelections?: number;
   disabled?: boolean;
+  onSubmit?: (questionId: string, selectedOptionIds: string[]) => void;
+  onSelectionChange?: (selectedIds: string[]) => void;
 }
 
 export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
   question,
-  onSelectionChange,
-  disabled = false
+  maxSelections,
+  disabled = false,
+  onSubmit,
+  onSelectionChange
 }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>(question.selectedOptionIds || []);
+  const [submitted, setSubmitted] = useState<boolean>(false);
+
+  const effectiveMax = maxSelections || (question.type === 'SINGLE' ? 1 : undefined);
 
   const handleToggle = (optionId: string) => {
-    if (disabled) return;
+    if (disabled || submitted) return;
     let next: string[];
     if (question.type === 'SINGLE') {
       next = [optionId];
@@ -24,6 +31,9 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
       if (selectedIds.includes(optionId)) {
         next = selectedIds.filter((id) => id !== optionId);
       } else {
+        if (effectiveMax && selectedIds.length >= effectiveMax) {
+          return; // reached limit
+        }
         next = [...selectedIds, optionId];
       }
     }
@@ -31,11 +41,24 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
     onSelectionChange?.(next);
   };
 
+  const handleSubmit = () => {
+    if (disabled || submitted || selectedIds.length === 0) return;
+    setSubmitted(true);
+    onSubmit?.(question.id, selectedIds);
+  };
+
   return (
-    <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl space-y-2.5 text-xs select-none">
-      <div className="flex items-center space-x-1.5 text-[#0F172A] font-bold">
-        <HelpCircle className="w-3.5 h-3.5 text-[#2563EB]" />
-        <span>{question.question}</span>
+    <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl space-y-3 text-xs select-none">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-1.5 text-[#0F172A] font-bold">
+          <HelpCircle className="w-3.5 h-3.5 text-[#2563EB]" />
+          <span>{question.question}</span>
+        </div>
+        {question.type === 'MULTIPLE' && (
+          <span className="text-[11px] text-[#64748B]">
+            {effectiveMax ? `最多选 ${effectiveMax} 项` : '可多选'}
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -45,13 +68,13 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
             <button
               key={opt.id}
               type="button"
-              disabled={disabled}
+              disabled={disabled || submitted}
               onClick={() => handleToggle(opt.id)}
               className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
                 isSelected
                   ? 'border-[#2563EB] bg-[#EFF6FF] text-[#1E3A8A]'
                   : 'border-[#E2E8F0] bg-white text-[#334155] hover:border-[#CBD5E1]'
-              } ${disabled ? 'opacity-75 cursor-default' : ''}`}
+              } ${disabled || submitted ? 'opacity-80 cursor-default' : ''}`}
             >
               <div className="flex items-center space-x-2 truncate">
                 <div
@@ -66,13 +89,31 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
                 <span className="font-medium truncate">{opt.label}</span>
               </div>
               {opt.recommended && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#DBEAFE] text-[#1E40AF] font-bold shrink-0 ml-1.5">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#DBEAFE] text-[#1E40AF] font-bold shrink-0 ml-1.5">
                   推荐
                 </span>
               )}
             </button>
           );
         })}
+      </div>
+
+      <div className="flex justify-end pt-1">
+        <button
+          type="button"
+          disabled={disabled || submitted || selectedIds.length === 0}
+          onClick={handleSubmit}
+          className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center space-x-1.5 transition-all ${
+            submitted
+              ? 'bg-[#F1F5F9] text-[#94A3B8] border border-[#E2E8F0] cursor-default'
+              : selectedIds.length === 0
+              ? 'bg-[#F1F5F9] text-[#94A3B8] cursor-not-allowed'
+              : 'bg-[#2563EB] text-white hover:bg-[#1D4ED8] shadow-sm cursor-pointer'
+          }`}
+        >
+          <span>{submitted ? '已确认' : '继续'}</span>
+          {!submitted && <ArrowRight className="w-3.5 h-3.5" />}
+        </button>
       </div>
     </div>
   );

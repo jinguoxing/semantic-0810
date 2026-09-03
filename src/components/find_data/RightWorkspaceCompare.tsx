@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { X, Check, ArrowRight, ShieldCheck, FileText, Info } from 'lucide-react';
+import { X, Check, ArrowRight, FileText, Info } from 'lucide-react';
 import { FindDataResource, ResourceComparisonRow, ResourceId } from './model/FindDataTask';
 
 interface RightWorkspaceCompareProps {
   resources: FindDataResource[];
-  comparisonRows: ResourceComparisonRow[];
+  comparisonRows?: ResourceComparisonRow[];
+  recommendationConclusion?: string;
   selectedResourceId?: ResourceId;
   onConfirmSelection: (resourceId: ResourceId) => void;
   onViewFields: (resourceId: ResourceId) => void;
@@ -13,27 +14,77 @@ interface RightWorkspaceCompareProps {
 
 export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
   resources,
-  comparisonRows,
-  selectedResourceId = 'r03',
+  comparisonRows = [],
+  recommendationConclusion,
+  selectedResourceId,
   onConfirmSelection,
   onViewFields,
   onClose
 }) => {
-  const [selectedId, setSelectedId] = useState<ResourceId>(selectedResourceId);
-
   const resA = resources[0];
   const resB = resources[1];
 
+  const defaultSelectedId = selectedResourceId || resB?.id || resA?.id;
+  const [selectedId, setSelectedId] = useState<ResourceId | undefined>(defaultSelectedId);
+
   if (!resA || !resB) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-white p-6 text-xs text-[#64748B]">
-        <span>暂无可比对的资源。</span>
-        <button onClick={onClose} className="mt-3 text-[#2563EB] hover:underline">
-          关闭
+      <div className="w-full h-full flex flex-col items-center justify-center bg-white p-6 text-xs text-[#64748B] select-none space-y-2">
+        <FileText className="w-10 h-10 text-[#CBD5E1]" />
+        <span className="font-semibold text-sm text-[#0F172A]">暂无可比对的资源项</span>
+        <p className="text-center text-[#64748B] max-w-xs">
+          请在检索结果或方案中选择至少两项候选数据资产进行深度选型对比。
+        </p>
+        <button
+          onClick={onClose}
+          className="mt-2 px-3 py-1 bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded text-[#475569] cursor-pointer"
+        >
+          关闭工作区
         </button>
       </div>
     );
   }
+
+  // Dynamic conclusion text if none provided
+  const conclusionText =
+    recommendationConclusion ||
+    `对比「${resA.name}」与「${resB.name}」：建议结合时效性、时间切片粒度以及权限可获取度进行选型。`;
+
+  // Fallback comparison rows if none provided
+  const rows: ResourceComparisonRow[] =
+    comparisonRows.length > 0
+      ? comparisonRows
+      : [
+          {
+            dimension: '资产类型与归属',
+            valueA: `${resA.type} (${resA.department || '未注明'})`,
+            valueB: `${resB.type} (${resB.department || '未注明'})`,
+            advantageSide: 'NEUTRAL'
+          },
+          {
+            dimension: '记录粒度',
+            valueA: resA.granularity,
+            valueB: resB.granularity,
+            advantageSide: 'NEUTRAL'
+          },
+          {
+            dimension: '覆盖范围/时效',
+            valueA: resA.timeCoverage,
+            valueB: resB.timeCoverage,
+            advantageSide: 'NEUTRAL'
+          },
+          {
+            dimension: '查询权限',
+            valueA: resA.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '查询需申请',
+            valueB: resB.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '查询需申请',
+            advantageSide:
+              resA.availabilityByAction.query === 'ALLOWED' && resB.availabilityByAction.query !== 'ALLOWED'
+                ? 'A'
+                : resB.availabilityByAction.query === 'ALLOWED' && resA.availabilityByAction.query !== 'ALLOWED'
+                ? 'B'
+                : 'NEUTRAL'
+          }
+        ];
 
   return (
     <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200 select-none">
@@ -45,9 +96,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
           </div>
           <div>
             <h3 className="text-sm font-bold text-[#0F172A] tracking-tight">资源选型对比</h3>
-            <p className="text-[11px] text-[#64748B]">
-              比对底册最新态与历史月度快照的适用范围
-            </p>
+            <p className="text-[11px] text-[#64748B]">比对候选资源的业务维度与口径差异</p>
           </div>
         </div>
         <button
@@ -61,15 +110,14 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar text-xs">
-        {/* Recommendation & Conclusion - Pure Text Representation */}
+        {/* Recommendation & Conclusion */}
         <div className="space-y-1 text-xs text-[#334155] leading-relaxed pb-2 border-b border-[#F1F5F9]">
           <div className="flex items-center space-x-1.5 font-bold text-[#0F172A]">
             <Info className="w-4 h-4 text-[#2563EB] shrink-0" />
-            <span>比对结论与推荐建议：</span>
+            <span>比对结论与建议：</span>
           </div>
           <p className="text-[11px] leading-relaxed text-[#475569] pl-5">
-            本次分析覆盖过去 12 个月（2025.09 — 2026.08），推荐将「<strong className="text-[#0F172A]">{resB.name}</strong>」作为可选下钻资源；
-            而「{resA.name}」仅含实时最新状态、无历史月度切片，且权限需申请，不建议纳入本次分析方案。
+            {conclusionText}
           </p>
         </div>
 
@@ -98,10 +146,10 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
                 {selectedId === resA.id && <Check className="w-2.5 h-2.5 stroke-[3]" />}
               </div>
             </div>
-            <div className="font-bold text-xs text-[#0F172A]">{resA.name}</div>
+            <div className="font-bold text-xs text-[#0F172A] truncate">{resA.name}</div>
             <p className="text-[11px] text-[#64748B] line-clamp-2 leading-relaxed">{resA.desc}</p>
-            <div className="pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-[10px]">
-              <span className="text-[#EA580C] font-semibold">查询需申请</span>
+            <div className="pt-1 border-t border-[#F1F5F9] flex justify-between items-center text-[10px] text-[#64748B]">
+              <span>权限：{resA.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '需申请'}</span>
               <button
                 type="button"
                 onClick={(e) => {
@@ -110,7 +158,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
                 }}
                 className="text-[#2563EB] hover:underline"
               >
-                查看元数据
+                查看字段
               </button>
             </div>
           </div>
@@ -125,14 +173,9 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
             }`}
           >
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-1.5">
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] font-medium border border-[#E2E8F0]">
-                  {resB.type}
-                </span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#DBEAFE] text-[#1E40AF] font-bold">
-                  推荐选择
-                </span>
-              </div>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] font-medium border border-[#E2E8F0]">
+                {resB.type}
+              </span>
               <div
                 className={`w-4 h-4 rounded-full flex items-center justify-center border ${
                   selectedId === resB.id
@@ -143,10 +186,10 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
                 {selectedId === resB.id && <Check className="w-2.5 h-2.5 stroke-[3]" />}
               </div>
             </div>
-            <div className="font-bold text-xs text-[#0F172A]">{resB.name}</div>
+            <div className="font-bold text-xs text-[#0F172A] truncate">{resB.name}</div>
             <p className="text-[11px] text-[#64748B] line-clamp-2 leading-relaxed">{resB.desc}</p>
-            <div className="pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-[10px]">
-              <span className="text-[#16A34A] font-semibold">当前可查询</span>
+            <div className="pt-1 border-t border-[#F1F5F9] flex justify-between items-center text-[10px] text-[#64748B]">
+              <span>权限：{resB.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '需申请'}</span>
               <button
                 type="button"
                 onClick={(e) => {
@@ -155,7 +198,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
                 }}
                 className="text-[#2563EB] hover:underline"
               >
-                查看字段 (18)
+                查看字段
               </button>
             </div>
           </div>
@@ -166,24 +209,28 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] text-[#475569]">
-                <th className="py-2.5 px-3 font-semibold w-24">比对维度</th>
-                <th className="py-2.5 px-3 font-semibold text-[#64748B]">{resA.name}</th>
-                <th className="py-2.5 px-3 font-semibold text-[#2563EB] bg-[#EFF6FF]/40">
-                  {resB.name} (推荐)
-                </th>
+                <th className="py-2.5 px-3 font-semibold w-1/4">比对维度</th>
+                <th className="py-2.5 px-3 font-semibold w-[37.5%] truncate">{resA.name}</th>
+                <th className="py-2.5 px-3 font-semibold w-[37.5%] truncate">{resB.name}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F1F5F9]">
-              {comparisonRows.map((row, idx) => (
+              {rows.map((row, idx) => (
                 <tr key={idx} className="hover:bg-[#F8FAFC]/50 transition-colors">
-                  <td className="py-2.5 px-3 font-bold text-[#0F172A] bg-[#FAFAFA] border-r border-[#F1F5F9] text-[11px]">
-                    {row.dimension}
+                  <td className="py-2 px-3 font-medium text-[#475569]">{row.dimension}</td>
+                  <td
+                    className={`py-2 px-3 text-[11px] leading-relaxed ${
+                      row.advantageSide === 'A' ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
+                    }`}
+                  >
+                    {row.valueA}
                   </td>
-                  <td className="py-2.5 px-3 text-[#475569] leading-relaxed">
-                    {row.values[resA.id]}
-                  </td>
-                  <td className="py-2.5 px-3 text-[#0F172A] font-medium leading-relaxed bg-[#EFF6FF]/20">
-                    {row.values[resB.id]}
+                  <td
+                    className={`py-2 px-3 text-[11px] leading-relaxed ${
+                      row.advantageSide === 'B' ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
+                    }`}
+                  >
+                    {row.valueB}
                   </td>
                 </tr>
               ))}
@@ -192,19 +239,25 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
         </div>
       </div>
 
-      {/* Footer Action */}
+      {/* Footer */}
       <div className="p-4 border-t border-[#E2E8F0] bg-[#FAFAFA] flex items-center justify-between shrink-0">
-        <div className="text-[11px] text-[#64748B]">
-          当前已选中：
-          <span className="font-bold text-[#0F172A]">
-            {selectedId === resA.id ? resA.name : resB.name}
-          </span>
-        </div>
         <button
-          onClick={() => onConfirmSelection(selectedId)}
-          className="px-4 py-1.5 text-xs font-bold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-lg transition-colors cursor-pointer flex items-center space-x-1.5 shadow-2xs"
+          onClick={onClose}
+          className="px-3 py-1.5 text-xs text-[#64748B] hover:text-[#0F172A] hover:bg-[#E2E8F0] rounded-lg transition-colors cursor-pointer"
         >
-          <span>确认优选并同步至方案</span>
+          取消
+        </button>
+
+        <button
+          onClick={() => selectedId && onConfirmSelection(selectedId)}
+          disabled={!selectedId}
+          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center space-x-1.5 ${
+            selectedId
+              ? 'text-white bg-[#2563EB] hover:bg-[#1D4ED8] shadow-2xs'
+              : 'text-[#94A3B8] bg-[#F1F5F9] cursor-not-allowed'
+          }`}
+        >
+          <span>锁定选定资源入方案</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>

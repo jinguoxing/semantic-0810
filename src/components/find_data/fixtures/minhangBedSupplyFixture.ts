@@ -2,6 +2,7 @@ import {
   FindDataResource,
   FieldMetadata,
   ResourceComparisonRow,
+  ResourceComparisonModel,
   DataSolution,
   AskPlan,
   RequirementHypothesis
@@ -378,6 +379,14 @@ export const MINHANG_COMPARISON_ROWS: ResourceComparisonRow[] = [
   }
 ];
 
+export const MINHANG_COMPARISON_MODEL: ResourceComparisonModel = {
+  resourceIds: ['r02', 'r03'],
+  recommendedResourceId: 'r03',
+  recommendationSummary:
+    '本次分析覆盖过去 12 个月（2025.09 — 2026.08），推荐将「常住人口月度快照」作为可选下钻资源；而「实时人员底册」仅含实时最新状态、无历史月度切片，且权限需申请，不建议纳入本次分析方案。',
+  rows: MINHANG_COMPARISON_ROWS
+};
+
 export const MINHANG_INITIAL_HYPOTHESIS: RequirementHypothesis = {
   region: '上海市闵行区',
   timeRange: {
@@ -417,8 +426,7 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       inclusionState: 'SELECTED',
       coverage: ['上海市闵行区及各街镇', '2025.09 — 2026.08 月度序列'],
       limitations: ['为街镇汇总级指标，不支持社区/村居进一步下钻'],
-      evidenceRefs: ['官方正式指标 · 统计口径稳定'],
-      availabilityByAction: MINHANG_RESOURCES.r01.availabilityByAction
+      evidenceRefs: ['官方正式指标 · 统计口径稳定']
     },
     {
       resourceId: 'r04',
@@ -426,8 +434,7 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       inclusionState: 'SELECTED',
       coverage: ['闵行区各街镇在营可用床位', '2025.09 — 2026.08 月度数据'],
       limitations: ['不含筹建中或暂停营业的床位数'],
-      evidenceRefs: ['市民政局核准在营指标'],
-      availabilityByAction: MINHANG_RESOURCES.r04.availabilityByAction
+      evidenceRefs: ['市民政局核准在营指标']
     },
     {
       resourceId: 'r03',
@@ -435,8 +442,7 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       inclusionState: 'RECOMMENDED',
       coverage: ['全区常住老年人口按月固化底册', '含年龄、失能评级、居村代码'],
       limitations: ['按人月固化，数据量较大；当前基线聚合分析非必需'],
-      evidenceRefs: ['可支持未来深入街镇下居村委或高龄结构穿透下钻'],
-      availabilityByAction: MINHANG_RESOURCES.r03.availabilityByAction
+      evidenceRefs: ['可支持未来深入街镇下居村委或高龄结构穿透下钻']
     },
     {
       resourceId: 'r02',
@@ -444,8 +450,7 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       inclusionState: 'NOT_INCLUDED',
       coverage: ['实时人员底册'],
       limitations: ['仅含实时最新状态，无历史月度快照；查询需申请'],
-      evidenceRefs: ['已被 r03 (常住人口月度快照) 优选替代'],
-      availabilityByAction: MINHANG_RESOURCES.r02.availabilityByAction
+      evidenceRefs: ['已被 r03 (常住人口月度快照) 优选替代']
     },
     {
       resourceId: 'r06',
@@ -453,8 +458,7 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       inclusionState: 'RECOMMENDED',
       coverage: ['闵行区登记在册养老机构名录'],
       limitations: ['机构层级名录，缺少实时床位动态占用流'],
-      evidenceRefs: ['可用于解释各街镇床位供给主要由哪些具体机构提供'],
-      availabilityByAction: MINHANG_RESOURCES.r06.availabilityByAction
+      evidenceRefs: ['可用于解释各街镇床位供给主要由哪些具体机构提供']
     },
     {
       resourceId: 'r07',
@@ -462,8 +466,7 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       inclusionState: 'NOT_INCLUDED',
       coverage: ['居家上门助餐、助洁服务记录'],
       limitations: ['仅反映居家上门服务，不代表机构养老等完整养老服务体系'],
-      evidenceRefs: ['已声明为当前方案缺口，不参与本次床位供给基线计算'],
-      availabilityByAction: MINHANG_RESOURCES.r07.availabilityByAction
+      evidenceRefs: ['已声明为当前方案缺口，不参与本次床位供给基线计算']
     }
   ],
   gaps: [

@@ -89,7 +89,6 @@ export interface DataSolutionItem {
   coverage: string[];
   limitations: string[];
   evidenceRefs: string[];
-  availabilityByAction: AvailabilityByAction;
 }
 
 export interface SolutionGap {
@@ -140,6 +139,13 @@ export interface ResourceComparisonRow {
   highlightResourceId?: ResourceId;
 }
 
+export interface ResourceComparisonModel {
+  resourceIds: ResourceId[];
+  recommendedResourceId?: ResourceId;
+  recommendationSummary?: string;
+  rows: ResourceComparisonRow[];
+}
+
 export interface RuntimeStatus {
   active: boolean;
   message: string;
@@ -161,6 +167,7 @@ export interface AskPlanCalculationSpec {
 export interface AskRunResult {
   success: boolean;
   executedAt: string;
+  dataOrigin?: 'MOCK_FIXTURE' | 'LIVE_QUERY';
   resultArtifact?: {
     districtWeightedAverage: string;
     totalPopulation: string;
@@ -293,6 +300,29 @@ export type TaskStatus =
   | 'PREPARING_ASK'
   | 'FAILED';
 
+export interface PermissionRequestRef {
+  requestId: string;
+  resourceIds: ResourceId[];
+  actionType: 'query' | 'export' | 'preview';
+  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
+  submittedAt: string;
+}
+
+export interface ResourceCandidate {
+  resourceId: ResourceId;
+  title: string;
+  score?: number;
+  reason?: string;
+}
+
+export interface TaskSearchResult {
+  query: string;
+  totalMatches: number;
+  candidateIds: ResourceId[];
+  candidateSnapshot?: ResourceCandidate[];
+  returnedCount: number;
+}
+
 export interface FindDataTaskState {
   taskId: string;
   title: string;
@@ -307,6 +337,9 @@ export interface FindDataTaskState {
 
   resources: Record<ResourceId, FindDataResource>;
   dataSolution: DataSolution;
+  searchResult?: TaskSearchResult;
+  permissionRequests: Record<string, PermissionRequestRef>;
+  comparisonModel?: ResourceComparisonModel;
 
   activeResourceId?: ResourceId;
   activeSurface: SurfaceState;
@@ -316,6 +349,7 @@ export interface FindDataTaskState {
 
   runtimeStatus?: RuntimeStatus;
   askPlan?: AskPlan;
+  metadata?: Record<string, unknown>;
 
   createdAt: string;
   updatedAt: string;

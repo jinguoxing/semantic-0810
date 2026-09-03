@@ -5,6 +5,7 @@ export const initialFindDataTaskState: FindDataTaskState = {
   taskId: '',
   title: '新建找数据任务',
   status: 'IDLE',
+  scenarioKey: 'generic',
   requirementHypothesis: {
     dimensions: [],
     analysisFocus: [],
@@ -12,7 +13,7 @@ export const initialFindDataTaskState: FindDataTaskState = {
     unresolvedQuestions: []
   },
   searchScope: {
-    domains: ['人口', '民政'],
+    domains: [],
     includeCrossDepartment: true
   },
   turns: [],
@@ -25,13 +26,24 @@ export const initialFindDataTaskState: FindDataTaskState = {
     limitationSummary: [],
     updatedAt: new Date().toISOString()
   },
+  searchResult: {
+    totalMatches: 0,
+    candidateIds: [],
+    returnedCount: 0,
+    query: ''
+  },
+  permissionRequests: {},
   activeResourceId: undefined,
   activeSurface: {
-    type: 'CLOSED'
+    type: 'CLOSED',
+    mode: 'QUICK_PREVIEW'
   },
   requirementRevision: 0,
   searchRevision: 0,
-  runtimeStatus: undefined,
+  runtimeStatus: {
+    active: false,
+    message: ''
+  },
   askPlan: undefined,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString()
@@ -143,6 +155,16 @@ export function findDataReducer(
         return state;
       }
 
+      // Upsert resources if provided (discover !== 'DENIED')
+      const updatedResources = { ...state.resources };
+      if (action.payload.resourceUpserts) {
+        for (const res of action.payload.resourceUpserts) {
+          if (res.availabilityByAction?.discover !== 'DENIED') {
+            updatedResources[res.id] = res;
+          }
+        }
+      }
+
       // Merge solution items
       const existingItemsMap = new Map(state.dataSolution.items.map((i) => [i.resourceId, i]));
       for (const newItem of action.payload.solutionItems) {
@@ -157,11 +179,31 @@ export function findDataReducer(
         ...state,
         status: 'READY',
         runtimeStatus: undefined,
+        resources: updatedResources,
+        searchResult: {
+          query: action.payload.query ?? state.searchResult?.query ?? '',
+          totalMatches: action.payload.totalMatches ?? action.payload.discoveredResourceIds.length,
+          candidateIds: action.payload.discoveredResourceIds,
+          candidateSnapshot: action.payload.candidateSnapshot,
+          returnedCount: action.payload.discoveredResourceIds.length
+        },
         dataSolution: {
           ...state.dataSolution,
           items: Array.from(existingItemsMap.values()),
           gaps: mergedGaps,
           updatedAt: now
+        },
+        updatedAt: now
+      };
+    }
+
+    case 'PERMISSION_REQUEST_CREATED': {
+      const { request } = action.payload;
+      return {
+        ...state,
+        permissionRequests: {
+          ...state.permissionRequests,
+          [request.requestId]: request
         },
         updatedAt: now
       };

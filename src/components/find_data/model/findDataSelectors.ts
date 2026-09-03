@@ -4,7 +4,8 @@ import {
   ResourceId,
   DataSolutionItem,
   SolutionGap,
-  FieldMetadata
+  FieldMetadata,
+  AvailabilityByAction
 } from './FindDataTask';
 
 /**
@@ -14,14 +15,14 @@ import {
  */
 export function selectDiscoverableResources(task: FindDataTaskState): FindDataResource[] {
   return Object.values(task.resources).filter(
-    (res) => res.availabilityByAction.discover !== 'DENIED'
+    (res) => res.availabilityByAction?.discover !== 'DENIED'
   );
 }
 
 export function selectDiscoverableResourceMap(task: FindDataTaskState): Record<ResourceId, FindDataResource> {
   const map: Record<ResourceId, FindDataResource> = {};
   for (const res of Object.values(task.resources)) {
-    if (res.availabilityByAction.discover !== 'DENIED') {
+    if (res.availabilityByAction?.discover !== 'DENIED') {
       map[res.id] = res;
     }
   }
@@ -34,10 +35,18 @@ export function selectResourceById(
 ): FindDataResource | undefined {
   if (!resourceId) return undefined;
   const res = task.resources[resourceId];
-  if (!res || res.availabilityByAction.discover === 'DENIED') {
+  if (!res || res.availabilityByAction?.discover === 'DENIED') {
     return undefined;
   }
   return res;
+}
+
+export function selectResourceAvailability(
+  task: FindDataTaskState,
+  resourceId?: ResourceId
+): AvailabilityByAction | undefined {
+  if (!resourceId) return undefined;
+  return task.resources[resourceId]?.availabilityByAction;
 }
 
 export function selectActiveResource(task: FindDataTaskState): FindDataResource | undefined {
@@ -53,24 +62,77 @@ export function selectResourceFields(
 }
 
 /**
- * All solution items where discover !== 'DENIED'.
- * Used in Recommended View: includes REQUESTABLE resources with recommendation notes.
+ * 1. selectBusinessRelevantItems:
+ * Returns all discoverable items with business role CORE, CONDITIONAL_SUPPORT, OPTIONAL_DRILLDOWN, or PARTIAL_MATCH
+ */
+export function selectBusinessRelevantItems(task: FindDataTaskState): DataSolutionItem[] {
+  const discoverableMap = selectDiscoverableResourceMap(task);
+  return task.dataSolution.items.filter((item) => {
+    const res = discoverableMap[item.resourceId];
+    return res !== undefined && ['CORE', 'CONDITIONAL_SUPPORT', 'OPTIONAL_DRILLDOWN', 'PARTIAL_MATCH'].includes(item.role);
+  });
+}
+
+/**
+ * 2. selectRecommendedSolutionItems:
+ * Returns items where inclusionState is RECOMMENDED or SELECTED.
  */
 export function selectRecommendedSolutionItems(task: FindDataTaskState): DataSolutionItem[] {
   const discoverableMap = selectDiscoverableResourceMap(task);
   return task.dataSolution.items.filter((item) => {
     const res = discoverableMap[item.resourceId];
-    return res !== undefined && item.inclusionState !== 'NOT_INCLUDED';
+    return res !== undefined && (item.inclusionState === 'RECOMMENDED' || item.inclusionState === 'SELECTED');
   });
 }
 
 /**
- * Executable subset:
- * Derived from the SAME DataSolution. Only items where query === 'ALLOWED' are strictly executable.
+ * 3. selectPartialMatchSolutionItems:
+ * Returns items where role is PARTIAL_MATCH
+ */
+export function selectPartialMatchSolutionItems(task: FindDataTaskState): DataSolutionItem[] {
+  const discoverableMap = selectDiscoverableResourceMap(task);
+  return task.dataSolution.items.filter((item) => {
+    const res = discoverableMap[item.resourceId];
+    return res !== undefined && item.role === 'PARTIAL_MATCH';
+  });
+}
+
+/**
+ * 4. selectExecutableSolutionItems:
+ * Must be in recommended/selected AND resource availability query === 'ALLOWED'
  */
 export function selectExecutableSolutionItems(task: FindDataTaskState): DataSolutionItem[] {
   const recommended = selectRecommendedSolutionItems(task);
-  return recommended.filter((item) => item.availabilityByAction.query === 'ALLOWED');
+  return recommended.filter((item) => {
+    const availability = task.resources[item.resourceId]?.availabilityByAction;
+    return availability?.query === 'ALLOWED';
+  });
+}
+
+/**
+ * 5. selectPermissionRelevantItems:
+ * Used by Access Surface:
+ * - Current solution recommended or selected items
+ * - Business relevant items where query is REQUESTABLE
+ * - Partial match items where query is REQUESTABLE
+ */
+export function selectPermissionRelevantItems(task: FindDataTaskState): DataSolutionItem[] {
+  const discoverableMap = selectDiscoverableResourceMap(task);
+  const itemsMap = new Map<ResourceId, DataSolutionItem>();
+
+  for (const item of task.dataSolution.items) {
+    if (!discoverableMap[item.resourceId]) continue;
+    const availability = task.resources[item.resourceId]?.availabilityByAction;
+
+    const isRecommendedOrSelected = item.inclusionState === 'RECOMMENDED' || item.inclusionState === 'SELECTED';
+    const isRequestable = availability?.query === 'REQUESTABLE';
+
+    if (isRecommendedOrSelected || isRequestable) {
+      itemsMap.set(item.resourceId, item);
+    }
+  }
+
+  return Array.from(itemsMap.values());
 }
 
 export interface SolutionGroups {
@@ -86,7 +148,7 @@ export function selectSolutionGroups(
 ): SolutionGroups {
   const items =
     mode === 'executable'
-      ? selectRecommendedSolutionItems(task) // in executable mode, show all but mark non-allowed as not executable
+      ? selectExecutableSolutionItems(task)
       : selectRecommendedSolutionItems(task);
 
   const groups: SolutionGroups = {
@@ -127,14 +189,14 @@ export function selectSolutionGaps(task: FindDataTaskState): SolutionGap[] {
 }
 
 /**
- * Derives user-friendly display text for query permission
+ * Derives user-friendly display text for query permission based on availability
  */
-export function getQueryStatusDisplay(item: DataSolutionItem): {
+export function getQueryStatusDisplay(availability?: AvailabilityByAction): {
   label: string;
   badgeClass: string;
   isExecutable: boolean;
 } {
-  const queryDecision = item.availabilityByAction.query;
+  const queryDecision = availability?.query;
   switch (queryDecision) {
     case 'ALLOWED':
       return {

@@ -5,11 +5,35 @@ export interface FindDataTaskStore {
   save(task: FindDataTaskState): void;
   remove(taskId: string): void;
   list(): FindDataTaskState[];
+  getCurrentTaskId(): string | null;
+  setCurrentTaskId(taskId: string | null): void;
 }
 
 const STORAGE_PREFIX = 'semovix_find_data_task_';
+const CURRENT_TASK_KEY = 'semovix_find_data_current_task_id';
 
 export class LocalStorageFindDataTaskStore implements FindDataTaskStore {
+  getCurrentTaskId(): string | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      return localStorage.getItem(CURRENT_TASK_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  setCurrentTaskId(taskId: string | null): void {
+    if (typeof window === 'undefined') return;
+    try {
+      if (taskId) {
+        localStorage.setItem(CURRENT_TASK_KEY, taskId);
+      } else {
+        localStorage.removeItem(CURRENT_TASK_KEY);
+      }
+    } catch {
+      // ignore
+    }
+  }
   load(taskId: string): FindDataTaskState | null {
     if (typeof window === 'undefined') return null;
     try {

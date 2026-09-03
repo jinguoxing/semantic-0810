@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { X, Calculator, CheckCircle2, ShieldCheck, Play, Edit3, AlertCircle, Loader2 } from 'lucide-react';
-import { FindDataTaskState } from './model/FindDataTask';
+import { X, Calculator, CheckCircle2, ShieldCheck, Play, Edit3, AlertCircle, Loader2, RefreshCw, Database } from 'lucide-react';
+import { FindDataTaskState, PermissionCheckState } from './model/FindDataTask';
 
 interface RightWorkspaceAskPlanProps {
   task: FindDataTaskState;
+  onCheckPermission: () => Promise<boolean>;
   onRunPlan: () => Promise<void>;
   onReturnToSolution: () => void;
   onModifySpec?: () => void;
@@ -12,26 +13,66 @@ interface RightWorkspaceAskPlanProps {
 
 export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   task,
+  onCheckPermission,
   onRunPlan,
   onReturnToSolution,
   onModifySpec,
   onClose
 }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const plan = task.askPlan;
-  const lastRunResult = plan?.lastRunResult;
-  const isRunning = plan?.status === 'RUNNING' || isSubmitting;
-  const hasExecuted = plan?.status === 'COMPLETED' && !!lastRunResult?.success;
-  const checkState = plan?.permissionCheckState || 'NOT_CHECKED';
+  const [checkState, setCheckState] = useState<PermissionCheckState>(
+    plan?.permissionCheckState || 'NOT_CHECKED'
+  );
+  const [isChecking, setIsChecking] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+
+  if (!plan) {
+    return (
+      <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200 select-none">
+        <div className="h-14 px-5 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-[#FAFAFA]">
+          <div className="flex items-center space-x-2.5">
+            <Calculator className="w-4 h-4 text-[#2563EB]" />
+            <h3 className="text-sm font-bold text-[#0F172A]">Ask Data 分析计划</h3>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-[#F1F5F9] text-[#64748B] flex items-center justify-center">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-2 text-xs">
+          <Calculator className="w-10 h-10 text-[#CBD5E1]" />
+          <p className="font-bold text-sm text-[#0F172A]">当前尚未生成分析计划</p>
+          <p className="text-[#64748B] max-w-xs">
+            分析计划需要在完成找数据意图收敛、数据方案确认及核心指标权限就绪后生成。
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const lastRunResult = plan.lastRunResult;
+  const hasExecuted = plan.status === 'COMPLETED' && !!lastRunResult?.success;
+
+  const handleCheckPermission = async () => {
+    if (isChecking || isExecuting) return;
+    setIsChecking(true);
+    setCheckState('CHECKING');
+    try {
+      const allowed = await onCheckPermission();
+      setCheckState(allowed ? 'ALLOWED' : 'BLOCKED');
+    } catch {
+      setCheckState('BLOCKED');
+    } finally {
+      setIsChecking(false);
+    }
+  };
 
   const handleRunClick = async () => {
-    if (isRunning) return;
-    setIsSubmitting(true);
+    if (checkState !== 'ALLOWED' || isChecking || isExecuting) return;
+    setIsExecuting(true);
     try {
       await onRunPlan();
     } finally {
-      setIsSubmitting(false);
+      setIsExecuting(false);
     }
   };
 
@@ -47,7 +88,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
             <div className="flex items-center space-x-2">
               <h3 className="text-sm font-bold text-[#0F172A] tracking-tight">Ask Data 分析计划</h3>
               <span className="text-[10px] px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] font-bold rounded border border-[#BFDBFE]">
-                交接准备完成
+                交接准备
               </span>
             </div>
             <p className="text-[11px] text-[#64748B]">由找数据方案转入分析计算的执行规划</p>
@@ -64,26 +105,26 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar text-xs">
-        {/* Section 1: 本次分析计算 */}
+        {/* Section 1: 本次分析计算定义 */}
         <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="font-bold text-xs text-[#0F172A]">一、本次分析计算定义</span>
             <span className="text-[10px] px-2 py-0.5 rounded bg-[#FEF3C7] text-[#D97706] font-bold border border-[#FDE68A]">
-              本次分析计算 · 非正式指标
+              分析派生指标
             </span>
           </div>
           <div className="text-sm font-bold text-[#2563EB]">
-            {plan?.calculationSpec.metricName || '每千名 60 岁以上常住人口养老床位数'}
+            {plan.calculationSpec.metricName || '每千名 60 岁以上常住人口养老床位数'}
           </div>
 
           {/* Formula Display */}
           <div className="p-3 bg-white rounded-lg border border-[#E2E8F0] font-mono text-xs text-[#1E293B] space-y-1">
             <div className="text-[10px] font-sans font-semibold text-[#64748B] mb-1">计算公式：</div>
             <div className="text-[#2563EB] font-bold">
-              {plan?.calculationSpec.formula || '( 在营可用养老床位数 ÷ 60 岁以上常住人口数 ) × 1000'}
+              {plan.calculationSpec.formula || '( 在营可用养老床位数 ÷ 60 岁以上常住人口数 ) × 1000'}
             </div>
             <div className="text-[10px] font-sans text-[#94A3B8] pt-1 leading-relaxed">
-              {plan?.calculationSpec.formulaExplanation || '* 分子：在营可用床位；分母：60 岁及以上常住人口；乘以 1000 换算为千人床位数。'}
+              {plan.calculationSpec.formulaExplanation}
             </div>
           </div>
         </div>
@@ -92,7 +133,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
         <div className="space-y-2">
           <div className="font-bold text-xs text-[#0F172A] flex items-center space-x-1.5 pb-1 border-b border-[#F1F5F9]">
             <span className="w-1.5 h-3.5 bg-[#2563EB] rounded-full" />
-            <span>二、核心输入（2项正式指标）</span>
+            <span>二、核心输入指标（2项正式指标）</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="p-2.5 bg-white border border-[#E2E8F0] rounded-lg">
@@ -110,47 +151,80 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
         <div className="space-y-2">
           <div className="font-bold text-xs text-[#0F172A] flex items-center space-x-1.5 pb-1 border-b border-[#F1F5F9]">
             <span className="w-1.5 h-3.5 bg-[#2563EB] rounded-full" />
-            <span>三、基准比对规则</span>
+            <span>三、基准比对规则与边界</span>
           </div>
-          <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg space-y-1">
+          <div className="p-3 bg-white border border-[#E2E8F0] rounded-lg space-y-1.5">
             <div className="font-semibold text-[#0F172A]">与全区加权平均基准比较</div>
             <p className="text-[11px] text-[#64748B] leading-relaxed">
-              以全区 14 个街镇总在营可用床位数与总 60 岁以上老年人口计算加权基准比率（24.8 张/千人），识别显著偏离均值的街镇。
+              以全区 14 个街镇总在营可用床位数与总 60 岁以上老年人口计算加权基准比率，识别显著偏离均值的街镇。
             </p>
+            <div className="p-2 bg-[#FFFBEB] rounded border border-[#FEF3C7] text-[11px] text-[#92400E]">
+              <span className="font-semibold">约束边界：</span>
+              {plan.calculationSpec.strictConclusionBoundary}
+            </div>
           </div>
         </div>
 
-        {/* Section 4: 权限校验说明 */}
-        <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl flex items-center justify-between text-xs">
-          <div className="flex items-center space-x-2">
-            <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
-            <span className="font-semibold text-[#0F172A]">执行前安全校验：</span>
-            <span className="text-[#64748B]">
-              {checkState === 'NOT_CHECKED'
-                ? '将在执行前重新校验核心资源的查询权限。'
+        {/* Section 4: 权限校验状态机卡片 */}
+        <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl space-y-2.5 text-xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
+              <span className="font-bold text-[#0F172A]">执行前权限重校验（严格状态机）：</span>
+            </div>
+            <span
+              className={`text-[10px] px-2 py-0.5 font-bold rounded border ${
+                checkState === 'ALLOWED'
+                  ? 'bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]'
+                  : checkState === 'CHECKING'
+                  ? 'bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]'
+                  : checkState === 'BLOCKED'
+                  ? 'bg-[#FEF2F2] text-[#DC2626] border-[#FECACA]'
+                  : 'bg-[#F1F5F9] text-[#64748B] border-[#E2E8F0]'
+              }`}
+            >
+              {checkState === 'ALLOWED'
+                ? '已通过校验 (ALLOWED)'
                 : checkState === 'CHECKING'
-                ? '正在核验查询权限…'
-                : '核心指标查询权限已校验通过'}
+                ? '核验中…'
+                : checkState === 'BLOCKED'
+                ? '权限阻断 (BLOCKED)'
+                : '未校验 (NOT_CHECKED)'}
             </span>
           </div>
-          <span
-            className={`text-[10px] px-2 py-0.5 font-bold rounded border ${
-              checkState === 'ALLOWED'
-                ? 'bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]'
+
+          <div className="text-[11px] text-[#64748B] flex items-center justify-between">
+            <span>
+              {checkState === 'ALLOWED'
+                ? '核心资源查询权限已确认，可安全执行计算。'
                 : checkState === 'CHECKING'
-                ? 'bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]'
-                : 'bg-[#F1F5F9] text-[#64748B] border-[#E2E8F0]'
-            }`}
-          >
-            {checkState === 'ALLOWED'
-              ? '已通过'
-              : checkState === 'CHECKING'
-              ? '核验中'
-              : '执行前自动触发'}
-          </span>
+                ? '正在向权限服务核查资源查询权限快照…'
+                : checkState === 'BLOCKED'
+                ? '由于核心资源查询权限缺失，暂不可开始计算。'
+                : '系统要求在正式触发运算前显式完成权限状态校验。'}
+            </span>
+
+            <button
+              type="button"
+              disabled={isChecking || isExecuting}
+              onClick={handleCheckPermission}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center space-x-1 transition-all ${
+                checkState === 'ALLOWED'
+                  ? 'bg-white hover:bg-[#F1F5F9] border border-[#CBD5E1] text-[#475569]'
+                  : 'bg-[#2563EB] text-white hover:bg-[#1D4ED8] shadow-2xs'
+              }`}
+            >
+              {isChecking ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3" />
+              )}
+              <span>{checkState === 'ALLOWED' ? '重新校验' : '执行权限重校验'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Execution Results View - Text based presentation, no cards */}
+        {/* Section 5: P0-15 隔离计算结果: 仅在执行后呈现 */}
         {hasExecuted && lastRunResult?.resultArtifact && (
           <div className="pt-4 pb-2 border-t border-[#E2E8F0] space-y-3.5 text-xs animate-in fade-in">
             <div className="flex items-center justify-between pb-1.5 border-b border-[#F1F5F9]">
@@ -158,7 +232,12 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
                 <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
                 <span className="text-sm">分析执行结论与基线核查</span>
               </div>
-              <span className="text-[11px] text-[#64748B]">2026.08 最新月度</span>
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] px-2 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] font-mono border border-[#E2E8F0]">
+                  {lastRunResult.dataOrigin === 'MOCK_FIXTURE' ? '系统离线模拟数据' : '实时查询引擎'}
+                </span>
+                <span className="text-[11px] text-[#64748B]">2026.08 最新月度</span>
+              </div>
             </div>
 
             {/* Core Finding Text */}
@@ -224,22 +303,24 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
 
         <button
           onClick={handleRunClick}
-          disabled={isRunning}
-          className={`px-5 py-1.5 text-xs font-bold text-white rounded-lg transition-all shadow-2xs cursor-pointer flex items-center space-x-1.5 ${
-            isRunning ? 'bg-[#93C5FD] cursor-not-allowed' : 'bg-[#2563EB] hover:bg-[#1D4ED8]'
+          disabled={checkState !== 'ALLOWED' || isChecking || isExecuting}
+          className={`px-5 py-1.5 text-xs font-bold rounded-lg transition-all shadow-2xs flex items-center space-x-1.5 ${
+            checkState === 'ALLOWED' && !isChecking && !isExecuting
+              ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white cursor-pointer'
+              : 'bg-[#F1F5F9] text-[#94A3B8] border border-[#E2E8F0] cursor-not-allowed'
           }`}
         >
-          {isRunning ? (
+          {isExecuting ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
             <Play className="w-3.5 h-3.5 fill-current" />
           )}
           <span>
-            {isRunning
-              ? '正在重新校验权限并运行…'
+            {isExecuting
+              ? '正在执行分析计算…'
               : hasExecuted
               ? '重新运行分析'
-              : '确认并运行'}
+              : '确认并开始计算'}
           </span>
         </button>
       </div>

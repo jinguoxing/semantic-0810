@@ -10,7 +10,9 @@ import {
   AskPlan,
   AskRunResult,
   ConversationBlock,
-  AvailabilityByAction
+  AvailabilityByAction,
+  PermissionRequestRef,
+  DataSolutionItem
 } from '../model/FindDataTask';
 import { FindDataEvent } from '../model/findDataEvents';
 import {
@@ -22,196 +24,100 @@ import {
   MINHANG_RESOURCES,
   MINHANG_INITIAL_HYPOTHESIS,
   MINHANG_DATA_SOLUTION,
-  MINHANG_ASK_PLAN
+  MINHANG_ASK_PLAN,
+  MINHANG_COMPARISON_MODEL
 } from '../fixtures/minhangBedSupplyFixture';
 
-function isMinhangAgingScenario(query?: string): boolean {
-  if (!query) return true;
+/**
+ * P0-03: Strict scenario matching:
+ * Matches ONLY when:
+ * 1. scenarioKey === 'minhang_pension' or 'minhang_bed_supply'
+ * OR
+ * 2. Natural language text simultaneously satisfies:
+ *    - Region intent: contains '上海' or '闵行'
+ *    AND
+ *    - Core business intent: contains '养老' or '床位'
+ *    AND
+ *    - Population intent: contains '人口' or '老年'
+ */
+export function isMinhangAgingScenario(query?: string, scenarioKey?: string): boolean {
+  if (scenarioKey === 'minhang_pension' || scenarioKey === 'minhang_bed_supply') {
+    return true;
+  }
+  if (!query) return false;
   const q = query.toLowerCase();
-  return (
-    q.includes('闵行') ||
-    q.includes('养老') ||
-    q.includes('老龄') ||
-    q.includes('床位') ||
-    q.includes('老人') ||
-    q.includes('人口') ||
-    q.includes('供给')
-  );
+
+  const hasRegion = q.includes('上海') || q.includes('闵行');
+  const hasBusiness = q.includes('养老') || q.includes('床位');
+  const hasPopulation = q.includes('人口') || q.includes('老年') || q.includes('老人') || q.includes('老龄');
+
+  return hasRegion && hasBusiness && hasPopulation;
 }
 
 export class MockFindDataService implements FindDataService {
+  /**
+   * P0-01 & P0-02: Clean empty task creation
+   * Does NOT pre-fill assistant or user turns in createTask.
+   * Does NOT load Minhang fixtures into clean empty task.
+   */
   async createTask(input?: { initialQuery?: string }): Promise<FindDataTaskState> {
     const taskId = `task_${Date.now()}`;
-    const initialQuery = input?.initialQuery?.trim();
-    const isScenario = isMinhangAgingScenario(initialQuery);
-
+    const initialQuery = input?.initialQuery?.trim() || '';
     const now = new Date().toISOString();
 
-    if (!isScenario && initialQuery) {
-      // General/Unknown scenario fallback (AC-17: distinct query handling)
-      return {
-        taskId,
-        title: initialQuery.length > 24 ? `${initialQuery.slice(0, 24)}...` : initialQuery,
-        status: 'IDLE',
-        scenarioKey: 'generic',
-        goal: initialQuery,
-        requirementHypothesis: {
-          dimensions: [],
-          analysisFocus: [],
-          assumptions: [],
-          unresolvedQuestions: []
-        },
-        searchScope: {
-          domains: ['业务全域'],
-          includeCrossDepartment: true
-        },
-        turns: [
-          {
-            turnId: `turn_${Date.now()}_u`,
-            sender: 'USER',
-            createdAt: now,
-            blocks: [
-              {
-                type: 'TEXT',
-                id: `txt_${Date.now()}_u`,
-                content: initialQuery
-              }
-            ]
-          },
-          {
-            turnId: `turn_${Date.now()}_a`,
-            sender: 'ASSISTANT',
-            createdAt: now,
-            blocks: [
-              {
-                type: 'TEXT',
-                id: `txt_${Date.now()}_a`,
-                content: `您好！已接收您的找数据诉求：「${initialQuery}」。\n\n当前原型系统已完整预置「闵行区老年人口与养老床位供给水平分析」端到端高保真语义推理与问数闭环。\n\n针对当前输入的自定义领域，语义引擎已完成意图提取，如需快速验证完整的多轮协同与问数工作区联动，可点击下方推荐场景，或直接输入您的具体分析维度。`
-              },
-              {
-                type: 'ACTION_GROUP',
-                id: `act_${Date.now()}`,
-                actions: [
-                  {
-                    id: 'act_load_minhang',
-                    label: '进入：闵行区老年人口与床位分析',
-                    actionCode: 'LOAD_MINHANG_SCENARIO',
-                    variant: 'primary'
-                  }
-                ]
-              }
-            ]
-          }
-        ],
-        resources: {},
-        dataSolution: {
-          items: [],
-          gaps: [],
-          relationshipEvidence: [],
-          coverageSummary: [],
-          limitationSummary: [],
-          updatedAt: now
-        },
-        activeSurface: {
-          type: 'CLOSED'
-        },
-        requirementRevision: 1,
-        searchRevision: 0,
-        createdAt: now,
-        updatedAt: now
-      };
-    }
+    const title = initialQuery
+      ? (initialQuery.length > 24 ? `${initialQuery.slice(0, 24)}...` : initialQuery)
+      : '新建找数据任务';
 
-    // Minhang Bed Supply Scenario
-    const task: FindDataTaskState = {
+    return {
       taskId,
-      title: '闵行区老年人口与养老床位供给水平分析',
-      status: 'READY',
-      scenarioKey: 'minhang_bed_supply',
-      goal: '评估 2025 年 9 月至 2026 年 8 月，闵行区各街镇 60 岁及以上常住人口规模与在营养老床位供给水平，识别相对偏低街镇。',
-      requirementHypothesis: MINHANG_INITIAL_HYPOTHESIS,
+      title,
+      status: 'IDLE',
+      scenarioKey: 'generic',
+      goal: initialQuery || '',
+      requirementHypothesis: {
+        dimensions: [],
+        analysisFocus: [],
+        assumptions: [],
+        unresolvedQuestions: []
+      },
       searchScope: {
-        domains: ['人口与统计', '民政与社会保障'],
+        domains: [],
         includeCrossDepartment: true
       },
-      turns: [
-        {
-          turnId: 'turn_01_user',
-          sender: 'USER',
-          createdAt: now,
-          blocks: [
-            {
-              type: 'TEXT',
-              id: 'b_u01',
-              content: initialQuery || '请帮我评估过去一年闵行区老年人口规模与养老床位供给水平，看看各街镇供给是否均衡，哪些街镇需要重点关注。'
-            }
-          ]
-        },
-        {
-          turnId: 'turn_01_assistant',
-          sender: 'ASSISTANT',
-          createdAt: now,
-          blocks: [
-            {
-              type: 'TEXT',
-              id: 'b_a01',
-              content:
-                '已为您梳理闵行区养老服务评估的业务意图。根据上海市统计与民政指标规范，过去 12 个月（2025.09 — 2026.08）的核心基线核算建议聚焦在「60 岁及以上常住人口」与「在营可用养老床位」。'
-            },
-            {
-              type: 'CLARIFICATION',
-              id: 'b_c01',
-              question: MINHANG_INITIAL_HYPOTHESIS.unresolvedQuestions[0]
-            },
-            {
-              type: 'RESULT_BRIEF',
-              id: 'b_rb01',
-              briefKind: 'DIRECT_METRIC',
-              title: '已定位 2 项高置信度官方指标（可直接用于问数）',
-              candidates: [
-                {
-                  resourceId: 'r01',
-                  title: '60 岁以上常住人口数',
-                  typeBadge: '正式指标',
-                  statusBadge: '可用于问数',
-                  description: '按月统计各街镇 60 岁及以上常住人口总数，统计局/大数据中心官方口径。',
-                  granularity: '街镇 × 月份'
-                },
-                {
-                  resourceId: 'r04',
-                  title: '在营可用养老床位数',
-                  typeBadge: '正式指标',
-                  statusBadge: '可用于问数',
-                  description: '民政核定在营可用养老床位总数，按街镇月度统计。',
-                  granularity: '街镇 × 月份'
-                }
-              ],
-              primaryAction: {
-                label: '打开当前数据方案',
-                actionCode: 'OPEN_SOLUTION'
-              },
-              secondaryAction: {
-                label: '展开底册与快照对比',
-                actionCode: 'OPEN_COMPARE'
-              }
-            }
-          ]
-        }
-      ],
-      resources: MINHANG_RESOURCES,
-      dataSolution: MINHANG_DATA_SOLUTION,
-      activeResourceId: 'r03',
-      activeSurface: {
-        type: 'CLOSED'
+      turns: [],
+      resources: {},
+      searchResult: {
+        totalMatches: 0,
+        candidateIds: [],
+        returnedCount: 0,
+        query: ''
       },
-      requirementRevision: 1,
-      searchRevision: 1,
-      askPlan: MINHANG_ASK_PLAN,
+      dataSolution: {
+        items: [],
+        gaps: [],
+        relationshipEvidence: [],
+        coverageSummary: [],
+        limitationSummary: [],
+        updatedAt: now
+      },
+      permissionRequests: {},
+      activeResourceId: undefined,
+      activeSurface: {
+        type: 'CLOSED',
+        mode: 'QUICK_PREVIEW'
+      },
+      requirementRevision: 0,
+      searchRevision: 0,
+      runtimeStatus: {
+        active: false,
+        message: ''
+      },
+      askPlan: undefined,
+      metadata: {},
       createdAt: now,
       updatedAt: now
     };
-
-    return task;
   }
 
   async submitTurn(
@@ -230,12 +136,172 @@ export class MockFindDataService implements FindDataService {
     const turnId = `turn_${Date.now()}_assistant`;
     const events: FindDataEvent[] = [];
     const blocks: ConversationBlock[] = [];
-
-    // Check what the user asked
     const norm = text.toLowerCase();
 
-    // 1. Question about fields without explicitly asking to open GUI
-    if (norm.includes('字段') && intent === 'QUESTION') {
+    // 1. Check if user triggers Minhang Bed Supply scenario
+    const isMinhang = isMinhangAgingScenario(text, task.scenarioKey);
+
+    if (isMinhang) {
+      // Full Minhang bed supply flow
+      const nextReqRev = task.requirementRevision === 0 ? 1 : task.requirementRevision;
+      const nextSearchRev = task.searchRevision === 0 ? 1 : task.searchRevision + 1;
+
+      // Update requirement hypothesis
+      events.push({
+        type: 'REQUIREMENT_UPDATED',
+        payload: {
+          hypothesis: MINHANG_INITIAL_HYPOTHESIS,
+          bumpRevision: task.requirementRevision === 0
+        }
+      });
+
+      // Search started
+      events.push({
+        type: 'SEARCH_STARTED',
+        payload: {
+          searchRevision: nextSearchRev,
+          scope: {
+            domains: ['人口与统计', '民政与社会保障']
+          },
+          statusMessage: '正在检索匹配的数据资产与指标…'
+        }
+      });
+
+      // Filter out negative sample r_neg_rescue from upserts
+      const discoverableResources = Object.values(MINHANG_RESOURCES).filter(
+        (res) => res.availabilityByAction.discover !== 'DENIED'
+      );
+
+      // Search results received
+      events.push({
+        type: 'SEARCH_RESULTS_RECEIVED',
+        payload: {
+          requirementRevision: nextReqRev,
+          searchRevision: nextSearchRev,
+          query: text,
+          totalMatches: 2,
+          candidateSnapshot: [
+            { resourceId: 'r01', title: '60 岁以上常住人口数', score: 0.98, reason: '官方正式指标 · 统计口径稳定' },
+            { resourceId: 'r04', title: '在营可用养老床位数', score: 0.96, reason: '市民政局核准在营指标' }
+          ],
+          resourceUpserts: discoverableResources,
+          discoveredResourceIds: ['r01', 'r04'],
+          solutionItems: MINHANG_DATA_SOLUTION.items,
+          gaps: MINHANG_DATA_SOLUTION.gaps
+        }
+      });
+
+      // Prepare Ask Plan
+      events.push({
+        type: 'ASK_PLAN_PREPARED',
+        payload: {
+          askPlan: MINHANG_ASK_PLAN
+        }
+      });
+
+      // Set comparison model
+      events.push({
+        type: 'TASK_HYDRATED',
+        payload: {
+          task: {
+            ...task,
+            scenarioKey: 'minhang_pension',
+            comparisonModel: MINHANG_COMPARISON_MODEL
+          }
+        }
+      });
+
+      // Assistant conversation blocks
+      blocks.push({
+        type: 'TEXT',
+        id: `txt_${Date.now()}_intro`,
+        content:
+          '已为您梳理闵行区养老服务评估的业务意图。根据上海市统计与民政指标规范，过去 12 个月（2025.09 — 2026.08）的核心基线核算建议聚焦在「60 岁及以上常住人口」与「在营可用养老床位」。'
+      });
+
+      blocks.push({
+        type: 'CLARIFICATION',
+        id: `clar_${Date.now()}`,
+        question: MINHANG_INITIAL_HYPOTHESIS.unresolvedQuestions[0]
+      });
+
+      blocks.push({
+        type: 'RESULT_BRIEF',
+        id: `rb_${Date.now()}`,
+        briefKind: 'DIRECT_METRIC',
+        title: '已定位 2 项高置信度官方指标（可直接用于问数）',
+        candidates: [
+          {
+            resourceId: 'r01',
+            title: '60 岁以上常住人口数',
+            typeBadge: '正式指标',
+            statusBadge: '可用于问数',
+            description: '按月统计各街镇 60 岁及以上常住人口总数，统计局/大数据中心官方口径。',
+            granularity: '街镇 × 月份'
+          },
+          {
+            resourceId: 'r04',
+            title: '在营可用养老床位数',
+            typeBadge: '正式指标',
+            statusBadge: '可用于问数',
+            description: '民政核定在营可用养老床位总数，按街镇月度统计。',
+            granularity: '街镇 × 月份'
+          }
+        ],
+        primaryAction: {
+          label: '打开当前数据方案',
+          actionCode: 'OPEN_SOLUTION'
+        },
+        secondaryAction: {
+          label: '展开底册与快照对比',
+          actionCode: 'OPEN_COMPARE'
+        }
+      });
+    } else if (norm === '养老' || (norm.includes('养老') && !norm.includes('闵行') && !norm.includes('上海'))) {
+      // Single keyword '养老': triggers clarification question without loading Minhang fixtures
+      blocks.push({
+        type: 'TEXT',
+        id: `txt_${Date.now()}`,
+        content: '您好！已接收关于「养老」领域的找数据诉求。为了准确定位官方数据资产与统计指标，需要进一步明确具体的空间范围与业务维度：'
+      });
+
+      blocks.push({
+        type: 'CLARIFICATION',
+        id: `clar_${Date.now()}`,
+        question: {
+          id: 'q_pension_scope',
+          question: '您关注的是哪个区县或业务维度的养老数据？',
+          type: 'SINGLE',
+          options: [
+            { id: 'opt_minhang', label: '上海市闵行区老年人口与养老床位（已预置高保真方案）' },
+            { id: 'opt_citywide', label: '上海市全市养老机构与综合服务数据' },
+            { id: 'opt_homecare', label: '社区居家养老服务与长护险' }
+          ]
+        }
+      });
+    } else if (norm === '人口' || (norm.includes('人口') && !norm.includes('闵行') && !norm.includes('养老'))) {
+      // Single keyword '人口': generic clarification without loading Minhang fixtures
+      blocks.push({
+        type: 'TEXT',
+        id: `txt_${Date.now()}`,
+        content: '已接收关于「人口」主题的检索需求。请明确您关注的人口统计范围与分析维度：'
+      });
+
+      blocks.push({
+        type: 'CLARIFICATION',
+        id: `clar_${Date.now()}`,
+        question: {
+          id: 'q_pop_scope',
+          question: '请明确您关注的人口统计口径与分析方向：',
+          type: 'MULTIPLE',
+          options: [
+            { id: 'opt_resident_aging', label: '常住人口与老龄化分布（60岁以上）' },
+            { id: 'opt_household', label: '户籍人口与家庭结构变动' },
+            { id: 'opt_migrant', label: '流动人口与就业动态' }
+          ]
+        }
+      });
+    } else if (norm.includes('字段') && intent === 'QUESTION') {
       blocks.push({
         type: 'TEXT',
         id: `txt_${Date.now()}`,
@@ -269,14 +335,26 @@ export class MockFindDataService implements FindDataService {
       blocks.push({
         type: 'TEXT',
         id: `txt_${Date.now()}`,
-        content: `已为您在右侧工作区打开相应视图。`
+        content: '已为您在右侧工作区打开相应视图。'
       });
     } else {
-      // General assistant reply
+      // Generic non-matching query
       blocks.push({
         type: 'TEXT',
         id: `txt_${Date.now()}`,
-        content: `已根据您的指示更新任务上下文。当前数据方案已就绪，核心指标已完成权限预检，可随时由找数据转入分析计划。`
+        content: `已接收您的诉求：「${text}」。\n\n语义分析引擎未在当前默认业务域内匹配到直接关联的已上线数据方案。您可以进一步提供具体的区县范围、时间跨度或指标名称，以便系统定位适合的数据资产。`
+      });
+      blocks.push({
+        type: 'ACTION_GROUP',
+        id: `act_${Date.now()}`,
+        actions: [
+          {
+            id: 'act_demo_minhang',
+            label: '查看演示场景：闵行区老年人口与养老床位供给分析',
+            actionCode: 'LOAD_MINHANG_SCENARIO',
+            variant: 'primary'
+          }
+        ]
       });
     }
 
@@ -294,7 +372,8 @@ export class MockFindDataService implements FindDataService {
         payload: {
           type: surfaceCommand.surface || 'SOLUTION',
           resourceIds: surfaceCommand.resourceIds,
-          openedBy: surfaceCommand.openedBy
+          openedBy: surfaceCommand.openedBy,
+          mode: surfaceCommand.surface === 'COMPARE' ? 'QUICK_PREVIEW' : 'WORKBENCH'
         }
       });
     } else if (surfaceCommand.action === 'CLOSE') {
@@ -326,16 +405,19 @@ export class MockFindDataService implements FindDataService {
     );
 
     switch (action.actionCode) {
-      case 'OPEN_COMPARE':
+      case 'OPEN_COMPARE': {
+        const compareIds = (action.payload?.resourceIds as string[]) || task.comparisonModel?.resourceIds || ['r02', 'r03'];
         events.push({
           type: 'SURFACE_OPENED',
           payload: {
             type: 'COMPARE',
-            resourceIds: ['r02', 'r03'],
+            mode: 'QUICK_PREVIEW',
+            resourceIds: compareIds,
             openedBy: 'ACTION_CLICK'
           }
         });
         break;
+      }
 
       case 'SELECT_RESOURCE': {
         const resourceId = (action.payload?.resourceId as string) || 'r03';
@@ -354,15 +436,18 @@ export class MockFindDataService implements FindDataService {
       }
 
       case 'OPEN_FIELDS': {
-        const resourceId = (action.payload?.resourceId as string) || task.activeResourceId || 'r03';
-        events.push({
-          type: 'SURFACE_OPENED',
-          payload: {
-            type: 'FIELDS',
-            resourceIds: [resourceId],
-            openedBy: 'ACTION_CLICK'
-          }
-        });
+        const resourceId = (action.payload?.resourceId as string) || task.activeResourceId || Object.keys(task.resources)[0];
+        if (resourceId) {
+          events.push({
+            type: 'SURFACE_OPENED',
+            payload: {
+              type: 'FIELDS',
+              mode: 'WORKBENCH',
+              resourceIds: [resourceId],
+              openedBy: 'ACTION_CLICK'
+            }
+          });
+        }
         break;
       }
 
@@ -371,6 +456,7 @@ export class MockFindDataService implements FindDataService {
           type: 'SURFACE_OPENED',
           payload: {
             type: 'SOLUTION',
+            mode: 'WORKBENCH',
             openedBy: 'ACTION_CLICK'
           }
         });
@@ -381,6 +467,7 @@ export class MockFindDataService implements FindDataService {
           type: 'SURFACE_OPENED',
           payload: {
             type: 'ACCESS',
+            mode: 'WORKBENCH',
             openedBy: 'ACTION_CLICK'
           }
         });
@@ -391,6 +478,7 @@ export class MockFindDataService implements FindDataService {
           type: 'SURFACE_OPENED',
           payload: {
             type: 'CATALOG',
+            mode: 'WORKBENCH',
             openedBy: 'ACTION_CLICK'
           }
         });
@@ -402,13 +490,13 @@ export class MockFindDataService implements FindDataService {
           type: 'SURFACE_OPENED',
           payload: {
             type: 'ASK_PLAN',
+            mode: 'WORKBENCH',
             openedBy: 'ACTION_CLICK'
           }
         });
         break;
 
       case 'KEEP_AS_GAP': {
-        // AC-08: KEEP_AS_GAP only updates DataSolution.gaps, does NOT open SOLUTION!
         events.push({
           type: 'SOLUTION_GAP_UPSERTED',
           payload: {
@@ -433,7 +521,6 @@ export class MockFindDataService implements FindDataService {
       }
 
       case 'EXPAND_SCOPE': {
-        // AC-09: EXPAND_SCOPE updates searchScope and bumps searchRevision
         const nextRevision = task.searchRevision + 1;
         events.push({
           type: 'SEARCH_STARTED',
@@ -445,7 +532,6 @@ export class MockFindDataService implements FindDataService {
             statusMessage: '正在扩展检索范围至卫生健康与社区综合服务…'
           }
         });
-        // Results
         events.push({
           type: 'SEARCH_RESULTS_RECEIVED',
           payload: {
@@ -459,8 +545,7 @@ export class MockFindDataService implements FindDataService {
                 inclusionState: 'RECOMMENDED',
                 coverage: ['全区在编审批核定床位数'],
                 limitations: ['不代表当前已开营可用床位'],
-                evidenceRefs: ['可用于计算核定床位转化为在营床位的利用率'],
-                availabilityByAction: MINHANG_RESOURCES.r05.availabilityByAction
+                evidenceRefs: ['可用于计算核定床位转化为在营床位的利用率']
               }
             ]
           }
@@ -473,13 +558,193 @@ export class MockFindDataService implements FindDataService {
         break;
       }
 
-      case 'LOAD_MINHANG_SCENARIO': {
-        const minhangTask = await this.createTask({ initialQuery: '闵行区老年人口与养老床位供给水平分析' });
+      case 'SUBMIT_CLARIFICATION': {
+        // P0-04: Submit clarification question answer
+        const questionId = action.payload?.questionId as string;
+        const selectedOptionIds = (action.payload?.selectedOptionIds as string[]) || [];
+
+        // If user chose Minhang in single-choice clarification
+        if (selectedOptionIds.includes('opt_minhang')) {
+          const result = await this.submitTurn(task, '请帮我评估过去一年闵行区老年人口规模与养老床位供给水平');
+          return result;
+        }
+
         events.push({
-          type: 'TASK_HYDRATED',
-          payload: { task: minhangTask }
+          type: 'REQUIREMENT_UPDATED',
+          payload: {
+            hypothesis: {
+              analysisFocus: selectedOptionIds
+            },
+            bumpRevision: true
+          }
+        });
+
+        blocks.push({
+          type: 'TEXT',
+          id: `txt_${Date.now()}`,
+          content: `已记录您的澄清确认。分析焦点已聚焦于选定的核心业务维度，当前方案已相应校准。`
         });
         break;
+      }
+
+      case 'EVALUATE_AND_ADD': {
+        // P0-10: Catalog "Evaluate and Add"
+        const resId = action.payload?.resourceId as string;
+        const res = task.resources[resId] || MINHANG_RESOURCES[resId];
+
+        if (resId === 'r06') {
+          const newItem: DataSolutionItem = {
+            resourceId: 'r06',
+            role: 'OPTIONAL_DRILLDOWN',
+            inclusionState: 'RECOMMENDED',
+            coverage: ['闵行区登记在册养老机构名录'],
+            limitations: ['机构层级名录，缺少实时床位动态占用流'],
+            evidenceRefs: ['可用于解释各街镇床位供给主要由哪些具体机构提供']
+          };
+          events.push({
+            type: 'SOLUTION_ITEM_UPSERTED',
+            payload: { item: newItem }
+          });
+          blocks.push({
+            type: 'TEXT',
+            id: `txt_${Date.now()}`,
+            content: '已完成对「养老机构名录 (r06)」的语义适配度评估，并将其作为「可选下钻资源」加入数据方案。'
+          });
+        } else if (resId === 'r07') {
+          const newItem: DataSolutionItem = {
+            resourceId: 'r07',
+            role: 'PARTIAL_MATCH',
+            inclusionState: 'NOT_INCLUDED',
+            coverage: ['居家上门助餐、助洁服务记录'],
+            limitations: ['仅反映居家上门服务，不代表机构养老等完整养老服务体系'],
+            evidenceRefs: ['已声明为当前方案缺口，不参与本次床位供给基线计算']
+          };
+          events.push({
+            type: 'SOLUTION_ITEM_UPSERTED',
+            payload: { item: newItem }
+          });
+          events.push({
+            type: 'SOLUTION_GAP_UPSERTED',
+            payload: {
+              gap: {
+                id: 'gap_homecare_partial',
+                title: '居家服务订单非完全覆盖缺口',
+                description: '该资源仅反映居家上门服务，已作为方案缺口纳管。',
+                impactLevel: 'LOW',
+                mitigation: '在分析中保持分立说明。',
+                status: 'ACKNOWLEDGED'
+              }
+            }
+          });
+          blocks.push({
+            type: 'TEXT',
+            id: `txt_${Date.now()}`,
+            content: '已评估「居家养老服务记录 (r07)」，识别为部分匹配资源，作为业务缺口补充纳管，不强行合并入床位供给基线。'
+          });
+        } else if (res) {
+          const newItem: DataSolutionItem = {
+            resourceId: resId,
+            role: 'OPTIONAL_DRILLDOWN',
+            inclusionState: 'RECOMMENDED',
+            coverage: [res.name],
+            limitations: ['需根据具体分析下钻路径进一步确定口径'],
+            evidenceRefs: ['用户在资产目录中主动关联']
+          };
+          events.push({
+            type: 'SOLUTION_ITEM_UPSERTED',
+            payload: { item: newItem }
+          });
+          blocks.push({
+            type: 'TEXT',
+            id: `txt_${Date.now()}`,
+            content: `已完成对「${res.name}」的适配度评估并加入数据方案。`
+          });
+        } else {
+          blocks.push({
+            type: 'SYSTEM_NOTICE',
+            id: `sn_${Date.now()}`,
+            level: 'warning',
+            title: '暂未纳入方案',
+            message: '当前尚无足够语义与关系证据将该资源加入方案。'
+          });
+        }
+        break;
+      }
+
+      case 'CREATE_PERMISSION_REQUEST': {
+        // P0-09: Permission application creation
+        const resourceIds = (action.payload?.resourceIds as string[]) || [];
+        const actionType = (action.payload?.actionType as 'query' | 'preview' | 'export') || 'query';
+        const requestId = `req_${Date.now().toString(36)}`;
+
+        const requestRef: PermissionRequestRef = {
+          requestId,
+          resourceIds,
+          actionType,
+          status: 'SUBMITTED',
+          submittedAt: new Date().toISOString()
+        };
+
+        events.push({
+          type: 'PERMISSION_REQUEST_CREATED',
+          payload: { request: requestRef }
+        });
+
+        blocks.push({
+          type: 'SYSTEM_NOTICE',
+          id: `sn_${Date.now()}`,
+          level: 'success',
+          title: '权限申请已提交',
+          message: `申请单已生成（单号：${requestId}），包含 ${resourceIds.length} 项资源的 ${actionType === 'query' ? '查询' : actionType} 权限，请等待审核审批。`
+        });
+        break;
+      }
+
+      case 'REVISE_REQUIREMENT': {
+        // P0-12: Requirement revision
+        const patch = action.payload?.hypothesisPatch || {};
+        const nextReqRev = task.requirementRevision + 1;
+        const nextSearchRev = task.searchRevision + 1;
+
+        events.push({
+          type: 'REQUIREMENT_UPDATED',
+          payload: {
+            hypothesis: patch,
+            bumpRevision: true
+          }
+        });
+
+        events.push({
+          type: 'SEARCH_STARTED',
+          payload: {
+            searchRevision: nextSearchRev,
+            statusMessage: '根据修订后的口径重新检索方案…'
+          }
+        });
+
+        events.push({
+          type: 'SEARCH_RESULTS_RECEIVED',
+          payload: {
+            requirementRevision: nextReqRev,
+            searchRevision: nextSearchRev,
+            discoveredResourceIds: Object.keys(task.resources),
+            solutionItems: task.dataSolution.items,
+            gaps: task.dataSolution.gaps
+          }
+        });
+
+        blocks.push({
+          type: 'TEXT',
+          id: `txt_${Date.now()}`,
+          content: '已根据修订后的业务假设与口径重新完成数据方案评估与检索。'
+        });
+        break;
+      }
+
+      case 'LOAD_MINHANG_SCENARIO': {
+        // Submit the canonical Minhang prompt
+        const res = await this.submitTurn(task, '请帮我评估过去一年闵行区老年人口规模与养老床位供给水平，看看各街镇供给是否均衡，哪些街镇需要重点关注。');
+        return res;
       }
 
       default:
@@ -518,7 +783,6 @@ export class MockFindDataService implements FindDataService {
       }
     }
 
-    // In Minhang fixture, core resources r01 and r04 are fully ALLOWED for query
     return {
       decision: 'ALLOWED',
       updatedPermissions,
@@ -535,6 +799,7 @@ export class MockFindDataService implements FindDataService {
     return {
       success: true,
       executedAt,
+      dataOrigin: 'MOCK_FIXTURE',
       permissionSnapshot: {
         r01: MINHANG_RESOURCES.r01.availabilityByAction,
         r04: MINHANG_RESOURCES.r04.availabilityByAction

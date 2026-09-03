@@ -1,23 +1,22 @@
-import React, { useState, useEffect, useRef, useReducer, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useReducer, useMemo, useCallback } from 'react';
 import {
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   Compass,
   Home,
-  MessageSquare,
   Bot,
   Send,
   ExternalLink,
-  ChevronDown,
-  Layers,
   ArrowLeft,
-  Sparkles
+  Loader2,
+  Trash2
 } from 'lucide-react';
 
 import { FindDataTaskState, ResourceId } from './find_data/model/FindDataTask';
 import { findDataReducer, initialFindDataTaskState } from './find_data/model/findDataReducer';
 import { createFindDataService } from './find_data/services/createFindDataService';
+import { defaultTaskStore } from './find_data/model/findDataStore';
 import {
   selectActiveResource,
   selectResourceById,
@@ -69,32 +68,64 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const [inputMessage, setInputMessage] = useState('');
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
   const [solutionMode, setSolutionMode] = useState<'recommended' | 'executable'>('recommended');
+  const [savedTaskList, setSavedTaskList] = useState(() => defaultTaskStore.list());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationScrollRef = useRef<HTMLDivElement>(null);
 
-  // Check if developer query param exists for debug milestones
-  const showDevMilestones = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return (
-      import.meta.env.DEV &&
-      new URLSearchParams(window.location.search).has('demoStage')
-    );
+  // Keep saved task list updated & persist current task
+  const refreshTaskList = useCallback(() => {
+    setSavedTaskList(defaultTaskStore.list());
   }, []);
 
-  // Initialize task on mount or when initialQuery changes
+  useEffect(() => {
+    if (task.taskId) {
+      defaultTaskStore.save(task);
+      defaultTaskStore.setCurrentTaskId(task.taskId);
+      refreshTaskList();
+    }
+  }, [task, refreshTaskList]);
+
+  // Unified Turn Pipeline (P0-02):
+  // When initialQuery is provided, initialize a truly clean IDLE task, then submit the query as Turn 1
   useEffect(() => {
     let mounted = true;
-    async function initTask() {
-      const newTask = await service.createTask({ initialQuery });
-      if (mounted) {
+
+    async function initTaskPipeline() {
+      const cleanTask = await service.createTask({ initialQuery: '' });
+      if (!mounted) return;
+
+      if (!initialQuery || !initialQuery.trim()) {
         dispatch({
           type: 'TASK_CREATED',
-          payload: { task: newTask }
+          payload: { task: cleanTask }
         });
+        defaultTaskStore.save(cleanTask);
+        return;
+      }
+
+      // Initial query provided: dispatch task creation then submitTurn
+      dispatch({
+        type: 'TASK_CREATED',
+        payload: { task: cleanTask }
+      });
+
+      const turnId = `turn_user_${Date.now()}`;
+      dispatch({
+        type: 'USER_TURN_SUBMITTED',
+        payload: { text: initialQuery.trim(), turnId }
+      });
+
+      const engineResult = await service.submitTurn(cleanTask, initialQuery.trim());
+      if (!mounted) return;
+
+      for (const ev of engineResult.events) {
+        dispatch(ev);
       }
     }
-    initTask();
+
+    initTaskPipeline();
+
     return () => {
       mounted = false;
     };
@@ -104,17 +135,6 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [task.turns, task.runtimeStatus]);
-
-  // Sidebar mock history
-  const recentSessions = [
-    { id: 's1', title: '闵行区老年人口与养老床位供给水平分析', time: '进行中', active: true },
-    { id: 's2', title: '出生、死亡、迁入迁出事件记录', time: '昨天', active: false },
-    { id: 's3', title: '公共服务热线工单办结分析', time: '前天', active: false }
-  ];
-
-  const filteredSessions = recentSessions.filter((s) =>
-    s.title.toLowerCase().includes(historySearch.toLowerCase())
-  );
 
   // Send a user turn
   const handleSendMessage = async () => {
@@ -134,6 +154,40 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     }
   };
 
+  // Switch task
+  const handleSwitchTask = (taskId: string) => {
+    const loaded = defaultTaskStore.get(taskId);
+    if (loaded) {
+      dispatch({
+        type: 'TASK_CREATED',
+        payload: { task: loaded }
+      });
+      defaultTaskStore.setCurrentTaskId(taskId);
+    }
+  };
+
+  // Create new clean task
+  const handleCreateNewTask = async () => {
+    const newTask = await service.createTask({ initialQuery: '' });
+    dispatch({
+      type: 'TASK_CREATED',
+      payload: { task: newTask }
+    });
+    defaultTaskStore.save(newTask);
+    defaultTaskStore.setCurrentTaskId(newTask.taskId);
+    refreshTaskList();
+  };
+
+  // Delete task from store
+  const handleDeleteTask = (e: React.MouseEvent, taskId: string) => {
+    e.stopPropagation();
+    defaultTaskStore.delete(taskId);
+    refreshTaskList();
+    if (task.taskId === taskId) {
+      handleCreateNewTask();
+    }
+  };
+
   // Execute typed actions from blocks or workspaces
   const handleAction = async (actionCode: string, payload?: Record<string, unknown>) => {
     if (actionCode === 'CLOSE_SURFACE') {
@@ -146,17 +200,26 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       return;
     }
 
+    if (actionCode === 'SUBMIT_CLARIFICATION') {
+      dispatch({
+        type: 'SUBMIT_CLARIFICATION',
+        payload: {
+          questionId: (payload?.questionId as string) || 'cq01',
+          selectedOptionIds: (payload?.selectedOptionIds as string[]) || []
+        }
+      });
+    }
+
     const engineResult = await service.executeAction(task, { actionCode, payload });
     for (const ev of engineResult.events) {
       dispatch(ev);
     }
   };
 
-  // Run Ask Plan workflow
-  const handleRunAskPlan = async () => {
-    if (!task.askPlan) return;
+  // Check permission for Ask Plan (P0-14 strict state machine)
+  const handleCheckPermissionForAskPlan = async (): Promise<boolean> => {
+    if (!task.askPlan) return false;
 
-    // 1. Recheck permissions first
     dispatch({
       type: 'PERMISSION_RECHECK_STARTED',
       payload: { resourceIds: task.askPlan.coreResourceIds }
@@ -176,15 +239,13 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       }
     });
 
-    if (checkResult.decision === 'BLOCKED') {
-      dispatch({
-        type: 'ASK_RUN_FAILED',
-        payload: { error: '查询权限未通过校验，无法执行。' }
-      });
-      return;
-    }
+    return checkResult.decision === 'ALLOWED';
+  };
 
-    // 2. Run plan
+  // Run Ask Plan workflow (P0-15: Result isolation)
+  const handleRunAskPlan = async () => {
+    if (!task.askPlan) return;
+
     dispatch({ type: 'ASK_RUN_STARTED' });
 
     const runResult = await service.runAskPlan(task, task.askPlan);
@@ -225,11 +286,21 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const isSurfaceOpen = activeSurfaceType !== 'CLOSED';
   const activeResource = selectActiveResource(task);
 
+  // Surface width governance (P1-03):
+  // QUICK_PREVIEW: 560px, WORKBENCH: 780px
+  const surfaceWidthClass =
+    task.activeSurface.mode === 'QUICK_PREVIEW' ? 'w-[560px]' : 'w-[780px]';
+
   // Target resource for Fields workspace
   const targetFieldResourceId =
     task.activeSurface.resourceIds?.[0] || task.activeResourceId || 'r03';
   const targetFieldResource = selectResourceById(task, targetFieldResourceId);
   const targetFieldList = selectResourceFields(task, targetFieldResourceId);
+
+  // Filter sessions
+  const filteredSessions = savedTaskList.filter((s) =>
+    s.title.toLowerCase().includes(historySearch.toLowerCase())
+  );
 
   return (
     <div className="flex-1 flex overflow-hidden bg-[#F7F9FC] text-[#0F172A] relative">
@@ -239,10 +310,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         hypothesis={task.requirementHypothesis}
         activeResourceName={activeResource?.name}
         onApplyChanges={(updated) => {
-          dispatch({
-            type: 'REQUIREMENT_UPDATED',
-            payload: { hypothesis: updated }
-          });
+          handleAction('REVISE_REQUIREMENT', { hypothesisPatch: updated });
         }}
       />
 
@@ -275,13 +343,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         {/* Primary Action Button */}
         <div className="p-3 border-b border-[#F1F5F9]">
           <button
-            onClick={async () => {
-              const newTask = await service.createTask({ initialQuery: '' });
-              dispatch({
-                type: 'TASK_CREATED',
-                payload: { task: newTask }
-              });
-            }}
+            onClick={handleCreateNewTask}
             className="w-full py-2 px-3 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold flex items-center justify-center space-x-2 transition-all shadow-2xs cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -323,34 +385,55 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           </button>
         </div>
 
-        {/* Recent Sessions */}
+        {/* Recent Sessions from defaultTaskStore */}
         {!isSidebarCollapsed && (
           <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar text-xs">
             <div className="px-2 py-1 text-[11px] font-bold text-[#94A3B8]">
-              近期找数据任务
+              任务历史（{filteredSessions.length}）
             </div>
-            {filteredSessions.map((session) => (
-              <div
-                key={session.id}
-                className={`p-2.5 rounded-lg transition-colors cursor-pointer flex flex-col space-y-0.5 ${
-                  session.active
-                    ? 'bg-[#F1F5F9] text-[#0F172A] font-semibold'
-                    : 'text-[#475569] hover:bg-[#F8FAFC]'
-                }`}
-              >
-                <div className="flex items-center space-x-1.5 truncate">
-                  <span className="truncate">{session.title}</span>
-                </div>
-                <div className="text-[10px] text-[#94A3B8]">{session.time}</div>
+            {filteredSessions.length === 0 ? (
+              <div className="px-2 py-4 text-center text-[#94A3B8] text-[11px]">
+                暂无历史任务
               </div>
-            ))}
+            ) : (
+              filteredSessions.map((session) => {
+                const isActive = session.taskId === task.taskId;
+                return (
+                  <div
+                    key={session.taskId}
+                    onClick={() => handleSwitchTask(session.taskId)}
+                    className={`group p-2 rounded-lg transition-colors cursor-pointer flex items-center justify-between ${
+                      isActive
+                        ? 'bg-[#F1F5F9] text-[#0F172A] font-semibold'
+                        : 'text-[#475569] hover:bg-[#F8FAFC]'
+                    }`}
+                  >
+                    <div className="flex flex-col min-w-0 pr-1">
+                      <span className="truncate text-xs">{session.title}</span>
+                      <span className="text-[10px] text-[#94A3B8]">
+                        {new Date(session.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteTask(e, session.taskId)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-[#94A3B8] hover:text-[#DC2626] rounded transition-opacity"
+                      title="删除任务"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
       </aside>
 
       {/* 2. MIDDLE CONVERSATION AREA */}
       <main className="flex-1 flex flex-col overflow-hidden bg-[#F7F9FC] relative">
-        {/* Top Header & Context Bar */}
+        {/* Top Header & Context Bar (P1-02: Clean header, state-aware surface toggles) */}
         <header className="h-14 px-5 border-b border-[#E2E8F0] bg-white flex items-center justify-between shrink-0 z-10">
           <div className="flex items-center space-x-3 truncate">
             {onBackToHome && (
@@ -393,14 +476,14 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                   onClick={() => setIsContextDrawerOpen(true)}
                   className="text-[#2563EB] hover:underline font-medium cursor-pointer inline-flex items-center space-x-0.5"
                 >
-                  <span>查看上下文</span>
+                  <span>查看口径上下文</span>
                   <ExternalLink className="w-2.5 h-2.5" />
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Quick Surface Toggles */}
+          {/* Quick Surface Toggles: Bound to task readiness (P1-02) */}
           <div className="flex items-center space-x-2 shrink-0">
             {isSurfaceOpen && (
               <button
@@ -413,6 +496,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
 
             <div className="flex items-center space-x-1 bg-[#F1F5F9] p-0.5 rounded-lg border border-[#E2E8F0] text-xs">
               <button
+                disabled={task.dataSolution.items.length === 0}
                 onClick={() =>
                   dispatch(
                     activeSurfaceType === 'SOLUTION'
@@ -420,34 +504,40 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                       : { type: 'SURFACE_OPENED', payload: { type: 'SOLUTION' } }
                   )
                 }
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-                  activeSurfaceType === 'SOLUTION'
-                    ? 'bg-white text-[#2563EB] font-bold shadow-2xs'
-                    : 'text-[#64748B] hover:text-[#0F172A]'
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  task.dataSolution.items.length === 0
+                    ? 'text-[#94A3B8] cursor-not-allowed'
+                    : activeSurfaceType === 'SOLUTION'
+                    ? 'bg-white text-[#2563EB] font-bold shadow-2xs cursor-pointer'
+                    : 'text-[#64748B] hover:text-[#0F172A] cursor-pointer'
                 }`}
               >
                 数据方案
               </button>
               <button
+                disabled={!targetFieldResource}
                 onClick={() =>
                   dispatch(
                     activeSurfaceType === 'FIELDS'
                       ? { type: 'SURFACE_CLOSED' }
                       : {
                           type: 'SURFACE_OPENED',
-                          payload: { type: 'FIELDS', resourceIds: [task.activeResourceId || 'r03'] }
+                          payload: { type: 'FIELDS', resourceIds: [targetFieldResourceId] }
                         }
                   )
                 }
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-                  activeSurfaceType === 'FIELDS'
-                    ? 'bg-white text-[#2563EB] font-bold shadow-2xs'
-                    : 'text-[#64748B] hover:text-[#0F172A]'
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  !targetFieldResource
+                    ? 'text-[#94A3B8] cursor-not-allowed'
+                    : activeSurfaceType === 'FIELDS'
+                    ? 'bg-white text-[#2563EB] font-bold shadow-2xs cursor-pointer'
+                    : 'text-[#64748B] hover:text-[#0F172A] cursor-pointer'
                 }`}
               >
-                字段
+                字段检视
               </button>
               <button
+                disabled={!task.askPlan}
                 onClick={() =>
                   dispatch(
                     activeSurfaceType === 'ASK_PLAN'
@@ -455,10 +545,12 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                       : { type: 'SURFACE_OPENED', payload: { type: 'ASK_PLAN' } }
                   )
                 }
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
-                  activeSurfaceType === 'ASK_PLAN'
-                    ? 'bg-white text-[#2563EB] font-bold shadow-2xs'
-                    : 'text-[#64748B] hover:text-[#0F172A]'
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  !task.askPlan
+                    ? 'text-[#94A3B8] cursor-not-allowed'
+                    : activeSurfaceType === 'ASK_PLAN'
+                    ? 'bg-white text-[#2563EB] font-bold shadow-2xs cursor-pointer'
+                    : 'text-[#64748B] hover:text-[#0F172A] cursor-pointer'
                 }`}
               >
                 分析计划
@@ -472,122 +564,126 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           ref={conversationScrollRef}
           className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar"
         >
-          {/* Centralized Reading Column:
-              880-1040px when surface is closed; narrower when surface is open. */}
           <div
             className={`mx-auto space-y-5 transition-all duration-200 ${
               isSurfaceOpen ? 'max-w-2xl' : 'max-w-4xl'
             }`}
           >
-            {task.turns.map((turn) => {
-              const isUser = turn.sender === 'USER';
+            {task.turns.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-2 text-xs">
+                <Bot className="w-10 h-10 text-[#CBD5E1]" />
+                <p className="font-bold text-sm text-[#0F172A]">请输入找数据意图</p>
+                <p className="text-[#64748B] max-w-sm">
+                  例如：“我想评估闵行区过去12个月养老服务供给情况，需要哪些数据？”
+                </p>
+              </div>
+            ) : (
+              task.turns.map((turn) => {
+                const isUser = turn.sender === 'USER';
 
-              return (
-                <div
-                  key={turn.turnId}
-                  className={`flex items-start space-x-3 ${
-                    isUser ? 'flex-row-reverse space-x-reverse' : ''
-                  }`}
-                >
-                  {/* Avatar */}
-                  {isUser ? (
-                    <div className="w-8 h-8 rounded-lg bg-[#0F172A] text-white font-bold flex items-center justify-center shrink-0 shadow-2xs text-xs">
-                      我
-                    </div>
-                  ) : (
-                    <XinoAvatar size="md" />
-                  )}
-
-                  {/* Message Bubble Column */}
+                return (
                   <div
-                    className={`flex flex-col space-y-2.5 max-w-[85%] ${
-                      isUser ? 'items-end' : 'items-start'
+                    key={turn.turnId}
+                    className={`flex items-start space-x-3 ${
+                      isUser ? 'flex-row-reverse space-x-reverse' : ''
                     }`}
                   >
-                    {turn.blocks.map((block) => {
-                      switch (block.type) {
-                        case 'TEXT':
-                          return isUser ? (
-                            <div
-                              key={block.id}
-                              className="px-4 py-2.5 rounded-2xl bg-[#2563EB] text-white text-xs leading-relaxed shadow-2xs"
-                            >
-                              {block.content}
-                            </div>
-                          ) : (
-                            <div
-                              key={block.id}
-                              className="py-1 text-xs text-[#0F172A] leading-relaxed w-full"
-                            >
-                              <AssistantTextBlock content={block.content} />
-                            </div>
-                          );
+                    {/* Avatar */}
+                    {isUser ? (
+                      <div className="w-8 h-8 rounded-lg bg-[#0F172A] text-white font-bold flex items-center justify-center shrink-0 shadow-2xs text-xs">
+                        我
+                      </div>
+                    ) : (
+                      <XinoAvatar size="md" />
+                    )}
 
-                        case 'CLARIFICATION':
-                          return (
-                            <div key={block.id} className="w-full">
-                              <ClarificationBlock
-                                question={block.question}
-                                onSelectionChange={(selectedIds) => {
-                                  dispatch({
-                                    type: 'REQUIREMENT_UPDATED',
-                                    payload: {
-                                      hypothesis: {
-                                        analysisFocus: selectedIds
-                                      }
-                                    }
-                                  });
-                                }}
-                              />
-                            </div>
-                          );
+                    {/* Message Bubble Column */}
+                    <div
+                      className={`flex flex-col space-y-2.5 max-w-[85%] ${
+                        isUser ? 'items-end' : 'items-start'
+                      }`}
+                    >
+                      {turn.blocks.map((block) => {
+                        switch (block.type) {
+                          case 'TEXT':
+                            return isUser ? (
+                              <div
+                                key={block.id}
+                                className="px-4 py-2.5 rounded-2xl bg-[#2563EB] text-white text-xs leading-relaxed shadow-2xs"
+                              >
+                                {block.content}
+                              </div>
+                            ) : (
+                              <div
+                                key={block.id}
+                                className="py-1 text-xs text-[#0F172A] leading-relaxed w-full"
+                              >
+                                <AssistantTextBlock content={block.content} />
+                              </div>
+                            );
 
-                        case 'RESULT_BRIEF':
-                          return (
-                            <div key={block.id} className="w-full">
-                              <ResultBriefBlock
-                                block={block}
-                                onActionClick={(code, p) => handleAction(code, p)}
-                              />
-                            </div>
-                          );
+                          case 'CLARIFICATION':
+                            return (
+                              <div key={block.id} className="w-full">
+                                <ClarificationBlock
+                                  question={block.question}
+                                  onSubmit={(qId, optIds) => {
+                                    handleAction('SUBMIT_CLARIFICATION', {
+                                      questionId: qId,
+                                      selectedOptionIds: optIds
+                                    });
+                                  }}
+                                />
+                              </div>
+                            );
 
-                        case 'ACTION_GROUP':
-                          return (
-                            <div key={block.id} className="w-full">
-                              <ActionGroupBlock
-                                actions={block.actions}
-                                onActionClick={(code, p) => handleAction(code, p)}
-                              />
-                            </div>
-                          );
+                          case 'RESULT_BRIEF':
+                            return (
+                              <div key={block.id} className="w-full">
+                                <ResultBriefBlock
+                                  block={block}
+                                  onActionClick={(code, p) => handleAction(code, p)}
+                                />
+                              </div>
+                            );
 
-                        case 'RUNTIME_STATUS':
-                          return (
-                            <div key={block.id} className="w-full">
-                              <RuntimeStatusBlock message={block.message} />
-                            </div>
-                          );
+                          case 'ACTION_GROUP':
+                            return (
+                              <div key={block.id} className="w-full">
+                                <ActionGroupBlock
+                                  actions={block.actions}
+                                  onActionClick={(code, p) => handleAction(code, p)}
+                                />
+                              </div>
+                            );
 
-                        case 'SYSTEM_NOTICE':
-                          return (
-                            <div key={block.id} className="w-full">
-                              <SystemNoticeBlock
-                                level={block.level}
-                                title={block.title}
-                                message={block.message}
-                              />
-                            </div>
-                          );
+                          case 'RUNTIME_STATUS':
+                            return (
+                              <div key={block.id} className="w-full">
+                                <RuntimeStatusBlock message={block.message} />
+                              </div>
+                            );
 
-                        default:
-                          return null;
-                      }
-                    })}
+                          case 'SYSTEM_NOTICE':
+                            return (
+                              <div key={block.id} className="w-full">
+                                <SystemNoticeBlock
+                                  level={block.level}
+                                  title={block.title}
+                                  message={block.message}
+                                />
+                              </div>
+                            );
+
+                          default:
+                            return null;
+                        }
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
 
             {/* Transient Runtime Status Indicator */}
             {task.runtimeStatus?.active && (
@@ -621,7 +717,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                     handleSendMessage();
                   }
                 }}
-                placeholder="向 Xino 发送找数据意图、提出追问或输入口径调整要求…"
+                placeholder="发送找数据意图、提出追问或输入口径调整要求…"
                 className="flex-1 bg-transparent px-3 py-1.5 text-xs text-[#0F172A] placeholder-[#94A3B8] focus:outline-none"
               />
 
@@ -640,23 +736,23 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             </div>
             <div className="flex items-center justify-between text-[11px] text-[#94A3B8] px-2 pt-1.5">
               <span>按 Enter 发送</span>
-              <span>Xino 数据语义理解引擎</span>
+              <span>数据资产找数分析工作台</span>
             </div>
           </div>
         </footer>
       </main>
 
-      {/* 3. RIGHT WORKSPACE AREA (480-600px, dynamically mounted based on task.activeSurface) */}
+      {/* 3. RIGHT WORKSPACE AREA (P1-03: QUICK_PREVIEW: 560px, WORKBENCH: 780px) */}
       {isSurfaceOpen && (
-        <aside className="w-[520px] shrink-0 z-10 overflow-hidden">
+        <aside className={`${surfaceWidthClass} shrink-0 z-10 overflow-hidden`}>
           {activeSurfaceType === 'COMPARE' && (
             <RightWorkspaceCompare
               resources={[task.resources.r02, task.resources.r03].filter(Boolean)}
-              comparisonRows={MINHANG_COMPARISON_ROWS}
+              comparisonRows={task.comparisonModel?.rows || MINHANG_COMPARISON_ROWS}
+              recommendationConclusion={task.comparisonModel?.conclusion}
               selectedResourceId={task.activeResourceId || 'r03'}
               onConfirmSelection={(resId) => {
                 handleAction('SELECT_RESOURCE', { resourceId: resId });
-                // Return to conversation or solution
                 dispatch({
                   type: 'SURFACE_OPENED',
                   payload: { type: 'SOLUTION' }
@@ -715,6 +811,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           {activeSurfaceType === 'ASK_PLAN' && (
             <RightWorkspaceAskPlan
               task={task}
+              onCheckPermission={handleCheckPermissionForAskPlan}
               onRunPlan={handleRunAskPlan}
               onReturnToSolution={() =>
                 dispatch({ type: 'SURFACE_OPENED', payload: { type: 'SOLUTION' } })

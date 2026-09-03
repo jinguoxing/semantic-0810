@@ -1,5 +1,6 @@
 import {
   FindDataTaskState,
+  FindDataResource,
   ResourceId,
   RequirementHypothesis,
   DataSolutionItem,
@@ -9,7 +10,9 @@ import {
   ConversationBlock,
   AskPlan,
   AvailabilityByAction,
-  AskRunResult
+  AskRunResult,
+  PermissionRequestRef,
+  ResourceCandidate
 } from './FindDataTask';
 
 export type FindDataEvent =
@@ -56,6 +59,10 @@ export type FindDataEvent =
       payload: {
         requirementRevision: number;
         searchRevision: number;
+        query?: string;
+        totalMatches?: number;
+        candidateSnapshot?: ResourceCandidate[];
+        resourceUpserts?: FindDataResource[];
         discoveredResourceIds: ResourceId[];
         solutionItems: DataSolutionItem[];
         gaps?: SolutionGap[];
@@ -77,6 +84,12 @@ export type FindDataEvent =
       type: 'SOLUTION_GAP_UPSERTED';
       payload: {
         gap: SolutionGap;
+      };
+    }
+  | {
+      type: 'PERMISSION_REQUEST_CREATED';
+      payload: {
+        request: PermissionRequestRef;
       };
     }
   | {
