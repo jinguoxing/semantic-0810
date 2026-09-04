@@ -27,7 +27,7 @@ describe('conversation presenters derive answers from task state', () => {
   it('uses coverage, limitations, evidence, granularity, and time coverage for recommendations', () => {
     const task = createEmptyTask({
       resources: { custom: createResource({ id: 'custom', name: '推荐资源', granularity: '街镇', timeCoverage: '过去一年' }) },
-      dataSolution: { items: [createSolutionItem({ resourceId: 'custom', coverage: ['覆盖 A'], limitations: ['限制 B'], evidenceRefs: ['证据 C'] })], gaps: [], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: '' }
+      dataSolution: { ...createEmptyTask().dataSolution, state: 'READY', items: [createSolutionItem({ resourceId: 'custom', coverage: ['覆盖 A'], limitations: ['限制 B'], evidenceRefs: ['证据 C'] })], gaps: [], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: '' }
     });
     const summary = buildRecommendationExplanation(task, 'custom');
     expect(summary).toContain('街镇');
@@ -45,7 +45,7 @@ describe('conversation presenters derive answers from task state', () => {
   it('uses business names rather than internal ids in permission summaries', () => {
     const task = createEmptyTask({
       resources: { internal_id: createResource({ id: 'internal_id', name: '业务资源名' }) },
-      dataSolution: { items: [createSolutionItem({ resourceId: 'internal_id' })], gaps: [], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: '' }
+      dataSolution: { ...createEmptyTask().dataSolution, state: 'READY', items: [createSolutionItem({ resourceId: 'internal_id' })], gaps: [], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: '' }
     });
     expect(buildPermissionSummary(task)).toContain('业务资源名');
     expect(buildPermissionSummary(task)).not.toContain('internal_id');

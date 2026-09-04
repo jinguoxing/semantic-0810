@@ -5,7 +5,9 @@ import {
   DataSolutionItem,
   SolutionGap,
   FieldMetadata,
-  AvailabilityByAction
+  AvailabilityByAction,
+  ResourceCandidate,
+  ExecutionAssessment
 } from './FindDataTask';
 
 /**
@@ -15,14 +17,14 @@ import {
  */
 export function selectDiscoverableResources(task: FindDataTaskState): FindDataResource[] {
   return Object.values(task.resources).filter(
-    (res) => res.availabilityByAction?.discover !== 'DENIED'
+    (res) => res.availabilityByAction?.discover === 'ALLOWED'
   );
 }
 
 export function selectDiscoverableResourceMap(task: FindDataTaskState): Record<ResourceId, FindDataResource> {
   const map: Record<ResourceId, FindDataResource> = {};
   for (const res of Object.values(task.resources)) {
-    if (res.availabilityByAction?.discover !== 'DENIED') {
+    if (res.availabilityByAction?.discover === 'ALLOWED') {
       map[res.id] = res;
     }
   }
@@ -35,7 +37,7 @@ export function selectResourceById(
 ): FindDataResource | undefined {
   if (!resourceId) return undefined;
   const res = task.resources[resourceId];
-  if (!res || res.availabilityByAction?.discover === 'DENIED') {
+  if (!res || res.availabilityByAction?.discover !== 'ALLOWED') {
     return undefined;
   }
   return res;
@@ -59,6 +61,30 @@ export function selectResourceFields(
 ): FieldMetadata[] {
   const resource = selectResourceById(task, resourceId);
   return resource?.fields || [];
+}
+
+export function selectCandidateResources(task: FindDataTaskState): ResourceCandidate[] {
+  return (task.searchResult?.candidateSnapshot ?? []).filter(
+    (candidate) => task.resources[candidate.resourceId]?.availabilityByAction.discover === 'ALLOWED'
+  );
+}
+
+export function selectRelatedResourceCandidates(task: FindDataTaskState): ResourceCandidate[] {
+  return selectCandidateResources(task).filter((candidate) => candidate.matchType !== 'DIRECT');
+}
+
+export function selectCandidateById(task: FindDataTaskState, resourceId?: ResourceId): ResourceCandidate | undefined {
+  if (!resourceId) return undefined;
+  return selectCandidateResources(task).find((candidate) => candidate.resourceId === resourceId);
+}
+
+export function selectCandidatesForComparison(task: FindDataTaskState): ResourceCandidate[] {
+  const comparisonIds = task.comparisonModel?.resourceIds ?? [];
+  return selectCandidateResources(task).filter((candidate) => comparisonIds.includes(candidate.resourceId));
+}
+
+export function selectCandidateSolutionStatus(task: FindDataTaskState, resourceId: ResourceId): '已加入方案' | '未加入方案' {
+  return task.dataSolution.items.some((item) => item.resourceId === resourceId) ? '已加入方案' : '未加入方案';
 }
 
 /**
@@ -104,18 +130,43 @@ export const selectPartialMatchSolutionItems = selectPartialMatchItems;
  * 4. selectExecutableSolutionItems:
  * Must be in recommended/selected AND resource availability query === 'ALLOWED'
  */
-export function selectExecutableSolutionItems(task: FindDataTaskState): DataSolutionItem[] {
-  return task.dataSolution.items.filter((item) => {
+export function selectExecutionAssessments(task: FindDataTaskState): ExecutionAssessment[] {
+  return task.dataSolution.items.map((item) => {
     const resource = task.resources[item.resourceId];
+    if (!resource || resource.availabilityByAction.discover !== 'ALLOWED') {
+      return { item, included: false, reason: 'RESOURCE_UNAVAILABLE', userMessage: '资源当前不可用，未纳入执行范围。' };
+    }
+    if (item.role === 'PARTIAL_MATCH') {
+      return { item, included: false, reason: 'PARTIAL_MATCH', userMessage: '该资源仅部分匹配当前目标，不参与本次执行。' };
+    }
+    if (item.role === 'OPTIONAL_DRILLDOWN') {
+      return { item, included: false, reason: 'OPTIONAL_DRILLDOWN', userMessage: '该资源仅供明细下钻，不作为本次计算输入。' };
+    }
+    if (item.inclusionState === 'NOT_INCLUDED') {
+      return { item, included: false, reason: 'NOT_SELECTED', userMessage: '该资源尚未被选入当前方案。' };
+    }
+    if (resource.availabilityByAction.query === 'REQUESTABLE') {
+      return { item, included: false, reason: 'QUERY_PERMISSION_REQUIRED', userMessage: '查询权限尚需申请，暂未纳入执行范围。' };
+    }
+    if (resource.availabilityByAction.query !== 'ALLOWED') {
+      return { item, included: false, reason: 'QUERY_PERMISSION_DENIED', userMessage: '当前查询权限不可用，无法纳入执行范围。' };
+    }
     const relationshipSatisfied = item.role !== 'CONDITIONAL_SUPPORT' || task.dataSolution.relationshipEvidence.some(
-      (evidence) => evidence.sourceResourceId === item.resourceId || evidence.targetResourceId === item.resourceId
+      (evidence) =>
+        (evidence.sourceResourceId === item.resourceId || evidence.targetResourceId === item.resourceId) &&
+        evidence.verificationStatus === 'CONFIRMED'
     );
-    return resource?.availabilityByAction.discover === 'ALLOWED' &&
-      resource.availabilityByAction.query === 'ALLOWED' &&
-      item.role !== 'PARTIAL_MATCH' &&
-      item.inclusionState !== 'NOT_INCLUDED' &&
-      relationshipSatisfied;
+    if (!relationshipSatisfied) {
+      return { item, included: false, reason: 'RELATIONSHIP_NOT_READY', userMessage: '与核心资源的关系尚未确认，暂不进入执行范围。' };
+    }
+    return { item, included: true, reason: 'INCLUDED', userMessage: '已纳入本次实际计算输入。' };
   });
+}
+
+export function selectExecutableSolutionItems(task: FindDataTaskState): DataSolutionItem[] {
+  return selectExecutionAssessments(task)
+    .filter((assessment) => assessment.included)
+    .map((assessment) => assessment.item);
 }
 
 /**
@@ -139,6 +190,23 @@ export function selectPermissionRelevantItems(task: FindDataTaskState): DataSolu
     if (isRecommendedOrSelected || isRequestable) {
       itemsMap.set(item.resourceId, item);
     }
+  }
+
+  // A requestable candidate is still relevant to the permission surface even
+  // before the user elects to make it part of the formal solution. This keeps
+  // discovery and solution membership separate while allowing a user to ask
+  // for access to a resource they are evaluating.
+  for (const candidate of selectCandidateResources(task)) {
+    const availability = task.resources[candidate.resourceId]?.availabilityByAction;
+    if (availability?.query !== 'REQUESTABLE' || itemsMap.has(candidate.resourceId)) continue;
+    itemsMap.set(candidate.resourceId, {
+      resourceId: candidate.resourceId,
+      role: candidate.proposedRole ?? 'OPTIONAL_DRILLDOWN',
+      inclusionState: 'NOT_INCLUDED',
+      coverage: [candidate.reason],
+      limitations: ['尚未纳入正式数据方案。'],
+      evidenceRefs: ['检索候选池']
+    });
   }
 
   return Array.from(itemsMap.values());

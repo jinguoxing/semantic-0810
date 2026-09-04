@@ -61,7 +61,7 @@ describe('findDataReducer search result contract', () => {
         candidateDelta: { retainedIds: ['r2'], addedIds: ['r3'], removedIds: ['r1'], allCandidateIds: ['r2', 'r3'] },
         solutionPatch: {
           mode, upsertItems: [createSolutionItem({ resourceId: 'r3' })], removeResourceIds: ['r1'],
-          relationshipEvidence: [{ sourceResourceId: 'r2', targetResourceId: 'r3', relationType: 'SUPPLEMENT', description: '补充' }],
+          relationshipEvidence: [{ sourceResourceId: 'r2', targetResourceId: 'r3', relationType: 'SUPPLEMENT', verificationStatus: 'CONFIRMED', evidenceLevel: 'STRONG', evidenceRefs: ['测试'], description: '补充' }],
           coverageSummary: ['新覆盖'], limitationSummary: ['新限制']
         }
       }
@@ -71,8 +71,9 @@ describe('findDataReducer search result contract', () => {
   function existingTask() {
     return createEmptyTask({
       requirementRevision: 1, searchRevision: 2, activeResourceId: 'r1', activeSurface: { type: 'FIELDS', resourceIds: ['r1'] },
-      resources: { r1, r2 }, searchResult: { query: 'old', totalMatches: 2, candidateIds: ['r1', 'r2'], returnedCount: 2 },
+      resources: { r1, r2 }, searchResult: { query: 'old', totalMatches: 2, candidateIds: ['r1', 'r2'], candidateSnapshot: [], returnedCount: 2 },
       dataSolution: {
+        state: 'READY', basedOnRequirementRevision: 1, basedOnSearchRevision: 2,
         items: [createSolutionItem({ resourceId: 'r1' }), createSolutionItem({ resourceId: 'r2' })], gaps: [],
         relationshipEvidence: [], coverageSummary: ['旧覆盖'], limitationSummary: ['旧限制'], updatedAt: ''
       }
@@ -107,6 +108,7 @@ describe('findDataReducer search result contract', () => {
 describe('findDataReducer solution selection', () => {
   it('selects only one resource inside an alternative group', () => {
     const task = createEmptyTask({ dataSolution: {
+      state: 'READY', basedOnRequirementRevision: 0, basedOnSearchRevision: 0,
       items: [
         createSolutionItem({ resourceId: 'r2', selectionGroupId: 'population_detail_alternative', inclusionState: 'SELECTED' }),
         createSolutionItem({ resourceId: 'r3', selectionGroupId: 'population_detail_alternative', inclusionState: 'RECOMMENDED' })
@@ -114,5 +116,41 @@ describe('findDataReducer solution selection', () => {
     } });
     const next = findDataReducer(task, { type: 'RESOURCE_SELECTED', payload: { resourceId: 'r3' } });
     expect(next.dataSolution.items.map((item) => item.inclusionState)).toEqual(['NOT_INCLUDED', 'SELECTED']);
+  });
+});
+
+describe('requirement recomposition and operation ordering', () => {
+  it('invalidates a former Ask Plan and puts the former solution into evaluation', () => {
+    const task = createEmptyTask({
+      requirementRevision: 1,
+      askPlan: {
+        id: 'plan', title: '旧计划', status: 'READY_TO_RUN', coreResourceIds: [], conditionalResourceIds: [],
+        permissionCheckState: 'ALLOWED', permissionBaseline: {}, requirementRevision: 1,
+        calculationSpec: { metricName: 'x', isOfficialMetric: false, formula: 'x', formulaExplanation: 'x', numerator: 'x', denominator: 'x', multiplier: 1, benchmarkRule: 'RANK_ONLY', strictConclusionBoundary: 'x' }
+      },
+      dataSolution: { ...createEmptyTask().dataSolution, state: 'READY', items: [createSolutionItem({ resourceId: 'r1' })] }
+    });
+    const events: FindDataEvent[] = [
+      { type: 'REQUIREMENT_UPDATED', payload: { hypothesis: { timeRange: { start: '2024.01', end: '2024.12' } } } },
+      { type: 'ASK_PLAN_INVALIDATED', payload: { reason: '需求已更新' } },
+      { type: 'COMPARISON_MODEL_CLEARED' },
+      { type: 'SOLUTION_EVALUATION_STARTED', payload: { requirementRevision: 2 } },
+      { type: 'SEARCH_STARTED', payload: { searchRevision: 1 } }
+    ];
+    const next = events.reduce(findDataReducer, task);
+    expect(next.askPlan).toBeUndefined();
+    expect(next.dataSolution.state).toBe('EVALUATING');
+    expect(next.dataSolution.items).toHaveLength(1);
+  });
+
+  it('only completes the pending operation that started the mutation', () => {
+    const started = findDataReducer(createEmptyTask(), {
+      type: 'OPERATION_STARTED', payload: { operationId: 'new', operationType: 'TURN', startedAt: '2026-09-04T00:00:00.000Z' }
+    });
+    const stale = findDataReducer(started, { type: 'OPERATION_COMPLETED', payload: { operationId: 'old' } });
+    expect(stale.pendingOperation?.operationId).toBe('new');
+    const completed = findDataReducer(stale, { type: 'OPERATION_COMPLETED', payload: { operationId: 'new' } });
+    expect(completed.pendingOperation).toBeUndefined();
+    expect(completed.lastCompletedOperationId).toBe('new');
   });
 });

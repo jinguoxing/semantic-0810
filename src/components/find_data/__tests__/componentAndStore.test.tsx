@@ -79,7 +79,7 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
       taskId: 'restored', requirementRevision: 3, searchRevision: 4,
       activeSurface: { type: 'SOLUTION' },
       turns: [{ turnId: 'u1', sender: 'USER', createdAt: '', blocks: [{ type: 'TEXT', id: 't1', content: '目标' }] }],
-      dataSolution: { items: [], gaps: [{ id: 'g1', title: '缺口', description: '缺口', impactLevel: 'LOW', mitigation: '补充', status: 'OPEN' }], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: '' }
+      dataSolution: { ...createEmptyTask().dataSolution, items: [], gaps: [{ id: 'g1', title: '缺口', description: '缺口', impactLevel: 'LOW', mitigation: '补充', status: 'OPEN' }], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: '' }
     });
     store.save(task);
     expect(store.load('restored')).toMatchObject({
@@ -126,7 +126,7 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
         onClose={() => {}}
       />
     );
-    expect(screen.getByText('权限已变化 (CHANGED)')).toBeInTheDocument();
+    expect(screen.getByText('权限发生变化')).toBeInTheDocument();
     expect(screen.getByText('查看权限变化')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '确认并开始计算' })).toBeDisabled();
   });
@@ -138,7 +138,8 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
       dataSolution: {
         ...task.dataSolution,
         relationshipEvidence: [{
-          sourceResourceId: 'r04', targetResourceId: 'r01', relationType: 'CORRELATION',
+          sourceResourceId: 'r04', targetResourceId: 'r01', relationType: 'ANALYTICAL_COMPATIBILITY',
+          verificationStatus: 'SEMANTIC_ONLY', evidenceLevel: 'MEDIUM', evidenceRefs: ['测试证据'],
           description: '同维度关联', joinKeys: ['street_town_code']
         }]
       }

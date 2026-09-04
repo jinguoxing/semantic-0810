@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Folder, Check, Plus, ExternalLink } from 'lucide-react';
 import { FindDataTaskState, ResourceId, TaskActionCode } from './model/FindDataTask';
-import { selectDiscoverableResources } from './model/findDataSelectors';
+import { selectCandidateSolutionStatus, selectRelatedResourceCandidates, selectResourceById } from './model/findDataSelectors';
 
 interface RightWorkspaceCatalogProps {
   task: FindDataTaskState;
@@ -18,12 +18,10 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
   onAction,
   onViewFields
 }) => {
-  // P0-11: Discover denied resources (discover === 'DENIED') are filtered out
-  const allDiscoverable = selectDiscoverableResources(task);
-  // Catalog shows available domain resources that can be evaluated/browsed
-  const catalogResources = allDiscoverable.filter(
-    (res) => res.id === 'r06' || res.id === 'r07' || !task.dataSolution.items.some((it) => it.resourceId === res.id)
-  );
+  const catalogResources = selectRelatedResourceCandidates(task).flatMap((candidate) => {
+    const resource = selectResourceById(task, candidate.resourceId);
+    return resource ? [{ candidate, resource }] : [];
+  });
 
   const [selectedId, setSelectedId] = useState<ResourceId | undefined>();
 
@@ -80,15 +78,16 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
             </div>
 
             <div className="space-y-3">
-              {catalogResources.map((item) => {
-                const isSelected = selectedId === item.id;
-                const isAllowed = item.availabilityByAction.query === 'ALLOWED';
-                const isInSolution = task.dataSolution.items.some((it) => it.resourceId === item.id);
+              {catalogResources.map(({ candidate, resource }) => {
+                const isSelected = selectedId === resource.id;
+                const isAllowed = resource.availabilityByAction.query === 'ALLOWED';
+                const solutionStatus = selectCandidateSolutionStatus(task, resource.id);
+                const isInSolution = solutionStatus === '已加入方案';
 
                 return (
                   <div
-                    key={item.id}
-                    onClick={() => setSelectedId(item.id)}
+                    key={resource.id}
+                    onClick={() => setSelectedId(resource.id)}
                     className={`p-4 rounded-xl border transition-all cursor-pointer space-y-3 ${
                       isSelected
                         ? 'border-[#2563EB] bg-[#EFF6FF]/20 ring-1 ring-[#2563EB]/30 shadow-xs'
@@ -97,16 +96,16 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2 truncate">
-                        <span className="font-bold text-xs text-[#0F172A] truncate">{item.name}</span>
+                          <span className="font-bold text-xs text-[#0F172A] truncate">{resource.name}</span>
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#F1F5F9] text-[#64748B] border border-[#E2E8F0]">
-                          {item.type}
+                          {resource.type}
                         </span>
                       </div>
 
                       <div className="flex items-center space-x-1.5">
                         {isInSolution && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold border bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]">
-                            已在方案中
+                            {solutionStatus}
                           </span>
                         )}
                         <span
@@ -121,11 +120,11 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
                       </div>
                     </div>
 
-                    <p className="text-[11px] text-[#64748B] leading-relaxed">{item.desc}</p>
+                    <p className="text-[11px] text-[#64748B] leading-relaxed">{candidate.reason}</p>
 
                     <div className="p-2.5 bg-[#F8FAFC] rounded-lg text-[11px] text-[#475569] space-y-1">
-                      <div><span className="font-semibold text-[#0F172A]">记录粒度：</span>{item.granularity}</div>
-                      <div><span className="font-semibold text-[#0F172A]">建议定位：</span>{item.roleNote || '业务补充'}</div>
+                      <div><span className="font-semibold text-[#0F172A]">记录粒度：</span>{resource.granularity}</div>
+                      <div><span className="font-semibold text-[#0F172A]">建议定位：</span>{resource.roleNote || '业务补充'}</div>
                     </div>
 
                     <div className="pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-xs">
@@ -133,7 +132,7 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onViewFields(item.id);
+                          onViewFields(resource.id);
                         }}
                         className="text-[#2563EB] hover:underline flex items-center space-x-0.5"
                       >
@@ -146,7 +145,7 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
                         disabled={isInSolution}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onAction?.('EVALUATE_AND_ADD', { resourceId: item.id });
+                          onAction?.('EVALUATE_AND_ADD', { resourceId: resource.id });
                         }}
                         className={`px-2.5 py-1 rounded-md transition-colors flex items-center space-x-1 font-semibold ${
                           isInSolution

@@ -1,6 +1,7 @@
 import {
   FindDataService,
   FindDataEngineResult,
+  FindDataTaskSummary,
   PermissionRecheckResult
 } from './FindDataService';
 import {
@@ -35,62 +36,83 @@ export class HttpFindDataService implements FindDataService {
     }
   }
 
+  async listTasks(): Promise<FindDataTaskSummary[]> {
+    const resp = await fetch(`${this.apiBase}/tasks`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    return await resp.json();
+  }
+
+  async getTask(taskId: string): Promise<FindDataTaskState> {
+    const resp = await fetch(`${this.apiBase}/tasks/${taskId}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    return await resp.json();
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    const resp = await fetch(`${this.apiBase}/tasks/${taskId}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+  }
+
   async submitTurn(
     task: FindDataTaskState,
-    text: string
+    text: string,
+    operationId?: string
   ): Promise<FindDataEngineResult> {
     const resp = await fetch(`${this.apiBase}/tasks/${task.taskId}/turns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, operationId })
     });
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
     }
-    return await resp.json();
+    return { ...await resp.json(), operationId: operationId ?? `http_turn_${Date.now()}` };
   }
 
   async executeAction(
     task: FindDataTaskState,
-    action: TaskAction
+    action: TaskAction,
+    operationId?: string
   ): Promise<FindDataEngineResult> {
     const resp = await fetch(`${this.apiBase}/tasks/${task.taskId}/actions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(action)
+      body: JSON.stringify({ ...action, operationId })
     });
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
     }
-    return await resp.json();
+    return { ...await resp.json(), operationId: operationId ?? `http_action_${Date.now()}` };
   }
 
   async recheckPermissions(
     task: FindDataTaskState,
     resourceIds: ResourceId[],
-    action: 'query' | 'preview' | 'export'
+    action: 'query' | 'preview' | 'export',
+    operationId?: string
   ): Promise<PermissionRecheckResult> {
     const resp = await fetch(`${this.apiBase}/tasks/${task.taskId}/permissions/check`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resourceIds, action })
+      body: JSON.stringify({ resourceIds, action, operationId })
     });
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
     }
-    return await resp.json();
+    return { ...await resp.json(), operationId };
   }
 
   async runAskPlan(
     task: FindDataTaskState,
-    askPlan: AskPlan
+    askPlan: AskPlan,
+    operationId?: string
   ): Promise<AskRunResult> {
     // Contract: this endpoint must recheck permissions and start execution in the
     // same backend transaction/workflow entry. A client-side precheck is advisory only.
     const resp = await fetch(`${this.apiBase}/tasks/${task.taskId}/ask-plan/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ askPlan })
+      body: JSON.stringify({ askPlan, operationId })
     });
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
@@ -98,7 +120,8 @@ export class HttpFindDataService implements FindDataService {
     const result = await resp.json();
     return {
       ...result,
-      dataOrigin: 'LIVE_QUERY'
+      dataOrigin: 'LIVE_QUERY',
+      operationId
     };
   }
 }

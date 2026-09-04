@@ -402,6 +402,9 @@ export const MINHANG_INITIAL_HYPOTHESIS: RequirementHypothesis = {
 };
 
 export const MINHANG_DATA_SOLUTION: DataSolution = {
+  state: 'READY',
+  basedOnRequirementRevision: 1,
+  basedOnSearchRevision: 1,
   items: [
     {
       resourceId: 'r01',
@@ -468,9 +471,12 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
     {
       sourceResourceId: 'r04',
       targetResourceId: 'r01',
-      relationType: 'CORRELATION',
-      description: '同按街镇与统计月份维度关联，构成床位供给比率计算的分子与分母。',
-      joinKeys: ['street_town_code', 'snapshot_month']
+      relationType: 'ANALYTICAL_COMPATIBILITY',
+      verificationStatus: 'SEMANTIC_ONLY',
+      evidenceLevel: 'MEDIUM',
+      description: '两项指标均按街镇与统计月份定义，支持围绕街镇与月份形成分析组合；技术连接仍需在分析阶段验证。',
+      joinKeys: ['street_town_code', 'snapshot_month'],
+      evidenceRefs: ['当前已登记指标定义与粒度说明']
     }
   ],
   coverageSummary: [

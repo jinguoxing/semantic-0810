@@ -79,10 +79,6 @@ function isSufficientInitialGoal(text: string): boolean {
     /(养老床位|养老资源|养老供给)/.test(text);
 }
 
-function isAnalysisRequest(text: string): boolean {
-  return /(按当前方案分析|供给水平相对偏低|每千名老人床位数)/.test(text);
-}
-
 function textBlock(content: string): ConversationBlock {
   return { type: 'TEXT', id: createScenarioId('text'), content };
 }
@@ -103,6 +99,7 @@ function searchEvents(
     gaps?: SolutionGap[];
     mode?: 'REPLACE' | 'MERGE';
     query?: string;
+    coverageSummary?: string[];
   }
 ): FindDataEvent[] {
   const searchRevision = task.searchRevision + 1;
@@ -112,6 +109,23 @@ function searchEvents(
     ? Array.from(new Set([...previousIds, ...options.resourceIds]))
     : options.resourceIds;
   const removedIds = mode === 'REPLACE' ? previousIds.filter((id) => !allCandidateIds.includes(id)) : [];
+  const priorCandidates = mode === 'MERGE'
+    ? (task.searchResult?.candidateSnapshot ?? []).filter((candidate) => allCandidateIds.includes(candidate.resourceId))
+    : [];
+  const candidateFor = (resourceId: ResourceId) => {
+    const resource = MINHANG_RESOURCES[resourceId];
+    const isCore = resourceId === 'r01' || resourceId === 'r04';
+    return {
+      resourceId,
+      title: resource?.name ?? '相关资源',
+      reason: isCore ? '直接满足当前供给分析的核心指标需要。' : resourceId === 'r07' ? '仅覆盖居家养老服务订单，属于部分匹配。' : '与当前目标相关，可进一步评估。',
+      matchType: isCore ? 'DIRECT' as const : resourceId === 'r07' ? 'PARTIAL' as const : 'RELATED' as const,
+      proposedRole: isCore ? 'CORE' as const : resourceId === 'r07' ? 'PARTIAL_MATCH' as const : resourceId === 'r06' ? 'CONDITIONAL_SUPPORT' as const : 'OPTIONAL_DRILLDOWN' as const,
+      sourceSearchRevision: searchRevision
+    };
+  };
+  const candidates = new Map(priorCandidates.map((candidate) => [candidate.resourceId, candidate]));
+  for (const resourceId of options.resourceIds) candidates.set(resourceId, candidateFor(resourceId));
   return [
     {
       type: 'SEARCH_STARTED',
@@ -129,6 +143,10 @@ function searchEvents(
         searchRevision,
         query: options.query,
         totalMatches: allCandidateIds.length,
+        candidateSnapshot: allCandidateIds.flatMap((resourceId) => {
+          const candidate = candidates.get(resourceId);
+          return candidate ? [candidate] : [];
+        }),
         resourceUpserts: options.resourceIds.map((id) => MINHANG_RESOURCES[id]).filter((resource): resource is FindDataResource => !!resource),
         candidateDelta: {
           retainedIds: previousIds.filter((id) => allCandidateIds.includes(id)),
@@ -144,7 +162,7 @@ function searchEvents(
           ...(options.items.some((item) => item.resourceId === 'r01')
             ? {
                 relationshipEvidence,
-                coverageSummary: MINHANG_DATA_SOLUTION.coverageSummary,
+                coverageSummary: options.coverageSummary ?? MINHANG_DATA_SOLUTION.coverageSummary,
                 limitationSummary: MINHANG_DATA_SOLUTION.limitationSummary
               }
             : mode === 'REPLACE'
@@ -255,6 +273,98 @@ function settledTaskStatus(task: FindDataTaskState): FindDataTaskState['status']
   return 'WAITING_USER';
 }
 
+function isCoverageSupported(timeRange: RequirementHypothesis['timeRange']): boolean {
+  if (!timeRange) return true;
+  const normalize = (value: string) => value.replace(/[^0-9]/g, '').slice(0, 6);
+  const start = normalize(timeRange.start);
+  const end = normalize(timeRange.end);
+  return start >= '202509' && end <= '202608';
+}
+
+function coverageForTimeRange(timeRange: RequirementHypothesis['timeRange']): string[] {
+  const coverage = MINHANG_DATA_SOLUTION.coverageSummary.filter((line) => !line.startsWith('时间覆盖：'));
+  if (!timeRange) return coverage;
+  return [
+    ...coverage,
+    `时间覆盖：已按 ${timeRange.start} — ${timeRange.end} 重新验证当前核心资源的月度覆盖。`
+  ];
+}
+
+function buildRequirementReevaluationResult(
+  task: FindDataTaskState,
+  patch: Partial<RequirementHypothesis>
+): FindDataEngineResult {
+  const requirementRevision = task.requirementRevision + 1;
+  const nextHypothesis = { ...task.requirementHypothesis, ...patch };
+  const prerequisite: FindDataEvent[] = [
+    { type: 'REQUIREMENT_UPDATED', payload: { hypothesis: patch, bumpRevision: true } },
+    { type: 'ASK_PLAN_INVALIDATED', payload: { reason: '需求或口径已修改，原分析计划不再有效。' } },
+    { type: 'COMPARISON_MODEL_CLEARED' },
+    { type: 'SOLUTION_EVALUATION_STARTED', payload: { requirementRevision } }
+  ];
+
+  if (nextHypothesis.region && !/闵行/.test(nextHypothesis.region)) {
+    const gap: SolutionGap = {
+      id: 'gap_region_not_configured',
+      title: '区域资源检索场景尚未配置',
+      description: '当前演示服务尚未配置该区域的数据资源检索场景。',
+      impactLevel: 'HIGH',
+      mitigation: '接入该区域的正式资源目录与检索场景后重新评估。',
+      status: 'OPEN'
+    };
+    const blocks = [textBlock('已按新的区域重新评估；当前演示服务尚未配置该区域的数据资源检索场景。')];
+    return {
+      ...emptyScenarioResult(task.taskId),
+      events: [
+        ...prerequisite,
+        { type: 'SCENARIO_RECLASSIFIED', payload: { fromScenarioKey: 'minhang_bed_supply', toScenarioKey: 'generic', reason: '区域已变更为非闵行区。' } },
+        ...searchEvents(task, { requirementRevision, resourceIds: [], items: [], gaps: [gap], mode: 'REPLACE', query: '需求修改后重新检索' }),
+        assistantEvent(blocks, 'READY')
+      ],
+      assistantBlocks: blocks
+    };
+  }
+
+  if (!isCoverageSupported(nextHypothesis.timeRange)) {
+    const gap: SolutionGap = {
+      id: 'gap_time_coverage',
+      title: '时间覆盖不足',
+      description: '当前已登记资源的时间覆盖不能满足新的时间范围。',
+      impactLevel: 'HIGH',
+      mitigation: '缩小时间范围或接入覆盖该期间的正式指标。',
+      status: 'OPEN'
+    };
+    const blocks = [textBlock('已按新时间范围重新验证，当前已登记资源的时间覆盖不能满足新的时间范围。')];
+    return {
+      ...emptyScenarioResult(task.taskId),
+      events: [
+        ...prerequisite,
+        ...searchEvents(task, { requirementRevision, resourceIds: [], items: [], gaps: [gap], mode: 'REPLACE', query: '需求修改后重新检索' }),
+        assistantEvent(blocks, 'READY')
+      ],
+      assistantBlocks: blocks
+    };
+  }
+
+  const blocks = [textBlock('正在按新口径重新评估；已更新候选资源、覆盖范围和关系证据。')];
+  return {
+    ...emptyScenarioResult(task.taskId),
+    events: [
+      ...prerequisite,
+      ...searchEvents(task, {
+        requirementRevision,
+        resourceIds: ['r01', 'r04'],
+        items: coreItems,
+        mode: 'REPLACE',
+        query: '需求修改后重新检索',
+        coverageSummary: coverageForTimeRange(nextHypothesis.timeRange)
+      }),
+      assistantEvent(blocks, 'READY')
+    ],
+    assistantBlocks: blocks
+  };
+}
+
 export function isMinhangBedSupplyInitialGoal(text: string): boolean {
   const hasRegion = /闵行/.test(text);
   const hasPopulation = /(老人|老年人口|60\s*岁以上|60\s*岁及以上|老龄)/.test(text);
@@ -269,7 +379,7 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
     return isMinhangBedSupplyInitialGoal(text);
   }
 
-  async handleTurn(task: FindDataTaskState, text: string, _intent: InteractionIntent): Promise<FindDataEngineResult> {
+  async handleTurn(task: FindDataTaskState, text: string, intent: InteractionIntent): Promise<FindDataEngineResult> {
     const result = emptyScenarioResult(task.taskId);
 
     if (task.scenarioKey) {
@@ -285,7 +395,14 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
         const blocks = [textBlock(buildGapSummary(task))];
         return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
       }
-      if (isAnalysisRequest(text) && task.dataSolution.items.length > 0 && !task.askPlan) {
+      if (intent.matchedRule === 'compare-summary-question') {
+        const blocks: ConversationBlock[] = [
+          textBlock('这两项资源可以从粒度、时间形态和查询权限三个维度比较。'),
+          { type: 'ACTION_GROUP', id: createScenarioId('actions'), actions: [{ id: createScenarioId('compare'), label: '比较 2 项资源', actionCode: 'OPEN_COMPARE', variant: 'weak' }] }
+        ];
+        return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
+      }
+      if (intent.kind === 'ANALYZE' && task.dataSolution.state === 'READY' && task.dataSolution.items.length > 0 && !task.askPlan) {
         const blocks: ConversationBlock[] = [{ type: 'CLARIFICATION', id: createScenarioId('clarification'), question: benchmarkQuestion }];
         const hypothesis = {
           ...task.requirementHypothesis,
@@ -312,16 +429,21 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
           }
         }], 'MERGE', text);
       }
-      if (/(查看明细|解释机构|浏览相关资源)/.test(text)) {
+      if (intent.kind === 'RESOURCE_BROWSE' || /(查看明细|解释机构|浏览相关资源|人口明细)/.test(text)) {
         const ids = text.includes('解释机构') ? ['r06'] : ['r02', 'r03'];
-        const items = MINHANG_DATA_SOLUTION.items.filter((item) => ids.includes(item.resourceId));
-        const blocks = [textBlock(`已补充 ${ids.length} 项与当前目标相关的可进一步评估资源。`)];
+        const blocks: ConversationBlock[] = [
+          textBlock(`当前发现 ${ids.length} 项可选明细资源。基于过去 12 个月的目标，月度快照更适合。`),
+          { type: 'ACTION_GROUP', id: createScenarioId('actions'), actions: [
+            { id: createScenarioId('compare'), label: '比较 2 项资源', actionCode: 'OPEN_COMPARE', variant: 'weak' },
+            { id: createScenarioId('select'), label: '使用月度快照', actionCode: 'SELECT_RESOURCE', payload: { resourceId: 'r03' }, variant: 'primary' }
+          ] }
+        ];
         const comparisonEvents = ids.includes('r02') && ids.includes('r03') ? createMinhangComparisonEvents() : [];
         return {
           ...result,
           events: [
             ...comparisonEvents,
-            ...searchEvents(task, { requirementRevision: task.requirementRevision, resourceIds: ids, items, mode: 'MERGE', query: text }),
+            ...searchEvents(task, { requirementRevision: task.requirementRevision, resourceIds: ids, items: [], mode: 'MERGE', query: text }),
             assistantEvent(blocks, 'READY')
           ],
           assistantBlocks: blocks
@@ -380,12 +502,7 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
     }
     if (action.actionCode === 'REVISE_REQUIREMENT') {
       const patch = (action.payload?.hypothesisPatch ?? {}) as Partial<RequirementHypothesis>;
-      const blocks: ConversationBlock[] = [textBlock('已更新当前任务的需求与口径，原分析计划需重新生成。')];
-      return {
-        ...result,
-        events: [{ type: 'REQUIREMENT_UPDATED', payload: { hypothesis: patch, bumpRevision: true } }, assistantEvent(blocks, 'WAITING_USER')],
-        assistantBlocks: blocks
-      };
+      return buildRequirementReevaluationResult(task, patch);
     }
     if (action.actionCode !== 'SUBMIT_CLARIFICATION') return result;
     const questionId = action.payload?.questionId as string;

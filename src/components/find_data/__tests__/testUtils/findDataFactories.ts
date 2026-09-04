@@ -80,9 +80,12 @@ export function createEmptyTask(overrides: Partial<FindDataTaskState> = {}): Fin
     turns: [],
     resources: {},
     dataSolution: {
+      state: 'EMPTY',
+      basedOnRequirementRevision: 0,
+      basedOnSearchRevision: 0,
       items: [], gaps: [], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: fixedNow
     },
-    searchResult: { query: '', totalMatches: 0, candidateIds: [], returnedCount: 0 },
+    searchResult: { query: '', totalMatches: 0, candidateIds: [], candidateSnapshot: [], returnedCount: 0 },
     permissionRequests: {},
     activeResourceId: undefined,
     activeSurface: { type: 'CLOSED', mode: 'QUICK_PREVIEW' },
@@ -117,10 +120,19 @@ export function createMinhangTask(overrides: Partial<FindDataTaskState> = {}): F
     },
     resources,
     dataSolution: {
+      state: 'READY',
+      basedOnRequirementRevision: 1,
+      basedOnSearchRevision: 1,
       items: [createSolutionItem({ resourceId: 'r01' }), createSolutionItem({ resourceId: 'r04' })],
       gaps: [], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: fixedNow
     },
-    searchResult: { query: '闵行养老床位供给', totalMatches: 2, candidateIds: ['r01', 'r04'], returnedCount: 2 },
+    searchResult: {
+      query: '闵行养老床位供给', totalMatches: 2, candidateIds: ['r01', 'r04'], returnedCount: 2,
+      candidateSnapshot: [
+        { resourceId: 'r01', title: '60 岁以上常住人口数', reason: '核心指标', matchType: 'DIRECT', proposedRole: 'CORE', sourceSearchRevision: 1 },
+        { resourceId: 'r04', title: '在营可用养老床位数', reason: '核心指标', matchType: 'DIRECT', proposedRole: 'CORE', sourceSearchRevision: 1 }
+      ]
+    },
     ...overrides
   });
 }

@@ -1,6 +1,7 @@
 import {
   FindDataService,
   FindDataEngineResult,
+  FindDataTaskSummary,
   PermissionRecheckResult
 } from './FindDataService';
 import {
@@ -21,14 +22,25 @@ export class DisconnectedFindDataService implements FindDataService {
     });
   }
 
+  async listTasks(): Promise<FindDataTaskSummary[]> {
+    return [];
+  }
+
+  async getTask(_taskId: string): Promise<FindDataTaskState> {
+    throw new Error('找数据服务尚未连接，无法恢复任务。');
+  }
+
+  async deleteTask(_taskId: string): Promise<void> {}
+
   async submitTurn(
     task: FindDataTaskState,
-    _text: string
+    _text: string,
+    operationId?: string
   ): Promise<FindDataEngineResult> {
     const turnId = `turn_${Date.now()}_assistant`;
     return {
       taskId: task.taskId,
-      operationId: `operation_${Date.now()}`,
+      operationId: operationId ?? `operation_${Date.now()}`,
       events: [
         {
           type: 'ASSISTANT_TURN_RECEIVED',
@@ -62,11 +74,12 @@ export class DisconnectedFindDataService implements FindDataService {
 
   async executeAction(
     task: FindDataTaskState,
-    _action: TaskAction
+    _action: TaskAction,
+    operationId?: string
   ): Promise<FindDataEngineResult> {
     return {
       taskId: task.taskId,
-      operationId: `operation_${Date.now()}`,
+      operationId: operationId ?? `operation_${Date.now()}`,
       events: [],
       assistantBlocks: [],
       surfaceCommand: { action: 'NO_CHANGE' }
@@ -76,9 +89,11 @@ export class DisconnectedFindDataService implements FindDataService {
   async recheckPermissions(
     _task: FindDataTaskState,
     _resourceIds: ResourceId[],
-    _action: 'query' | 'preview' | 'export'
+    _action: 'query' | 'preview' | 'export',
+    operationId?: string
   ): Promise<PermissionRecheckResult> {
     return {
+      operationId,
       decision: 'BLOCKED',
       updatedPermissions: {},
       details: '服务未连接，无法完成权限校验。'
@@ -87,9 +102,11 @@ export class DisconnectedFindDataService implements FindDataService {
 
   async runAskPlan(
     _task: FindDataTaskState,
-    _askPlan: AskPlan
+    _askPlan: AskPlan,
+    operationId?: string
   ): Promise<AskRunResult> {
     return {
+      operationId,
       success: false,
       executedAt: new Date().toISOString(),
       permissionSnapshot: {},

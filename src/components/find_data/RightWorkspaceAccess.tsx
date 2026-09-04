@@ -28,6 +28,8 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
   const [selectedToApply, setSelectedToApply] = useState<ResourceId[]>([]);
 
   const permissionRequests: PermissionRequestRef[] = Object.values(task.permissionRequests);
+  const coreItems = items.filter((item) => item.role === 'CORE');
+  const hasCoreResources = coreItems.length > 0;
 
   const getDecisionBadge = (decision?: PermissionDecision) => {
     switch (decision) {
@@ -75,9 +77,10 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
     setSelectedToApply([]);
   };
 
-  const hasCoreAllAllowed = items.length > 0 && items
-    .filter((it) => it.role === 'CORE')
-    .every((it) => task.resources[it.resourceId]?.availabilityByAction?.query === 'ALLOWED');
+  const areAllCoreQueryable = hasCoreResources && coreItems
+    .every((item) => task.resources[item.resourceId]?.availabilityByAction?.query === 'ALLOWED');
+  const hasDeniedCore = coreItems.some((item) => task.resources[item.resourceId]?.availabilityByAction?.query === 'DENIED');
+  const hasRequestable = items.some((item) => task.resources[item.resourceId]?.availabilityByAction?.query === 'REQUESTABLE');
 
   return (
     <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200 select-none">
@@ -115,15 +118,31 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
           </div>
         ) : (
           <>
-            {hasCoreAllAllowed ? (
+            {!hasCoreResources ? (
+              <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl space-y-1 text-xs text-[#475569]">
+                <div className="font-bold flex items-center space-x-1.5">
+                  <AlertTriangle className="w-4 h-4 text-[#64748B]" />
+                  <span>当前方案尚未形成可执行核心资源。</span>
+                </div>
+                <p className="text-[11px] leading-relaxed">权限页展示的是当前资源快照；形成核心资源后才能判断可执行范围。</p>
+              </div>
+            ) : areAllCoreQueryable ? (
               <div className="p-3 bg-[#EFF6FF]/60 border border-[#BFDBFE] rounded-xl space-y-1 text-xs text-[#1E3A8A]">
                 <div className="font-bold flex items-center space-x-1.5">
                   <Check className="w-4 h-4 text-[#2563EB]" />
-                  <span>核心计算指标已通过权限校验</span>
+                  <span>当前核心资源可用于查询。</span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
-                  当前方案核心指标均具备即时查询权限，可直接执行 Ask Data 问数分析。下钻明细可按需勾选申请。
+                  此处仅展示当前权限快照；执行分析前仍会再次校验权限。下钻明细可按需申请。
                 </p>
+              </div>
+            ) : hasDeniedCore ? (
+              <div className="p-3 bg-[#FEF2F2] border border-[#FECACA] rounded-xl space-y-1 text-xs text-[#991B1B]">
+                <div className="font-bold flex items-center space-x-1.5"><AlertTriangle className="w-4 h-4" /><span>当前至少一项核心资源不可查询，无法形成完整可执行范围。</span></div>
+              </div>
+            ) : hasRequestable ? (
+              <div className="p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl space-y-1 text-xs text-[#92400E]">
+                <div className="font-bold flex items-center space-x-1.5"><AlertTriangle className="w-4 h-4 text-[#D97706]" /><span>部分核心或扩展资源需要申请查询权限。</span></div>
               </div>
             ) : (
               <div className="p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl space-y-1 text-xs text-[#92400E]">
@@ -247,7 +266,7 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
           }`}
         >
           <FileCheck className="w-3.5 h-3.5" />
-          <span>发起选定权限申请 ({selectedToApply.length})</span>
+          <span>申请 {selectedToApply.length} 项查询权限</span>
         </button>
       </div>
     </div>

@@ -12,10 +12,11 @@ import {
 } from '../model/FindDataTask';
 import { FindDataEvent } from '../model/findDataEvents';
 import { createFindDataTask } from '../model/createFindDataTask';
-import { determineInteractionIntent, evaluateSurfacePolicy, isSurfaceActionCode } from '../policy/surfacePolicy';
-import { scenarioRegistry } from '../scenarios/scenarioRegistry';
+import { evaluateSurfacePolicy, isSurfaceActionCode, resolveInteractionIntent } from '../policy/surfacePolicy';
+import { buildScenarioClassificationContext, canUpgradeGenericScenario, scenarioRegistry } from '../scenarios/scenarioRegistry';
 import { createScenarioId, emptyScenarioResult } from '../scenarios/FindDataScenario';
-import { FindDataEngineResult, FindDataService, PermissionRecheckResult } from './FindDataService';
+import { selectCandidateById } from '../model/findDataSelectors';
+import { FindDataEngineResult, FindDataService, FindDataTaskSummary, PermissionRecheckResult } from './FindDataService';
 
 function assistantNotice(task: FindDataTaskState, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info'): FindDataEngineResult {
   const block: ConversationBlock = { type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level, message };
@@ -80,40 +81,92 @@ function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resul
 }
 
 export class MockFindDataService implements FindDataService {
+  private tasks = new Map<string, FindDataTaskState>();
+
   async createTask(input?: { initialQuery?: string }): Promise<FindDataTaskState> {
-    return createFindDataTask({ taskId: createScenarioId('task'), initialQuery: input?.initialQuery });
+    const task = createFindDataTask({ taskId: createScenarioId('task'), initialQuery: input?.initialQuery });
+    this.tasks.set(task.taskId, task);
+    return task;
   }
 
-  async submitTurn(task: FindDataTaskState, text: string): Promise<FindDataEngineResult> {
-    const intent = determineInteractionIntent(text);
-    const surfaceCommand = evaluateSurfacePolicy(intent, undefined, task.activeSurface, task, text);
-    const scenario = task.scenarioKey ? scenarioRegistry.get(task.scenarioKey) : scenarioRegistry.classify(text);
-    const result = await scenario.handleTurn(task, text, intent);
+  async listTasks(): Promise<FindDataTaskSummary[]> {
+    return Array.from(this.tasks.values())
+      .map(({ taskId, title, status, updatedAt, scenarioKey }) => ({ taskId, title, status, updatedAt, scenarioKey }))
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  }
+
+  async getTask(taskId: string): Promise<FindDataTaskState> {
+    const task = this.tasks.get(taskId);
+    if (!task) throw new Error('未找到该找数据任务。');
+    return task;
+  }
+
+  async deleteTask(taskId: string): Promise<void> {
+    this.tasks.delete(taskId);
+  }
+
+  async submitTurn(task: FindDataTaskState, text: string, operationId = createScenarioId('operation')): Promise<FindDataEngineResult> {
+    this.tasks.set(task.taskId, task);
+    const intent = resolveInteractionIntent(text, task);
+    const surfaceCommand = evaluateSurfacePolicy(intent, undefined, task.activeSurface, task);
+    const canUpgrade = canUpgradeGenericScenario(task);
+    const upgradedScenario = canUpgrade
+      ? scenarioRegistry.classify(buildScenarioClassificationContext(task, text))
+      : undefined;
+    const isUpgrade = task.scenarioKey === 'generic' && upgradedScenario !== undefined && upgradedScenario.key !== 'generic';
+    const scenario = isUpgrade
+      ? upgradedScenario!
+      : task.scenarioKey
+      ? scenarioRegistry.get(task.scenarioKey)
+      : scenarioRegistry.classify(text);
+    const scenarioTask = isUpgrade ? { ...task, scenarioKey: undefined } : task;
+    const result = await scenario.handleTurn(scenarioTask, text, intent);
     const events: FindDataEvent[] = [];
-    if (!task.scenarioKey) {
+    if (isUpgrade) {
+      events.push({
+        type: 'SCENARIO_RECLASSIFIED',
+        payload: { fromScenarioKey: 'generic', toScenarioKey: scenario.key, reason: '补充信息已满足场景识别条件。' }
+      });
+    } else if (!task.scenarioKey) {
       events.push({ type: 'SCENARIO_CLASSIFIED', payload: { scenarioKey: scenario.key } });
     }
     events.push(...result.events);
-    return { ...result, taskId: task.taskId, events, surfaceCommand };
+    return { ...result, taskId: task.taskId, operationId, events, surfaceCommand };
   }
 
-  async executeAction(task: FindDataTaskState, action: TaskAction): Promise<FindDataEngineResult> {
+  async executeAction(task: FindDataTaskState, action: TaskAction, operationId = createScenarioId('operation')): Promise<FindDataEngineResult> {
+    this.tasks.set(task.taskId, task);
     const surfaceCommand = evaluateSurfacePolicy(
-      'TASK_ACTION', action.actionCode, task.activeSurface, task, undefined, action.payload
+      resolveInteractionIntent('', task), action.actionCode, task.activeSurface, task, action.payload
     );
 
     if (isSurfaceActionCode(action.actionCode)) {
-      return { ...emptyScenarioResult(task.taskId), surfaceCommand };
+      return { ...emptyScenarioResult(task.taskId), operationId, surfaceCommand };
     }
 
     if (action.actionCode === 'SELECT_RESOURCE') {
       const resourceId = action.payload?.resourceId as string;
-      if (!requireDiscoverableTaskResource(task, resourceId)) {
-        return assistantNotice(task, '当前资源不属于本任务可发现范围，无法执行该操作。', 'warning');
+      const candidate = selectCandidateById(task, resourceId);
+      if (!requireDiscoverableTaskResource(task, resourceId) || !candidate) {
+        return { ...assistantNotice(task, '当前资源不属于本任务可发现范围，无法执行该操作。', 'warning'), operationId };
       }
+      const existing = task.dataSolution.items.find((item) => item.resourceId === resourceId);
+      const item: DataSolutionItem = existing ?? {
+        resourceId,
+        role: candidate.proposedRole ?? 'OPTIONAL_DRILLDOWN',
+        inclusionState: 'SELECTED',
+        coverage: [candidate.reason],
+        limitations: [],
+        evidenceRefs: ['用户确认纳入当前方案'],
+        selectionGroupId: ['r02', 'r03'].includes(resourceId) ? 'population_detail_alternative' : undefined
+      };
       return {
         ...emptyScenarioResult(task.taskId),
-        events: [{ type: 'RESOURCE_SELECTED', payload: { resourceId } }],
+        operationId,
+        events: [
+          ...(existing ? [] : [{ type: 'SOLUTION_ITEM_UPSERTED' as const, payload: { item } }]),
+          { type: 'RESOURCE_SELECTED', payload: { resourceId } }
+        ],
         surfaceCommand: task.activeSurface.type === 'COMPARE' ? { action: 'CLOSE', surface: 'CLOSED' } : surfaceCommand
       };
     }
@@ -121,12 +174,13 @@ export class MockFindDataService implements FindDataService {
     if (action.actionCode === 'EVALUATE_AND_ADD') {
       const resourceId = action.payload?.resourceId as string;
       const resource = requireDiscoverableTaskResource(task, resourceId);
-      if (!resource) {
-        return assistantNotice(task, '当前资源不属于本任务可发现范围，无法执行该操作。', 'warning');
+      const candidate = selectCandidateById(task, resourceId);
+      if (!resource || !candidate) {
+        return { ...assistantNotice(task, '当前资源不属于本任务可发现范围，无法执行该操作。', 'warning'), operationId };
       }
       const item: DataSolutionItem = {
         resourceId,
-        role: resourceId === 'r07' ? 'PARTIAL_MATCH' : 'OPTIONAL_DRILLDOWN',
+        role: candidate.proposedRole ?? (resourceId === 'r07' ? 'PARTIAL_MATCH' : 'OPTIONAL_DRILLDOWN'),
         inclusionState: resourceId === 'r07' ? 'NOT_INCLUDED' : 'RECOMMENDED',
         coverage: [resource.desc],
         limitations: [resource.roleNote ?? '需进一步确认分析口径'],
@@ -137,6 +191,7 @@ export class MockFindDataService implements FindDataService {
       };
       return {
         ...emptyScenarioResult(task.taskId),
+        operationId,
         events: [
           { type: 'SOLUTION_ITEM_UPSERTED', payload: { item } },
           { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [block], nextStatus: 'READY' } }
@@ -147,21 +202,59 @@ export class MockFindDataService implements FindDataService {
     }
 
     if (action.actionCode === 'CREATE_PERMISSION_REQUEST') {
-      const requestedIds = (action.payload?.resourceIds as string[] ?? []).filter((id) => !!requireDiscoverableTaskResource(task, id));
-      if (requestedIds.length === 0) return assistantNotice(task, '当前没有可提交申请的任务资源。', 'warning');
+      const rawIds = action.payload?.resourceIds;
+      const requestedIds = Array.isArray(rawIds) ? Array.from(new Set(rawIds.filter((id): id is string => typeof id === 'string'))) : [];
+      const actionType = (action.payload?.actionType as PermissionRequestRef['actionType']) ?? 'query';
+      if (requestedIds.length === 0) return { ...assistantNotice(task, '当前资源不属于本任务可申请范围。', 'warning'), operationId };
+      const invalid = requestedIds.some((id) => {
+        const resource = requireDiscoverableTaskResource(task, id);
+        const belongsToTask = !!selectCandidateById(task, id) || task.dataSolution.items.some((item) => item.resourceId === id);
+        return !resource || !belongsToTask;
+      });
+      if (invalid) return { ...assistantNotice(task, '当前资源不属于本任务可申请范围。', 'warning'), operationId };
+      const decisions = requestedIds.map((id) => task.resources[id].availabilityByAction[actionType]);
+      if (decisions.some((decision) => decision === 'ALLOWED')) {
+        return { ...assistantNotice(task, '该资源当前已经具备查询权限，无需重复申请。', 'info'), operationId };
+      }
+      if (decisions.some((decision) => decision === 'DENIED')) {
+        return { ...assistantNotice(task, '当前策略不支持申请该项权限。', 'warning'), operationId };
+      }
+      if (decisions.some((decision) => decision === 'UNKNOWN')) {
+        return { ...assistantNotice(task, '当前权限状态尚未确认，请稍后重试或联系管理员。', 'warning'), operationId };
+      }
+      const existing = Object.values(task.permissionRequests).find((request) =>
+        request.status === 'SUBMITTED' && request.actionType === actionType &&
+        request.resourceIds.length === requestedIds.length && request.resourceIds.every((id) => requestedIds.includes(id))
+      );
+      if (existing) {
+        const notice: ConversationBlock = {
+          type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level: 'info', message: '相同权限申请已提交，已返回现有申请记录。'
+        };
+        return {
+          ...emptyScenarioResult(task.taskId),
+          operationId,
+          events: [
+            { type: 'PERMISSION_REQUEST_CREATED', payload: { request: existing } },
+            { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [notice], nextStatus: task.status } }
+          ],
+          assistantBlocks: [notice],
+          surfaceCommand
+        };
+      }
       const request: PermissionRequestRef = {
         requestId: createScenarioId('request'),
         resourceIds: requestedIds,
-        actionType: (action.payload?.actionType as PermissionRequestRef['actionType']) ?? 'query',
+        actionType,
         status: 'SUBMITTED',
         submittedAt: new Date().toISOString()
       };
-      return { ...emptyScenarioResult(task.taskId), events: [{ type: 'PERMISSION_REQUEST_CREATED', payload: { request } }], surfaceCommand };
+      return { ...emptyScenarioResult(task.taskId), operationId, events: [{ type: 'PERMISSION_REQUEST_CREATED', payload: { request } }], surfaceCommand };
     }
 
     if (action.actionCode === 'KEEP_AS_GAP') {
       return {
         ...emptyScenarioResult(task.taskId),
+        operationId,
         events: [{ type: 'SOLUTION_GAP_UPSERTED', payload: { gap: {
           id: createScenarioId('gap'), title: '已保留的当前检索缺口', description: '当前资源覆盖不足，本轮不强行纳入分析。',
           impactLevel: 'LOW', mitigation: '在分析边界中明确披露。', status: 'ACKNOWLEDGED'
@@ -172,19 +265,23 @@ export class MockFindDataService implements FindDataService {
 
     const scenario = scenarioRegistry.get(task.scenarioKey ?? 'generic');
     const result = await scenario.handleAction(task, action);
-    return { ...result, taskId: task.taskId, surfaceCommand };
+    return { ...result, taskId: task.taskId, operationId, surfaceCommand };
   }
 
   async recheckPermissions(
     task: FindDataTaskState,
     resourceIds: ResourceId[],
-    action: 'query' | 'preview' | 'export'
+    action: 'query' | 'preview' | 'export',
+    operationId?: string
   ): Promise<PermissionRecheckResult> {
+    if (resourceIds.length === 0) {
+      return { operationId, decision: 'BLOCKED', updatedPermissions: {}, details: '当前方案尚未形成可执行核心资源。' };
+    }
     const updatedPermissions: Record<ResourceId, AvailabilityByAction> = {};
     for (const id of resourceIds) {
       const resource = requireDiscoverableTaskResource(task, id);
       if (!resource) {
-        return { decision: 'BLOCKED', updatedPermissions, details: '核心资源不存在或不在任务可发现范围。' };
+        return { operationId, decision: 'BLOCKED', updatedPermissions, details: '核心资源不存在或不在任务可发现范围。' };
       }
       updatedPermissions[id] = { ...resource.availabilityByAction };
     }
@@ -193,21 +290,21 @@ export class MockFindDataService implements FindDataService {
     const changed = resourceIds.some((id) => baseline?.[id] !== undefined && baseline[id] !== updatedPermissions[id][action]);
     if (changed) {
       return {
-        decision: 'CHANGED', updatedPermissions,
+        operationId, decision: 'CHANGED', updatedPermissions,
         details: '部分核心资源的查询权限自分析计划生成后发生变化，请先确认新的可执行范围。'
       };
     }
     const blocked = resourceIds.some((id) => updatedPermissions[id][action] !== 'ALLOWED');
     return {
-      decision: blocked ? 'BLOCKED' : 'ALLOWED',
+      operationId, decision: blocked ? 'BLOCKED' : 'ALLOWED',
       updatedPermissions,
       details: blocked ? '至少一项核心资源不允许执行当前操作。' : '所有核心资源权限重检通过。'
     };
   }
 
-  async runAskPlan(task: FindDataTaskState, askPlan: AskPlan): Promise<AskRunResult> {
+  async runAskPlan(task: FindDataTaskState, askPlan: AskPlan, operationId?: string): Promise<AskRunResult> {
     const fail = (error: string, permissionSnapshot: Record<ResourceId, AvailabilityByAction> = {}): AskRunResult => ({
-      success: false, executedAt: new Date().toISOString(), permissionSnapshot, error
+      operationId, success: false, executedAt: new Date().toISOString(), permissionSnapshot, error
     });
     if (!task.askPlan || task.askPlan.id !== askPlan.id) return fail('分析计划不存在。');
     if (!['READY_TO_RUN', 'COMPLETED', 'FAILED'].includes(askPlan.status)) return fail('分析计划当前状态不允许执行。');
@@ -228,6 +325,7 @@ export class MockFindDataService implements FindDataService {
     return {
       success: true,
       executedAt: new Date().toISOString(),
+      operationId,
       dataOrigin: 'MOCK_FIXTURE',
       permissionSnapshot: authoritativeCheck.updatedPermissions,
       resultArtifact: buildMockAskArtifact(askPlan)

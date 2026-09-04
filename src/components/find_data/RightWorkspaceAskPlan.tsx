@@ -193,7 +193,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <ShieldCheck className="w-4 h-4 text-[#2563EB]" />
-              <span className="font-bold text-[#0F172A]">执行前权限重校验（严格状态机）：</span>
+              <span className="font-bold text-[#0F172A]">执行前权限校验：</span>
             </div>
             <span
               className={`text-[10px] px-2 py-0.5 font-bold rounded border ${
@@ -209,14 +209,14 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
               }`}
             >
               {checkState === 'ALLOWED'
-                ? '已通过校验 (ALLOWED)'
+                ? '可以执行'
                 : checkState === 'CHECKING'
                 ? '核验中…'
                 : checkState === 'BLOCKED'
-                ? '权限阻断 (BLOCKED)'
+                ? '当前无法执行'
                 : checkState === 'CHANGED'
-                ? '权限已变化 (CHANGED)'
-                : '未校验 (NOT_CHECKED)'}
+                ? '权限发生变化'
+                : '尚未校验'}
             </span>
           </div>
 
@@ -271,7 +271,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-[10px] px-2 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] font-mono border border-[#E2E8F0]">
-                  {lastRunResult.dataOrigin === 'MOCK_FIXTURE' ? '系统离线模拟数据' : '实时查询引擎'}
+                  {lastRunResult.dataOrigin === 'MOCK_FIXTURE' ? '演示数据' : '实时查询引擎'}
                 </span>
                 <span className="text-[11px] text-[#64748B]">{plan.timeRange?.end ? `${plan.timeRange.end} 最新月度` : '时间未指定'}</span>
               </div>

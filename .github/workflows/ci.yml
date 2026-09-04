@@ -2,8 +2,18 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'v2026.*'
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -21,9 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        find-data-mode: [mock, disconnected]
+        find-data-mode: [mock, disconnected, http]
     env:
       VITE_FIND_DATA_MODE: ${{ matrix.find-data-mode }}
+      VITE_FIND_DATA_API_BASE: /api/find-data
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

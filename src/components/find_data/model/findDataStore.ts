@@ -123,7 +123,7 @@ export class DisconnectedSessionTaskStore extends LocalStorageFindDataTaskStore 
       ...task,
       resources: {},
       dataSolution: { ...task.dataSolution, items: [], gaps: [], relationshipEvidence: [], coverageSummary: [], limitationSummary: [] },
-      searchResult: { query: '', totalMatches: 0, candidateIds: [], returnedCount: 0 },
+      searchResult: { query: '', totalMatches: 0, candidateIds: [], candidateSnapshot: [], returnedCount: 0 },
       askPlan: undefined,
       permissionRequests: {}
     });

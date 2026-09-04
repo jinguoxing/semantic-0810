@@ -1,4 +1,4 @@
-import { ConversationTurn, DataSolutionItem, FindDataTaskState } from './FindDataTask';
+import { ConversationTurn, DataSolutionItem, FindDataTaskState, ResourceCandidate } from './FindDataTask';
 import { createFindDataTask } from './createFindDataTask';
 import { FindDataEvent } from './findDataEvents';
 
@@ -10,6 +10,19 @@ function upsertItems(existing: DataSolutionItem[], incoming: DataSolutionItem[])
   const items = new Map(existing.map((item) => [item.resourceId, item]));
   for (const item of incoming) items.set(item.resourceId, item);
   return Array.from(items.values());
+}
+
+function mergeCandidateSnapshot(
+  state: FindDataTaskState,
+  candidateIds: string[],
+  incoming: ResourceCandidate[] | undefined
+): ResourceCandidate[] {
+  const candidates = new Map((state.searchResult?.candidateSnapshot ?? []).map((candidate) => [candidate.resourceId, candidate]));
+  for (const candidate of incoming ?? []) candidates.set(candidate.resourceId, candidate);
+  return candidateIds.flatMap((resourceId) => {
+    const candidate = candidates.get(resourceId);
+    return candidate ? [candidate] : [];
+  });
 }
 
 export function findDataReducer(state: FindDataTaskState, action: FindDataEvent): FindDataTaskState {
@@ -26,8 +39,14 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
     case 'SCENARIO_CLASSIFIED':
       return { ...state, scenarioKey: action.payload.scenarioKey, updatedAt: now };
 
+    case 'SCENARIO_RECLASSIFIED':
+      return { ...state, scenarioKey: action.payload.toScenarioKey, updatedAt: now };
+
     case 'COMPARISON_MODEL_SET':
       return { ...state, comparisonModel: action.payload.comparisonModel, updatedAt: now };
+
+    case 'COMPARISON_MODEL_CLEARED':
+      return { ...state, comparisonModel: undefined, updatedAt: now };
 
     case 'USER_TURN_SUBMITTED': {
       const turn: ConversationTurn = {
@@ -42,7 +61,13 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
           ? (action.payload.text.length > 24 ? `${action.payload.text.slice(0, 24)}...` : action.payload.text)
           : state.title,
         goal: state.turns.length === 0 && !state.goal ? action.payload.text : state.goal,
-        status: 'UNDERSTANDING',
+        // A generic task can be reclassified only from its stable, unresolved
+        // states. Keep that state through the transient submitted turn; the
+        // pending-operation contract still disables another mutation while the
+        // service is processing it.
+        status: state.scenarioKey === 'generic' && ['NEEDS_CLARIFICATION', 'WAITING_USER', 'IDLE'].includes(state.status)
+          ? state.status
+          : 'UNDERSTANDING',
         runtimeStatus: { active: true, message: '正在理解当前问题…' },
         turns: [...state.turns, turn],
         updatedAt: now
@@ -74,9 +99,20 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
         requirementHypothesis: { ...state.requirementHypothesis, ...action.payload.hypothesis },
         requirementRevision,
         status: 'UNDERSTANDING',
+        dataSolution: action.payload.bumpRevision === false || state.dataSolution.state === 'EMPTY'
+          ? state.dataSolution
+          : { ...state.dataSolution, state: 'STALE', updatedAt: now },
         updatedAt: now
       };
     }
+
+    case 'SOLUTION_EVALUATION_STARTED':
+      if (action.payload.requirementRevision !== state.requirementRevision) return state;
+      return {
+        ...state,
+        dataSolution: { ...state.dataSolution, state: 'EVALUATING', updatedAt: now },
+        updatedAt: now
+      };
 
     case 'CLARIFICATION_RESOLVED': {
       const resolveQuestion = (question: FindDataTaskState['requirementHypothesis']['unresolvedQuestions'][number]) =>
@@ -115,6 +151,7 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
           domains: action.payload.scope?.domains ?? state.searchScope.domains,
           expandedDomains: action.payload.scope?.expandedDomains ?? state.searchScope.expandedDomains
         },
+        dataSolution: { ...state.dataSolution, state: 'EVALUATING', updatedAt: now },
         runtimeStatus: { active: true, message: action.payload.statusMessage ?? '正在检索匹配的数据资产与指标…' },
         updatedAt: now
       };
@@ -154,10 +191,13 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
           query: payload.query ?? state.searchResult?.query ?? '',
           totalMatches: payload.totalMatches ?? payload.candidateDelta.allCandidateIds.length,
           candidateIds: payload.candidateDelta.allCandidateIds,
-          candidateSnapshot: payload.candidateSnapshot,
+          candidateSnapshot: mergeCandidateSnapshot(state, payload.candidateDelta.allCandidateIds, payload.candidateSnapshot),
           returnedCount: payload.candidateDelta.allCandidateIds.length
         },
         dataSolution: {
+          state: 'READY',
+          basedOnRequirementRevision: state.requirementRevision,
+          basedOnSearchRevision: state.searchRevision,
           items,
           gaps: payload.solutionPatch.gaps ?? (payload.solutionPatch.mode === 'REPLACE' ? [] : state.dataSolution.gaps),
           relationshipEvidence: payload.solutionPatch.relationshipEvidence ?? (payload.solutionPatch.mode === 'REPLACE' ? [] : state.dataSolution.relationshipEvidence),
@@ -190,7 +230,12 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
     case 'SOLUTION_ITEM_UPSERTED':
       return {
         ...state,
-        dataSolution: { ...state.dataSolution, items: upsertItems(state.dataSolution.items, [action.payload.item]), updatedAt: now },
+        dataSolution: {
+          ...state.dataSolution,
+          state: state.dataSolution.state === 'EMPTY' ? 'READY' : state.dataSolution.state,
+          items: upsertItems(state.dataSolution.items, [action.payload.item]),
+          updatedAt: now
+        },
         updatedAt: now
       };
 
@@ -199,7 +244,16 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
       const index = gaps.findIndex((gap) => gap.id === action.payload.gap.id);
       if (index >= 0) gaps[index] = action.payload.gap;
       else gaps.push(action.payload.gap);
-      return { ...state, dataSolution: { ...state.dataSolution, gaps, updatedAt: now }, updatedAt: now };
+      return {
+        ...state,
+        dataSolution: {
+          ...state.dataSolution,
+          state: state.dataSolution.state === 'EMPTY' ? 'READY' : state.dataSolution.state,
+          gaps,
+          updatedAt: now
+        },
+        updatedAt: now
+      };
     }
 
     case 'PERMISSION_REQUEST_CREATED':
@@ -259,6 +313,14 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
       };
     }
 
+    case 'ASK_PLAN_INVALIDATED':
+      return {
+        ...state,
+        askPlan: undefined,
+        activeSurface: state.activeSurface.type === 'ASK_PLAN' ? { type: 'CLOSED' } : state.activeSurface,
+        updatedAt: now
+      };
+
     case 'ASK_RUN_STARTED':
       return !state.askPlan ? state : {
         ...state,
@@ -288,6 +350,23 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
         },
         updatedAt: now
       };
+
+    case 'OPERATION_STARTED':
+      if (state.pendingOperation) return state;
+      return { ...state, pendingOperation: action.payload, updatedAt: now };
+
+    case 'OPERATION_COMPLETED':
+      if (state.pendingOperation?.operationId !== action.payload.operationId) return state;
+      return {
+        ...state,
+        pendingOperation: undefined,
+        lastCompletedOperationId: action.payload.operationId,
+        updatedAt: now
+      };
+
+    case 'OPERATION_FAILED':
+      if (state.pendingOperation?.operationId !== action.payload.operationId) return state;
+      return { ...state, pendingOperation: undefined, updatedAt: now };
 
     default:
       return state;

@@ -27,8 +27,11 @@ export function createFindDataTask({
     searchScope: { domains: [], includeCrossDepartment: true },
     turns: [],
     resources: {},
-    searchResult: { totalMatches: 0, candidateIds: [], returnedCount: 0, query: '' },
+    searchResult: { totalMatches: 0, candidateIds: [], candidateSnapshot: [], returnedCount: 0, query: '' },
     dataSolution: {
+      state: 'EMPTY',
+      basedOnRequirementRevision: 0,
+      basedOnSearchRevision: 0,
       items: [], gaps: [], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: now
     },
     permissionRequests: {},

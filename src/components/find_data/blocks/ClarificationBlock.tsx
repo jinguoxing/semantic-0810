@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Check, HelpCircle, ArrowRight } from 'lucide-react';
 import { ClarificationQuestion } from '../model/FindDataTask';
 
 export interface ClarificationBlockProps {
   question: ClarificationQuestion;
+  submitting?: boolean;
+  error?: string;
+  onSubmit: (questionId: string, selectedOptionIds: string[]) => Promise<void>;
   maxSelections?: number;
   disabled?: boolean;
-  onSubmit?: (questionId: string, selectedOptionIds: string[]) => void;
   onSelectionChange?: (selectedIds: string[]) => void;
 }
 
 export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
   question,
+  submitting = false,
+  error,
   maxSelections,
   disabled = false,
   onSubmit,
@@ -20,11 +24,16 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
   const [selectedIds, setSelectedIds] = useState<string[]>(
     question.resolution?.selectedOptionIds || []
   );
-  const [submitted, setSubmitted] = useState<boolean>(false);
+  const [localError, setLocalError] = useState<string>();
 
   const isResolved = question.resolution?.status === 'RESOLVED';
-  const isLocked = disabled || submitted || isResolved;
+  const isLocked = disabled || submitting || isResolved;
   const effectiveMax = maxSelections || question.maxSelections || (question.type === 'SINGLE' ? 1 : undefined);
+
+  useEffect(() => {
+    setSelectedIds(question.resolution?.selectedOptionIds || []);
+    setLocalError(undefined);
+  }, [question.id, question.resolution?.status, question.resolution?.selectedOptionIds]);
 
   const handleToggle = (optionId: string) => {
     if (isLocked) return;
@@ -45,10 +54,14 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
     onSelectionChange?.(next);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (isLocked || selectedIds.length === 0) return;
-    setSubmitted(true);
-    onSubmit?.(question.id, selectedIds);
+    setLocalError(undefined);
+    try {
+      await onSubmit(question.id, selectedIds);
+    } catch (submitError: unknown) {
+      setLocalError(submitError instanceof Error ? submitError.message : '提交失败，请重试。');
+    }
   };
 
   return (
@@ -115,10 +128,11 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
               : 'bg-[#2563EB] text-white hover:bg-[#1D4ED8] shadow-sm cursor-pointer'
           }`}
         >
-          <span>{isResolved ? '已确认' : submitted ? '提交中' : '继续'}</span>
+          <span>{isResolved ? '已确认' : submitting ? '提交中' : '继续'}</span>
           {!isLocked && <ArrowRight className="w-3.5 h-3.5" />}
         </button>
       </div>
+      {(error || localError) && <p className="text-[11px] text-[#DC2626]">{error || localError}</p>}
     </div>
   );
 };

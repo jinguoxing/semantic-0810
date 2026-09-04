@@ -13,18 +13,20 @@ import {
   Trash2
 } from 'lucide-react';
 
-import { AskPlan, AskRunResult, FindDataTaskState, TaskActionCode } from './find_data/model/FindDataTask';
+import { AskPlan, AskRunResult, FindDataTaskState, PendingOperation, TaskActionCode } from './find_data/model/FindDataTask';
 import { FindDataEvent } from './find_data/model/findDataEvents';
 import { findDataReducer, initialFindDataTaskState } from './find_data/model/findDataReducer';
 import {
   createFindDataService,
-  resolveFindDataServiceMode
+  resolveFindDataServiceMode,
+  FindDataServiceMode
 } from './find_data/services/createFindDataService';
 import { createFindDataTaskStore, FindDataTaskStore } from './find_data/model/findDataStore';
 import { createFindDataTask } from './find_data/model/createFindDataTask';
 import {
   FindDataEngineResult,
   FindDataService,
+  FindDataTaskSummary,
   PermissionRecheckResult
 } from './find_data/services/FindDataService';
 import { SurfaceCommand } from './find_data/policy/surfacePolicy';
@@ -61,6 +63,8 @@ interface DataAssistantFindDataWorkspaceProps {
   onBackToHome?: () => void;
   serviceOverride?: FindDataService;
   taskStoreOverride?: FindDataTaskStore;
+  /** Dependency-injection seam for service-mode lifecycle tests. */
+  serviceModeOverride?: FindDataServiceMode;
 }
 
 let uiSequence = 0;
@@ -76,6 +80,23 @@ const askPlanStatusLabels: Record<AskPlan['status'], string> = {
   COMPLETED: '已完成',
   FAILED: '执行失败'
 };
+
+function toTaskSummary(task: FindDataTaskState): FindDataTaskSummary {
+  const { taskId, title, status, updatedAt, scenarioKey } = task;
+  return { taskId, title, status, updatedAt, scenarioKey };
+}
+
+function getTaskIdFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get('findTaskId');
+}
+
+function replaceTaskIdInUrl(taskId: string): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  url.searchParams.set('findTaskId', taskId);
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+}
 
 function askRunCompletionMessage(plan: AskPlan, result: AskRunResult): string {
   const count = result.resultArtifact?.townResults.length ?? 0;
@@ -93,11 +114,12 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   onNavigateToNav,
   onBackToHome,
   serviceOverride,
-  taskStoreOverride
+  taskStoreOverride,
+  serviceModeOverride
 }) => {
   const serviceMode = useMemo(
-    () => resolveFindDataServiceMode(import.meta.env.VITE_FIND_DATA_MODE as string | undefined),
-    []
+    () => serviceModeOverride ?? resolveFindDataServiceMode(import.meta.env.VITE_FIND_DATA_MODE as string | undefined),
+    [serviceModeOverride]
   );
   const service = useMemo(() => serviceOverride ?? createFindDataService(serviceMode), [serviceMode, serviceOverride]);
   const taskStore = useMemo(() => taskStoreOverride ?? createFindDataTaskStore(serviceMode), [serviceMode, taskStoreOverride]);
@@ -110,7 +132,9 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const [inputMessage, setInputMessage] = useState('');
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
   const [solutionMode, setSolutionMode] = useState<'recommended' | 'executable'>('recommended');
-  const [savedTaskList, setSavedTaskList] = useState(() => taskStore.list());
+  const [savedTaskList, setSavedTaskList] = useState<FindDataTaskSummary[]>(() => taskStore.list().map(toTaskSummary));
+  const [clarificationErrors, setClarificationErrors] = useState<Record<string, string>>({});
+  const [clarificationSubmittingId, setClarificationSubmittingId] = useState<string>();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationScrollRef = useRef<HTMLDivElement>(null);
@@ -130,9 +154,27 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     return taskRef.current;
   }, [dispatchTracked]);
 
-  const refreshTaskList = useCallback(() => {
-    setSavedTaskList(taskStore.list());
-  }, [taskStore]);
+  const refreshTaskList = useCallback(async () => {
+    if (serviceMode === 'http') {
+      try {
+        setSavedTaskList(await service.listTasks());
+      } catch {
+        setSavedTaskList([]);
+      }
+      return;
+    }
+    setSavedTaskList(taskStore.list().map(toTaskSummary));
+  }, [service, serviceMode, taskStore]);
+
+  const startOperation = useCallback((operationType: PendingOperation['operationType']): string | undefined => {
+    if (taskRef.current.pendingOperation) return undefined;
+    const operationId = createUiId('operation');
+    dispatchTracked({
+      type: 'OPERATION_STARTED',
+      payload: { operationId, operationType, startedAt: new Date().toISOString() }
+    });
+    return operationId;
+  }, [dispatchTracked]);
 
   const applySurfaceCommand = useCallback((command?: SurfaceCommand) => {
     if (!command) return;
@@ -169,13 +211,19 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
 
   const applyEngineResult = useCallback((result: FindDataEngineResult) => {
     if (result.taskId !== taskRef.current.taskId) return false;
+    if (taskRef.current.pendingOperation && result.operationId !== taskRef.current.pendingOperation.operationId) return false;
     dispatchTrackedEvents(result.events);
     applySurfaceCommand(result.surfaceCommand);
+    if (taskRef.current.pendingOperation?.operationId === result.operationId) {
+      dispatchTracked({ type: 'OPERATION_COMPLETED', payload: { operationId: result.operationId } });
+    }
     return true;
-  }, [applySurfaceCommand, dispatchTrackedEvents]);
+  }, [applySurfaceCommand, dispatchTracked, dispatchTrackedEvents]);
 
-  const applyServiceFailure = useCallback((taskId: string, error: unknown) => {
+  const applyServiceFailure = useCallback((taskId: string, error: unknown, operationId?: string) => {
     if (taskId !== taskRef.current.taskId) return;
+    if (operationId && taskRef.current.pendingOperation?.operationId !== operationId) return;
+    if (operationId) dispatchTracked({ type: 'OPERATION_FAILED', payload: { operationId } });
     dispatchTracked({
       type: 'ASSISTANT_TURN_RECEIVED',
       payload: {
@@ -192,10 +240,11 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   }, [dispatchTracked]);
 
   const persistTask = useCallback((taskToSave: FindDataTaskState = taskRef.current) => {
+    if (serviceMode === 'http') return;
     if (!taskToSave.taskId) return;
     taskStore.save(taskToSave);
     taskStore.setCurrentTaskId(taskToSave.taskId);
-  }, [taskStore]);
+  }, [serviceMode, taskStore]);
 
   useEffect(() => {
     if (!task.taskId) return;
@@ -206,7 +255,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   }, [task, persistTask]);
 
   useEffect(() => {
-    if (task.taskId) refreshTaskList();
+    if (task.taskId) void refreshTaskList();
   }, [task.taskId, task.title, task.status, refreshTaskList]);
 
   useEffect(() => {
@@ -214,7 +263,24 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
 
     async function initTaskPipeline() {
       if (!initialQuery?.trim()) {
-        const currentTaskId = taskStore.getCurrentTaskId();
+        const requestedTaskId = getTaskIdFromUrl();
+        if (requestedTaskId) {
+          try {
+            const restored = serviceMode === 'http'
+              ? await service.getTask(requestedTaskId)
+              : taskStore.load(requestedTaskId);
+            if (restored && !cancelled) {
+              dispatchTracked({ type: 'TASK_HYDRATED', payload: { task: restored } });
+              return;
+            }
+          } catch (error: unknown) {
+            if (!cancelled) applyServiceFailure(taskRef.current.taskId, error);
+          }
+        }
+        // HTTP tasks are owned by the backend and must never be reconstructed
+        // from a browser cache. Mock and disconnected modes can safely restore
+        // the task store used by their local/demo runtime.
+        const currentTaskId = serviceMode !== 'http' ? taskStore.getCurrentTaskId() : null;
         if (currentTaskId) {
           const restored = taskStore.load(currentTaskId);
           if (restored && !cancelled) {
@@ -236,25 +302,31 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       }
       if (cancelled) return;
       dispatchTracked({ type: 'TASK_CREATED', payload: { task: cleanTask } });
+      replaceTaskIdInUrl(cleanTask.taskId);
 
       if (!initialQuery || !initialQuery.trim()) {
-        taskStore.save(cleanTask);
-        taskStore.setCurrentTaskId(cleanTask.taskId);
-        refreshTaskList();
+        if (serviceMode !== 'http') {
+          taskStore.save(cleanTask);
+          taskStore.setCurrentTaskId(cleanTask.taskId);
+        }
+        replaceTaskIdInUrl(cleanTask.taskId);
+        void refreshTaskList();
         return;
       }
 
       const text = initialQuery.trim();
+      const operationId = startOperation('TURN');
+      if (!operationId) return;
       dispatchTracked({
         type: 'USER_TURN_SUBMITTED',
         payload: { text, turnId: createUiId('user') }
       });
       const submittedTaskId = taskRef.current.taskId;
       try {
-        const engineResult = await service.submitTurn(taskRef.current, text);
+        const engineResult = await service.submitTurn(taskRef.current, text, operationId);
         if (!cancelled) applyEngineResult(engineResult);
       } catch (error: unknown) {
-        if (!cancelled) applyServiceFailure(submittedTaskId, error);
+        if (!cancelled) applyServiceFailure(submittedTaskId, error, operationId);
       }
     }
 
@@ -263,18 +335,20 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     return () => {
       cancelled = true;
     };
-  }, [service, taskStore, initialQuery, dispatchTracked, applyEngineResult, applyServiceFailure, refreshTaskList]);
+  }, [service, serviceMode, taskStore, initialQuery, dispatchTracked, applyEngineResult, applyServiceFailure, refreshTaskList, startOperation]);
 
   // Scroll to bottom on new turns
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [task.turns, task.runtimeStatus]);
 
-  const isInputBlocked = task.status === 'UNDERSTANDING' || task.status === 'SEARCHING' || !!task.runtimeStatus?.active;
+  const isInputBlocked = task.status === 'UNDERSTANDING' || task.status === 'SEARCHING' || !!task.runtimeStatus?.active || !!task.pendingOperation;
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isInputBlocked) return;
     const text = inputMessage.trim();
+    const operationId = startOperation('TURN');
+    if (!operationId) return;
     setInputMessage('');
     dispatchTracked({
       type: 'USER_TURN_SUBMITTED',
@@ -282,20 +356,25 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     });
     const submittedTaskId = taskRef.current.taskId;
     try {
-      const engineResult = await service.submitTurn(taskRef.current, text);
+      const engineResult = await service.submitTurn(taskRef.current, text, operationId);
       applyEngineResult(engineResult);
     } catch (error: unknown) {
-      applyServiceFailure(submittedTaskId, error);
+      applyServiceFailure(submittedTaskId, error, operationId);
     }
   };
 
-  const handleSwitchTask = (taskId: string) => {
+  const handleSwitchTask = async (taskId: string) => {
     if (taskRef.current.taskId && taskRef.current.taskId !== taskId) persistTask();
-    const loaded = taskStore.load(taskId);
-    if (loaded) {
-      dispatchTracked({ type: 'TASK_HYDRATED', payload: { task: loaded } });
-      taskStore.setCurrentTaskId(taskId);
-      refreshTaskList();
+    try {
+      const loaded = serviceMode === 'http' ? await service.getTask(taskId) : taskStore.load(taskId);
+      if (loaded) {
+        dispatchTracked({ type: 'TASK_HYDRATED', payload: { task: loaded } });
+        if (serviceMode !== 'http') taskStore.setCurrentTaskId(taskId);
+        replaceTaskIdInUrl(taskId);
+        void refreshTaskList();
+      }
+    } catch (error: unknown) {
+      applyServiceFailure(taskRef.current.taskId, error);
     }
   };
 
@@ -305,17 +384,19 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     try {
       const newTask = await service.createTask({ initialQuery: '' });
       dispatchTracked({ type: 'TASK_CREATED', payload: { task: newTask } });
-      persistTask(newTask);
-      refreshTaskList();
+      if (serviceMode !== 'http') persistTask(newTask);
+      replaceTaskIdInUrl(newTask.taskId);
+      void refreshTaskList();
     } catch (error: unknown) {
       applyServiceFailure(currentTaskId, error);
     }
   };
 
-  const handleDeleteTask = (e: React.MouseEvent, taskId: string) => {
+  const handleDeleteTask = async (e: React.MouseEvent, taskId: string) => {
     e.stopPropagation();
-    taskStore.remove(taskId);
-    refreshTaskList();
+    if (serviceMode === 'http') await service.deleteTask(taskId);
+    else taskStore.remove(taskId);
+    void refreshTaskList();
     if (taskRef.current.taskId === taskId) void handleCreateNewTask(false);
   };
 
@@ -324,18 +405,23 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       setIsContextDrawerOpen(true);
       return;
     }
+    const isSurfaceAction = ['OPEN_FIELDS', 'OPEN_COMPARE', 'OPEN_SOLUTION', 'OPEN_ACCESS', 'OPEN_RELATED_RESOURCES', 'OPEN_ASK_PLAN', 'CLOSE_SURFACE'].includes(actionCode);
+    const operationId = isSurfaceAction ? undefined : startOperation('ACTION');
+    if (!isSurfaceAction && !operationId) return;
     const actionTaskId = taskRef.current.taskId;
     try {
-      const engineResult = await service.executeAction(taskRef.current, { actionCode, payload });
+      const engineResult = await service.executeAction(taskRef.current, { actionCode, payload }, operationId);
       applyEngineResult(engineResult);
     } catch (error: unknown) {
-      applyServiceFailure(actionTaskId, error);
+      applyServiceFailure(actionTaskId, error, operationId);
     }
   };
 
   const handleCheckPermissionForAskPlan = async (): Promise<PermissionRecheckResult> => {
     const taskAtStart = taskRef.current;
     if (!taskAtStart.askPlan) return { decision: 'BLOCKED', updatedPermissions: {}, details: '当前没有分析计划。' };
+    const operationId = startOperation('PERMISSION_CHECK');
+    if (!operationId) return { decision: 'BLOCKED', updatedPermissions: {}, details: '当前任务正在处理，请稍后重试。' };
     dispatchTracked({
       type: 'PERMISSION_RECHECK_STARTED',
       payload: { resourceIds: taskAtStart.askPlan.coreResourceIds }
@@ -345,20 +431,23 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       checkResult = await service.recheckPermissions(
         taskAtStart,
         taskAtStart.askPlan.coreResourceIds,
-        'query'
+        'query',
+        operationId
       );
     } catch (error: unknown) {
       checkResult = {
+        operationId,
         decision: 'BLOCKED',
         updatedPermissions: {},
         details: error instanceof Error ? error.message : '权限重检失败。'
       };
     }
-    if (taskRef.current.taskId === taskAtStart.taskId) {
+    if (taskRef.current.taskId === taskAtStart.taskId && taskRef.current.pendingOperation?.operationId === operationId && (!checkResult.operationId || checkResult.operationId === operationId)) {
       dispatchTracked({
         type: 'PERMISSION_RECHECK_COMPLETED',
         payload: { decision: checkResult.decision, updatedPermissions: checkResult.updatedPermissions }
       });
+      dispatchTracked({ type: 'OPERATION_COMPLETED', payload: { operationId } });
     }
     return checkResult;
   };
@@ -366,19 +455,22 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const handleRunAskPlan = async () => {
     const taskAtStart = taskRef.current;
     if (!taskAtStart.askPlan) return;
+    const operationId = startOperation('ASK_RUN');
+    if (!operationId) return;
     dispatchTracked({ type: 'ASK_RUN_STARTED' });
     let runResult: AskRunResult;
     try {
-      runResult = await service.runAskPlan(taskAtStart, taskAtStart.askPlan);
+      runResult = await service.runAskPlan(taskAtStart, taskAtStart.askPlan, operationId);
     } catch (error: unknown) {
       runResult = {
+        operationId,
         success: false,
         executedAt: new Date().toISOString(),
         permissionSnapshot: {},
         error: error instanceof Error ? error.message : '执行分析计算失败'
       };
     }
-    if (taskRef.current.taskId !== taskAtStart.taskId) return;
+    if (taskRef.current.taskId !== taskAtStart.taskId || taskRef.current.pendingOperation?.operationId !== operationId || (runResult.operationId && runResult.operationId !== operationId)) return;
     if (runResult.success) {
       dispatchTracked({ type: 'ASK_RUN_COMPLETED', payload: { result: runResult } });
       dispatchTracked({
@@ -395,10 +487,37 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     } else {
       dispatchTracked({ type: 'ASK_RUN_FAILED', payload: { error: runResult.error || '执行分析计算失败' } });
     }
+    dispatchTracked({ type: 'OPERATION_COMPLETED', payload: { operationId } });
+  };
+
+  const handleClarificationSubmit = async (questionId: string, selectedOptionIds: string[]): Promise<void> => {
+    const operationId = startOperation('ACTION');
+    if (!operationId) throw new Error('当前任务正在处理，请稍后重试。');
+    setClarificationSubmittingId(questionId);
+    setClarificationErrors((errors) => ({ ...errors, [questionId]: '' }));
+    const actionTaskId = taskRef.current.taskId;
+    try {
+      const engineResult = await service.executeAction(
+        taskRef.current,
+        { actionCode: 'SUBMIT_CLARIFICATION', payload: { questionId, selectedOptionIds } },
+        operationId
+      );
+      if (!applyEngineResult(engineResult)) throw new Error('澄清结果已过期，请重新确认后再提交。');
+    } catch (error: unknown) {
+      if (taskRef.current.taskId === actionTaskId && taskRef.current.pendingOperation?.operationId === operationId) {
+        dispatchTracked({ type: 'OPERATION_FAILED', payload: { operationId } });
+      }
+      const message = error instanceof Error ? error.message : '澄清提交失败，请重试。';
+      setClarificationErrors((errors) => ({ ...errors, [questionId]: message }));
+      throw new Error(message);
+    } finally {
+      setClarificationSubmittingId(undefined);
+    }
   };
 
   const activeSurfaceType = task.activeSurface.type;
   const isSurfaceOpen = activeSurfaceType !== 'CLOSED';
+  const isReevaluating = task.dataSolution.state === 'EVALUATING' || task.dataSolution.state === 'STALE';
   const activeResource = selectActiveResource(task);
 
   // Surface width governance (P1-03):
@@ -609,7 +728,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               </button>
             )}
 
-            {(task.dataSolution.items.length > 0 || task.activeResourceId || task.askPlan) && <div className="flex items-center space-x-1 bg-[#F1F5F9] p-0.5 rounded-lg border border-[#E2E8F0] text-xs">
+            {(task.dataSolution.items.length > 0 || task.dataSolution.gaps.length > 0 || task.activeResourceId || task.askPlan) && <div className="flex items-center space-x-1 bg-[#F1F5F9] p-0.5 rounded-lg border border-[#E2E8F0] text-xs">
               {task.dataSolution.items.length > 0 && (
               <button
                 onClick={() => void handleAction(activeSurfaceType === 'SOLUTION' ? 'CLOSE_SURFACE' : 'OPEN_SOLUTION')}
@@ -619,7 +738,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                     : 'text-[#64748B] hover:text-[#0F172A] cursor-pointer'
                 }`}
               >
-                方案 · {task.dataSolution.items.filter((item) => item.role === 'CORE').length} 项核心资源
+                {isReevaluating ? '正在重新评估' : `方案 · ${task.dataSolution.items.filter((item) => item.role === 'CORE').length} 项核心资源`}
               </button>
               )}
               {task.activeResourceId && targetFieldResource && (
@@ -718,12 +837,10 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                               <div key={block.id} className="w-full">
                                 <ClarificationBlock
                                   question={block.question}
-                                  onSubmit={(qId, optIds) => {
-                                    handleAction('SUBMIT_CLARIFICATION', {
-                                      questionId: qId,
-                                      selectedOptionIds: optIds
-                                    });
-                                  }}
+                                  submitting={clarificationSubmittingId === block.question.id}
+                                  error={clarificationErrors[block.question.id]}
+                                  disabled={!!task.pendingOperation && clarificationSubmittingId !== block.question.id}
+                                  onSubmit={handleClarificationSubmit}
                                 />
                               </div>
                             );

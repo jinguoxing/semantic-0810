@@ -7,7 +7,8 @@ import {
   selectSolutionGaps,
   selectResourceById,
   selectResourceAvailability,
-  getQueryStatusDisplay
+  getQueryStatusDisplay,
+  selectExecutionAssessments
 } from './model/findDataSelectors';
 
 interface RightWorkspaceSolutionProps {
@@ -35,6 +36,9 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
   const coverage = selectSolutionCoverage(task);
   const gaps = selectSolutionGaps(task);
   const relationships = task.dataSolution.relationshipEvidence || [];
+  const executionAssessments = selectExecutionAssessments(task);
+  const excludedAssessments = executionAssessments.filter((assessment) => !assessment.included);
+  const isReevaluating = task.dataSolution.state === 'EVALUATING' || task.dataSolution.state === 'STALE';
 
   const totalItems = task.dataSolution.items.length;
   const isEmpty = totalItems === 0 && gaps.length === 0;
@@ -54,13 +58,15 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
               </h3>
               {!isEmpty && (
                 <span className="text-[10px] px-1.5 py-0.2 bg-[#F0FDF4] text-[#16A34A] rounded border border-[#DCFCE7] font-bold shrink-0">
-                  {isExecutableMode ? '可执行' : '推荐就绪'}
+                  {isReevaluating ? '正在重新评估' : isExecutableMode ? '可执行' : '推荐就绪'}
                 </span>
               )}
             </div>
             <p className="text-[11px] text-[#64748B] truncate">
               {isEmpty
                 ? '暂无活跃数据方案'
+                : isReevaluating
+                ? '正在按新口径重新评估，旧内容仅供过渡查看'
                 : isExecutableMode
                 ? '仅核验具备即时查询权限的直接可执行范围'
                 : '完整业务推荐方案与缺口声明'}
@@ -122,6 +128,11 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
           </div>
         ) : (
           <>
+            {isReevaluating && (
+              <div className="p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl text-xs text-[#92400E]">
+                正在按新口径重新评估。旧方案暂不作为推荐就绪方案，也不能进入 Ask Data。
+              </div>
+            )}
             {/* Coverage Scope Card */}
             {coverage && coverage.length > 0 && (
               <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl space-y-2">
@@ -137,6 +148,34 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {isExecutableMode && excludedAssessments.length > 0 && (
+              <div className="space-y-2.5 pt-2 border-t border-[#F1F5F9]">
+                <div className="font-bold text-xs text-[#0F172A]">未进入本次执行范围的资源</div>
+                {[
+                  ['QUERY_PERMISSION_REQUIRED', '因权限未就绪未进入'],
+                  ['QUERY_PERMISSION_DENIED', '因权限不可用未进入'],
+                  ['RELATIONSHIP_NOT_READY', '因关系未确认未进入'],
+                  ['OPTIONAL_DRILLDOWN', '仅供下钻，不参与计算'],
+                  ['PARTIAL_MATCH', '部分匹配，不进入执行'],
+                  ['NOT_SELECTED', '尚未选入当前方案'],
+                  ['RESOURCE_UNAVAILABLE', '资源当前不可用']
+                ].map(([reason, title]) => {
+                  const assessments = excludedAssessments.filter((assessment) => assessment.reason === reason);
+                  if (assessments.length === 0) return null;
+                  return (
+                    <div key={reason} className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1">
+                      <div className="font-semibold text-[#475569]">{title}</div>
+                      {assessments.map((assessment) => (
+                        <div key={assessment.item.resourceId} className="text-[11px] text-[#64748B]">
+                          {selectResourceById(task, assessment.item.resourceId)?.name ?? '相关资源'}：{assessment.userMessage}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -318,7 +357,13 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
                           {selectResourceById(task, rel.targetResourceId)?.name || '相关资源'}
                         </span>
                         <span className="text-[10px] px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] rounded font-medium">
-                          {rel.relationType === 'CORRELATION' ? '已确认关联' : rel.relationType === 'ALTERNATIVE' ? '替代关系' : '辅助补充'}
+                          {rel.verificationStatus === 'CONFIRMED'
+                            ? '已确认关系'
+                            : rel.verificationStatus === 'SEMANTIC_ONLY'
+                            ? '仅语义关联'
+                            : rel.verificationStatus === 'CONFLICT'
+                            ? '关系存在冲突'
+                            : '待分析阶段验证'}
                         </span>
                       </div>
                       <p className="text-[#64748B]">{rel.description}</p>
@@ -364,7 +409,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
           查看全景权限
         </button>
 
-        {task.askPlan && (
+        {task.askPlan && !isReevaluating && (
           <button
             onClick={() => onAction?.('OPEN_ASK_PLAN')}
             className="px-4 py-1.5 text-xs font-bold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-lg transition-colors cursor-pointer flex items-center space-x-1.5 shadow-2xs"

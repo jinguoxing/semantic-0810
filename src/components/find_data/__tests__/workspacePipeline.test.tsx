@@ -15,7 +15,10 @@ Object.defineProperty(Element.prototype, 'scrollIntoView', {
   value: vi.fn()
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.history.replaceState({}, '', '/');
+});
 
 class MemoryTaskStore implements FindDataTaskStore {
   currentTaskId: string | null = null;
@@ -31,25 +34,28 @@ class MemoryTaskStore implements FindDataTaskStore {
 
 function createService(overrides: Partial<FindDataService> = {}): FindDataService {
   const createTask = vi.fn(async () => createEmptyTask({ taskId: 'created_task' }));
-  const submitTurn = vi.fn(async (task: ReturnType<typeof createEmptyTask>): Promise<FindDataEngineResult> => ({
+  const submitTurn = vi.fn(async (task: ReturnType<typeof createEmptyTask>, _text: string, operationId?: string): Promise<FindDataEngineResult> => ({
     taskId: task.taskId,
-    operationId: 'operation_submit',
+    operationId: operationId ?? 'operation_submit',
     events: [{ type: 'ASSISTANT_TURN_RECEIVED', payload: {
       turnId: 'assistant', nextStatus: 'READY', blocks: [{ type: 'TEXT', id: 'answer', content: '已处理' }]
     } }],
     assistantBlocks: [],
     surfaceCommand: { action: 'NO_CHANGE' }
   }));
-  const executeAction = vi.fn(async (task: ReturnType<typeof createEmptyTask>): Promise<FindDataEngineResult> => ({
-    taskId: task.taskId, operationId: 'operation_action', events: [], assistantBlocks: [], surfaceCommand: { action: 'NO_CHANGE' }
+  const executeAction = vi.fn(async (task: ReturnType<typeof createEmptyTask>, _action, operationId?: string): Promise<FindDataEngineResult> => ({
+    taskId: task.taskId, operationId: operationId ?? 'operation_action', events: [], assistantBlocks: [], surfaceCommand: { action: 'NO_CHANGE' }
   }));
-  const recheckPermissions = vi.fn(async (): Promise<PermissionRecheckResult> => ({ decision: 'BLOCKED', updatedPermissions: {} }));
+  const recheckPermissions = vi.fn(async (_task, _resourceIds, _action, operationId?: string): Promise<PermissionRecheckResult> => ({ operationId, decision: 'BLOCKED', updatedPermissions: {} }));
   return {
     createTask,
+    listTasks: vi.fn(async () => []),
+    getTask: vi.fn(async () => { throw new Error('未找到任务'); }),
+    deleteTask: vi.fn(async () => {}),
     submitTurn,
     executeAction,
     recheckPermissions,
-    runAskPlan: vi.fn(async () => ({ success: false, executedAt: '', permissionSnapshot: {}, error: '未连接' })),
+    runAskPlan: vi.fn(async (_task, _plan, operationId?: string) => ({ operationId, success: false, executedAt: '', permissionSnapshot: {}, error: '未连接' })),
     ...overrides
   };
 }
@@ -152,5 +158,24 @@ describe('workspace tracked task pipeline', () => {
     fireEvent.click(await screen.findByRole('button', { name: '方案 · 2 项核心资源' }));
     expect(await screen.findByText('操作服务失败')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…')).not.toBeDisabled();
+  });
+
+  it('restores an HTTP task from the URL without persisting business state locally', async () => {
+    window.history.replaceState({}, '', '/?findTaskId=http_task');
+    const restored = createEmptyTask({
+      taskId: 'http_task', title: 'HTTP 恢复任务',
+      turns: [{ turnId: 'a_http', sender: 'ASSISTANT', createdAt: '', blocks: [{ type: 'TEXT', id: 'http_text', content: '来自服务端的任务状态' }] }]
+    });
+    const store = new MemoryTaskStore();
+    const save = vi.spyOn(store, 'save');
+    const service = createService({
+      listTasks: vi.fn(async () => [{ taskId: 'http_task', title: 'HTTP 恢复任务', status: 'READY' as const, updatedAt: '', scenarioKey: 'generic' }]),
+      getTask: vi.fn(async () => restored)
+    });
+    render(<DataAssistantFindDataWorkspace serviceOverride={service} taskStoreOverride={store} serviceModeOverride="http" />);
+    expect(await screen.findByText('来自服务端的任务状态')).toBeInTheDocument();
+    expect(service.getTask).toHaveBeenCalledWith('http_task');
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+    expect(save).not.toHaveBeenCalled();
   });
 });

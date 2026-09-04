@@ -16,7 +16,8 @@ import {
   ResourceComparisonModel,
   CandidateDelta,
   DataSolutionPatch,
-  TaskStatus
+  TaskStatus,
+  PendingOperation
 } from './FindDataTask';
 
 export type FindDataEvent =
@@ -48,10 +49,21 @@ export type FindDataEvent =
       };
     }
   | {
+      type: 'SCENARIO_RECLASSIFIED';
+      payload: {
+        fromScenarioKey: string;
+        toScenarioKey: string;
+        reason: string;
+      };
+    }
+  | {
       type: 'COMPARISON_MODEL_SET';
       payload: {
         comparisonModel?: ResourceComparisonModel;
       };
+    }
+  | {
+      type: 'COMPARISON_MODEL_CLEARED';
     }
   | {
       type: 'TASK_TITLE_UPDATED';
@@ -76,6 +88,12 @@ export type FindDataEvent =
         };
         searchRevision: number;
         statusMessage?: string;
+      };
+    }
+  | {
+      type: 'SOLUTION_EVALUATION_STARTED';
+      payload: {
+        requirementRevision: number;
       };
     }
   | {
@@ -153,6 +171,12 @@ export type FindDataEvent =
       };
     }
   | {
+      type: 'ASK_PLAN_INVALIDATED';
+      payload: {
+        reason: string;
+      };
+    }
+  | {
       type: 'ASK_RUN_STARTED';
     }
   | {
@@ -165,6 +189,22 @@ export type FindDataEvent =
       type: 'ASK_RUN_FAILED';
       payload: {
         error: string;
+      };
+    }
+  | {
+      type: 'OPERATION_STARTED';
+      payload: PendingOperation;
+    }
+  | {
+      type: 'OPERATION_COMPLETED';
+      payload: {
+        operationId: string;
+      };
+    }
+  | {
+      type: 'OPERATION_FAILED';
+      payload: {
+        operationId: string;
       };
     }
   | {

@@ -112,12 +112,27 @@ export interface SolutionGap {
 export interface RelationshipEvidence {
   sourceResourceId: ResourceId;
   targetResourceId: ResourceId;
-  relationType: 'CORRELATION' | 'HIERARCHY' | 'SUPPLEMENT' | 'ALTERNATIVE';
+  relationType:
+    | 'SEMANTIC_RELATION'
+    | 'ANALYTICAL_COMPATIBILITY'
+    | 'TECHNICAL_JOIN'
+    | 'ALTERNATIVE'
+    | 'SUPPLEMENT';
+  verificationStatus: 'CONFIRMED' | 'SEMANTIC_ONLY' | 'UNVERIFIED' | 'CONFLICT';
+  evidenceLevel: 'STRONG' | 'MEDIUM' | 'WEAK';
   description: string;
   joinKeys?: string[];
+  evidenceRefs: string[];
+  confirmedBy?: string;
+  lastVerifiedAt?: string;
 }
 
+export type DataSolutionState = 'EMPTY' | 'EVALUATING' | 'READY' | 'STALE';
+
 export interface DataSolution {
+  state: DataSolutionState;
+  basedOnRequirementRevision: number;
+  basedOnSearchRevision: number;
   items: DataSolutionItem[];
   gaps: SolutionGap[];
   relationshipEvidence: RelationshipEvidence[];
@@ -193,6 +208,7 @@ export interface AskPlanCalculationSpec {
 }
 
 export interface AskRunResult {
+  operationId?: string;
   success: boolean;
   executedAt: string;
   dataOrigin?: 'MOCK_FIXTURE' | 'LIVE_QUERY';
@@ -375,16 +391,42 @@ export interface PermissionRequestRef {
 export interface ResourceCandidate {
   resourceId: ResourceId;
   title: string;
+  reason: string;
+  matchType: 'DIRECT' | 'RELATED' | 'PARTIAL';
+  proposedRole?: 'CORE' | 'CONDITIONAL_SUPPORT' | 'OPTIONAL_DRILLDOWN' | 'PARTIAL_MATCH';
+  sourceSearchRevision: number;
   score?: number;
-  reason?: string;
 }
 
 export interface TaskSearchResult {
   query: string;
   totalMatches: number;
   candidateIds: ResourceId[];
-  candidateSnapshot?: ResourceCandidate[];
+  candidateSnapshot: ResourceCandidate[];
   returnedCount: number;
+}
+
+export type ExecutionEligibilityReason =
+  | 'INCLUDED'
+  | 'NOT_SELECTED'
+  | 'QUERY_PERMISSION_REQUIRED'
+  | 'QUERY_PERMISSION_DENIED'
+  | 'RELATIONSHIP_NOT_READY'
+  | 'PARTIAL_MATCH'
+  | 'OPTIONAL_DRILLDOWN'
+  | 'RESOURCE_UNAVAILABLE';
+
+export interface ExecutionAssessment {
+  item: DataSolutionItem;
+  included: boolean;
+  reason: ExecutionEligibilityReason;
+  userMessage: string;
+}
+
+export interface PendingOperation {
+  operationId: string;
+  operationType: 'TURN' | 'ACTION' | 'SEARCH' | 'PERMISSION_CHECK' | 'ASK_RUN';
+  startedAt: string;
 }
 
 export interface FindDataTaskState {
@@ -412,6 +454,8 @@ export interface FindDataTaskState {
   searchRevision: number;
 
   runtimeStatus?: RuntimeStatus;
+  pendingOperation?: PendingOperation;
+  lastCompletedOperationId?: string;
   askPlan?: AskPlan;
   metadata?: Record<string, unknown>;
 

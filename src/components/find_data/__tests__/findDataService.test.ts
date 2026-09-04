@@ -284,3 +284,109 @@ describe('Ask execution authorization', () => {
     expect(result.resultArtifact?.townResults[0]?.comparisonNote).toBe(comparisonNote);
   });
 });
+
+describe('fourth-round task recomposition and candidate pool', () => {
+  it('revises a requirement through invalidation, evaluation, and a fresh search', async () => {
+    const task = createMinhangTask({ askPlan: createAskPlan() });
+    const result = await service.executeAction(task, {
+      actionCode: 'REVISE_REQUIREMENT',
+      payload: { hypothesisPatch: { timeRange: { start: '2024.09', end: '2025.08' } } }
+    });
+    expect(result.events.map((event) => event.type)).toEqual([
+      'REQUIREMENT_UPDATED', 'ASK_PLAN_INVALIDATED', 'COMPARISON_MODEL_CLEARED',
+      'SOLUTION_EVALUATION_STARTED', 'SEARCH_STARTED', 'SEARCH_RESULTS_RECEIVED', 'ASSISTANT_TURN_RECEIVED'
+    ]);
+    const next = apply(task, result.events);
+    expect(next.askPlan).toBeUndefined();
+    expect(next.dataSolution).toMatchObject({ state: 'READY', basedOnRequirementRevision: 2, basedOnSearchRevision: 2 });
+    expect(next.requirementHypothesis.timeRange).toEqual({ start: '2024.09', end: '2025.08' });
+  });
+
+  it('does not leave Minhang resources in an active solution after a non-Minhang revision', async () => {
+    const result = await service.executeAction(createMinhangTask(), {
+      actionCode: 'REVISE_REQUIREMENT', payload: { hypothesisPatch: { region: '上海市徐汇区' } }
+    });
+    const next = apply(createMinhangTask(), result.events);
+    expect(result.events.some((event) => event.type === 'SCENARIO_RECLASSIFIED')).toBe(true);
+    expect(next.scenarioKey).toBe('generic');
+    expect(next.dataSolution.items).toEqual([]);
+    expect(Object.keys(next.resources)).toEqual([]);
+    expect(next.dataSolution.gaps[0]?.description).toContain('尚未配置该区域');
+  });
+
+  it('upgrades an empty generic task after the user supplies complete Minhang context', async () => {
+    const generic = createEmptyTask({
+      scenarioKey: 'generic', status: 'NEEDS_CLARIFICATION', goal: '我想找养老数据',
+      turns: [{ turnId: 'u1', sender: 'USER', createdAt: '', blocks: [{ type: 'TEXT', id: 'u1b', content: '我想找养老数据' }] }]
+    });
+    const { result, task } = await submit(generic, '闵行区过去 12 个月，按街镇看老年人口和养老床位');
+    expect(result.events[0]).toMatchObject({ type: 'SCENARIO_RECLASSIFIED', payload: { fromScenarioKey: 'generic', toScenarioKey: 'minhang_bed_supply' } });
+    expect(task.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+  });
+
+  it('does not reclassify a generic task that already has a formal solution', async () => {
+    const task = createMinhangTask({ scenarioKey: 'generic', status: 'READY' });
+    const result = await service.submitTurn(task, '闵行区过去 12 个月，按街镇看老年人口和养老床位');
+    expect(result.events.some((event) => event.type === 'SCENARIO_RECLASSIFIED')).toBe(false);
+  });
+
+  it('adds detail resources to the candidate pool and only adds the chosen monthly snapshot to the solution', async () => {
+    const detail = await submit(createMinhangTask(), '我还想看人口明细');
+    expect(detail.task.searchResult?.candidateIds).toEqual(['r01', 'r04', 'r02', 'r03']);
+    expect(detail.task.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+    const selected = await service.executeAction(detail.task, { actionCode: 'SELECT_RESOURCE', payload: { resourceId: 'r03' } });
+    const next = apply(detail.task, selected.events);
+    expect(next.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04', 'r03']);
+    expect(next.dataSolution.items.some((item) => item.resourceId === 'r02')).toBe(false);
+  });
+});
+
+describe('permission request server contract', () => {
+  function requestableTask(query: 'ALLOWED' | 'REQUESTABLE' | 'DENIED' | 'UNKNOWN' = 'REQUESTABLE') {
+    const base = createMinhangTask();
+    return {
+      ...base,
+      resources: { ...base.resources, r04: { ...base.resources.r04, availabilityByAction: permissionsWithQuery(query) } }
+    };
+  }
+
+  function noticeText(result: Awaited<ReturnType<MockFindDataService['executeAction']>>) {
+    const turn = result.events.find((event) => event.type === 'ASSISTANT_TURN_RECEIVED');
+    return turn?.type === 'ASSISTANT_TURN_RECEIVED' ? JSON.stringify(turn.payload.blocks) : '';
+  }
+
+  it('only creates a request for a REQUESTABLE task candidate', async () => {
+    const result = await service.executeAction(requestableTask(), { actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04'], actionType: 'query' } });
+    expect(result.events.find((event) => event.type === 'PERMISSION_REQUEST_CREATED')).toBeTruthy();
+  });
+
+  it.each([
+    ['ALLOWED', '无需重复申请'],
+    ['DENIED', '不支持申请'],
+    ['UNKNOWN', '尚未确认']
+  ] as const)('rejects %s permission request without creating a record', async (query, message) => {
+    const result = await service.executeAction(requestableTask(query), { actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04'], actionType: 'query' } });
+    expect(result.events.some((event) => event.type === 'PERMISSION_REQUEST_CREATED')).toBe(false);
+    expect(noticeText(result)).toContain(message);
+  });
+
+  it('rejects a constructed resource id without echoing it and uses all-or-nothing validation', async () => {
+    const result = await service.executeAction(requestableTask(), {
+      actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04', 'constructed_resource_id'], actionType: 'query' }
+    });
+    expect(result.events.some((event) => event.type === 'PERMISSION_REQUEST_CREATED')).toBe(false);
+    expect(JSON.stringify(result)).not.toContain('constructed_resource_id');
+    expect(noticeText(result)).toContain('不属于本任务可申请范围');
+  });
+
+  it('returns the existing submitted request instead of creating a duplicate', async () => {
+    const initial = requestableTask();
+    const first = await service.executeAction(initial, { actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04'], actionType: 'query' } });
+    const afterFirst = apply(initial, first.events);
+    const second = await service.executeAction(afterFirst, { actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04'], actionType: 'query' } });
+    const firstRequest = first.events.find((event) => event.type === 'PERMISSION_REQUEST_CREATED');
+    const secondRequest = second.events.find((event) => event.type === 'PERMISSION_REQUEST_CREATED');
+    expect(secondRequest).toEqual(firstRequest);
+    expect(noticeText(second)).toContain('已返回现有申请记录');
+  });
+});
