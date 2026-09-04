@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 const goal = '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。';
 
 test.describe('Find Data RC1 mock smoke', () => {
-  test('creates a solution, prepares Ask Data, runs it, then re-evaluates a time-range revision', async ({ page }) => {
+  test('creates a solution, prepares Ask Data, runs it, then recomposes r04 to r05 after a definition revision', async ({ page }) => {
     test.setTimeout(90_000);
     await page.goto('/');
     await page.getByRole('button', { name: '找数据' }).click();
@@ -31,9 +31,10 @@ test.describe('Find Data RC1 mock smoke', () => {
     await page.getByRole('button', { name: '收起右侧工作区' }).click();
     await page.getByRole('button', { name: '查看口径上下文' }).click();
     const inputs = page.locator('.fixed input');
-    await inputs.nth(1).fill('2024-01');
-    await inputs.nth(2).fill('2024-12');
+    await inputs.nth(5).fill('养老床位核定数');
     await page.getByRole('button', { name: '保存并更新口径' }).click();
     await expect(page.getByText('正在按新口径重新评估')).toBeVisible();
+    await page.getByRole('button', { name: /方案 · 2 项核心资源/ }).click();
+    await expect(page.getByText('养老床位核定数', { exact: true })).toBeVisible();
   });
 });
