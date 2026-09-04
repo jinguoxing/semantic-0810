@@ -156,8 +156,13 @@ export function selectCandidatesForComparison(task: FindDataTaskState): Resource
   return selectCandidateResources(task).filter((candidate) => comparisonIds.includes(candidate.resourceId));
 }
 
-export function selectCandidateSolutionStatus(task: FindDataTaskState, resourceId: ResourceId): '已加入方案' | '未加入方案' {
-  return task.dataSolution.items.some((item) => item.resourceId === resourceId) ? '已加入方案' : '未加入方案';
+export type CandidateSolutionStatus = 'INCLUDED' | 'PARTIAL_RECORDED' | 'NOT_INCLUDED';
+
+export function selectCandidateSolutionStatus(task: FindDataTaskState, resourceId: ResourceId): CandidateSolutionStatus {
+  const item = task.dataSolution.items.find((entry) => entry.resourceId === resourceId);
+  if (item?.role === 'PARTIAL_MATCH') return 'PARTIAL_RECORDED';
+  if (item && item.inclusionState !== 'NOT_INCLUDED') return 'INCLUDED';
+  return 'NOT_INCLUDED';
 }
 
 /**

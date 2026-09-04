@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Folder, Check, Plus, ExternalLink } from 'lucide-react';
 import { FindDataTaskState, ResourceId, TaskActionCode } from './model/FindDataTask';
 import { selectCandidateSolutionStatus, selectRelatedResourceCandidates, selectResourceById } from './model/findDataSelectors';
+import { getMinhangBedDefinitionForResource } from './scenarios/minhangBedDefinition';
 
 interface RightWorkspaceCatalogProps {
   task: FindDataTaskState;
@@ -85,7 +86,21 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
                 const queryDecision = resource.availabilityByAction.query;
                 const queryLabel = queryDecision === 'ALLOWED' ? '可直接使用' : queryDecision === 'REQUESTABLE' ? '查询需申请' : queryDecision === 'DENIED' ? '当前不可使用' : '查询待确认';
                 const solutionStatus = selectCandidateSolutionStatus(task, resource.id);
-                const isInSolution = solutionStatus === '已加入方案';
+                const isInSolution = solutionStatus === 'INCLUDED';
+                const isPartialRecorded = solutionStatus === 'PARTIAL_RECORDED';
+                const resourceBedDefinition = getMinhangBedDefinitionForResource(resource.id);
+                const currentBedDefinition = task.dataSolution.items
+                  .filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED')
+                  .map((item) => getMinhangBedDefinitionForResource(item.resourceId))
+                  .find((definition) => definition !== undefined);
+                const isBedDefinitionAlternative = resourceBedDefinition !== undefined && currentBedDefinition?.key !== resourceBedDefinition.key;
+                const actionLabel = isInSolution
+                  ? '已加入方案'
+                  : isPartialRecorded
+                  ? '保持部分匹配'
+                  : isBedDefinitionAlternative
+                  ? resourceBedDefinition!.switchLabel
+                  : '评估并加入当前方案';
 
                 return (
                   <div
@@ -106,9 +121,13 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
                       </div>
 
                       <div className="flex items-center space-x-1.5">
-                        {isInSolution && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold border bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]">
-                            {solutionStatus}
+                        {(isInSolution || isPartialRecorded) && (
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                            isInSolution
+                              ? 'bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]'
+                              : 'bg-[#FFF7ED] text-[#C2410C] border-[#FED7AA]'
+                          }`}>
+                            {isInSolution ? '已加入方案' : '已记录为部分匹配'}
                           </span>
                         )}
                         <span
@@ -158,19 +177,19 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
 
                       <button
                         type="button"
-                        disabled={isInSolution}
+                        disabled={isInSolution || isPartialRecorded}
                         onClick={(e) => {
                           e.stopPropagation();
                           onAction?.('EVALUATE_AND_ADD', { resourceId: resource.id });
                         }}
                         className={`px-2.5 py-1 rounded-md transition-colors flex items-center space-x-1 font-semibold ${
-                          isInSolution
+                          isInSolution || isPartialRecorded
                             ? 'bg-[#F1F5F9] text-[#94A3B8] border border-[#E2E8F0] cursor-default'
                             : 'bg-white hover:bg-[#F8FAFC] border border-[#CBD5E1] text-[#0F172A] cursor-pointer'
                         }`}
                       >
                         <Plus className="w-3 h-3" />
-                        <span>{isInSolution ? '已加入方案' : '评估并加入当前方案'}</span>
+                        <span>{actionLabel}</span>
                       </button>
                     </div>
                   </div>

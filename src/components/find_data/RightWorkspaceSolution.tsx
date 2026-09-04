@@ -8,8 +8,10 @@ import {
   selectResourceById,
   selectResourceAvailability,
   getQueryStatusDisplay,
-  selectExecutionAssessments
+  selectExecutionAssessments,
+  getDataSolutionDisplayState
 } from './model/findDataSelectors';
+import { getMinhangBedDefinitionForResource, MINHANG_BED_DEFINITION_VARIANTS } from './scenarios/minhangBedDefinition';
 
 interface RightWorkspaceSolutionProps {
   task: FindDataTaskState;
@@ -39,6 +41,15 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
   const executionAssessments = selectExecutionAssessments(task);
   const excludedAssessments = executionAssessments.filter((assessment) => !assessment.included);
   const isReevaluating = task.dataSolution.state === 'EVALUATING' || task.dataSolution.state === 'STALE';
+  const displayState = getDataSolutionDisplayState(task);
+  const displayStateClass = {
+    EMPTY: 'bg-[#F1F5F9] text-[#64748B] border-[#E2E8F0]',
+    EVALUATING: 'bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]',
+    READY_COMPLETE: 'bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]',
+    READY_PARTIAL: 'bg-[#FFF7ED] text-[#C2410C] border-[#FED7AA]',
+    GAP_ONLY: 'bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]',
+    STALE: 'bg-[#FFF7ED] text-[#C2410C] border-[#FED7AA]'
+  }[displayState.code];
 
   const totalItems = task.dataSolution.items.length;
   const isEmpty = totalItems === 0 && gaps.length === 0;
@@ -56,11 +67,9 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
               <h3 className="text-sm font-bold text-[#0F172A] tracking-tight truncate">
                 数据方案 · {task.title || '当前方案'}
               </h3>
-              {!isEmpty && (
-                <span className="text-[10px] px-1.5 py-0.2 bg-[#F0FDF4] text-[#16A34A] rounded border border-[#DCFCE7] font-bold shrink-0">
-                  {isReevaluating ? '正在重新评估' : isExecutableMode ? '可执行' : '推荐就绪'}
-                </span>
-              )}
+              <span className={`text-[10px] px-1.5 py-0.2 rounded border font-bold shrink-0 ${displayStateClass}`}>
+                {displayState.label}
+              </span>
             </div>
             <p className="text-[11px] text-[#64748B] truncate">
               {isEmpty
@@ -195,6 +204,10 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
                   const res = selectResourceById(task, item.resourceId);
                   const availability = selectResourceAvailability(task, item.resourceId);
                   const statusInfo = getQueryStatusDisplay(availability);
+                  const bedDefinition = getMinhangBedDefinitionForResource(item.resourceId);
+                  const alternativeBedDefinition = bedDefinition
+                    ? Object.values(MINHANG_BED_DEFINITION_VARIANTS).find((variant) => variant.key !== bedDefinition.key)
+                    : undefined;
                   if (!res) return null;
 
                   return (
@@ -224,6 +237,15 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
                         <span>粒度：{res.granularity}</span>
                         <span>覆盖：{res.timeCoverage}</span>
                       </div>
+                      {task.scenarioKey === 'minhang_bed_supply' && alternativeBedDefinition && !isExecutableMode && (
+                        <button
+                          type="button"
+                          onClick={() => onAction?.('REVISE_REQUIREMENT', { hypothesisPatch: { bedDefinition: alternativeBedDefinition.hypothesisValue } })}
+                          className="text-[11px] text-[#2563EB] hover:underline cursor-pointer"
+                        >
+                          {alternativeBedDefinition.switchLabel}
+                        </button>
+                      )}
                     </div>
                   );
                 })}

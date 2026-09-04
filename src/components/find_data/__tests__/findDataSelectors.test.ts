@@ -8,7 +8,8 @@ import {
   selectRecommendedSolutionItems,
   selectResourceById,
   selectResourceFields,
-  selectSolutionGroups
+  selectSolutionGroups,
+  getDataSolutionDisplayState
 } from '../model/findDataSelectors';
 import { deniedResourceFixture } from './fixtures/deniedResourceFixture';
 import { createEmptyTask, createResource, createSolutionItem, permissionsWithQuery } from './testUtils/findDataFactories';
@@ -137,5 +138,30 @@ describe('find-data selectors', () => {
       }
     });
     expect(selectExecutionAssessments(task)[0]?.reason).toBe('RELATIONSHIP_NOT_READY');
+  });
+
+  it('distinguishes complete, partial, and gap-only data-solution display states', () => {
+    const complete = createEmptyTask({
+      scenarioKey: 'minhang_bed_supply',
+      resources: {
+        r01: createResource({ id: 'r01', analysisDimensions: ['street_town', 'month'], timeGrain: 'MONTH' }),
+        r04: createResource({ id: 'r04', analysisDimensions: ['street_town', 'month'], timeGrain: 'MONTH' })
+      },
+      dataSolution: {
+        ...createEmptyTask().dataSolution,
+        state: 'READY',
+        items: [createSolutionItem({ resourceId: 'r01' }), createSolutionItem({ resourceId: 'r04' })],
+        relationshipEvidence: [{ sourceResourceId: 'r04', targetResourceId: 'r01', relationType: 'ANALYTICAL_COMPATIBILITY', verificationStatus: 'SEMANTIC_ONLY', evidenceLevel: 'MEDIUM', description: '语义关系', evidenceRefs: ['test'] }]
+      }
+    });
+    const partial = createEmptyTask({
+      dataSolution: { ...createEmptyTask().dataSolution, state: 'READY', items: [createSolutionItem({ resourceId: 'r07', role: 'PARTIAL_MATCH', inclusionState: 'NOT_INCLUDED' })] }
+    });
+    const gapOnly = createEmptyTask({
+      dataSolution: { ...createEmptyTask().dataSolution, state: 'READY', gaps: [{ id: 'gap', title: '缺口', description: '缺口', impactLevel: 'HIGH', mitigation: '补充', status: 'OPEN' }] }
+    });
+    expect(getDataSolutionDisplayState(complete).label).toBe('推荐就绪');
+    expect(getDataSolutionDisplayState(partial).label).toBe('部分覆盖');
+    expect(getDataSolutionDisplayState(gapOnly).label).toBe('当前仅发现缺口');
   });
 });

@@ -1,10 +1,12 @@
 import React from 'react';
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { RightWorkspaceFields } from '../RightWorkspaceFields';
 import { RightWorkspaceAskPlan } from '../RightWorkspaceAskPlan';
 import { RightWorkspaceSolution } from '../RightWorkspaceSolution';
+import { RightWorkspaceCatalog } from '../RightWorkspaceCatalog';
 import { TaskContextDrawer } from '../TaskContextDrawer';
+import { MINHANG_RESOURCES } from '../fixtures/minhangBedSupplyFixture';
 import {
   createFindDataTaskStore,
   LocalStorageFindDataTaskStore,
@@ -158,5 +160,43 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
     }} onClose={() => {}} />);
     expect(screen.getByText('在营可用养老床位数 ↔ 60 岁以上常住人口数')).toBeInTheDocument();
     expect(screen.queryByText('r04 ↔ r01')).not.toBeInTheDocument();
+  });
+
+  it('labels a PARTIAL_MATCH catalog candidate as recorded, not included', () => {
+    const base = createMinhangTask();
+    const task = {
+      ...base,
+      resources: { ...base.resources, r07: MINHANG_RESOURCES.r07 },
+      searchResult: {
+        query: '民政相关资源', totalMatches: 1, returnedCount: 1, candidateIds: ['r07'],
+        candidateSnapshot: [{ resourceId: 'r07', title: '居家养老服务订单', reason: '部分匹配', matchType: 'PARTIAL' as const, proposedRole: 'PARTIAL_MATCH' as const, sourceSearchRevision: 1 }]
+      },
+      dataSolution: {
+        ...base.dataSolution,
+        items: [{ resourceId: 'r07', role: 'PARTIAL_MATCH' as const, inclusionState: 'NOT_INCLUDED' as const, coverage: [], limitations: [], evidenceRefs: [] }]
+      }
+    };
+    render(<RightWorkspaceCatalog task={task} onClose={() => {}} onReturnToAnalysis={() => {}} onViewFields={() => {}} />);
+    expect(screen.getByText('已记录为部分匹配')).toBeInTheDocument();
+    expect(screen.queryByText('已加入方案')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保持部分匹配' })).toBeDisabled();
+  });
+
+  it('offers a controlled return to the available-bed definition from an approved-bed solution', () => {
+    const base = createMinhangTask();
+    const onAction = vi.fn();
+    render(<RightWorkspaceSolution task={{
+      ...base,
+      resources: { ...base.resources, r05: MINHANG_RESOURCES.r05 },
+      requirementHypothesis: { ...base.requirementHypothesis, bedDefinition: '养老床位核定数' },
+      dataSolution: { ...base.dataSolution, items: [
+        { ...base.dataSolution.items[0], resourceId: 'r01' },
+        { ...base.dataSolution.items[1], resourceId: 'r05', selectionGroupId: 'bed_definition_alternative' }
+      ] }
+    }} onAction={onAction} onClose={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: '切换为在营可用口径' }));
+    expect(onAction).toHaveBeenCalledWith('REVISE_REQUIREMENT', {
+      hypothesisPatch: { bedDefinition: '民政核定且在营可用养老床位数' }
+    });
   });
 });

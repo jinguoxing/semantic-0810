@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Calculator, CheckCircle2, ShieldCheck, Play, Edit3, Loader2, RefreshCw } from 'lucide-react';
 import { AskPlan, FindDataTaskState, PermissionCheckState } from './model/FindDataTask';
 import { PermissionRecheckResult } from './services/FindDataService';
+import { getMinhangBedDefinitionForNumerator } from './scenarios/minhangBedDefinition';
 
 interface RightWorkspaceAskPlanProps {
   task: FindDataTaskState;
@@ -71,6 +72,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   const checkState: PermissionCheckState = plan.permissionCheckState;
   const coreResources = plan.coreResourceIds.map((id) => task.resources[id]).filter(Boolean);
   const selectedBenchmark = benchmarkCopy[plan.calculationSpec.benchmarkRule];
+  const resultDefinitionLabel = getMinhangBedDefinitionForNumerator(plan.calculationSpec.numerator).resultDefinitionLabel;
 
   const handleCheckPermission = async () => {
     if (isChecking || isExecuting) return;
@@ -271,7 +273,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-[10px] px-2 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] font-mono border border-[#E2E8F0]">
-                  {lastRunResult.dataOrigin === 'MOCK_FIXTURE' ? '演示数据' : '实时查询引擎'}
+                  {lastRunResult.dataOrigin === 'MOCK_FIXTURE' ? `${resultDefinitionLabel} · 演示数据` : '实时查询引擎'}
                 </span>
                 <span className="text-[11px] text-[#64748B]">{plan.timeRange?.end ? `${plan.timeRange.end} 最新月度` : '时间未指定'}</span>
               </div>
@@ -292,7 +294,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
               )}
               {(lastRunResult.resultArtifact.totalPopulation || lastRunResult.resultArtifact.totalBeds) && (
                 <p className="text-[11px] text-[#64748B]">
-                  全区 60 岁以上常住人口约 {lastRunResult.resultArtifact.totalPopulation ?? '未返回'}，在营可用养老床位共{' '}
+                  全区 60 岁以上常住人口约 {lastRunResult.resultArtifact.totalPopulation ?? '未返回'}，{plan.calculationSpec.numerator.replace('（正式指标）', '')}共{' '}
                   {lastRunResult.resultArtifact.totalBeds ?? '未返回'}。
                 </p>
               )}

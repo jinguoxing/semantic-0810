@@ -47,7 +47,7 @@ export function resolveInteractionIntent(text: string, _task: FindDataTaskState)
   if (/(比较这两张表|对比这两个资源|看看这两个候选有什么区别|展开两个资源比较|帮我比较一下它们)/.test(normalized)) {
     return result('OPEN_SURFACE', true, 'HIGH', 'open-compare', 'COMPARE');
   }
-  if (/(我先看看民政相关资源|看看还有哪些相关数据|浏览与当前目标相关的数据|民政下面还有哪些表|打开相关资源)/.test(normalized)) {
+  if (/(我先看看民政相关资源|看看还有哪些相关数据|浏览与当前目标相关的数据|民政下面还有哪些表|打开相关资源|浏览民政数据|还有哪些养老资源|查看养老相关数据)/.test(normalized)) {
     return result('RESOURCE_BROWSE', true, 'HIGH', 'browse-related-resources', 'RELATED_RESOURCES');
   }
   if (/(计算各街镇每千名老人养老床位数|按当前方案分析|找出供给水平相对偏低的街镇|根据当前数据做分析|生成养老床位供给比较结果)/.test(normalized)) {

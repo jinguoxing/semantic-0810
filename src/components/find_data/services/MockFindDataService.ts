@@ -19,6 +19,7 @@ import { createScenarioId, emptyScenarioResult } from '../scenarios/FindDataScen
 import { selectCandidateById } from '../model/findDataSelectors';
 import { selectAskHandoffReadiness, validateAnalyticalAlignment } from '../model/findDataSelectors';
 import { findDataReducer } from '../model/findDataReducer';
+import { getMinhangBedDefinitionForCoreResources, getMinhangBedDefinitionForResource } from '../scenarios/minhangBedDefinition';
 import { FindDataEngineResult, FindDataService, FindDataTaskSummary, PermissionRecheckResult } from './FindDataService';
 
 function assistantNotice(task: FindDataTaskState, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info'): FindDataEngineResult {
@@ -40,14 +41,37 @@ export function requireDiscoverableTaskResource(
 
 function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resultArtifact']> {
   const boundaryNotice = askPlan.calculationSpec.strictConclusionBoundary;
+  const bedDefinition = getMinhangBedDefinitionForCoreResources(askPlan.coreResourceIds);
+  const fixture = bedDefinition.key === 'APPROVED'
+    ? {
+        benchmarkLabel: '全区加权平均核定床位容量',
+        benchmarkValue: '31.4 张 / 千人',
+        summary: '全区加权平均核定床位容量为 31.4 张 / 千人；该结果仅反映审批或设计容量。',
+        totalPopulation: '41.2 万人',
+        totalBeds: '12,936 张',
+        townResults: [
+          { townName: '浦锦街道', supplyRatio: '32.0 张 / 千人', comparisonNote: '高于全区 +1.9%' },
+          { townName: '七宝镇', supplyRatio: '36.5 张 / 千人', comparisonNote: '高于全区 +16.2%' }
+        ]
+      }
+    : {
+        benchmarkLabel: '全区加权平均供给水平',
+        benchmarkValue: '24.8 张 / 千人',
+        summary: '全区加权平均供给水平为 24.8 张 / 千人。',
+        totalPopulation: '41.2 万人',
+        totalBeds: '10,218 张',
+        townResults: [
+          { townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于全区 -42.7%' },
+          { townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '低于全区 -33.5%' }
+        ]
+      };
   if (askPlan.calculationSpec.benchmarkRule === 'RANK_ONLY') {
     return {
       benchmarkLabel: '街镇指标排名',
-      summary: '离线样例已按每千名老人床位数从高到低排序，当前返回 2 个街镇结果。',
-      townResults: [
-        { townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '样例排名第 1' },
-        { townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '样例排名第 2' }
-      ],
+      summary: bedDefinition.key === 'APPROVED' ? '离线样例已按每千名老人核定床位数从高到低排序，当前返回 2 个街镇结果。' : '离线样例已按每千名老人床位数从高到低排序，当前返回 2 个街镇结果。',
+      townResults: bedDefinition.key === 'APPROVED'
+        ? [{ townName: '七宝镇', supplyRatio: '36.5 张 / 千人', comparisonNote: '样例排名第 1' }, { townName: '浦锦街道', supplyRatio: '32.0 张 / 千人', comparisonNote: '样例排名第 2' }]
+        : [{ townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '样例排名第 1' }, { townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '样例排名第 2' }],
       boundaryNotice
     };
   }
@@ -61,24 +85,15 @@ function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resul
         ? `使用分析计划中登记的离线演示政策目标 ${benchmarkValue} 完成比较。`
         : '分析计划未登记可用政策目标值，因此没有生成达标判断。',
       townResults: benchmarkValue
-        ? [
-            { townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于演示目标 -52.7%' },
-            { townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '低于演示目标 -45.0%' }
-          ]
+        ? bedDefinition.key === 'APPROVED'
+          ? [{ townName: '浦锦街道', supplyRatio: '32.0 张 / 千人', comparisonNote: '高于演示目标 +6.7%' }, { townName: '七宝镇', supplyRatio: '36.5 张 / 千人', comparisonNote: '高于演示目标 +21.7%' }]
+          : [{ townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于演示目标 -52.7%' }, { townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '低于演示目标 -45.0%' }]
         : [],
       boundaryNotice
     };
   }
   return {
-    benchmarkLabel: '全区加权平均供给水平',
-    benchmarkValue: '24.8 张 / 千人',
-    summary: '全区加权平均供给水平为 24.8 张 / 千人。',
-    totalPopulation: '41.2 万人',
-    totalBeds: '10,218 张',
-    townResults: [
-      { townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于全区 -42.7%' },
-      { townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '低于全区 -33.5%' }
-    ],
+    ...fixture,
     boundaryNotice
   };
 }
@@ -186,6 +201,21 @@ export class MockFindDataService implements FindDataService {
       if (!resource || !candidate) {
         return this.persistResult(task, { ...assistantNotice(task, '当前资源不属于本任务可发现范围，无法执行该操作。', 'warning'), operationId });
       }
+      const requestedBedDefinition = getMinhangBedDefinitionForResource(resourceId);
+      const currentBedDefinition = task.dataSolution.items
+        .filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED')
+        .map((item) => getMinhangBedDefinitionForResource(item.resourceId))
+        .find((definition) => definition !== undefined);
+      const shouldRecomposeBedDefinition = requestedBedDefinition !== undefined && currentBedDefinition !== undefined &&
+        requestedBedDefinition.key !== currentBedDefinition.key && task.scenarioKey === 'minhang_bed_supply';
+      if (shouldRecomposeBedDefinition) {
+        const scenario = scenarioRegistry.get('minhang_bed_supply');
+        const recomposed = await scenario.handleAction(task, {
+          actionCode: 'REVISE_REQUIREMENT',
+          payload: { hypothesisPatch: { bedDefinition: requestedBedDefinition.hypothesisValue } }
+        });
+        return this.persistResult(task, { ...recomposed, taskId: task.taskId, operationId, surfaceCommand });
+      }
       const item: DataSolutionItem = {
         resourceId,
         role: candidate.proposedRole ?? (resourceId === 'r07' ? 'PARTIAL_MATCH' : 'OPTIONAL_DRILLDOWN'),
@@ -236,18 +266,19 @@ export class MockFindDataService implements FindDataService {
       if (decisions.some((decision) => decision === 'UNKNOWN')) {
         return this.persistResult(task, { ...assistantNotice(task, '当前权限状态尚未确认，请稍后重试或联系管理员。', 'warning'), operationId });
       }
-      const existing = Object.values(task.permissionRequests).find((request) =>
-        request.status === 'SUBMITTED' && request.actionType === actionType && request.resourceIds.some((id) => requestedIds.includes(id))
-      );
-      if (existing) {
+      const overlappingIds = requestedIds.filter((id) => Object.values(task.permissionRequests).some((request) =>
+        request.status === 'SUBMITTED' && request.actionType === actionType && request.resourceIds.includes(id)
+      ));
+      if (overlappingIds.length > 0) {
+        const names = overlappingIds.map((id) => task.resources[id]?.name).filter((name): name is string => !!name);
+        const resourceNames = names.length > 0 ? names.join('、') : '当前资源';
         const notice: ConversationBlock = {
-          type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level: 'info', message: '相同权限申请已提交，已返回现有申请记录。'
+          type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level: 'warning', message: `${resourceNames}已有进行中的查询权限申请，本次包含的其他资源尚未提交。请移除重复项后重试。`
         };
         return this.persistResult(task, {
           ...emptyScenarioResult(task.taskId),
           operationId,
           events: [
-            { type: 'PERMISSION_REQUEST_CREATED', payload: { request: existing } },
             { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [notice], nextStatus: task.status } }
           ],
           assistantBlocks: [notice],

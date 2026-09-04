@@ -6,6 +6,7 @@ import {
   ResourceId,
   SolutionGap
 } from '../model/FindDataTask';
+import { getMinhangBedDefinitionForHypothesis, getMinhangBedDefinitionForResource } from './minhangBedDefinition';
 
 export interface MinhangSolutionComposition {
   resourceIds: ResourceId[];
@@ -22,7 +23,15 @@ const openGap = (id: string, title: string, description: string): SolutionGap =>
 });
 
 const coreItem = (resourceId: ResourceId): DataSolutionItem => ({
-  resourceId, role: 'CORE', inclusionState: 'SELECTED', coverage: ['街镇与月度分析核心指标'], limitations: [], evidenceRefs: ['闵行养老供给确定性组合']
+  resourceId,
+  role: 'CORE',
+  inclusionState: 'SELECTED',
+  coverage: ['街镇与月度分析核心指标'],
+  limitations: [],
+  evidenceRefs: ['闵行养老供给确定性组合'],
+  selectionGroupId: getMinhangBedDefinitionForResource(resourceId)
+    ? 'bed_definition_alternative'
+    : undefined
 });
 
 function includesAny(values: string[], expressions: RegExp[]): boolean {
@@ -55,7 +64,7 @@ export function composeMinhangSolution(
     return { resourceIds: [], items: [], gaps: [openGap('gap_population_definition', '老年人口统计口径未覆盖', '当前已登记资源尚未覆盖新的老年人口统计口径。')], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], readiness: 'GAP_ONLY' };
   }
 
-  const bedResourceId = /核定/.test(bedDefinition) && !/(在营|可用)/.test(bedDefinition) ? 'r05' : 'r04';
+  const bedResourceId = getMinhangBedDefinitionForHypothesis(bedDefinition).resourceId;
   if (!resources.r01 || !resources[bedResourceId]) {
     return { resourceIds: [], items: [], gaps: [openGap('gap_core_resource', '核心资源未登记', '当前方案尚未同时覆盖老年人口规模和养老床位口径。')], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], readiness: 'GAP_ONLY' };
   }

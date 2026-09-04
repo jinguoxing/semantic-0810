@@ -138,7 +138,7 @@ describe('scenario classification and turn handling', () => {
     const calculationSpec = apply(handoff.task, result.events).askPlan?.calculationSpec;
     expect(calculationSpec?.benchmarkValue).toBe('30 张 / 千人');
     expect(calculationSpec?.benchmarkReference).toContain('Mock Fixture');
-    expect(calculationSpec?.strictConclusionBoundary).toContain('不得据此声称真实政策达标或不达标');
+    expect(calculationSpec?.strictConclusionBoundary).toContain('严禁直接表达为“供需不足”');
   });
 
   it('rejects a fabricated clarification action that is absent from task history', async () => {
@@ -324,7 +324,7 @@ describe('fourth-round task recomposition and candidate pool', () => {
       scenarioKey: 'generic', status: 'NEEDS_CLARIFICATION', goal: '我想找养老数据',
       turns: [{ turnId: 'u1', sender: 'USER', createdAt: '', blocks: [{ type: 'TEXT', id: 'u1b', content: '我想找养老数据' }] }]
     });
-    const { result, task } = await submit(generic, '闵行区过去 12 个月，按街镇看老年人口和养老床位');
+    const { result, task } = await submit(generic, '闵行区过去 12 个月，按街镇看老年人口和在营可用养老床位');
     expect(result.events[0]).toMatchObject({ type: 'SCENARIO_RECLASSIFIED', payload: { fromScenarioKey: 'generic', toScenarioKey: 'minhang_bed_supply' } });
     expect(task.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
   });
@@ -384,14 +384,13 @@ describe('permission request server contract', () => {
     expect(noticeText(result)).toContain('不属于本任务可申请范围');
   });
 
-  it('returns the existing submitted request instead of creating a duplicate', async () => {
+  it('rejects a duplicate submitted request without creating another record', async () => {
     const initial = requestableTask();
     const first = await service.executeAction(initial, { actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04'], actionType: 'query' } });
     const afterFirst = apply(initial, first.events);
     const second = await service.executeAction(afterFirst, { actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04'], actionType: 'query' } });
-    const firstRequest = first.events.find((event) => event.type === 'PERMISSION_REQUEST_CREATED');
-    const secondRequest = second.events.find((event) => event.type === 'PERMISSION_REQUEST_CREATED');
-    expect(secondRequest).toEqual(firstRequest);
-    expect(noticeText(second)).toContain('已返回现有申请记录');
+    expect(first.events.some((event) => event.type === 'PERMISSION_REQUEST_CREATED')).toBe(true);
+    expect(second.events.some((event) => event.type === 'PERMISSION_REQUEST_CREATED')).toBe(false);
+    expect(noticeText(second)).toContain('其他资源尚未提交');
   });
 });
