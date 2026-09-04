@@ -1,10 +1,10 @@
 import React from 'react';
 import { ChevronRight, ExternalLink } from 'lucide-react';
-import { ResultBriefBlock as ResultBriefBlockType } from '../model/FindDataTask';
+import { ResultBriefBlock as ResultBriefBlockType, TaskActionCode } from '../model/FindDataTask';
 
 interface ResultBriefBlockProps {
   block: ResultBriefBlockType;
-  onActionClick?: (actionCode: string, payload?: Record<string, unknown>) => void;
+  onActionClick?: (actionCode: TaskActionCode, payload?: Record<string, unknown>) => void;
 }
 
 export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({

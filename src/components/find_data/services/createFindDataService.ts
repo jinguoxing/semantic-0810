@@ -10,8 +10,14 @@ import { DisconnectedFindDataService } from './DisconnectedFindDataService';
  * - 'http': HttpFindDataService with real backend REST/WebSocket calls
  * - 'disconnected': DisconnectedFindDataService returning graceful service disconnected notices
  */
-export function createFindDataService(explicitMode?: 'mock' | 'http' | 'disconnected'): FindDataService {
-  const mode = explicitMode || (import.meta.env.VITE_FIND_DATA_MODE as string) || 'mock';
+export type FindDataServiceMode = 'mock' | 'http' | 'disconnected';
+
+export function resolveFindDataServiceMode(value?: string): FindDataServiceMode {
+  return value === 'mock' || value === 'http' || value === 'disconnected' ? value : 'disconnected';
+}
+
+export function createFindDataService(explicitMode?: FindDataServiceMode): FindDataService {
+  const mode = explicitMode ?? resolveFindDataServiceMode(import.meta.env.VITE_FIND_DATA_MODE as string | undefined);
   const apiBase = import.meta.env.VITE_FIND_DATA_API_BASE as string;
 
   if (mode === 'disconnected') {

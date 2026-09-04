@@ -81,7 +81,8 @@ export function selectRecommendedSolutionItems(task: FindDataTaskState): DataSol
   const discoverableMap = selectDiscoverableResourceMap(task);
   return task.dataSolution.items.filter((item) => {
     const res = discoverableMap[item.resourceId];
-    return res !== undefined && (item.inclusionState === 'RECOMMENDED' || item.inclusionState === 'SELECTED');
+    return res !== undefined && item.role !== 'PARTIAL_MATCH' &&
+      (item.inclusionState === 'RECOMMENDED' || item.inclusionState === 'SELECTED');
   });
 }
 
@@ -89,7 +90,7 @@ export function selectRecommendedSolutionItems(task: FindDataTaskState): DataSol
  * 3. selectPartialMatchSolutionItems:
  * Returns items where role is PARTIAL_MATCH
  */
-export function selectPartialMatchSolutionItems(task: FindDataTaskState): DataSolutionItem[] {
+export function selectPartialMatchItems(task: FindDataTaskState): DataSolutionItem[] {
   const discoverableMap = selectDiscoverableResourceMap(task);
   return task.dataSolution.items.filter((item) => {
     const res = discoverableMap[item.resourceId];
@@ -97,15 +98,23 @@ export function selectPartialMatchSolutionItems(task: FindDataTaskState): DataSo
   });
 }
 
+export const selectPartialMatchSolutionItems = selectPartialMatchItems;
+
 /**
  * 4. selectExecutableSolutionItems:
  * Must be in recommended/selected AND resource availability query === 'ALLOWED'
  */
 export function selectExecutableSolutionItems(task: FindDataTaskState): DataSolutionItem[] {
-  const recommended = selectRecommendedSolutionItems(task);
-  return recommended.filter((item) => {
-    const availability = task.resources[item.resourceId]?.availabilityByAction;
-    return availability?.query === 'ALLOWED';
+  return task.dataSolution.items.filter((item) => {
+    const resource = task.resources[item.resourceId];
+    const relationshipSatisfied = item.role !== 'CONDITIONAL_SUPPORT' || task.dataSolution.relationshipEvidence.some(
+      (evidence) => evidence.sourceResourceId === item.resourceId || evidence.targetResourceId === item.resourceId
+    );
+    return resource?.availabilityByAction.discover === 'ALLOWED' &&
+      resource.availabilityByAction.query === 'ALLOWED' &&
+      item.role !== 'PARTIAL_MATCH' &&
+      item.inclusionState !== 'NOT_INCLUDED' &&
+      relationshipSatisfied;
   });
 }
 
@@ -175,6 +184,10 @@ export function selectSolutionGroups(
       default:
         break;
     }
+  }
+
+  if (mode === 'recommended') {
+    groups.partialMatch = selectPartialMatchItems(task);
   }
 
   return groups;

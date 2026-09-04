@@ -57,32 +57,31 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
       : [
           {
             dimension: '资产类型与归属',
-            valueA: `${resA.type} (${resA.department || '未注明'})`,
-            valueB: `${resB.type} (${resB.department || '未注明'})`,
-            advantageSide: 'NEUTRAL'
+            values: {
+              [resA.id]: `${resA.type} (${resA.department || '未注明'})`,
+              [resB.id]: `${resB.type} (${resB.department || '未注明'})`
+            }
           },
           {
             dimension: '记录粒度',
-            valueA: resA.granularity,
-            valueB: resB.granularity,
-            advantageSide: 'NEUTRAL'
+            values: { [resA.id]: resA.granularity, [resB.id]: resB.granularity }
           },
           {
             dimension: '覆盖范围/时效',
-            valueA: resA.timeCoverage,
-            valueB: resB.timeCoverage,
-            advantageSide: 'NEUTRAL'
+            values: { [resA.id]: resA.timeCoverage, [resB.id]: resB.timeCoverage }
           },
           {
             dimension: '查询权限',
-            valueA: resA.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '查询需申请',
-            valueB: resB.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '查询需申请',
-            advantageSide:
+            values: {
+              [resA.id]: resA.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '查询需申请',
+              [resB.id]: resB.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '查询需申请'
+            },
+            highlightResourceId:
               resA.availabilityByAction.query === 'ALLOWED' && resB.availabilityByAction.query !== 'ALLOWED'
-                ? 'A'
+                ? resA.id
                 : resB.availabilityByAction.query === 'ALLOWED' && resA.availabilityByAction.query !== 'ALLOWED'
-                ? 'B'
-                : 'NEUTRAL'
+                ? resB.id
+                : undefined
           }
         ];
 
@@ -220,17 +219,17 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
                   <td className="py-2 px-3 font-medium text-[#475569]">{row.dimension}</td>
                   <td
                     className={`py-2 px-3 text-[11px] leading-relaxed ${
-                      row.advantageSide === 'A' ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
+                      row.highlightResourceId === resA.id ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
                     }`}
                   >
-                    {row.valueA}
+                    {row.values[resA.id]}
                   </td>
                   <td
                     className={`py-2 px-3 text-[11px] leading-relaxed ${
-                      row.advantageSide === 'B' ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
+                      row.highlightResourceId === resB.id ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
                     }`}
                   >
-                    {row.valueB}
+                    {row.values[resB.id]}
                   </td>
                 </tr>
               ))}

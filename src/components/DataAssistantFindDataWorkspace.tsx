@@ -13,16 +13,26 @@ import {
   Trash2
 } from 'lucide-react';
 
-import { FindDataTaskState, ResourceId } from './find_data/model/FindDataTask';
+import { AskPlan, AskRunResult, FindDataTaskState, TaskActionCode } from './find_data/model/FindDataTask';
+import { FindDataEvent } from './find_data/model/findDataEvents';
 import { findDataReducer, initialFindDataTaskState } from './find_data/model/findDataReducer';
-import { createFindDataService } from './find_data/services/createFindDataService';
-import { defaultTaskStore } from './find_data/model/findDataStore';
+import {
+  createFindDataService,
+  resolveFindDataServiceMode
+} from './find_data/services/createFindDataService';
+import { createFindDataTaskStore, FindDataTaskStore } from './find_data/model/findDataStore';
+import { createFindDataTask } from './find_data/model/createFindDataTask';
+import {
+  FindDataEngineResult,
+  FindDataService,
+  PermissionRecheckResult
+} from './find_data/services/FindDataService';
+import { SurfaceCommand } from './find_data/policy/surfacePolicy';
 import {
   selectActiveResource,
   selectResourceById,
   selectResourceFields
 } from './find_data/model/findDataSelectors';
-import { MINHANG_COMPARISON_ROWS } from './find_data/fixtures/minhangBedSupplyFixture';
 
 // Blocks
 import { AssistantTextBlock } from './find_data/blocks/AssistantTextBlock';
@@ -49,18 +59,50 @@ interface DataAssistantFindDataWorkspaceProps {
   initialQuery?: string;
   onNavigateToNav?: (navId: string) => void;
   onBackToHome?: () => void;
+  serviceOverride?: FindDataService;
+  taskStoreOverride?: FindDataTaskStore;
+}
+
+let uiSequence = 0;
+const createUiId = (prefix: string) => {
+  uiSequence += 1;
+  return `${prefix}_${Date.now().toString(36)}_${uiSequence.toString(36)}`;
+};
+
+const askPlanStatusLabels: Record<AskPlan['status'], string> = {
+  DRAFT: '草稿',
+  READY_TO_RUN: '待确认',
+  RUNNING: '执行中',
+  COMPLETED: '已完成',
+  FAILED: '执行失败'
+};
+
+function askRunCompletionMessage(plan: AskPlan, result: AskRunResult): string {
+  const count = result.resultArtifact?.townResults.length ?? 0;
+  if (plan.calculationSpec.benchmarkRule === 'RANK_ONLY') {
+    return `分析已完成，已生成 ${count} 个街镇的指标排名。完整结果和边界说明已在右侧展示。`;
+  }
+  if (plan.calculationSpec.benchmarkRule === 'POLICY_TARGET') {
+    return `分析已完成，已按计划登记的政策目标生成 ${count} 个街镇比较结果。完整结果和边界说明已在右侧展示。`;
+  }
+  return `分析已完成，识别出 ${count} 个供给水平相对全区加权平均偏低的街镇。完整结果和边界说明已在右侧展示。`;
 }
 
 export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorkspaceProps> = ({
   initialQuery,
   onNavigateToNav,
-  onBackToHome
+  onBackToHome,
+  serviceOverride,
+  taskStoreOverride
 }) => {
-  // Service instance
-  const service = useMemo(() => createFindDataService(), []);
-
-  // Reducer
+  const serviceMode = useMemo(
+    () => resolveFindDataServiceMode(import.meta.env.VITE_FIND_DATA_MODE as string | undefined),
+    []
+  );
+  const service = useMemo(() => serviceOverride ?? createFindDataService(serviceMode), [serviceMode, serviceOverride]);
+  const taskStore = useMemo(() => taskStoreOverride ?? createFindDataTaskStore(serviceMode), [serviceMode, taskStoreOverride]);
   const [task, dispatch] = useReducer(findDataReducer, initialFindDataTaskState);
+  const taskRef = useRef<FindDataTaskState>(task);
 
   // Local UI states
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -68,217 +110,290 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const [inputMessage, setInputMessage] = useState('');
   const [isContextDrawerOpen, setIsContextDrawerOpen] = useState(false);
   const [solutionMode, setSolutionMode] = useState<'recommended' | 'executable'>('recommended');
-  const [savedTaskList, setSavedTaskList] = useState(() => defaultTaskStore.list());
+  const [savedTaskList, setSavedTaskList] = useState(() => taskStore.list());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationScrollRef = useRef<HTMLDivElement>(null);
 
-  // Keep saved task list updated & persist current task
-  const refreshTaskList = useCallback(() => {
-    setSavedTaskList(defaultTaskStore.list());
+  useEffect(() => {
+    taskRef.current = task;
+  }, [task]);
+
+  const dispatchTracked = useCallback((event: FindDataEvent) => {
+    taskRef.current = findDataReducer(taskRef.current, event);
+    dispatch(event);
+    return taskRef.current;
   }, []);
 
-  useEffect(() => {
-    if (task.taskId) {
-      defaultTaskStore.save(task);
-      defaultTaskStore.setCurrentTaskId(task.taskId);
-      refreshTaskList();
-    }
-  }, [task, refreshTaskList]);
+  const dispatchTrackedEvents = useCallback((events: FindDataEvent[]) => {
+    for (const event of events) dispatchTracked(event);
+    return taskRef.current;
+  }, [dispatchTracked]);
 
-  // Unified Turn Pipeline (P0-02):
-  // When initialQuery is provided, initialize a truly clean IDLE task, then submit the query as Turn 1
+  const refreshTaskList = useCallback(() => {
+    setSavedTaskList(taskStore.list());
+  }, [taskStore]);
+
+  const applySurfaceCommand = useCallback((command?: SurfaceCommand) => {
+    if (!command) return;
+    if (command.blockedReason) {
+      dispatchTracked({
+        type: 'ASSISTANT_TURN_RECEIVED',
+        payload: {
+          turnId: createUiId('surface_blocked'),
+          nextStatus: taskRef.current.status,
+          blocks: [{
+            type: 'SYSTEM_NOTICE',
+            id: createUiId('notice'),
+            level: 'info',
+            message: command.blockedReason
+          }]
+        }
+      });
+      return;
+    }
+    if ((command.action === 'OPEN' || command.action === 'REPLACE') && command.surface) {
+      dispatchTracked({
+        type: 'SURFACE_OPENED',
+        payload: {
+          type: command.surface,
+          mode: command.mode,
+          resourceIds: command.resourceIds,
+          openedBy: command.openedBy
+        }
+      });
+    } else if (command.action === 'CLOSE') {
+      dispatchTracked({ type: 'SURFACE_CLOSED' });
+    }
+  }, [dispatchTracked]);
+
+  const applyEngineResult = useCallback((result: FindDataEngineResult) => {
+    if (result.taskId !== taskRef.current.taskId) return false;
+    dispatchTrackedEvents(result.events);
+    applySurfaceCommand(result.surfaceCommand);
+    return true;
+  }, [applySurfaceCommand, dispatchTrackedEvents]);
+
+  const applyServiceFailure = useCallback((taskId: string, error: unknown) => {
+    if (taskId !== taskRef.current.taskId) return;
+    dispatchTracked({
+      type: 'ASSISTANT_TURN_RECEIVED',
+      payload: {
+        turnId: createUiId('service_failure'),
+        nextStatus: 'FAILED',
+        blocks: [{
+          type: 'SYSTEM_NOTICE',
+          id: createUiId('notice'),
+          level: 'error',
+          message: error instanceof Error ? error.message : '数据服务请求失败，请稍后重试。'
+        }]
+      }
+    });
+  }, [dispatchTracked]);
+
+  const persistTask = useCallback((taskToSave: FindDataTaskState = taskRef.current) => {
+    if (!taskToSave.taskId) return;
+    taskStore.save(taskToSave);
+    taskStore.setCurrentTaskId(taskToSave.taskId);
+  }, [taskStore]);
+
   useEffect(() => {
-    let mounted = true;
+    if (!task.taskId) return;
+    const timer = window.setTimeout(() => {
+      persistTask(task);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [task, persistTask]);
+
+  useEffect(() => {
+    if (task.taskId) refreshTaskList();
+  }, [task.taskId, task.title, task.status, refreshTaskList]);
+
+  useEffect(() => {
+    let cancelled = false;
 
     async function initTaskPipeline() {
-      const cleanTask = await service.createTask({ initialQuery: '' });
-      if (!mounted) return;
+      if (!initialQuery?.trim()) {
+        const currentTaskId = taskStore.getCurrentTaskId();
+        if (currentTaskId) {
+          const restored = taskStore.load(currentTaskId);
+          if (restored && !cancelled) {
+            dispatchTracked({ type: 'TASK_HYDRATED', payload: { task: restored } });
+            return;
+          }
+        }
+      }
+
+      let cleanTask: FindDataTaskState;
+      try {
+        cleanTask = await service.createTask({ initialQuery: '' });
+      } catch (error: unknown) {
+        if (cancelled) return;
+        const failedTask = createFindDataTask({ taskId: createUiId('failed_task') });
+        dispatchTracked({ type: 'TASK_CREATED', payload: { task: failedTask } });
+        applyServiceFailure(failedTask.taskId, error);
+        return;
+      }
+      if (cancelled) return;
+      dispatchTracked({ type: 'TASK_CREATED', payload: { task: cleanTask } });
 
       if (!initialQuery || !initialQuery.trim()) {
-        dispatch({
-          type: 'TASK_CREATED',
-          payload: { task: cleanTask }
-        });
-        defaultTaskStore.save(cleanTask);
+        taskStore.save(cleanTask);
+        taskStore.setCurrentTaskId(cleanTask.taskId);
+        refreshTaskList();
         return;
       }
 
-      // Initial query provided: dispatch task creation then submitTurn
-      dispatch({
-        type: 'TASK_CREATED',
-        payload: { task: cleanTask }
-      });
-
-      const turnId = `turn_user_${Date.now()}`;
-      dispatch({
+      const text = initialQuery.trim();
+      dispatchTracked({
         type: 'USER_TURN_SUBMITTED',
-        payload: { text: initialQuery.trim(), turnId }
+        payload: { text, turnId: createUiId('user') }
       });
-
-      const engineResult = await service.submitTurn(cleanTask, initialQuery.trim());
-      if (!mounted) return;
-
-      for (const ev of engineResult.events) {
-        dispatch(ev);
+      const submittedTaskId = taskRef.current.taskId;
+      try {
+        const engineResult = await service.submitTurn(taskRef.current, text);
+        if (!cancelled) applyEngineResult(engineResult);
+      } catch (error: unknown) {
+        if (!cancelled) applyServiceFailure(submittedTaskId, error);
       }
     }
 
-    initTaskPipeline();
+    void initTaskPipeline();
 
     return () => {
-      mounted = false;
+      cancelled = true;
     };
-  }, [service, initialQuery]);
+  }, [service, taskStore, initialQuery, dispatchTracked, applyEngineResult, applyServiceFailure, refreshTaskList]);
 
   // Scroll to bottom on new turns
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [task.turns, task.runtimeStatus]);
 
-  // Send a user turn
+  const isInputBlocked = task.status === 'UNDERSTANDING' || task.status === 'SEARCHING' || !!task.runtimeStatus?.active;
+
   const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
+    if (!inputMessage.trim() || isInputBlocked) return;
     const text = inputMessage.trim();
     setInputMessage('');
-
-    const turnId = `turn_user_${Date.now()}`;
-    dispatch({
+    dispatchTracked({
       type: 'USER_TURN_SUBMITTED',
-      payload: { text, turnId }
+      payload: { text, turnId: createUiId('user') }
     });
-
-    const engineResult = await service.submitTurn(task, text);
-    for (const ev of engineResult.events) {
-      dispatch(ev);
+    const submittedTaskId = taskRef.current.taskId;
+    try {
+      const engineResult = await service.submitTurn(taskRef.current, text);
+      applyEngineResult(engineResult);
+    } catch (error: unknown) {
+      applyServiceFailure(submittedTaskId, error);
     }
   };
 
-  // Switch task
   const handleSwitchTask = (taskId: string) => {
-    const loaded = defaultTaskStore.get(taskId);
+    if (taskRef.current.taskId && taskRef.current.taskId !== taskId) persistTask();
+    const loaded = taskStore.load(taskId);
     if (loaded) {
-      dispatch({
-        type: 'TASK_CREATED',
-        payload: { task: loaded }
-      });
-      defaultTaskStore.setCurrentTaskId(taskId);
+      dispatchTracked({ type: 'TASK_HYDRATED', payload: { task: loaded } });
+      taskStore.setCurrentTaskId(taskId);
+      refreshTaskList();
     }
   };
 
-  // Create new clean task
-  const handleCreateNewTask = async () => {
-    const newTask = await service.createTask({ initialQuery: '' });
-    dispatch({
-      type: 'TASK_CREATED',
-      payload: { task: newTask }
-    });
-    defaultTaskStore.save(newTask);
-    defaultTaskStore.setCurrentTaskId(newTask.taskId);
-    refreshTaskList();
+  const handleCreateNewTask = async (saveCurrent = true) => {
+    if (saveCurrent) persistTask();
+    const currentTaskId = taskRef.current.taskId;
+    try {
+      const newTask = await service.createTask({ initialQuery: '' });
+      dispatchTracked({ type: 'TASK_CREATED', payload: { task: newTask } });
+      persistTask(newTask);
+      refreshTaskList();
+    } catch (error: unknown) {
+      applyServiceFailure(currentTaskId, error);
+    }
   };
 
-  // Delete task from store
   const handleDeleteTask = (e: React.MouseEvent, taskId: string) => {
     e.stopPropagation();
-    defaultTaskStore.delete(taskId);
+    taskStore.remove(taskId);
     refreshTaskList();
-    if (task.taskId === taskId) {
-      handleCreateNewTask();
-    }
+    if (taskRef.current.taskId === taskId) void handleCreateNewTask(false);
   };
 
-  // Execute typed actions from blocks or workspaces
-  const handleAction = async (actionCode: string, payload?: Record<string, unknown>) => {
-    if (actionCode === 'CLOSE_SURFACE') {
-      dispatch({ type: 'SURFACE_CLOSED' });
-      return;
-    }
-
+  const handleAction = async (actionCode: TaskActionCode, payload?: Record<string, unknown>) => {
     if (actionCode === 'MODIFY_UNDERSTANDING' || actionCode === 'MODIFY_SPEC') {
       setIsContextDrawerOpen(true);
       return;
     }
-
-    if (actionCode === 'SUBMIT_CLARIFICATION') {
-      dispatch({
-        type: 'SUBMIT_CLARIFICATION',
-        payload: {
-          questionId: (payload?.questionId as string) || 'cq01',
-          selectedOptionIds: (payload?.selectedOptionIds as string[]) || []
-        }
-      });
-    }
-
-    const engineResult = await service.executeAction(task, { actionCode, payload });
-    for (const ev of engineResult.events) {
-      dispatch(ev);
+    const actionTaskId = taskRef.current.taskId;
+    try {
+      const engineResult = await service.executeAction(taskRef.current, { actionCode, payload });
+      applyEngineResult(engineResult);
+    } catch (error: unknown) {
+      applyServiceFailure(actionTaskId, error);
     }
   };
 
-  // Check permission for Ask Plan (P0-14 strict state machine)
-  const handleCheckPermissionForAskPlan = async (): Promise<boolean> => {
-    if (!task.askPlan) return false;
-
-    dispatch({
+  const handleCheckPermissionForAskPlan = async (): Promise<PermissionRecheckResult> => {
+    const taskAtStart = taskRef.current;
+    if (!taskAtStart.askPlan) return { decision: 'BLOCKED', updatedPermissions: {}, details: '当前没有分析计划。' };
+    dispatchTracked({
       type: 'PERMISSION_RECHECK_STARTED',
-      payload: { resourceIds: task.askPlan.coreResourceIds }
+      payload: { resourceIds: taskAtStart.askPlan.coreResourceIds }
     });
-
-    const checkResult = await service.recheckPermissions(
-      task,
-      task.askPlan.coreResourceIds,
-      'query'
-    );
-
-    dispatch({
-      type: 'PERMISSION_RECHECK_COMPLETED',
-      payload: {
-        decision: checkResult.decision,
-        updatedPermissions: checkResult.updatedPermissions
-      }
-    });
-
-    return checkResult.decision === 'ALLOWED';
+    let checkResult: PermissionRecheckResult;
+    try {
+      checkResult = await service.recheckPermissions(
+        taskAtStart,
+        taskAtStart.askPlan.coreResourceIds,
+        'query'
+      );
+    } catch (error: unknown) {
+      checkResult = {
+        decision: 'BLOCKED',
+        updatedPermissions: {},
+        details: error instanceof Error ? error.message : '权限重检失败。'
+      };
+    }
+    if (taskRef.current.taskId === taskAtStart.taskId) {
+      dispatchTracked({
+        type: 'PERMISSION_RECHECK_COMPLETED',
+        payload: { decision: checkResult.decision, updatedPermissions: checkResult.updatedPermissions }
+      });
+    }
+    return checkResult;
   };
 
-  // Run Ask Plan workflow (P0-15: Result isolation)
   const handleRunAskPlan = async () => {
-    if (!task.askPlan) return;
-
-    dispatch({ type: 'ASK_RUN_STARTED' });
-
-    const runResult = await service.runAskPlan(task, task.askPlan);
-
+    const taskAtStart = taskRef.current;
+    if (!taskAtStart.askPlan) return;
+    dispatchTracked({ type: 'ASK_RUN_STARTED' });
+    let runResult: AskRunResult;
+    try {
+      runResult = await service.runAskPlan(taskAtStart, taskAtStart.askPlan);
+    } catch (error: unknown) {
+      runResult = {
+        success: false,
+        executedAt: new Date().toISOString(),
+        permissionSnapshot: {},
+        error: error instanceof Error ? error.message : '执行分析计算失败'
+      };
+    }
+    if (taskRef.current.taskId !== taskAtStart.taskId) return;
     if (runResult.success) {
-      dispatch({
-        type: 'ASK_RUN_COMPLETED',
-        payload: { result: runResult }
-      });
-
-      if (runResult.resultArtifact) {
-        const artifact = runResult.resultArtifact;
-        const conclusionText = `### 分析基线核查结论（2026.08 最新月度）\n\n- **全区加权平均供给水平**：**${artifact.districtWeightedAverage}**（全区 60 岁以上常住人口约 ${artifact.totalPopulation}，在营可用养老床位共 ${artifact.totalBeds}）。\n- **相对供给偏低街镇（建议进一步核查）**：\n${artifact.lowSupplyTowns.map((t) => `  • **${t.townName}**：供给水平为 **${t.supplyRatio}**（${t.differencePct}）`).join('\n')}\n\n**结论合规与边界声明**：\n${artifact.boundaryNotice}`;
-
-        dispatch({
+      dispatchTracked({ type: 'ASK_RUN_COMPLETED', payload: { result: runResult } });
+      dispatchTracked({
           type: 'ASSISTANT_TURN_RECEIVED',
           payload: {
-            turnId: `turn_conclusion_${Date.now()}`,
+            turnId: createUiId('ask_complete'),
+            nextStatus: 'READY',
             blocks: [
-              {
-                type: 'TEXT',
-                id: `txt_conclusion_${Date.now()}`,
-                content: conclusionText
-              }
+              { type: 'TEXT', id: createUiId('text'), content: askRunCompletionMessage(taskAtStart.askPlan!, runResult) },
+              { type: 'ACTION_GROUP', id: createUiId('actions'), actions: [{ id: createUiId('view_result'), label: '查看完整结果', actionCode: 'OPEN_ASK_PLAN', variant: 'weak' }] }
             ]
           }
-        });
-      }
-    } else {
-      dispatch({
-        type: 'ASK_RUN_FAILED',
-        payload: { error: runResult.error || '执行分析计算失败' }
       });
+    } else {
+      dispatchTracked({ type: 'ASK_RUN_FAILED', payload: { error: runResult.error || '执行分析计算失败' } });
     }
   };
 
@@ -291,9 +406,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const surfaceWidthClass =
     task.activeSurface.mode === 'QUICK_PREVIEW' ? 'w-[560px]' : 'w-[780px]';
 
-  // Target resource for Fields workspace
-  const targetFieldResourceId =
-    task.activeSurface.resourceIds?.[0] || task.activeResourceId || 'r03';
+  const targetFieldResourceId = task.activeSurface.resourceIds?.[0] ?? task.activeResourceId;
   const targetFieldResource = selectResourceById(task, targetFieldResourceId);
   const targetFieldList = selectResourceFields(task, targetFieldResourceId);
 
@@ -308,6 +421,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         isOpen={isContextDrawerOpen}
         onClose={() => setIsContextDrawerOpen(false)}
         hypothesis={task.requirementHypothesis}
+        scenarioKey={task.scenarioKey}
         activeResourceName={activeResource?.name}
         onApplyChanges={(updated) => {
           handleAction('REVISE_REQUIREMENT', { hypothesisPatch: updated });
@@ -343,7 +457,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         {/* Primary Action Button */}
         <div className="p-3 border-b border-[#F1F5F9]">
           <button
-            onClick={handleCreateNewTask}
+            onClick={() => void handleCreateNewTask()}
             className="w-full py-2 px-3 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold flex items-center justify-center space-x-2 transition-all shadow-2xs cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -461,14 +575,15 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                 <span>区域：{task.requirementHypothesis.region || '未指定'}</span>
                 <span className="text-[#CBD5E1]">·</span>
                 <span>
-                  时间：{task.requirementHypothesis.timeRange?.start || '2025.09'} —{' '}
-                  {task.requirementHypothesis.timeRange?.end || '2026.08'}
+                  时间：{task.requirementHypothesis.timeRange
+                    ? `${task.requirementHypothesis.timeRange.start} — ${task.requirementHypothesis.timeRange.end}`
+                    : '未指定'}
                 </span>
                 <span className="text-[#CBD5E1]">·</span>
                 <span>
                   焦点：
                   <span className="font-semibold text-[#0F172A]">
-                    {activeResource ? activeResource.name : '整体方案'}
+                    {activeResource?.name ?? task.requirementHypothesis.analysisFocus[0] ?? '尚未形成'}
                   </span>
                 </span>
                 <span className="text-[#CBD5E1]">·</span>
@@ -487,75 +602,51 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           <div className="flex items-center space-x-2 shrink-0">
             {isSurfaceOpen && (
               <button
-                onClick={() => dispatch({ type: 'SURFACE_CLOSED' })}
+                onClick={() => void handleAction('CLOSE_SURFACE')}
                 className="px-2.5 py-1 text-xs text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded-lg transition-colors cursor-pointer border border-[#E2E8F0]"
               >
                 收起右侧工作区
               </button>
             )}
 
-            <div className="flex items-center space-x-1 bg-[#F1F5F9] p-0.5 rounded-lg border border-[#E2E8F0] text-xs">
+            {(task.dataSolution.items.length > 0 || task.activeResourceId || task.askPlan) && <div className="flex items-center space-x-1 bg-[#F1F5F9] p-0.5 rounded-lg border border-[#E2E8F0] text-xs">
+              {task.dataSolution.items.length > 0 && (
               <button
-                disabled={task.dataSolution.items.length === 0}
-                onClick={() =>
-                  dispatch(
-                    activeSurfaceType === 'SOLUTION'
-                      ? { type: 'SURFACE_CLOSED' }
-                      : { type: 'SURFACE_OPENED', payload: { type: 'SOLUTION' } }
-                  )
-                }
+                onClick={() => void handleAction(activeSurfaceType === 'SOLUTION' ? 'CLOSE_SURFACE' : 'OPEN_SOLUTION')}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                  task.dataSolution.items.length === 0
-                    ? 'text-[#94A3B8] cursor-not-allowed'
-                    : activeSurfaceType === 'SOLUTION'
+                  activeSurfaceType === 'SOLUTION'
                     ? 'bg-white text-[#2563EB] font-bold shadow-2xs cursor-pointer'
                     : 'text-[#64748B] hover:text-[#0F172A] cursor-pointer'
                 }`}
               >
-                数据方案
+                方案 · {task.dataSolution.items.filter((item) => item.role === 'CORE').length} 项核心资源
               </button>
+              )}
+              {task.activeResourceId && targetFieldResource && (
               <button
-                disabled={!targetFieldResource}
-                onClick={() =>
-                  dispatch(
-                    activeSurfaceType === 'FIELDS'
-                      ? { type: 'SURFACE_CLOSED' }
-                      : {
-                          type: 'SURFACE_OPENED',
-                          payload: { type: 'FIELDS', resourceIds: [targetFieldResourceId] }
-                        }
-                  )
-                }
+                onClick={() => void handleAction(activeSurfaceType === 'FIELDS' ? 'CLOSE_SURFACE' : 'OPEN_FIELDS', { resourceId: task.activeResourceId })}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                  !targetFieldResource
-                    ? 'text-[#94A3B8] cursor-not-allowed'
-                    : activeSurfaceType === 'FIELDS'
+                  activeSurfaceType === 'FIELDS'
                     ? 'bg-white text-[#2563EB] font-bold shadow-2xs cursor-pointer'
                     : 'text-[#64748B] hover:text-[#0F172A] cursor-pointer'
                 }`}
               >
-                字段检视
+                当前资源 · {targetFieldResource.name}
               </button>
+              )}
+              {task.askPlan && (
               <button
-                disabled={!task.askPlan}
-                onClick={() =>
-                  dispatch(
-                    activeSurfaceType === 'ASK_PLAN'
-                      ? { type: 'SURFACE_CLOSED' }
-                      : { type: 'SURFACE_OPENED', payload: { type: 'ASK_PLAN' } }
-                  )
-                }
+                onClick={() => void handleAction(activeSurfaceType === 'ASK_PLAN' ? 'CLOSE_SURFACE' : 'OPEN_ASK_PLAN')}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                  !task.askPlan
-                    ? 'text-[#94A3B8] cursor-not-allowed'
-                    : activeSurfaceType === 'ASK_PLAN'
+                  activeSurfaceType === 'ASK_PLAN'
                     ? 'bg-white text-[#2563EB] font-bold shadow-2xs cursor-pointer'
                     : 'text-[#64748B] hover:text-[#0F172A] cursor-pointer'
                 }`}
               >
-                分析计划
+                分析计划 · {askPlanStatusLabels[task.askPlan.status]}
               </button>
-            </div>
+              )}
+            </div>}
           </div>
         </header>
 
@@ -710,6 +801,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               <input
                 type="text"
                 value={inputMessage}
+                disabled={isInputBlocked}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -717,21 +809,21 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                     handleSendMessage();
                   }
                 }}
-                placeholder="发送找数据意图、提出追问或输入口径调整要求…"
+                placeholder={isInputBlocked ? '当前任务正在处理，请稍候…' : '发送找数据意图、提出追问或输入口径调整要求…'}
                 className="flex-1 bg-transparent px-3 py-1.5 text-xs text-[#0F172A] placeholder-[#94A3B8] focus:outline-none"
               />
 
               <button
                 type="button"
                 onClick={handleSendMessage}
-                disabled={!inputMessage.trim()}
+                disabled={!inputMessage.trim() || isInputBlocked}
                 className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
-                  inputMessage.trim()
+                  inputMessage.trim() && !isInputBlocked
                     ? 'bg-[#2563EB] text-white hover:bg-[#1D4ED8] shadow-2xs'
                     : 'bg-[#E2E8F0] text-[#94A3B8] cursor-not-allowed'
                 }`}
               >
-                <Send className="w-4 h-4" />
+                {isInputBlocked ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </button>
             </div>
             <div className="flex items-center justify-between text-[11px] text-[#94A3B8] px-2 pt-1.5">
@@ -747,21 +839,17 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         <aside className={`${surfaceWidthClass} shrink-0 z-10 overflow-hidden`}>
           {activeSurfaceType === 'COMPARE' && (
             <RightWorkspaceCompare
-              resources={[task.resources.r02, task.resources.r03].filter(Boolean)}
-              comparisonRows={task.comparisonModel?.rows || MINHANG_COMPARISON_ROWS}
-              recommendationConclusion={task.comparisonModel?.conclusion}
-              selectedResourceId={task.activeResourceId || 'r03'}
+              resources={(task.activeSurface.resourceIds ?? []).map((id) => task.resources[id]).filter(Boolean)}
+              comparisonRows={task.comparisonModel?.rows ?? []}
+              recommendationConclusion={task.comparisonModel?.recommendationSummary}
+              selectedResourceId={task.activeResourceId}
               onConfirmSelection={(resId) => {
-                handleAction('SELECT_RESOURCE', { resourceId: resId });
-                dispatch({
-                  type: 'SURFACE_OPENED',
-                  payload: { type: 'SOLUTION' }
-                });
+                void handleAction('SELECT_RESOURCE', { resourceId: resId });
               }}
               onViewFields={(resId) => {
                 handleAction('OPEN_FIELDS', { resourceId: resId });
               }}
-              onClose={() => dispatch({ type: 'SURFACE_CLOSED' })}
+              onClose={() => void handleAction('CLOSE_SURFACE')}
             />
           )}
 
@@ -769,10 +857,8 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             <RightWorkspaceFields
               resource={targetFieldResource}
               fields={targetFieldList}
-              onClose={() => dispatch({ type: 'SURFACE_CLOSED' })}
-              onBackToSolution={() =>
-                dispatch({ type: 'SURFACE_OPENED', payload: { type: 'SOLUTION' } })
-              }
+              onClose={() => void handleAction('CLOSE_SURFACE')}
+              onBackToSolution={() => void handleAction('OPEN_SOLUTION')}
             />
           )}
 
@@ -782,7 +868,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               mode={solutionMode}
               onModeChange={(m) => setSolutionMode(m)}
               onAction={(code, p) => handleAction(code, p)}
-              onClose={() => dispatch({ type: 'SURFACE_CLOSED' })}
+              onClose={() => void handleAction('CLOSE_SURFACE')}
             />
           )}
 
@@ -790,17 +876,15 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             <RightWorkspaceAccess
               task={task}
               onAction={(code, p) => handleAction(code, p)}
-              onClose={() => dispatch({ type: 'SURFACE_CLOSED' })}
+              onClose={() => void handleAction('CLOSE_SURFACE')}
             />
           )}
 
-          {activeSurfaceType === 'CATALOG' && (
+          {activeSurfaceType === 'RELATED_RESOURCES' && (
             <RightWorkspaceCatalog
               task={task}
-              onClose={() => dispatch({ type: 'SURFACE_CLOSED' })}
-              onReturnToAnalysis={() =>
-                dispatch({ type: 'SURFACE_OPENED', payload: { type: 'SOLUTION' } })
-              }
+              onClose={() => void handleAction('CLOSE_SURFACE')}
+              onReturnToAnalysis={() => void handleAction('OPEN_SOLUTION')}
               onAction={(code, p) => handleAction(code, p)}
               onViewFields={(resId) => {
                 handleAction('OPEN_FIELDS', { resourceId: resId });
@@ -813,11 +897,11 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               task={task}
               onCheckPermission={handleCheckPermissionForAskPlan}
               onRunPlan={handleRunAskPlan}
-              onReturnToSolution={() =>
-                dispatch({ type: 'SURFACE_OPENED', payload: { type: 'SOLUTION' } })
-              }
+              onReturnToSolution={() => void handleAction('OPEN_SOLUTION')}
+              onViewPermissionChanges={() => void handleAction('OPEN_ACCESS')}
+              onRegeneratePlan={() => void handleAction('REGENERATE_ASK_PLAN')}
               onModifySpec={() => setIsContextDrawerOpen(true)}
-              onClose={() => dispatch({ type: 'SURFACE_CLOSED' })}
+              onClose={() => void handleAction('CLOSE_SURFACE')}
             />
           )}
         </aside>

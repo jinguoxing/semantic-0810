@@ -36,7 +36,7 @@ export interface FieldMetadata {
 export interface FindDataResource {
   id: ResourceId;
   name: string;
-  type: '正式指标' | '数据资产' | '业务视图' | '未上架资源';
+  type: '正式指标' | '数据资产' | 'API' | '业务对象' | '业务视图' | '未上架资源';
   granularity: string;
   timeCoverage: string;
   department?: string;
@@ -53,12 +53,20 @@ export interface ClarificationOption {
   recommended?: boolean;
 }
 
+export interface ClarificationResolution {
+  status: 'OPEN' | 'RESOLVED' | 'STALE';
+  selectedOptionIds: string[];
+  resolvedAt?: string;
+  resolvedAtRequirementRevision?: number;
+}
+
 export interface ClarificationQuestion {
   id: string;
   question: string;
   type: 'SINGLE' | 'MULTIPLE';
   options: ClarificationOption[];
-  selectedOptionIds: string[];
+  maxSelections?: number;
+  resolution?: ClarificationResolution;
 }
 
 export interface RequirementHypothesis {
@@ -89,6 +97,7 @@ export interface DataSolutionItem {
   coverage: string[];
   limitations: string[];
   evidenceRefs: string[];
+  selectionGroupId?: string;
 }
 
 export interface SolutionGap {
@@ -117,13 +126,30 @@ export interface DataSolution {
   updatedAt: string;
 }
 
+export interface CandidateDelta {
+  retainedIds: ResourceId[];
+  addedIds: ResourceId[];
+  removedIds: ResourceId[];
+  allCandidateIds: ResourceId[];
+}
+
+export interface DataSolutionPatch {
+  mode: 'REPLACE' | 'MERGE';
+  upsertItems: DataSolutionItem[];
+  removeResourceIds?: ResourceId[];
+  gaps?: SolutionGap[];
+  relationshipEvidence?: RelationshipEvidence[];
+  coverageSummary?: string[];
+  limitationSummary?: string[];
+}
+
 export type SurfaceType =
   | 'CLOSED'
   | 'COMPARE'
   | 'FIELDS'
   | 'SOLUTION'
   | 'ACCESS'
-  | 'CATALOG'
+  | 'RELATED_RESOURCES'
   | 'ASK_PLAN';
 
 export interface SurfaceState {
@@ -160,7 +186,9 @@ export interface AskPlanCalculationSpec {
   numerator: string;
   denominator: string;
   multiplier: number;
-  benchmarkRule: 'WEIGHTED_DISTRICT_AVERAGE' | 'SIMPLE_AVERAGE';
+  benchmarkRule: 'RANK_ONLY' | 'WEIGHTED_DISTRICT_AVERAGE' | 'POLICY_TARGET';
+  benchmarkValue?: string;
+  benchmarkReference?: string;
   strictConclusionBoundary: string;
 }
 
@@ -169,19 +197,29 @@ export interface AskRunResult {
   executedAt: string;
   dataOrigin?: 'MOCK_FIXTURE' | 'LIVE_QUERY';
   resultArtifact?: {
-    districtWeightedAverage: string;
-    totalPopulation: string;
-    totalBeds: string;
-    lowSupplyTowns: Array<{
+    benchmarkLabel: string;
+    benchmarkValue?: string;
+    benchmarkReference?: string;
+    summary: string;
+    totalPopulation?: string;
+    totalBeds?: string;
+    townResults: Array<{
       townName: string;
       supplyRatio: string;
-      differencePct: string;
+      comparisonNote: string;
     }>;
     boundaryNotice: string;
   };
   permissionSnapshot: Record<ResourceId, AvailabilityByAction>;
   error?: string;
 }
+
+export type PermissionCheckState =
+  | 'NOT_CHECKED'
+  | 'CHECKING'
+  | 'ALLOWED'
+  | 'BLOCKED'
+  | 'CHANGED';
 
 export interface AskPlan {
   id: string;
@@ -190,7 +228,15 @@ export interface AskPlan {
   calculationSpec: AskPlanCalculationSpec;
   coreResourceIds: ResourceId[];
   conditionalResourceIds: ResourceId[];
-  permissionCheckState: 'NOT_CHECKED' | 'CHECKING' | 'ALLOWED' | 'BLOCKED' | 'CHANGED';
+  permissionCheckState: PermissionCheckState;
+  permissionBaseline?: Record<ResourceId, PermissionDecision>;
+  permissionCheckedAt?: string;
+  permissionRevision?: number;
+  requirementRevision?: number;
+  timeRange?: {
+    start: string;
+    end: string;
+  };
   lastRunResult?: AskRunResult;
 }
 
@@ -216,6 +262,24 @@ export interface ResultBriefCandidate {
   granularity?: string;
 }
 
+export type TaskActionCode =
+  | 'OPEN_FIELDS'
+  | 'OPEN_COMPARE'
+  | 'OPEN_SOLUTION'
+  | 'OPEN_ACCESS'
+  | 'OPEN_RELATED_RESOURCES'
+  | 'OPEN_ASK_PLAN'
+  | 'CLOSE_SURFACE'
+  | 'SELECT_RESOURCE'
+  | 'EVALUATE_AND_ADD'
+  | 'CREATE_PERMISSION_REQUEST'
+  | 'KEEP_AS_GAP'
+  | 'SUBMIT_CLARIFICATION'
+  | 'REGENERATE_ASK_PLAN'
+  | 'REVISE_REQUIREMENT'
+  | 'MODIFY_UNDERSTANDING'
+  | 'MODIFY_SPEC';
+
 export interface ResultBriefBlock {
   type: 'RESULT_BRIEF';
   id: string;
@@ -232,17 +296,17 @@ export interface ResultBriefBlock {
   keyPoints?: string[];
   primaryAction?: {
     label: string;
-    actionCode: string;
+    actionCode: TaskActionCode;
     payload?: Record<string, unknown>;
   };
   secondaryAction?: {
     label: string;
-    actionCode: string;
+    actionCode: TaskActionCode;
     payload?: Record<string, unknown>;
   };
   textLinkAction?: {
     label: string;
-    actionCode: string;
+    actionCode: TaskActionCode;
     payload?: Record<string, unknown>;
   };
 }
@@ -250,7 +314,7 @@ export interface ResultBriefBlock {
 export interface ActionGroupItem {
   id: string;
   label: string;
-  actionCode: string;
+  actionCode: TaskActionCode;
   variant?: 'primary' | 'secondary' | 'weak';
   payload?: Record<string, unknown>;
 }
@@ -356,6 +420,6 @@ export interface FindDataTaskState {
 }
 
 export interface TaskAction {
-  actionCode: string;
+  actionCode: TaskActionCode;
   payload?: Record<string, unknown>;
 }

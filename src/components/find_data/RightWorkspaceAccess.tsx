@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, Check, AlertTriangle, Clock, FileCheck, ArrowRight } from 'lucide-react';
-import { FindDataTaskState, PermissionDecision, ResourceId } from './model/FindDataTask';
+import {
+  FindDataTaskState,
+  PermissionDecision,
+  PermissionRequestRef,
+  ResourceId,
+  TaskActionCode
+} from './model/FindDataTask';
 import {
   selectPermissionRelevantItems,
   selectResourceById,
@@ -9,7 +15,7 @@ import {
 
 interface RightWorkspaceAccessProps {
   task: FindDataTaskState;
-  onAction?: (actionCode: string, payload?: Record<string, unknown>) => void;
+  onAction?: (actionCode: TaskActionCode, payload?: Record<string, unknown>) => void;
   onClose: () => void;
 }
 
@@ -21,7 +27,7 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
   const items = selectPermissionRelevantItems(task);
   const [selectedToApply, setSelectedToApply] = useState<ResourceId[]>([]);
 
-  const permissionRequests = Object.values(task.permissionRequests || {});
+  const permissionRequests: PermissionRequestRef[] = Object.values(task.permissionRequests);
 
   const getDecisionBadge = (decision?: PermissionDecision) => {
     switch (decision) {
@@ -152,7 +158,7 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
                       </div>
                       <div className="text-[11px] text-[#64748B]">
                         申请权限：{req.actionType === 'query' ? '查询问数' : req.actionType} · 涉及资源：
-                        {req.resourceIds.map((id) => task.resources[id]?.name || id).join('、')}
+                        {req.resourceIds.map((id) => task.resources[id]?.name || '资源已不可用').join('、')}
                       </div>
                       <div className="text-[10px] text-[#94A3B8]">
                         提交时间：{new Date(req.submittedAt).toLocaleString()}

@@ -10,89 +10,31 @@ import {
   AskPlan,
   AskRunResult
 } from '../model/FindDataTask';
+import { createFindDataTask } from '../model/createFindDataTask';
 
 export class DisconnectedFindDataService implements FindDataService {
   async createTask(input?: { initialQuery?: string }): Promise<FindDataTaskState> {
-    const taskId = `task_${Date.now()}`;
-    const initialQuery = input?.initialQuery?.trim() || '';
-    const now = new Date().toISOString();
-
-    return {
-      taskId,
-      title: initialQuery || '新建找数据任务',
-      status: 'FAILED',
-      scenarioKey: 'disconnected',
-      goal: initialQuery,
-      requirementHypothesis: {
-        dimensions: [],
-        analysisFocus: [],
-        assumptions: [],
-        unresolvedQuestions: []
-      },
-      searchScope: {
-        domains: [],
-        includeCrossDepartment: true
-      },
-      turns: [
-        {
-          turnId: `turn_${Date.now()}`,
-          sender: 'ASSISTANT',
-          createdAt: now,
-          blocks: [
-            {
-              type: 'SYSTEM_NOTICE',
-              id: `sn_${Date.now()}`,
-              level: 'error',
-              title: '找数据服务未连接',
-              message: '找数据服务尚未连接，请联系平台管理员完成服务配置。'
-            }
-          ]
-        }
-      ],
-      resources: {},
-      searchResult: {
-        totalMatches: 0,
-        candidateIds: [],
-        returnedCount: 0,
-        query: ''
-      },
-      dataSolution: {
-        items: [],
-        gaps: [],
-        relationshipEvidence: [],
-        coverageSummary: [],
-        limitationSummary: [],
-        updatedAt: now
-      },
-      permissionRequests: {},
-      activeResourceId: undefined,
-      activeSurface: {
-        type: 'CLOSED',
-        mode: 'QUICK_PREVIEW'
-      },
-      requirementRevision: 0,
-      searchRevision: 0,
-      runtimeStatus: {
-        active: false,
-        message: '服务未连接'
-      },
-      askPlan: undefined,
-      createdAt: now,
-      updatedAt: now
-    };
+    return createFindDataTask({
+      taskId: `task_${Date.now()}`,
+      initialQuery: input?.initialQuery,
+      scenarioKey: 'disconnected'
+    });
   }
 
   async submitTurn(
-    _task: FindDataTaskState,
+    task: FindDataTaskState,
     _text: string
   ): Promise<FindDataEngineResult> {
     const turnId = `turn_${Date.now()}_assistant`;
     return {
+      taskId: task.taskId,
+      operationId: `operation_${Date.now()}`,
       events: [
         {
           type: 'ASSISTANT_TURN_RECEIVED',
           payload: {
             turnId,
+            nextStatus: 'FAILED',
             blocks: [
               {
                 type: 'SYSTEM_NOTICE',
@@ -119,10 +61,12 @@ export class DisconnectedFindDataService implements FindDataService {
   }
 
   async executeAction(
-    _task: FindDataTaskState,
+    task: FindDataTaskState,
     _action: TaskAction
   ): Promise<FindDataEngineResult> {
     return {
+      taskId: task.taskId,
+      operationId: `operation_${Date.now()}`,
       events: [],
       assistantBlocks: [],
       surfaceCommand: { action: 'NO_CHANGE' }

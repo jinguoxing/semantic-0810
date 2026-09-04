@@ -1,9 +1,9 @@
 import React from 'react';
-import { ActionGroupItem } from '../model/FindDataTask';
+import { ActionGroupItem, TaskActionCode } from '../model/FindDataTask';
 
 interface ActionGroupBlockProps {
   actions: ActionGroupItem[];
-  onActionClick?: (actionCode: string, payload?: Record<string, unknown>) => void;
+  onActionClick?: (actionCode: TaskActionCode, payload?: Record<string, unknown>) => void;
 }
 
 export const ActionGroupBlock: React.FC<ActionGroupBlockProps> = ({

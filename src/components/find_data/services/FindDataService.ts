@@ -11,6 +11,8 @@ import { FindDataEvent } from '../model/findDataEvents';
 import { SurfaceCommand } from '../policy/surfacePolicy';
 
 export interface FindDataEngineResult {
+  taskId: string;
+  operationId: string;
   events: FindDataEvent[];
   assistantBlocks: ConversationBlock[];
   surfaceCommand?: SurfaceCommand;

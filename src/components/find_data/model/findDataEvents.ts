@@ -12,7 +12,11 @@ import {
   AvailabilityByAction,
   AskRunResult,
   PermissionRequestRef,
-  ResourceCandidate
+  ResourceCandidate,
+  ResourceComparisonModel,
+  CandidateDelta,
+  DataSolutionPatch,
+  TaskStatus
 } from './FindDataTask';
 
 export type FindDataEvent =
@@ -34,6 +38,26 @@ export type FindDataEvent =
       payload: {
         turnId: string;
         blocks: ConversationBlock[];
+        nextStatus?: TaskStatus;
+      };
+    }
+  | {
+      type: 'SCENARIO_CLASSIFIED';
+      payload: {
+        scenarioKey: string;
+      };
+    }
+  | {
+      type: 'COMPARISON_MODEL_SET';
+      payload: {
+        comparisonModel?: ResourceComparisonModel;
+      };
+    }
+  | {
+      type: 'TASK_TITLE_UPDATED';
+      payload: {
+        title: string;
+        goal?: string;
       };
     }
   | {
@@ -57,15 +81,25 @@ export type FindDataEvent =
   | {
       type: 'SEARCH_RESULTS_RECEIVED';
       payload: {
+        taskId: string;
         requirementRevision: number;
         searchRevision: number;
         query?: string;
         totalMatches?: number;
         candidateSnapshot?: ResourceCandidate[];
         resourceUpserts?: FindDataResource[];
-        discoveredResourceIds: ResourceId[];
-        solutionItems: DataSolutionItem[];
-        gaps?: SolutionGap[];
+        candidateDelta: CandidateDelta;
+        solutionPatch: DataSolutionPatch;
+      };
+    }
+  | {
+      type: 'CLARIFICATION_RESOLVED';
+      payload: {
+        questionId: string;
+        selectedOptionIds: string[];
+        selectedOptionLabels: string[];
+        requirementRevision: number;
+        resolvedAt: string;
       };
     }
   | {

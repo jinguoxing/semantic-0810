@@ -314,26 +314,6 @@ export const MINHANG_RESOURCES: Record<string, FindDataResource> = {
       query: 'REQUESTABLE',
       export: 'DENIED'
     }
-  },
-
-  // NEGATIVE TEST SAMPLE:
-  // Must be strictly filtered out by all discover selectors, catalog, search, and assistant summaries.
-  r_neg_rescue: {
-    id: 'r_neg_rescue',
-    name: '困难老年人救助对象明细',
-    type: '数据资产',
-    granularity: '一人一行',
-    timeCoverage: '2025.01 — 2026.08',
-    department: '市民政局社会救助处',
-    desc: '包含特困、低保及低收入困难老人的身份证件、住址与银行补贴发放流水。',
-    roleNote: '绝密敏感数据 · 未开放目录发现',
-    availabilityByAction: {
-      discover: 'DENIED',
-      viewMetadata: 'DENIED',
-      preview: 'DENIED',
-      query: 'DENIED',
-      export: 'DENIED'
-    }
   }
 };
 
@@ -413,7 +393,10 @@ export const MINHANG_INITIAL_HYPOTHESIS: RequirementHypothesis = {
         { id: 'opt_service', label: '居家养老服务订单与使用情况' },
         { id: 'opt_medical', label: '医养结合签约与门诊记录' }
       ],
-      selectedOptionIds: ['opt_pop', 'opt_bed']
+      resolution: {
+        status: 'OPEN',
+        selectedOptionIds: []
+      }
     }
   ]
 };
@@ -426,7 +409,7 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       inclusionState: 'SELECTED',
       coverage: ['上海市闵行区及各街镇', '2025.09 — 2026.08 月度序列'],
       limitations: ['为街镇汇总级指标，不支持社区/村居进一步下钻'],
-      evidenceRefs: ['官方正式指标 · 统计口径稳定']
+      evidenceRefs: ['当前检索到的正式指标 · 统计口径已登记']
     },
     {
       resourceId: 'r04',
@@ -442,7 +425,8 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       inclusionState: 'RECOMMENDED',
       coverage: ['全区常住老年人口按月固化底册', '含年龄、失能评级、居村代码'],
       limitations: ['按人月固化，数据量较大；当前基线聚合分析非必需'],
-      evidenceRefs: ['可支持未来深入街镇下居村委或高龄结构穿透下钻']
+      evidenceRefs: ['可支持未来深入街镇下居村委或高龄结构穿透下钻'],
+      selectionGroupId: 'population_detail_alternative'
     },
     {
       resourceId: 'r02',
@@ -450,7 +434,8 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       inclusionState: 'NOT_INCLUDED',
       coverage: ['实时人员底册'],
       limitations: ['仅含实时最新状态，无历史月度快照；查询需申请'],
-      evidenceRefs: ['已被 r03 (常住人口月度快照) 优选替代']
+      evidenceRefs: ['已被常住人口月度快照优选替代'],
+      selectionGroupId: 'population_detail_alternative'
     },
     {
       resourceId: 'r06',
@@ -507,13 +492,22 @@ export const MINHANG_ASK_PLAN: AskPlan = {
   coreResourceIds: ['r01', 'r04'],
   conditionalResourceIds: ['r03', 'r06'],
   permissionCheckState: 'NOT_CHECKED',
+  permissionBaseline: {
+    r01: 'ALLOWED',
+    r04: 'ALLOWED'
+  },
+  requirementRevision: 1,
+  timeRange: {
+    start: '2025.09',
+    end: '2026.08'
+  },
   calculationSpec: {
     metricName: '每千名 60 岁以上常住人口养老床位数',
     isOfficialMetric: false,
     formula: '( 在营可用养老床位数 ÷ 60 岁以上常住人口数 ) × 1000',
     formulaExplanation: '分子为各街镇在营可用养老床位总数；分母为各街镇 60 岁及以上常住人口总数；乘以 1000 换算为千人床位数。',
-    numerator: '在营可用养老床位数（正式指标 r04）',
-    denominator: '60 岁以上常住人口数（正式指标 r01）',
+    numerator: '在营可用养老床位数（正式指标）',
+    denominator: '60 岁以上常住人口数（正式指标）',
     multiplier: 1000,
     benchmarkRule: 'WEIGHTED_DISTRICT_AVERAGE',
     strictConclusionBoundary:

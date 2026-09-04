@@ -29,8 +29,9 @@ export class HttpFindDataService implements FindDataService {
         throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
       }
       return await resp.json();
-    } catch (e: any) {
-      throw new Error(`无法连接找数据后端服务: ${e.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`无法连接找数据后端服务: ${message}`);
     }
   }
 
@@ -84,6 +85,8 @@ export class HttpFindDataService implements FindDataService {
     task: FindDataTaskState,
     askPlan: AskPlan
   ): Promise<AskRunResult> {
+    // Contract: this endpoint must recheck permissions and start execution in the
+    // same backend transaction/workflow entry. A client-side precheck is advisory only.
     const resp = await fetch(`${this.apiBase}/tasks/${task.taskId}/ask-plan/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

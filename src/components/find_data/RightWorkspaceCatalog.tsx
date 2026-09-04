@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { X, Folder, ChevronRight, Check, Plus, ExternalLink } from 'lucide-react';
-import { FindDataTaskState, ResourceId } from './model/FindDataTask';
+import { X, Folder, Check, Plus, ExternalLink } from 'lucide-react';
+import { FindDataTaskState, ResourceId, TaskActionCode } from './model/FindDataTask';
 import { selectDiscoverableResources } from './model/findDataSelectors';
 
 interface RightWorkspaceCatalogProps {
   task: FindDataTaskState;
   onClose: () => void;
   onReturnToAnalysis: () => void;
-  onAction?: (actionCode: string, payload?: Record<string, unknown>) => void;
+  onAction?: (actionCode: TaskActionCode, payload?: Record<string, unknown>) => void;
   onViewFields: (resourceId: ResourceId) => void;
 }
 
@@ -25,9 +25,7 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
     (res) => res.id === 'r06' || res.id === 'r07' || !task.dataSolution.items.some((it) => it.resourceId === res.id)
   );
 
-  const [selectedId, setSelectedId] = useState<ResourceId | undefined>(
-    catalogResources[0]?.id
-  );
+  const [selectedId, setSelectedId] = useState<ResourceId | undefined>();
 
   return (
     <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200 select-none">
@@ -38,8 +36,8 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
             <Folder className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-[#0F172A] tracking-tight">目录浏览 · 数据资产</h3>
-            <p className="text-[11px] text-[#64748B]">按业务域层级浏览底层数据资产与明细</p>
+            <h3 className="text-sm font-bold text-[#0F172A] tracking-tight">相关资源浏览</h3>
+            <p className="text-[11px] text-[#64748B]">浏览当前业务目标相关、可进一步评估的数据资源。</p>
           </div>
         </div>
         <button
@@ -65,19 +63,12 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
         </button>
       </div>
 
-      {/* Directory Hierarchy Bar */}
-      <div className="px-5 py-2.5 bg-[#F8FAFC] border-b border-[#E2E8F0] flex items-center space-x-1.5 text-xs text-[#64748B]">
-        <span>数据资源目录</span>
-        <ChevronRight className="w-3.5 h-3.5 text-[#94A3B8]" />
-        <span className="font-semibold text-[#0F172A]">{task.scenarioKey === 'minhang_pension' ? '民政养老服务' : '公共数据资源'}</span>
-      </div>
-
       {/* Main Catalog Content */}
       <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar text-xs">
         {catalogResources.length === 0 ? (
           <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-2">
             <Folder className="w-10 h-10 text-[#CBD5E1]" />
-            <p className="font-bold text-sm text-[#0F172A]">当前目录暂无可浏览的数据资产</p>
+            <p className="font-bold text-sm text-[#0F172A]">当前暂无可浏览的相关资源</p>
             <p className="text-xs text-[#64748B]">
               请在左侧发起找数据任务，系统将按业务主题索引相关资产。
             </p>
@@ -85,7 +76,7 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
         ) : (
           <>
             <div className="text-[11px] text-[#64748B]">
-              当前业务域共有 {catalogResources.length} 项可浏览数据资产（已排除无权发现目录项）
+              当前共有 {catalogResources.length} 项可浏览资源。
             </div>
 
             <div className="space-y-3">

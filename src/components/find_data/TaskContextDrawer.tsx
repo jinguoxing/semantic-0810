@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, MapPin, Database, Target, AlertTriangle, Check } from 'lucide-react';
-import { RequirementHypothesis, ResourceId } from './model/FindDataTask';
+import { RequirementHypothesis } from './model/FindDataTask';
 
 interface TaskContextDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   hypothesis: RequirementHypothesis;
+  scenarioKey?: string;
   activeResourceName?: string;
   onApplyChanges: (updated: Partial<RequirementHypothesis>) => void;
 }
@@ -14,21 +15,24 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
   isOpen,
   onClose,
   hypothesis,
+  scenarioKey,
   activeResourceName,
   onApplyChanges
 }) => {
-  const [region, setRegion] = useState(hypothesis.region || '上海市闵行区');
-  const [timeStart, setTimeStart] = useState(hypothesis.timeRange?.start || '2025.09');
-  const [timeEnd, setTimeEnd] = useState(hypothesis.timeRange?.end || '2026.08');
-  const [popDef, setPopDef] = useState(hypothesis.populationDefinition || '60 岁及以上常住人口');
-  const [bedDef, setBedDef] = useState(hypothesis.bedDefinition || '民政核定在营可用养老床位数');
+  const [region, setRegion] = useState(hypothesis.region || '');
+  const [timeStart, setTimeStart] = useState(hypothesis.timeRange?.start || '');
+  const [timeEnd, setTimeEnd] = useState(hypothesis.timeRange?.end || '');
+  const [analysisFocus, setAnalysisFocus] = useState(hypothesis.analysisFocus.join('、'));
+  const [popDef, setPopDef] = useState(hypothesis.populationDefinition || '');
+  const [bedDef, setBedDef] = useState(hypothesis.bedDefinition || '');
 
   useEffect(() => {
-    setRegion(hypothesis.region || '上海市闵行区');
-    setTimeStart(hypothesis.timeRange?.start || '2025.09');
-    setTimeEnd(hypothesis.timeRange?.end || '2026.08');
-    setPopDef(hypothesis.populationDefinition || '60 岁及以上常住人口');
-    setBedDef(hypothesis.bedDefinition || '民政核定在营可用养老床位数');
+    setRegion(hypothesis.region || '');
+    setTimeStart(hypothesis.timeRange?.start || '');
+    setTimeEnd(hypothesis.timeRange?.end || '');
+    setAnalysisFocus(hypothesis.analysisFocus.join('、'));
+    setPopDef(hypothesis.populationDefinition || '');
+    setBedDef(hypothesis.bedDefinition || '');
   }, [hypothesis]);
 
   if (!isOpen) return null;
@@ -36,10 +40,11 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
   const handleSave = () => {
     onApplyChanges({
       region,
-      timeRange: {
+      timeRange: timeStart || timeEnd ? {
         start: timeStart,
         end: timeEnd
-      },
+      } : undefined,
+      analysisFocus: analysisFocus.split(/[、,]/).map((value) => value.trim()).filter(Boolean),
       populationDefinition: popDef,
       bedDefinition: bedDef
     });
@@ -109,6 +114,20 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold text-[#475569] flex items-center space-x-1">
               <Target className="w-3 h-3 text-[#2563EB]" />
+              <span>分析方向</span>
+            </label>
+            <input
+              type="text"
+              value={analysisFocus}
+              onChange={(e) => setAnalysisFocus(e.target.value)}
+              placeholder="尚未形成"
+              className="w-full px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs focus:outline-none focus:border-[#2563EB]"
+            />
+          </div>
+
+          {scenarioKey === 'minhang_bed_supply' && <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-[#475569] flex items-center space-x-1">
+              <Target className="w-3 h-3 text-[#2563EB]" />
               <span>老年人口统计口径定义</span>
             </label>
             <input
@@ -117,9 +136,9 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
               onChange={(e) => setPopDef(e.target.value)}
               className="w-full px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs focus:outline-none focus:border-[#2563EB]"
             />
-          </div>
+          </div>}
 
-          <div className="space-y-1.5">
+          {scenarioKey === 'minhang_bed_supply' && <div className="space-y-1.5">
             <label className="text-[11px] font-bold text-[#475569] flex items-center space-x-1">
               <Database className="w-3 h-3 text-[#2563EB]" />
               <span>养老床位供给口径定义</span>
@@ -130,7 +149,7 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
               onChange={(e) => setBedDef(e.target.value)}
               className="w-full px-3 py-1.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs focus:outline-none focus:border-[#2563EB]"
             />
-          </div>
+          </div>}
 
           {activeResourceName && (
             <div className="p-2.5 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] text-[11px] text-[#64748B]">
@@ -139,7 +158,7 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
           )}
 
           {/* Strict Conclusion Boundary Notice */}
-          <div className="p-3 bg-[#FFFBEB] rounded-xl border border-[#FDE68A] space-y-1 text-[#92400E]">
+          {scenarioKey === 'minhang_bed_supply' && <div className="p-3 bg-[#FFFBEB] rounded-xl border border-[#FDE68A] space-y-1 text-[#92400E]">
             <div className="text-[10px] font-bold flex items-center space-x-1 text-[#B45309]">
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>结论边界约束（不可变更）</span>
@@ -147,7 +166,7 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
             <p className="text-[11px] leading-relaxed">
               分析结论仅表达“床位供给水平相对全区加权平均偏低，建议进一步核查”；严禁直接表达为“供需不足”或“缺少养老资源”。
             </p>
-          </div>
+          </div>}
         </div>
 
         {/* Footer */}

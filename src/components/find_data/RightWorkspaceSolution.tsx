@@ -1,6 +1,6 @@
 import React from 'react';
-import { X, Layers, AlertCircle, ArrowRight, Database, ExternalLink, GitMerge, FileText } from 'lucide-react';
-import { FindDataTaskState, ResourceId } from './model/FindDataTask';
+import { X, Layers, AlertCircle, ArrowRight, ExternalLink, GitMerge } from 'lucide-react';
+import { FindDataTaskState, ResourceId, TaskActionCode } from './model/FindDataTask';
 import {
   selectSolutionGroups,
   selectSolutionCoverage,
@@ -14,7 +14,7 @@ interface RightWorkspaceSolutionProps {
   task: FindDataTaskState;
   mode?: 'recommended' | 'executable';
   onModeChange?: (mode: 'recommended' | 'executable') => void;
-  onAction?: (actionCode: string, payload?: Record<string, unknown>) => void;
+  onAction?: (actionCode: TaskActionCode, payload?: Record<string, unknown>) => void;
   onClose: () => void;
 }
 
@@ -314,7 +314,8 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
                     <div key={idx} className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-[11px] space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-[#1E293B]">
-                          {rel.sourceResourceId} ↔ {rel.targetResourceId}
+                          {selectResourceById(task, rel.sourceResourceId)?.name || '相关资源'} ↔{' '}
+                          {selectResourceById(task, rel.targetResourceId)?.name || '相关资源'}
                         </span>
                         <span className="text-[10px] px-1.5 py-0.2 bg-[#EFF6FF] text-[#2563EB] rounded font-medium">
                           {rel.relationType === 'CORRELATION' ? '已确认关联' : rel.relationType === 'ALTERNATIVE' ? '替代关系' : '辅助补充'}

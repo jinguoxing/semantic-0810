@@ -17,13 +17,17 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
   onSubmit,
   onSelectionChange
 }) => {
-  const [selectedIds, setSelectedIds] = useState<string[]>(question.selectedOptionIds || []);
+  const [selectedIds, setSelectedIds] = useState<string[]>(
+    question.resolution?.selectedOptionIds || []
+  );
   const [submitted, setSubmitted] = useState<boolean>(false);
 
-  const effectiveMax = maxSelections || (question.type === 'SINGLE' ? 1 : undefined);
+  const isResolved = question.resolution?.status === 'RESOLVED';
+  const isLocked = disabled || submitted || isResolved;
+  const effectiveMax = maxSelections || question.maxSelections || (question.type === 'SINGLE' ? 1 : undefined);
 
   const handleToggle = (optionId: string) => {
-    if (disabled || submitted) return;
+    if (isLocked) return;
     let next: string[];
     if (question.type === 'SINGLE') {
       next = [optionId];
@@ -42,7 +46,7 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
   };
 
   const handleSubmit = () => {
-    if (disabled || submitted || selectedIds.length === 0) return;
+    if (isLocked || selectedIds.length === 0) return;
     setSubmitted(true);
     onSubmit?.(question.id, selectedIds);
   };
@@ -68,13 +72,13 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
             <button
               key={opt.id}
               type="button"
-              disabled={disabled || submitted}
+              disabled={isLocked}
               onClick={() => handleToggle(opt.id)}
               className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between ${
                 isSelected
                   ? 'border-[#2563EB] bg-[#EFF6FF] text-[#1E3A8A]'
                   : 'border-[#E2E8F0] bg-white text-[#334155] hover:border-[#CBD5E1]'
-              } ${disabled || submitted ? 'opacity-80 cursor-default' : ''}`}
+              } ${isLocked ? 'opacity-80 cursor-default' : ''}`}
             >
               <div className="flex items-center space-x-2 truncate">
                 <div
@@ -101,18 +105,18 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
       <div className="flex justify-end pt-1">
         <button
           type="button"
-          disabled={disabled || submitted || selectedIds.length === 0}
+          disabled={isLocked || selectedIds.length === 0}
           onClick={handleSubmit}
           className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg flex items-center space-x-1.5 transition-all ${
-            submitted
+            isLocked
               ? 'bg-[#F1F5F9] text-[#94A3B8] border border-[#E2E8F0] cursor-default'
               : selectedIds.length === 0
               ? 'bg-[#F1F5F9] text-[#94A3B8] cursor-not-allowed'
               : 'bg-[#2563EB] text-white hover:bg-[#1D4ED8] shadow-sm cursor-pointer'
           }`}
         >
-          <span>{submitted ? '已确认' : '继续'}</span>
-          {!submitted && <ArrowRight className="w-3.5 h-3.5" />}
+          <span>{isResolved ? '已确认' : submitted ? '提交中' : '继续'}</span>
+          {!isLocked && <ArrowRight className="w-3.5 h-3.5" />}
         </button>
       </div>
     </div>
