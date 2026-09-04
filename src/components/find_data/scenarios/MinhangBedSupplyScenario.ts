@@ -61,6 +61,13 @@ function isBenchmarkQuestionId(questionId: string): boolean {
   return questionId === benchmarkQuestionIdPrefix || questionId.startsWith(`${benchmarkQuestionIdPrefix}_`);
 }
 
+function isOpenBenchmarkClarification(
+  block: ConversationBlock
+): block is Extract<ConversationBlock, { type: 'CLARIFICATION' }> {
+  return block.type === 'CLARIFICATION' &&
+    isBenchmarkQuestionId(block.question.id) && block.question.resolution?.status === 'OPEN';
+}
+
 function createBenchmarkQuestion(task: FindDataTaskState) {
   const previousBenchmarkCount = task.turns
     .flatMap((turn) => turn.blocks)
@@ -77,11 +84,28 @@ function createBenchmarkQuestion(task: FindDataTaskState) {
   };
 }
 
-function findOpenBenchmarkQuestion(task: FindDataTaskState) {
+function findOpenBenchmarkQuestions(task: FindDataTaskState) {
   return task.turns
     .flatMap((turn) => turn.blocks)
-    .find((block) => block.type === 'CLARIFICATION' &&
-      isBenchmarkQuestionId(block.question.id) && block.question.resolution?.status === 'OPEN');
+    .filter(isOpenBenchmarkClarification);
+}
+
+function findOpenBenchmarkQuestion(task: FindDataTaskState) {
+  return findOpenBenchmarkQuestions(task).at(0);
+}
+
+function findOpenBenchmarkQuestionIds(task: FindDataTaskState): string[] {
+  return findOpenBenchmarkQuestions(task).map((block) => block.question.id);
+}
+
+function staleOpenBenchmarkEvents(task: FindDataTaskState, reason: string): FindDataEvent[] {
+  const questionIds = findOpenBenchmarkQuestionIds(task);
+  return questionIds.length === 0
+    ? []
+    : [{
+        type: 'CLARIFICATION_STALE',
+        payload: { questionIds, staleAt: new Date().toISOString(), reason }
+      }];
 }
 
 type ServiceUseChangeMode = 'EXTEND' | 'REPLACE';
@@ -234,6 +258,16 @@ function selectedLabels(
     .filter((label): label is string => !!label);
 }
 
+const focusOptions: Record<string, string[]> = {
+  opt_pop_bed: ['老年人口规模与分布', '养老床位供给'],
+  opt_service: ['养老服务实际使用'],
+  opt_public_service: ['老年人公共服务诉求']
+};
+
+export function resolveFocusOptionIds(selectedOptionIds: string[]): string[] {
+  return selectedOptionIds.flatMap((optionId) => focusOptions[optionId] ?? []);
+}
+
 const benchmarkRules: Record<string, {
   rule: AskPlanCalculationSpec['benchmarkRule'];
   value?: string;
@@ -372,6 +406,7 @@ function buildServiceUseGoalResult(
     ? Array.from(new Set([...task.requirementHypothesis.analysisFocus, '养老服务实际使用']))
     : ['养老服务实际使用'];
   const prerequisiteEvents: FindDataEvent[] = [
+    ...staleOpenBenchmarkEvents(task, '需求或核心方案已变化，原比较基准需重新确认。'),
     { type: 'REQUIREMENT_UPDATED', payload: { hypothesis: { analysisFocus }, bumpRevision: true } },
     { type: 'ASK_PLAN_INVALIDATED', payload: { reason: '需求或口径已修改，原分析计划不再有效。' } },
     { type: 'COMPARISON_MODEL_CLEARED' },
@@ -424,6 +459,7 @@ function buildRequirementReevaluationResult(
   const requirementRevision = task.requirementRevision + 1;
   const nextHypothesis = { ...task.requirementHypothesis, ...patch };
   const prerequisite: FindDataEvent[] = [
+    ...staleOpenBenchmarkEvents(task, '需求或核心方案已变化，原比较基准需重新确认。'),
     { type: 'REQUIREMENT_UPDATED', payload: { hypothesis: patch, bumpRevision: true } },
     { type: 'ASK_PLAN_INVALIDATED', payload: { reason: '需求或口径已修改，原分析计划不再有效。' } },
     { type: 'COMPARISON_MODEL_CLEARED' },
@@ -618,6 +654,10 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       const blocks: ConversationBlock[] = [textBlock('该澄清决定已经提交，无需重复处理。')];
       return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
     }
+    if (existing?.type === 'CLARIFICATION' && isBenchmarkQuestionId(questionId) && existing.question.resolution?.status === 'STALE') {
+      const blocks: ConversationBlock[] = [textBlock('当前需求已经变化，该比较基准选择已失效，请基于最新方案重新进入分析。')];
+      return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
+    }
     const uniqueOptionIds = Array.from(new Set(selectedOptionIds));
     const hasValidCardinality = existing?.type === 'CLARIFICATION' && (
       existing.question.type === 'SINGLE'
@@ -670,26 +710,35 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       };
     }
 
-    const shouldApplyBroadGoalDefaults = questionId === focusQuestion.id &&
-      labels.includes('人口规模与养老床位供给') &&
-      !task.requirementHypothesis.populationDefinition &&
-      !task.requirementHypothesis.bedDefinition;
-    const defaultAssumptions = shouldApplyBroadGoalDefaults
-      ? Array.from(new Set([
-          ...task.requirementHypothesis.assumptions,
-          '当前按 60 岁及以上常住人口理解，可在任务上下文中修改。',
-          '当前按在营可用养老床位理解，可在任务上下文中修改。'
-        ]))
-      : task.requirementHypothesis.assumptions;
+    const normalizedFocus = questionId === focusQuestion.id
+      ? resolveFocusOptionIds(uniqueOptionIds)
+      : labels;
+    if (questionId === focusQuestion.id && normalizedFocus.length === 0) {
+      const blocks: ConversationBlock[] = [textBlock('请选择有效的澄清选项后再继续。')];
+      return { ...result, events: [assistantEvent(blocks, 'NEEDS_CLARIFICATION')], assistantBlocks: blocks };
+    }
+    const shouldApplyBroadGoalDefaults = questionId === focusQuestion.id && uniqueOptionIds.includes('opt_pop_bed');
+    const defaultHypothesis: Partial<RequirementHypothesis> = {};
+    const assumptions = new Set(task.requirementHypothesis.assumptions);
+    if (shouldApplyBroadGoalDefaults && !task.requirementHypothesis.populationDefinition) {
+      defaultHypothesis.populationDefinition = '60 岁及以上常住人口';
+      assumptions.add('当前按 60 岁及以上常住人口理解，可在任务上下文中修改。');
+    }
+    if (shouldApplyBroadGoalDefaults && !task.requirementHypothesis.bedDefinition) {
+      defaultHypothesis.bedDefinition = '民政核定且在营可用养老床位数';
+      assumptions.add('当前按在营可用养老床位理解，可在任务上下文中修改。');
+    }
+    const usesDefaultTimeRange = shouldApplyBroadGoalDefaults && !task.requirementHypothesis.timeRange;
+    const usesDefaultDimensions = shouldApplyBroadGoalDefaults && task.requirementHypothesis.dimensions.length === 0;
+    if (usesDefaultTimeRange) defaultHypothesis.timeRange = { start: '2025-09', end: '2026-08' };
+    if (usesDefaultDimensions) defaultHypothesis.dimensions = ['时间（月度）', '空间（街镇）'];
+    if (usesDefaultTimeRange || usesDefaultDimensions) {
+      assumptions.add('当前按核心资源共同覆盖的最近 12 个完整月，并按街镇和月份组织分析，可在任务上下文中修改。');
+    }
+    if (shouldApplyBroadGoalDefaults) defaultHypothesis.assumptions = Array.from(assumptions);
     const recomposed = buildRequirementReevaluationResult(task, {
-      analysisFocus: labels,
-      ...(shouldApplyBroadGoalDefaults
-        ? {
-            populationDefinition: '60 岁及以上常住人口',
-            bedDefinition: '民政核定且在营可用养老床位数',
-            assumptions: defaultAssumptions
-          }
-        : {})
+      analysisFocus: normalizedFocus,
+      ...defaultHypothesis
     });
     return {
       ...recomposed,

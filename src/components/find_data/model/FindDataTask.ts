@@ -61,6 +61,8 @@ export interface ClarificationResolution {
   selectedOptionIds: string[];
   resolvedAt?: string;
   resolvedAtRequirementRevision?: number;
+  staleAt?: string;
+  staleReason?: string;
 }
 
 export interface ClarificationQuestion {

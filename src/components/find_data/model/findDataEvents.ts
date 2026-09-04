@@ -121,6 +121,14 @@ export type FindDataEvent =
       };
     }
   | {
+      type: 'CLARIFICATION_STALE';
+      payload: {
+        questionIds: string[];
+        staleAt: string;
+        reason: string;
+      };
+    }
+  | {
       type: 'RESOURCE_SELECTED';
       payload: {
         resourceId: ResourceId;

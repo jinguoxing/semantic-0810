@@ -222,6 +222,54 @@ describe('scenario classification and turn handling', () => {
     expect(JSON.stringify(second.result.assistantBlocks)).toContain('当前比较基准尚未确认');
   });
 
+  it('marks an open benchmark stale when the requirement changes and creates a fresh one only for the revised core plan', async () => {
+    const initial = await submit(createEmptyTask(), '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。');
+    const benchmark = await submit(initial.task, '按当前方案分析');
+    const originalQuestion = benchmark.task.turns
+      .flatMap((turn) => turn.blocks)
+      .find((block) => block.type === 'CLARIFICATION' && block.question.id === 'q_minhang_benchmark');
+    expect(originalQuestion?.type === 'CLARIFICATION' && originalQuestion.question.resolution?.status).toBe('OPEN');
+
+    const replaced = await submit(benchmark.task, '改为只看养老服务实际使用');
+    expect(replaced.result.events.map((event) => event.type)).toEqual([
+      'CLARIFICATION_STALE', 'REQUIREMENT_UPDATED', 'ASK_PLAN_INVALIDATED', 'COMPARISON_MODEL_CLEARED',
+      'SOLUTION_EVALUATION_STARTED', 'SEARCH_STARTED', 'SEARCH_RESULTS_RECEIVED', 'ASSISTANT_TURN_RECEIVED'
+    ]);
+    const staleQuestion = replaced.task.turns
+      .flatMap((turn) => turn.blocks)
+      .find((block) => block.type === 'CLARIFICATION' && block.question.id === 'q_minhang_benchmark');
+    expect(staleQuestion?.type === 'CLARIFICATION' && staleQuestion.question.resolution).toMatchObject({
+      status: 'STALE', staleReason: '需求或核心方案已变化，原比较基准需重新确认。'
+    });
+    expect(replaced.task.turns.flatMap((turn) => turn.blocks).filter((block) =>
+      block.type === 'CLARIFICATION' && block.question.id.startsWith('q_minhang_benchmark') && block.question.resolution?.status === 'OPEN'
+    )).toHaveLength(0);
+    expect(replaced.task.dataSolution.items).toMatchObject([{ resourceId: 'r07', role: 'PARTIAL_MATCH' }]);
+    expect(replaced.task.dataSolution.gaps.map((gap) => gap.id)).toEqual(['gap_homecare_partial']);
+
+    const staleSubmission = await service.executeAction(replaced.task, {
+      actionCode: 'SUBMIT_CLARIFICATION', payload: { questionId: 'q_minhang_benchmark', selectedOptionIds: ['benchmark_weighted'] }
+    });
+    expect(staleSubmission.events.some((event) => event.type === 'ASK_PLAN_PREPARED')).toBe(false);
+    expect(JSON.stringify(staleSubmission.assistantBlocks)).toContain('该比较基准选择已失效');
+    const partialAnalysis = await submit(replaced.task, '按当前方案分析');
+    expect(JSON.stringify(partialAnalysis.result.assistantBlocks)).toContain('当前只有部分匹配资源');
+
+    const revised = await service.executeAction(benchmark.task, {
+      actionCode: 'REVISE_REQUIREMENT', payload: { hypothesisPatch: { bedDefinition: '养老床位核定数' } }
+    });
+    const revisedTask = apply(benchmark.task, revised.events);
+    const refreshed = await submit(revisedTask, '按当前方案分析');
+    const questions = refreshed.task.turns
+      .flatMap((turn) => turn.blocks)
+      .filter((block) => block.type === 'CLARIFICATION' && block.question.id.startsWith('q_minhang_benchmark'));
+    expect(questions.filter((block) => block.type === 'CLARIFICATION' && block.question.resolution?.status === 'STALE')).toHaveLength(1);
+    expect(questions.filter((block) => block.type === 'CLARIFICATION' && block.question.resolution?.status === 'OPEN')).toHaveLength(1);
+    const latestQuestion = questions.at(-1);
+    expect(latestQuestion?.type === 'CLARIFICATION' ? latestQuestion.question.id : undefined).not.toBe('q_minhang_benchmark');
+    expect(revisedTask.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+  });
+
   it('uses the institution resource only for optional drilldown', async () => {
     const browsed = await submit(createMinhangTask(), '解释床位由哪些机构提供');
     expect(browsed.task.searchResult?.candidateSnapshot.find((candidate) => candidate.resourceId === 'r06')?.proposedRole).toBe('OPTIONAL_DRILLDOWN');
@@ -245,24 +293,47 @@ describe('clarification decisions', () => {
     return (await submit(createEmptyTask(), '帮我看看闵行区老人养老情况。')).task;
   }
 
-  it('resolves history and stores business labels rather than option ids', async () => {
+  it('completes broad-path defaults and stores normalized domain focus', async () => {
     const task = await broadTask();
     const result = await service.executeAction(task, {
       actionCode: 'SUBMIT_CLARIFICATION', payload: { questionId: 'q_minhang_focus', selectedOptionIds: ['opt_pop_bed'] }
     });
     const next = apply(task, result.events);
-    expect(next.requirementHypothesis.analysisFocus).toEqual(['人口规模与养老床位供给']);
+    expect(next.requirementHypothesis.analysisFocus).toEqual(['老年人口规模与分布', '养老床位供给']);
     expect(next.requirementHypothesis.analysisFocus).not.toContain('opt_pop_bed');
     const clarification = next.turns.flatMap((turn) => turn.blocks).find((block) => block.type === 'CLARIFICATION');
     expect(clarification?.type === 'CLARIFICATION' && clarification.question.resolution?.status).toBe('RESOLVED');
     expect(next.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+    expect(next.requirementHypothesis.timeRange).toEqual({ start: '2025-09', end: '2026-08' });
+    expect(next.requirementHypothesis.dimensions).toEqual(['时间（月度）', '空间（街镇）']);
     expect(next.requirementHypothesis.populationDefinition).toBe('60 岁及以上常住人口');
     expect(next.requirementHypothesis.bedDefinition).toBe('民政核定且在营可用养老床位数');
     expect(next.requirementHypothesis.assumptions).toEqual(expect.arrayContaining([
       '当前按 60 岁及以上常住人口理解，可在任务上下文中修改。',
-      '当前按在营可用养老床位理解，可在任务上下文中修改。'
+      '当前按在营可用养老床位理解，可在任务上下文中修改。',
+      '当前按核心资源共同覆盖的最近 12 个完整月，并按街镇和月份组织分析，可在任务上下文中修改。'
     ]));
     expect(next.askPlan).toBeUndefined();
+  });
+
+  it('preserves normalized focus when service use is extended and the bed definition changes', async () => {
+    const broad = await broadTask();
+    const selected = apply(broad, (await service.executeAction(broad, {
+      actionCode: 'SUBMIT_CLARIFICATION', payload: { questionId: 'q_minhang_focus', selectedOptionIds: ['opt_pop_bed'] }
+    })).events);
+    const extended = await submit(selected, '再加入养老服务实际使用');
+    const revised = await service.executeAction(extended.task, {
+      actionCode: 'REVISE_REQUIREMENT', payload: { hypothesisPatch: { bedDefinition: '养老床位核定数' } }
+    });
+    const next = apply(extended.task, revised.events);
+    expect(next.requirementHypothesis.analysisFocus).toEqual([
+      '老年人口规模与分布',
+      '养老床位供给',
+      '养老服务实际使用'
+    ]);
+    expect(next.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+    expect(next.dataSolution.items.find((item) => item.resourceId === 'r07')).toMatchObject({ role: 'PARTIAL_MATCH' });
+    expect(next.dataSolution.gaps.map((gap) => gap.id)).toContain('gap_homecare_partial');
   });
 
   it('service-use branch creates only a partial match and a gap', async () => {

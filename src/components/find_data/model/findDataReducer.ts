@@ -1,4 +1,4 @@
-import { ConversationTurn, DataSolutionItem, FindDataTaskState, ResourceCandidate } from './FindDataTask';
+import { ClarificationQuestion, ConversationTurn, DataSolutionItem, FindDataTaskState, ResourceCandidate } from './FindDataTask';
 import { createFindDataTask } from './createFindDataTask';
 import { FindDataEvent } from './findDataEvents';
 
@@ -23,6 +23,24 @@ function mergeCandidateSnapshot(
     const candidate = candidates.get(resourceId);
     return candidate ? [candidate] : [];
   });
+}
+
+function mapClarificationQuestions(
+  state: FindDataTaskState,
+  mapQuestion: (question: ClarificationQuestion) => ClarificationQuestion
+): Pick<FindDataTaskState, 'turns' | 'requirementHypothesis'> {
+  return {
+    turns: state.turns.map((turn) => ({
+      ...turn,
+      blocks: turn.blocks.map((block) => block.type === 'CLARIFICATION'
+        ? { ...block, question: mapQuestion(block.question) }
+        : block)
+    })),
+    requirementHypothesis: {
+      ...state.requirementHypothesis,
+      unresolvedQuestions: state.requirementHypothesis.unresolvedQuestions.map(mapQuestion)
+    }
+  };
 }
 
 export function findDataReducer(state: FindDataTaskState, action: FindDataEvent): FindDataTaskState {
@@ -128,7 +146,7 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
       };
 
     case 'CLARIFICATION_RESOLVED': {
-      const resolveQuestion = (question: FindDataTaskState['requirementHypothesis']['unresolvedQuestions'][number]) =>
+      const resolveQuestion = (question: ClarificationQuestion) =>
         question.id !== action.payload.questionId ? question : {
           ...question,
           resolution: {
@@ -137,19 +155,31 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
             resolvedAt: action.payload.resolvedAt,
             resolvedAtRequirementRevision: action.payload.requirementRevision
           }
-        };
+      };
       return {
         ...state,
-        turns: state.turns.map((turn) => ({
-          ...turn,
-          blocks: turn.blocks.map((block) => block.type === 'CLARIFICATION'
-            ? { ...block, question: resolveQuestion(block.question) }
-            : block)
-        })),
-        requirementHypothesis: {
-          ...state.requirementHypothesis,
-          unresolvedQuestions: state.requirementHypothesis.unresolvedQuestions.map(resolveQuestion)
-        },
+        ...mapClarificationQuestions(state, resolveQuestion),
+        updatedAt: now
+      };
+    }
+
+    case 'CLARIFICATION_STALE': {
+      const questionIds = new Set(action.payload.questionIds);
+      const staleQuestion = (question: ClarificationQuestion) => {
+        if (!questionIds.has(question.id) || question.resolution?.status !== 'OPEN') return question;
+        return {
+          ...question,
+          resolution: {
+            ...question.resolution,
+            status: 'STALE' as const,
+            staleAt: action.payload.staleAt,
+            staleReason: action.payload.reason
+          }
+        };
+      };
+      return {
+        ...state,
+        ...mapClarificationQuestions(state, staleQuestion),
         updatedAt: now
       };
     }
