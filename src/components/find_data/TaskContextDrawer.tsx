@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, MapPin, Database, Target, AlertTriangle, Check } from 'lucide-react';
 import { RequirementHypothesis } from './model/FindDataTask';
+import { validateMonthRange } from './model/timeRangeUtils';
 
 interface TaskContextDrawerProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
   const [analysisFocus, setAnalysisFocus] = useState(hypothesis.analysisFocus.join('、'));
   const [popDef, setPopDef] = useState(hypothesis.populationDefinition || '');
   const [bedDef, setBedDef] = useState(hypothesis.bedDefinition || '');
+  const [validationError, setValidationError] = useState<string>();
 
   useEffect(() => {
     setRegion(hypothesis.region || '');
@@ -38,12 +40,16 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
   if (!isOpen) return null;
 
   const handleSave = () => {
+    const timeRange = timeStart || timeEnd ? { start: timeStart, end: timeEnd } : undefined;
+    const validation = validateMonthRange(timeRange);
+    if (!validation.valid) {
+      setValidationError(validation.reason);
+      return;
+    }
+    setValidationError(undefined);
     onApplyChanges({
       region,
-      timeRange: timeStart || timeEnd ? {
-        start: timeStart,
-        end: timeEnd
-      } : undefined,
+      timeRange,
       analysisFocus: analysisFocus.split(/[、,]/).map((value) => value.trim()).filter(Boolean),
       populationDefinition: popDef,
       bedDefinition: bedDef
@@ -60,6 +66,7 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
             <div className="w-2.5 h-2.5 rounded-full bg-[#2563EB]" />
             <h3 className="text-sm font-bold text-[#0F172A]">当前任务上下文与口径配置</h3>
           </div>
+          {validationError && <p role="alert" className="text-[11px] text-[#DC2626] -mt-2">{validationError}</p>}
           <button
             onClick={onClose}
             className="w-7 h-7 rounded-lg hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors cursor-pointer"

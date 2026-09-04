@@ -10,6 +10,7 @@ import {
   LocalStorageFindDataTaskStore,
   NoopFindDataTaskStore
 } from '../model/findDataStore';
+import { findDataReducer } from '../model/findDataReducer';
 import { createAskPlan, createEmptyTask, createMinhangTask } from './testUtils/findDataFactories';
 
 describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
@@ -86,6 +87,17 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
       requirementRevision: 3, searchRevision: 4, activeSurface: { type: 'SOLUTION' },
       turns: [{ turnId: 'u1' }], dataSolution: { gaps: [{ id: 'g1' }] }
     });
+  });
+
+  it('sanitizes an interrupted local operation and shows one recovery notice on hydrate', () => {
+    const store = new LocalStorageFindDataTaskStore();
+    store.save(createEmptyTask({ taskId: 'interrupted', status: 'SEARCHING', runtimeStatus: { active: true, message: '处理中' }, pendingOperation: { operationId: 'inflight', operationType: 'TURN', startedAt: '' } }));
+    const restored = store.load('interrupted')!;
+    expect(restored.pendingOperation).toBeUndefined();
+    expect(restored.status).toBe('WAITING_USER');
+    const hydrated = findDataReducer(createEmptyTask(), { type: 'TASK_HYDRATED', payload: { task: restored } });
+    expect(hydrated.turns.at(-1)?.blocks[0]).toMatchObject({ type: 'SYSTEM_NOTICE', message: expect.stringContaining('未完成操作已安全停止') });
+    expect(hydrated.metadata?.localRecoveryNotice).toBeUndefined();
   });
 
   it('uses backend persistence in HTTP mode and local metadata-minimal storage when disconnected', () => {

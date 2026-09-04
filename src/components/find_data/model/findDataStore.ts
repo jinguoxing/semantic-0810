@@ -19,6 +19,24 @@ export interface FindDataTaskStore {
 const STORAGE_PREFIX = 'semovix_find_data_task_';
 const CURRENT_TASK_KEY = 'semovix_find_data_current_task_id';
 
+/**
+ * Browser persistence is a recovery snapshot, not an operation journal. A
+ * reload must never revive a request that may already have completed on the
+ * service, because doing so invites a duplicate mutation.
+ */
+export function sanitizeTaskForLocalPersistence(task: FindDataTaskState): FindDataTaskState {
+  const interrupted = Boolean(task.pendingOperation || task.runtimeStatus?.active || ['UNDERSTANDING', 'SEARCHING', 'PREPARING_ASK'].includes(task.status));
+  const metadata = { ...(task.metadata ?? {}) };
+  if (interrupted) metadata.localRecoveryNotice = true;
+  return {
+    ...task,
+    status: interrupted ? 'WAITING_USER' : task.status,
+    pendingOperation: undefined,
+    runtimeStatus: { active: false, message: '' },
+    metadata
+  };
+}
+
 function parseStoredTask(raw: string): FindDataTaskState | null {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -72,7 +90,7 @@ export class LocalStorageFindDataTaskStore implements FindDataTaskStore {
       storeSchemaVersion: 1,
       taskSchemaVersion: 1,
       savedAt: new Date().toISOString(),
-      task
+      task: sanitizeTaskForLocalPersistence(task)
     };
     try {
       localStorage.setItem(`${STORAGE_PREFIX}${task.taskId}`, JSON.stringify(stored));

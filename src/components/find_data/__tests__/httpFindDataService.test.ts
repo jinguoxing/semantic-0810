@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HttpFindDataService } from '../services/HttpFindDataService';
 import { createEmptyTask } from './testUtils/findDataFactories';
+import { createAskPlan, createMinhangTask } from './testUtils/findDataFactories';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -44,5 +45,24 @@ describe('HTTP find-data task lifecycle', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/find-data/tasks/task_1/turns');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST' });
     expect(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)).toContain('operation_1');
+  });
+
+  it('sends only Ask plan identity, revisions, and idempotency data to the server', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true, executedAt: '', permissionSnapshot: {}, dataOrigin: 'LIVE_QUERY' })));
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new HttpFindDataService('/api/find-data');
+    const task = createMinhangTask({ askPlan: createAskPlan() });
+    await service.runAskPlan(task, { askPlanId: 'plan_test', expectedRequirementRevision: 1, expectedSearchRevision: 1, idempotencyKey: 'idem_1' }, 'operation_ask');
+    const call = (fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit]>)[0];
+    const body = JSON.parse(String(call?.[1].body));
+    expect(body).toEqual({ askPlanId: 'plan_test', expectedRequirementRevision: 1, expectedSearchRevision: 1, idempotencyKey: 'idem_1', operationId: 'operation_ask' });
+    expect(body.calculationSpec).toBeUndefined();
+  });
+
+  it('rejects an Ask response without server dataOrigin', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: true, executedAt: '', permissionSnapshot: {} }))));
+    const service = new HttpFindDataService('/api/find-data');
+    const task = createMinhangTask({ askPlan: createAskPlan() });
+    await expect(service.runAskPlan(task, { askPlanId: 'plan_test', expectedRequirementRevision: 1, expectedSearchRevision: 1, idempotencyKey: 'idem_1' })).rejects.toThrow('数据来源合同');
   });
 });

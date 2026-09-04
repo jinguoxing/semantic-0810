@@ -3,7 +3,7 @@ import {
   ResourceId,
   ConversationBlock,
   TaskAction,
-  AskPlan,
+  AskPlanRunRequest,
   AskRunResult,
   AvailabilityByAction,
   TaskStatus
@@ -66,7 +66,7 @@ export interface FindDataService {
 
   runAskPlan(
     task: FindDataTaskState,
-    askPlan: AskPlan,
+    request: AskPlanRunRequest,
     operationId?: string
   ): Promise<AskRunResult>;
 }

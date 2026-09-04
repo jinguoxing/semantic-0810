@@ -53,6 +53,7 @@ export function createAskPlan(overrides: Partial<AskPlan> = {}): AskPlan {
     permissionCheckState: 'NOT_CHECKED',
     permissionBaseline: { r01: 'ALLOWED', r04: 'ALLOWED' },
     requirementRevision: 1,
+    basedOnSearchRevision: 1,
     calculationSpec: {
       metricName: '测试指标',
       isOfficialMetric: false,
@@ -101,8 +102,8 @@ export function createEmptyTask(overrides: Partial<FindDataTaskState> = {}): Fin
 
 export function createMinhangTask(overrides: Partial<FindDataTaskState> = {}): FindDataTaskState {
   const resources = {
-    r01: createResource({ id: 'r01', name: '60 岁以上常住人口数', type: '正式指标' }),
-    r04: createResource({ id: 'r04', name: '在营可用养老床位数', type: '正式指标' })
+    r01: createResource({ id: 'r01', name: '60 岁以上常住人口数', type: '正式指标', availabilityPeriod: { start: '2023-01', end: '2026-08' }, analysisDimensions: ['street_town', 'month'], timeGrain: 'MONTH' }),
+    r04: createResource({ id: 'r04', name: '在营可用养老床位数', type: '正式指标', availabilityPeriod: { start: '2024-01', end: '2026-08' }, analysisDimensions: ['street_town', 'month'], timeGrain: 'MONTH' })
   };
   return createEmptyTask({
     status: 'READY',
@@ -124,7 +125,7 @@ export function createMinhangTask(overrides: Partial<FindDataTaskState> = {}): F
       basedOnRequirementRevision: 1,
       basedOnSearchRevision: 1,
       items: [createSolutionItem({ resourceId: 'r01' }), createSolutionItem({ resourceId: 'r04' })],
-      gaps: [], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], updatedAt: fixedNow
+      gaps: [], relationshipEvidence: [{ sourceResourceId: 'r04', targetResourceId: 'r01', relationType: 'ANALYTICAL_COMPATIBILITY', verificationStatus: 'SEMANTIC_ONLY', evidenceLevel: 'MEDIUM', description: '测试语义关联', joinKeys: ['street_town', 'month'], evidenceRefs: ['test'] }], coverageSummary: [], limitationSummary: [], updatedAt: fixedNow
     },
     searchResult: {
       query: '闵行养老床位供给', totalMatches: 2, candidateIds: ['r01', 'r04'], returnedCount: 2,

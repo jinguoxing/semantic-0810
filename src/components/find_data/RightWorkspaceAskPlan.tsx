@@ -45,7 +45,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
 
   if (!plan) {
     return (
-      <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200 select-none">
+      <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200">
         <div className="h-14 px-5 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-[#FAFAFA]">
           <div className="flex items-center space-x-2.5">
             <Calculator className="w-4 h-4 text-[#2563EB]" />
@@ -93,7 +93,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200 select-none">
+    <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200">
       {/* Top Header */}
       <div className="h-14 px-5 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-[#FAFAFA]">
         <div className="flex items-center space-x-2.5">

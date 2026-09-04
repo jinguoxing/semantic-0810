@@ -25,6 +25,9 @@ import {
 import { InteractionIntent } from '../policy/surfacePolicy';
 import { FindDataEngineResult } from '../services/FindDataService';
 import { FindDataScenario, createScenarioId, emptyScenarioResult } from './FindDataScenario';
+import { composeMinhangSolution } from './minhangSolutionComposer';
+import { selectAskHandoffReadiness } from '../model/findDataSelectors';
+import { resourceCoversRange, validateMonthRange } from '../model/timeRangeUtils';
 
 const focusQuestion = {
   id: 'q_minhang_focus',
@@ -69,9 +72,6 @@ const sufficientHypothesis: RequirementHypothesis = {
   unresolvedQuestions: []
 };
 
-const coreItems = MINHANG_DATA_SOLUTION.items.filter((item) => ['r01', 'r04'].includes(item.resourceId));
-const relationshipEvidence = MINHANG_DATA_SOLUTION.relationshipEvidence;
-
 function isSufficientInitialGoal(text: string): boolean {
   return /(过去\s*12\s*个月|过去一年|202\d|\d{4}[.\/-]\d{1,2})/.test(text) &&
     /(街镇|街道|镇)/.test(text) &&
@@ -100,6 +100,8 @@ function searchEvents(
     mode?: 'REPLACE' | 'MERGE';
     query?: string;
     coverageSummary?: string[];
+    relationshipEvidence?: FindDataTaskState['dataSolution']['relationshipEvidence'];
+    limitationSummary?: string[];
   }
 ): FindDataEvent[] {
   const searchRevision = task.searchRevision + 1;
@@ -114,7 +116,7 @@ function searchEvents(
     : [];
   const candidateFor = (resourceId: ResourceId) => {
     const resource = MINHANG_RESOURCES[resourceId];
-    const isCore = resourceId === 'r01' || resourceId === 'r04';
+    const isCore = resourceId === 'r01' || resourceId === 'r04' || resourceId === 'r05';
     return {
       resourceId,
       title: resource?.name ?? '相关资源',
@@ -159,11 +161,11 @@ function searchEvents(
           upsertItems: options.items,
           removeResourceIds: removedIds,
           gaps: options.gaps ?? (mode === 'REPLACE' ? [] : task.dataSolution.gaps),
-          ...(options.items.some((item) => item.resourceId === 'r01')
+          ...(options.relationshipEvidence
             ? {
-                relationshipEvidence,
+                relationshipEvidence: options.relationshipEvidence,
                 coverageSummary: options.coverageSummary ?? MINHANG_DATA_SOLUTION.coverageSummary,
-                limitationSummary: MINHANG_DATA_SOLUTION.limitationSummary
+                limitationSummary: options.limitationSummary ?? MINHANG_DATA_SOLUTION.limitationSummary
               }
             : mode === 'REPLACE'
             ? { relationshipEvidence: [], coverageSummary: [], limitationSummary: [] }
@@ -211,7 +213,7 @@ const benchmarkRules: Record<string, {
   }
 };
 
-function buildAskPlan(task: FindDataTaskState, requirementRevision: number, benchmarkOptionId?: string): AskPlan {
+function buildAskPlan(task: FindDataTaskState, benchmarkOptionId?: string): AskPlan {
   const benchmark = benchmarkOptionId
     ? benchmarkRules[benchmarkOptionId]
     : undefined;
@@ -225,11 +227,17 @@ function buildAskPlan(task: FindDataTaskState, requirementRevision: number, benc
       strictConclusionBoundary: benchmark?.boundary ?? task.askPlan?.calculationSpec.strictConclusionBoundary ?? MINHANG_ASK_PLAN.calculationSpec.strictConclusionBoundary
     },
     permissionCheckState: 'NOT_CHECKED',
+    coreResourceIds: task.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED').map((item) => item.resourceId),
     permissionBaseline: Object.fromEntries(
-      MINHANG_ASK_PLAN.coreResourceIds.map((id) => [id, task.resources[id]?.availabilityByAction.query ?? 'UNKNOWN'])
+      task.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED').map((item) => [item.resourceId, task.resources[item.resourceId]?.availabilityByAction.query ?? 'UNKNOWN'])
     ),
-    requirementRevision,
-    timeRange: task.requirementHypothesis.timeRange
+    requirementRevision: task.dataSolution.basedOnRequirementRevision,
+    basedOnSearchRevision: task.dataSolution.basedOnSearchRevision,
+    timeRange: task.requirementHypothesis.timeRange,
+    alignmentRequirement: {
+      requiredDimensions: ['street_town', 'month'], requiredTimeGrain: 'MONTH',
+      requiredRelationshipResourcePairs: task.dataSolution.items.filter((item) => item.role === 'CORE' && item.resourceId !== 'r01').map((item) => ({ sourceResourceId: item.resourceId, targetResourceId: 'r01' }))
+    }
   };
 }
 
@@ -273,21 +281,26 @@ function settledTaskStatus(task: FindDataTaskState): FindDataTaskState['status']
   return 'WAITING_USER';
 }
 
-function isCoverageSupported(timeRange: RequirementHypothesis['timeRange']): boolean {
-  if (!timeRange) return true;
-  const normalize = (value: string) => value.replace(/[^0-9]/g, '').slice(0, 6);
-  const start = normalize(timeRange.start);
-  const end = normalize(timeRange.end);
-  return start >= '202509' && end <= '202608';
-}
-
-function coverageForTimeRange(timeRange: RequirementHypothesis['timeRange']): string[] {
-  const coverage = MINHANG_DATA_SOLUTION.coverageSummary.filter((line) => !line.startsWith('时间覆盖：'));
-  if (!timeRange) return coverage;
-  return [
-    ...coverage,
-    `时间覆盖：已按 ${timeRange.start} — ${timeRange.end} 重新验证当前核心资源的月度覆盖。`
-  ];
+function buildCompositionSearchEvents(task: FindDataTaskState, hypothesis: RequirementHypothesis, requirementRevision: number, query?: string): FindDataEvent[] {
+  const composition = composeMinhangSolution(hypothesis, MINHANG_RESOURCES);
+  const rangeValidation = validateMonthRange(hypothesis.timeRange);
+  const coreResources = composition.items
+    .filter((item) => item.role === 'CORE')
+    .map((item) => MINHANG_RESOURCES[item.resourceId])
+    .filter((resource): resource is FindDataResource => !!resource);
+  const uncovered = hypothesis.timeRange ? coreResources.filter((resource) => !resourceCoversRange(resource, hypothesis.timeRange)) : [];
+  const timeGap: SolutionGap | undefined = !rangeValidation.valid
+    ? { id: 'gap_time_range', title: '时间范围无效', description: rangeValidation.reason!, impactLevel: 'HIGH', mitigation: '修正时间范围后重新评估。', status: 'OPEN' }
+    : uncovered.length > 0
+    ? { id: 'gap_time_coverage', title: '时间覆盖不足', description: `${uncovered.map((resource) => `${resource.name}仅覆盖到 ${resource.availabilityPeriod?.end}`).join('、')}，不能满足当前截止时间。`, impactLevel: 'HIGH', mitigation: '缩小时间范围或接入覆盖该期间的正式指标。', status: 'OPEN' }
+    : undefined;
+  const effective = timeGap
+    ? { ...composition, resourceIds: [], items: [], relationshipEvidence: [], gaps: [...composition.gaps, timeGap], readiness: 'GAP_ONLY' as const }
+    : composition;
+  return searchEvents(task, {
+    requirementRevision, resourceIds: effective.resourceIds, items: effective.items, gaps: effective.gaps, mode: 'REPLACE', query,
+    relationshipEvidence: effective.relationshipEvidence, coverageSummary: effective.coverageSummary, limitationSummary: effective.limitationSummary
+  });
 }
 
 function buildRequirementReevaluationResult(
@@ -325,40 +338,12 @@ function buildRequirementReevaluationResult(
     };
   }
 
-  if (!isCoverageSupported(nextHypothesis.timeRange)) {
-    const gap: SolutionGap = {
-      id: 'gap_time_coverage',
-      title: '时间覆盖不足',
-      description: '当前已登记资源的时间覆盖不能满足新的时间范围。',
-      impactLevel: 'HIGH',
-      mitigation: '缩小时间范围或接入覆盖该期间的正式指标。',
-      status: 'OPEN'
-    };
-    const blocks = [textBlock('已按新时间范围重新验证，当前已登记资源的时间覆盖不能满足新的时间范围。')];
-    return {
-      ...emptyScenarioResult(task.taskId),
-      events: [
-        ...prerequisite,
-        ...searchEvents(task, { requirementRevision, resourceIds: [], items: [], gaps: [gap], mode: 'REPLACE', query: '需求修改后重新检索' }),
-        assistantEvent(blocks, 'READY')
-      ],
-      assistantBlocks: blocks
-    };
-  }
-
   const blocks = [textBlock('正在按新口径重新评估；已更新候选资源、覆盖范围和关系证据。')];
   return {
     ...emptyScenarioResult(task.taskId),
     events: [
       ...prerequisite,
-      ...searchEvents(task, {
-        requirementRevision,
-        resourceIds: ['r01', 'r04'],
-        items: coreItems,
-        mode: 'REPLACE',
-        query: '需求修改后重新检索',
-        coverageSummary: coverageForTimeRange(nextHypothesis.timeRange)
-      }),
+      ...buildCompositionSearchEvents(task, nextHypothesis, requirementRevision, '需求修改后重新检索'),
       assistantEvent(blocks, 'READY')
     ],
     assistantBlocks: blocks
@@ -402,43 +387,36 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
         ];
         return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
       }
-      if (intent.kind === 'ANALYZE' && task.dataSolution.state === 'READY' && task.dataSolution.items.length > 0 && !task.askPlan) {
+      if (intent.kind === 'ANALYZE' && !task.askPlan) {
+        const readiness = selectAskHandoffReadiness(task);
+        if (!readiness.ready) {
+          const blocks: ConversationBlock[] = [
+            textBlock(readiness.message),
+            { type: 'ACTION_GROUP', id: createScenarioId('actions'), actions: [{ id: createScenarioId('solution'), label: '查看当前方案', actionCode: 'OPEN_SOLUTION', variant: 'weak' }] }
+          ];
+          return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
+        }
         const blocks: ConversationBlock[] = [{ type: 'CLARIFICATION', id: createScenarioId('clarification'), question: benchmarkQuestion }];
-        const hypothesis = {
-          ...task.requirementHypothesis,
-          unresolvedQuestions: [...task.requirementHypothesis.unresolvedQuestions, benchmarkQuestion]
-        };
         return {
           ...result,
-          events: [
-            { type: 'REQUIREMENT_UPDATED', payload: { hypothesis, bumpRevision: false } },
-            assistantEvent(blocks, 'WAITING_USER')
-          ],
+          events: [assistantEvent(blocks, 'WAITING_USER')],
           assistantBlocks: blocks
         };
       }
       if (text.includes('实际服务使用')) {
-        const requirementRevision = task.requirementRevision + 1;
-        return buildServiceUseResult(task, requirementRevision, [{
-          type: 'REQUIREMENT_UPDATED',
-          payload: {
-            hypothesis: {
-              analysisFocus: Array.from(new Set([...task.requirementHypothesis.analysisFocus, '养老服务实际使用']))
-            },
-            bumpRevision: true
-          }
-        }], 'MERGE', text);
+        return buildRequirementReevaluationResult(task, { analysisFocus: ['养老服务实际使用'] });
       }
-      if (intent.kind === 'RESOURCE_BROWSE' || /(查看明细|解释机构|浏览相关资源|人口明细)/.test(text)) {
-        const ids = text.includes('解释机构') ? ['r06'] : ['r02', 'r03'];
+      if (intent.kind === 'RESOURCE_BROWSE' || /(查看明细|解释机构|浏览相关资源|人口明细|民政相关资源|养老相关数据|养老资源|浏览民政数据)/.test(text)) {
+        const isInstitution = /(解释机构|养老机构|床位来源机构)/.test(text);
+        const isCivilAffairs = /(民政相关资源|养老相关数据|还有哪些养老资源|浏览民政数据)/.test(text);
+        const ids = isInstitution ? ['r06'] : isCivilAffairs ? ['r05', 'r06', 'r07'] : ['r02', 'r03'];
         const blocks: ConversationBlock[] = [
-          textBlock(`当前发现 ${ids.length} 项可选明细资源。基于过去 12 个月的目标，月度快照更适合。`),
-          { type: 'ACTION_GROUP', id: createScenarioId('actions'), actions: [
-            { id: createScenarioId('compare'), label: '比较 2 项资源', actionCode: 'OPEN_COMPARE', variant: 'weak' },
-            { id: createScenarioId('select'), label: '使用月度快照', actionCode: 'SELECT_RESOURCE', payload: { resourceId: 'r03' }, variant: 'primary' }
-          ] }
+          textBlock(isCivilAffairs ? `当前发现 ${ids.length} 项民政相关候选资源，尚未自动纳入正式方案。` : `当前发现 ${ids.length} 项可选明细资源。基于过去 12 个月的目标，月度快照更适合。`),
+          { type: 'ACTION_GROUP', id: createScenarioId('actions'), actions: ids.length >= 2
+            ? [{ id: createScenarioId('compare'), label: `比较 ${ids.length} 项资源`, actionCode: 'OPEN_COMPARE', variant: 'weak' }, ...(ids.includes('r03') ? [{ id: createScenarioId('select'), label: '使用月度快照', actionCode: 'SELECT_RESOURCE' as const, payload: { resourceId: 'r03' }, variant: 'primary' as const }] : [])]
+            : [{ id: createScenarioId('fields'), label: '查看机构元数据', actionCode: 'OPEN_FIELDS', payload: { resourceId: 'r06' }, variant: 'weak' }] }
         ];
-        const comparisonEvents = ids.includes('r02') && ids.includes('r03') ? createMinhangComparisonEvents() : [];
+        const comparisonEvents = ids.length >= 2 ? [{ type: 'COMPARISON_MODEL_SET' as const, payload: { comparisonModel: { resourceIds: ids, recommendedResourceId: ids.includes('r05') ? 'r05' : 'r03', rows: [] } } }] : [];
         return {
           ...result,
           events: [
@@ -466,12 +444,13 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
     }
 
     const requirementRevision = task.requirementRevision + 1;
+    const composition = composeMinhangSolution(sufficientHypothesis, MINHANG_RESOURCES);
     const blocks: ConversationBlock[] = [
-      textBlock('已按当前已登记的指标定义完成初次检索，形成包含老年人口与在营可用养老床位的最小数据方案。'),
+      textBlock('已按当前已登记的指标定义完成初次检索，形成最小数据方案。'),
       {
         type: 'RESULT_BRIEF', id: createScenarioId('result'), briefKind: 'SOLUTION_SUMMARY',
-        title: '已形成 2 项核心资源的最小数据方案',
-        candidates: coreItems.map((item) => {
+        title: `已形成 ${composition.items.length} 项核心资源的最小数据方案`,
+        candidates: composition.items.map((item) => {
           const resource = MINHANG_RESOURCES[item.resourceId];
           return { resourceId: resource.id, title: resource.name, typeBadge: resource.type, statusBadge: '可用于问数', description: resource.desc, granularity: resource.granularity };
         }),
@@ -482,7 +461,7 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       ...result,
       events: [
         { type: 'REQUIREMENT_UPDATED', payload: { hypothesis: sufficientHypothesis, bumpRevision: true } },
-        ...searchEvents(task, { requirementRevision, resourceIds: ['r01', 'r04'], items: coreItems, query: text }),
+        ...buildCompositionSearchEvents(task, sufficientHypothesis, requirementRevision, text),
         assistantEvent(blocks, 'READY')
       ],
       assistantBlocks: blocks
@@ -492,7 +471,9 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
   async handleAction(task: FindDataTaskState, action: TaskAction): Promise<FindDataEngineResult> {
     const result = emptyScenarioResult(task.taskId);
     if (action.actionCode === 'REGENERATE_ASK_PLAN') {
-      const askPlan = buildAskPlan(task, task.requirementRevision);
+      const readiness = selectAskHandoffReadiness(task);
+      if (!readiness.ready) return { ...result, events: [assistantEvent([textBlock(readiness.message)], settledTaskStatus(task))], assistantBlocks: [textBlock(readiness.message)] };
+      const askPlan = buildAskPlan(task);
       const blocks: ConversationBlock[] = [textBlock('已按当前需求与权限基线重新生成分析计划。')];
       return {
         ...result,
@@ -533,48 +514,25 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       return { ...result, events: [assistantEvent(blocks, nextStatus)], assistantBlocks: blocks };
     }
 
-    const requirementRevision = task.requirementRevision + 1;
-    const nextAnalysisFocus = questionId === benchmarkQuestion.id
-      ? Array.from(new Set([...task.requirementHypothesis.analysisFocus, ...labels]))
-      : labels;
-    const baseEvents: FindDataEvent[] = [
-      { type: 'CLARIFICATION_RESOLVED', payload: { questionId, selectedOptionIds: uniqueOptionIds, selectedOptionLabels: labels, requirementRevision, resolvedAt: new Date().toISOString() } },
-      { type: 'REQUIREMENT_UPDATED', payload: { hypothesis: { analysisFocus: nextAnalysisFocus }, bumpRevision: true } }
-    ];
-
     if (questionId === benchmarkQuestion.id) {
-      const askPlan = buildAskPlan(task, requirementRevision, uniqueOptionIds[0]);
+      const readiness = selectAskHandoffReadiness(task);
+      if (!readiness.ready) return { ...result, events: [assistantEvent([textBlock(readiness.message)], settledTaskStatus(task))], assistantBlocks: [textBlock(readiness.message)] };
+      const askPlan = buildAskPlan(task, uniqueOptionIds[0]);
       const blocks: ConversationBlock[] = [textBlock('比较基准已确认，分析计划已准备完成，请先执行权限重检。')];
       return {
         ...result,
-        events: [...baseEvents, { type: 'ASK_PLAN_PREPARED', payload: { askPlan } }, assistantEvent(blocks, 'WAITING_USER')],
+        events: [{ type: 'CLARIFICATION_RESOLVED', payload: { questionId, selectedOptionIds: uniqueOptionIds, selectedOptionLabels: labels, requirementRevision: task.requirementRevision, resolvedAt: new Date().toISOString() } }, { type: 'ASK_PLAN_PREPARED', payload: { askPlan } }, assistantEvent(blocks, 'WAITING_USER')],
         assistantBlocks: blocks
       };
     }
 
-    if (uniqueOptionIds.includes('opt_service')) {
-      return buildServiceUseResult(task, requirementRevision, baseEvents, 'REPLACE');
-    }
-
-    if (uniqueOptionIds.includes('opt_public_service')) {
-      const gap: SolutionGap = {
-        id: 'gap_public_service', title: '老年人公共服务诉求资源缺口',
-        description: '当前检索范围内尚未配置可用于该目标的正式资源。',
-        impactLevel: 'HIGH', mitigation: '扩展公共服务工单与热线诉求数据域。', status: 'OPEN'
-      };
-      const blocks: ConversationBlock[] = [textBlock('当前未检索到可用的老年人公共服务诉求资源，已登记为当前检索缺口。')];
-      return {
-        ...result,
-        events: [...baseEvents, ...searchEvents(task, { requirementRevision, resourceIds: [], items: [], gaps: [gap] }), assistantEvent(blocks, 'READY')],
-        assistantBlocks: blocks
-      };
-    }
-
-    const blocks: ConversationBlock[] = [textBlock('已按「人口规模与养老床位供给」形成最小数据方案，暂不生成分析计划。')];
+    const recomposed = buildRequirementReevaluationResult(task, { analysisFocus: labels });
     return {
-      ...result,
-      events: [...baseEvents, ...searchEvents(task, { requirementRevision, resourceIds: ['r01', 'r04'], items: coreItems }), assistantEvent(blocks, 'READY')],
-      assistantBlocks: blocks
+      ...recomposed,
+      events: [
+        { type: 'CLARIFICATION_RESOLVED', payload: { questionId, selectedOptionIds: uniqueOptionIds, selectedOptionLabels: labels, requirementRevision: task.requirementRevision + 1, resolvedAt: new Date().toISOString() } },
+        ...recomposed.events
+      ]
     };
   }
 }

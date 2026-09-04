@@ -8,7 +8,7 @@ import {
   FindDataTaskState,
   ResourceId,
   TaskAction,
-  AskPlan,
+  AskPlanRunRequest,
   AskRunResult
 } from '../model/FindDataTask';
 
@@ -104,24 +104,24 @@ export class HttpFindDataService implements FindDataService {
 
   async runAskPlan(
     task: FindDataTaskState,
-    askPlan: AskPlan,
+    request: AskPlanRunRequest,
     operationId?: string
   ): Promise<AskRunResult> {
-    // Contract: this endpoint must recheck permissions and start execution in the
-    // same backend transaction/workflow entry. A client-side precheck is advisory only.
+    // Server authority contract: resolve askPlanId server-side, then validate task
+    // ownership, revisions, permissions, relationship/dimension/time alignment and
+    // execute. The browser must never transmit a mutable formula or resource plan.
     const resp = await fetch(`${this.apiBase}/tasks/${task.taskId}/ask-plan/run`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ askPlan, operationId })
+      body: JSON.stringify({ ...request, operationId })
     });
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
     }
     const result = await resp.json();
-    return {
-      ...result,
-      dataOrigin: 'LIVE_QUERY',
-      operationId
-    };
+    if (result?.dataOrigin !== 'LIVE_QUERY' && result?.dataOrigin !== 'MOCK_FIXTURE') {
+      throw new Error('找数据后端返回了无效的数据来源合同。');
+    }
+    return { ...result, operationId };
   }
 }

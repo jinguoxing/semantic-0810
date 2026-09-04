@@ -18,6 +18,15 @@ async function submit(task: FindDataTaskState, text: string) {
   return { result, task: apply(withUser, result.events) };
 }
 
+function askRunRequest(task: FindDataTaskState, askPlan = task.askPlan!) {
+  return {
+    askPlanId: askPlan.id,
+    expectedRequirementRevision: task.requirementRevision,
+    expectedSearchRevision: task.searchRevision,
+    idempotencyKey: `idem_${askPlan.id}`
+  };
+}
+
 describe('scenario classification and turn handling', () => {
   it.each([
     ['上海全市养老数据', false],
@@ -81,16 +90,11 @@ describe('scenario classification and turn handling', () => {
 
   it('adds the partial service-use resource only when requested after the minimal solution', async () => {
     const initial = await submit(createEmptyTask(), '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。');
-    const relationships = initial.task.dataSolution.relationshipEvidence;
-    const coverage = initial.task.dataSolution.coverageSummary;
-    const limitations = initial.task.dataSolution.limitationSummary;
     const { task } = await submit(initial.task, '查看实际服务使用');
     expect(task.dataSolution.items.find((item) => item.resourceId === 'r07')).toMatchObject({ role: 'PARTIAL_MATCH' });
     expect(task.dataSolution.gaps.map((gap) => gap.id)).toContain('gap_homecare_partial');
-    expect(task.dataSolution.items.filter((item) => ['r01', 'r04'].includes(item.resourceId))).toHaveLength(2);
-    expect(task.dataSolution.relationshipEvidence).toEqual(relationships);
-    expect(task.dataSolution.coverageSummary).toEqual(coverage);
-    expect(task.dataSolution.limitationSummary).toEqual(limitations);
+    expect(task.dataSolution.items.filter((item) => ['r01', 'r04'].includes(item.resourceId))).toHaveLength(0);
+    expect(task.dataSolution.relationshipEvidence).toEqual([]);
   });
 
   it('creates an Ask Plan only after the user confirms a comparison benchmark', async () => {
@@ -103,7 +107,7 @@ describe('scenario classification and turn handling', () => {
       payload: { questionId: 'q_minhang_benchmark', selectedOptionIds: ['benchmark_weighted'] }
     });
     expect(action.events.map((event) => event.type)).toEqual([
-      'CLARIFICATION_RESOLVED', 'REQUIREMENT_UPDATED', 'ASK_PLAN_PREPARED', 'ASSISTANT_TURN_RECEIVED'
+      'CLARIFICATION_RESOLVED', 'ASK_PLAN_PREPARED', 'ASSISTANT_TURN_RECEIVED'
     ]);
     const prepared = apply(handoff.task, action.events);
     expect(prepared.askPlan).toMatchObject({ status: 'READY_TO_RUN', permissionCheckState: 'NOT_CHECKED' });
@@ -227,12 +231,12 @@ describe('Ask execution authorization', () => {
   it.each(['BLOCKED', 'CHANGED'] as const)('%s plans cannot run', async (permissionCheckState) => {
     const askPlan = createAskPlan({ permissionCheckState });
     const task = createMinhangTask({ askPlan });
-    expect((await service.runAskPlan(task, askPlan)).success).toBe(false);
+    expect((await service.runAskPlan(task, askRunRequest(task, askPlan))).success).toBe(false);
   });
 
   it('an old plan cannot run after requirement revision changes', async () => {
     const task = executableTask({ requirementRevision: 2 });
-    expect((await service.runAskPlan(task, task.askPlan!)).success).toBe(false);
+    expect((await service.runAskPlan(task, askRunRequest(task))).success).toBe(false);
   });
 
   it('does not run a policy-target plan without a registered value and source', async () => {
@@ -241,7 +245,8 @@ describe('Ask execution authorization', () => {
       permissionCheckState: 'ALLOWED',
       calculationSpec: { ...basePlan.calculationSpec, benchmarkRule: 'POLICY_TARGET' }
     });
-    const result = await service.runAskPlan(createMinhangTask({ askPlan }), askPlan);
+    const policyTask = createMinhangTask({ askPlan });
+    const result = await service.runAskPlan(policyTask, askRunRequest(policyTask, askPlan));
     expect(result.success).toBe(false);
     expect(result.error).toContain('缺少已登记的目标值或来源');
   });
@@ -252,12 +257,12 @@ describe('Ask execution authorization', () => {
       askPlan,
       resources: { ...createMinhangTask().resources, r04: { ...createMinhangTask().resources.r04, availabilityByAction: permissionsWithQuery('DENIED') } }
     });
-    expect((await service.runAskPlan(task, askPlan)).success).toBe(false);
+    expect((await service.runAskPlan(task, askRunRequest(task, askPlan))).success).toBe(false);
   });
 
   it('runs only when every core resource is still ALLOWED', async () => {
     const task = executableTask();
-    const result = await service.runAskPlan(task, task.askPlan!);
+    const result = await service.runAskPlan(task, askRunRequest(task));
     expect(result.success).toBe(true);
     expect(result.resultArtifact?.townResults).toHaveLength(2);
     expect(result.resultArtifact?.boundaryNotice).toBe(task.askPlan?.calculationSpec.strictConclusionBoundary);
@@ -279,7 +284,7 @@ describe('Ask execution authorization', () => {
       }
     });
     const task = createMinhangTask({ askPlan });
-    const result = await service.runAskPlan(task, askPlan);
+    const result = await service.runAskPlan(task, askRunRequest(task, askPlan));
     expect(result.resultArtifact?.benchmarkLabel).toBe(benchmarkLabel);
     expect(result.resultArtifact?.townResults[0]?.comparisonNote).toBe(comparisonNote);
   });

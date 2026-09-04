@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Check, ArrowRight, FileText, Info } from 'lucide-react';
 import { FindDataResource, ResourceComparisonRow, ResourceId } from './model/FindDataTask';
 
@@ -6,6 +6,7 @@ interface RightWorkspaceCompareProps {
   resources: FindDataResource[];
   comparisonRows?: ResourceComparisonRow[];
   recommendationConclusion?: string;
+  recommendedResourceId?: ResourceId;
   selectedResourceId?: ResourceId;
   onConfirmSelection: (resourceId: ResourceId) => void;
   onViewFields: (resourceId: ResourceId) => void;
@@ -16,6 +17,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
   resources,
   comparisonRows = [],
   recommendationConclusion,
+  recommendedResourceId,
   selectedResourceId,
   onConfirmSelection,
   onViewFields,
@@ -24,12 +26,16 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
   const resA = resources[0];
   const resB = resources[1];
 
-  const defaultSelectedId = selectedResourceId || resB?.id || resA?.id;
+  const defaultSelectedId = selectedResourceId || recommendedResourceId || resA?.id;
   const [selectedId, setSelectedId] = useState<ResourceId | undefined>(defaultSelectedId);
+
+  useEffect(() => {
+    setSelectedId(selectedResourceId || recommendedResourceId || resources[0]?.id);
+  }, [selectedResourceId, recommendedResourceId, resources]);
 
   if (!resA || !resB) {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-white p-6 text-xs text-[#64748B] select-none space-y-2">
+      <div className="w-full h-full flex flex-col items-center justify-center bg-white p-6 text-xs text-[#64748B] space-y-2">
         <FileText className="w-10 h-10 text-[#CBD5E1]" />
         <span className="font-semibold text-sm text-[#0F172A]">暂无可比对的资源项</span>
         <p className="text-center text-[#64748B] max-w-xs">
@@ -86,7 +92,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
         ];
 
   return (
-    <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200 select-none">
+    <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200">
       {/* Top Header */}
       <div className="h-14 px-5 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-[#FAFAFA]">
         <div className="flex items-center space-x-2.5">

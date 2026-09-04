@@ -460,7 +460,12 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     dispatchTracked({ type: 'ASK_RUN_STARTED' });
     let runResult: AskRunResult;
     try {
-      runResult = await service.runAskPlan(taskAtStart, taskAtStart.askPlan, operationId);
+      runResult = await service.runAskPlan(taskAtStart, {
+        askPlanId: taskAtStart.askPlan.id,
+        expectedRequirementRevision: taskAtStart.requirementRevision,
+        expectedSearchRevision: taskAtStart.searchRevision,
+        idempotencyKey: operationId
+      }, operationId);
     } catch (error: unknown) {
       runResult = {
         operationId,
@@ -850,6 +855,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                               <div key={block.id} className="w-full">
                                 <ResultBriefBlock
                                   block={block}
+                                  task={task}
                                   onActionClick={(code, p) => handleAction(code, p)}
                                 />
                               </div>
@@ -860,6 +866,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                               <div key={block.id} className="w-full">
                                 <ActionGroupBlock
                                   actions={block.actions}
+                                  task={task}
                                   onActionClick={(code, p) => handleAction(code, p)}
                                 />
                               </div>
@@ -959,6 +966,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               resources={(task.activeSurface.resourceIds ?? []).map((id) => task.resources[id]).filter(Boolean)}
               comparisonRows={task.comparisonModel?.rows ?? []}
               recommendationConclusion={task.comparisonModel?.recommendationSummary}
+              recommendedResourceId={task.comparisonModel?.recommendedResourceId}
               selectedResourceId={task.activeResourceId}
               onConfirmSelection={(resId) => {
                 void handleAction('SELECT_RESOURCE', { resourceId: resId });

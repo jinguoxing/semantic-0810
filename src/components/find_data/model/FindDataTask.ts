@@ -43,6 +43,9 @@ export interface FindDataResource {
   desc: string;
   roleNote?: string;
   availabilityByAction: AvailabilityByAction;
+  availabilityPeriod?: { start: string; end: string };
+  analysisDimensions?: string[];
+  timeGrain?: 'DAY' | 'MONTH' | 'QUARTER' | 'YEAR' | 'CURRENT';
   fields?: FieldMetadata[];
 }
 
@@ -228,6 +231,11 @@ export interface AskRunResult {
   };
   permissionSnapshot: Record<ResourceId, AvailabilityByAction>;
   error?: string;
+  alignmentValidation?: {
+    status: 'VALIDATED' | 'INSUFFICIENT_METADATA' | 'RELATIONSHIP_CONFLICT' | 'TIME_NOT_ALIGNED' | 'GRAIN_NOT_ALIGNED';
+    scope?: 'CURRENT_ANALYSIS_ONLY';
+    details: string[];
+  };
 }
 
 export type PermissionCheckState =
@@ -249,11 +257,26 @@ export interface AskPlan {
   permissionCheckedAt?: string;
   permissionRevision?: number;
   requirementRevision?: number;
+  basedOnSearchRevision?: number;
   timeRange?: {
     start: string;
     end: string;
   };
   lastRunResult?: AskRunResult;
+  alignmentRequirement?: AskAlignmentRequirement;
+}
+
+export interface AskAlignmentRequirement {
+  requiredDimensions: string[];
+  requiredTimeGrain: FindDataResource['timeGrain'];
+  requiredRelationshipResourcePairs: Array<{ sourceResourceId: ResourceId; targetResourceId: ResourceId }>;
+}
+
+export interface AskPlanRunRequest {
+  askPlanId: string;
+  expectedRequirementRevision: number;
+  expectedSearchRevision: number;
+  idempotencyKey: string;
 }
 
 // Conversation Blocks
@@ -383,7 +406,7 @@ export type TaskStatus =
 export interface PermissionRequestRef {
   requestId: string;
   resourceIds: ResourceId[];
-  actionType: 'query' | 'export' | 'preview';
+  actionType: 'query' | 'export' | 'preview' | 'viewMetadata';
   status: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
   submittedAt: string;
 }

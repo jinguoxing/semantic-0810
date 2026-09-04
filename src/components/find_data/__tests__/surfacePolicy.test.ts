@@ -37,10 +37,10 @@ describe('surface policy and structured natural-language intent', () => {
     expect(command.blockedReason).toContain('没有选定资源');
   });
 
-  it('OPEN_COMPARE uses the candidate pool when no dedicated comparison model exists', () => {
+  it('OPEN_COMPARE requires a dedicated comparison model or explicit action payload', () => {
     const task = createMinhangTask();
     expect(evaluateSurfacePolicy(resolveInteractionIntent('', task), 'OPEN_COMPARE', task.activeSurface, task)).toMatchObject({
-      action: 'OPEN', surface: 'COMPARE', resourceIds: ['r01', 'r04']
+      action: 'NO_CHANGE'
     });
   });
 

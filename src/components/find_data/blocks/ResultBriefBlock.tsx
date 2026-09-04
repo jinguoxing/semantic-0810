@@ -1,17 +1,21 @@
 import React from 'react';
 import { ChevronRight, ExternalLink } from 'lucide-react';
-import { ResultBriefBlock as ResultBriefBlockType, TaskActionCode } from '../model/FindDataTask';
+import { FindDataTaskState, ResultBriefBlock as ResultBriefBlockType, TaskActionCode } from '../model/FindDataTask';
+import { canExecuteTaskAction } from '../model/findDataSelectors';
 
 interface ResultBriefBlockProps {
   block: ResultBriefBlockType;
+  task?: FindDataTaskState;
   onActionClick?: (actionCode: TaskActionCode, payload?: Record<string, unknown>) => void;
 }
 
 export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
   block,
+  task,
   onActionClick
 }) => {
   const { title, candidates, keyPoints, primaryAction, secondaryAction, textLinkAction } = block;
+  const actionEnabled = (action?: { actionCode: TaskActionCode; payload?: Record<string, unknown> }) => !task || !action || canExecuteTaskAction(task, action.actionCode, action.payload);
 
   return (
     <div className="pt-1 text-xs space-y-2 select-none w-full">
@@ -67,8 +71,9 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
             {primaryAction && (
               <button
                 type="button"
+                disabled={!actionEnabled(primaryAction)}
                 onClick={() => onActionClick?.(primaryAction.actionCode, primaryAction.payload)}
-                className="px-2.5 py-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-medium rounded-lg transition-colors cursor-pointer flex items-center space-x-1 text-xs"
+                className={`px-2.5 py-1 font-medium rounded-lg transition-colors flex items-center space-x-1 text-xs ${actionEnabled(primaryAction) ? 'bg-[#2563EB] hover:bg-[#1D4ED8] text-white cursor-pointer' : 'bg-[#F1F5F9] text-[#94A3B8] cursor-not-allowed'}`}
               >
                 <span>{primaryAction.label}</span>
                 <ChevronRight className="w-3 h-3" />
@@ -78,8 +83,9 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
             {secondaryAction && (
               <button
                 type="button"
+                disabled={!actionEnabled(secondaryAction)}
                 onClick={() => onActionClick?.(secondaryAction.actionCode, secondaryAction.payload)}
-                className="px-2.5 py-1 bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#334155] border border-[#E2E8F0] font-medium rounded-lg transition-colors cursor-pointer text-xs"
+                className={`px-2.5 py-1 border border-[#E2E8F0] font-medium rounded-lg transition-colors text-xs ${actionEnabled(secondaryAction) ? 'bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#334155] cursor-pointer' : 'bg-[#F1F5F9] text-[#94A3B8] cursor-not-allowed'}`}
               >
                 {secondaryAction.label}
               </button>
@@ -89,8 +95,9 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
           {textLinkAction && (
             <button
               type="button"
+              disabled={!actionEnabled(textLinkAction)}
               onClick={() => onActionClick?.(textLinkAction.actionCode, textLinkAction.payload)}
-              className="text-[11px] text-[#2563EB] hover:underline cursor-pointer flex items-center space-x-0.5 ml-auto"
+              className={`text-[11px] flex items-center space-x-0.5 ml-auto ${actionEnabled(textLinkAction) ? 'text-[#2563EB] hover:underline cursor-pointer' : 'text-[#94A3B8] cursor-not-allowed'}`}
             >
               <span>{textLinkAction.label}</span>
               <ExternalLink className="w-3 h-3" />

@@ -10,6 +10,7 @@
     "clean": "rm -rf dist server.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:smoke": "VITE_FIND_DATA_MODE=mock playwright test e2e/find-data-rc1.spec.ts && VITE_FIND_DATA_MODE=http VITE_FIND_DATA_API_BASE=/api/find-data playwright test e2e/find-data-rc1-http.spec.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "@playwright/test": "^1.57.0",
     "esbuild": "^0.25.0",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.14",

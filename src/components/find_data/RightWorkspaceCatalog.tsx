@@ -26,7 +26,7 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
   const [selectedId, setSelectedId] = useState<ResourceId | undefined>();
 
   return (
-    <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200 select-none">
+    <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200">
       {/* Top Header */}
       <div className="h-14 px-5 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-[#FAFAFA]">
         <div className="flex items-center space-x-2.5">
@@ -81,6 +81,9 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
               {catalogResources.map(({ candidate, resource }) => {
                 const isSelected = selectedId === resource.id;
                 const isAllowed = resource.availabilityByAction.query === 'ALLOWED';
+                const metadataPermission = resource.availabilityByAction.viewMetadata;
+                const queryDecision = resource.availabilityByAction.query;
+                const queryLabel = queryDecision === 'ALLOWED' ? '可直接使用' : queryDecision === 'REQUESTABLE' ? '查询需申请' : queryDecision === 'DENIED' ? '查询不可用' : '查询待确认';
                 const solutionStatus = selectCandidateSolutionStatus(task, resource.id);
                 const isInSolution = solutionStatus === '已加入方案';
 
@@ -112,10 +115,12 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
                           className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
                             isAllowed
                               ? 'bg-[#F0FDF4] text-[#16A34A] border-[#DCFCE7]'
+                              : queryDecision === 'DENIED'
+                              ? 'bg-[#FEF2F2] text-[#DC2626] border-[#FECACA]'
                               : 'bg-[#FFF7ED] text-[#EA580C] border-[#FFEDD5]'
                           }`}
                         >
-                          {isAllowed ? '可直接使用' : '需申请'}
+                          {queryLabel}
                         </span>
                       </div>
                     </div>
@@ -130,15 +135,26 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
                     <div className="pt-2 border-t border-[#F1F5F9] flex items-center justify-between text-xs">
                       <button
                         type="button"
+                        disabled={metadataPermission !== 'ALLOWED'}
                         onClick={(e) => {
                           e.stopPropagation();
-                          onViewFields(resource.id);
+                          if (metadataPermission === 'ALLOWED') onViewFields(resource.id);
                         }}
-                        className="text-[#2563EB] hover:underline flex items-center space-x-0.5"
+                        className={metadataPermission === 'ALLOWED' ? 'text-[#2563EB] hover:underline flex items-center space-x-0.5 cursor-pointer' : 'text-[#94A3B8] flex items-center space-x-0.5 cursor-not-allowed'}
                       >
-                        <span>检视元数据</span>
+                        <span>{metadataPermission === 'ALLOWED' ? '检视元数据' : metadataPermission === 'REQUESTABLE' ? '元数据需申请' : '元数据不可查看'}</span>
                         <ExternalLink className="w-3 h-3" />
                       </button>
+
+                      {metadataPermission === 'REQUESTABLE' && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onAction?.('CREATE_PERMISSION_REQUEST', { resourceIds: [resource.id], actionType: 'viewMetadata' }); }}
+                          className="text-[#2563EB] hover:underline cursor-pointer"
+                        >
+                          申请查看
+                        </button>
+                      )}
 
                       <button
                         type="button"

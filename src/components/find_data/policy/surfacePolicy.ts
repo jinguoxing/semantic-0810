@@ -1,4 +1,5 @@
 import { FindDataTaskState, ResourceId, SurfaceState, SurfaceType, TaskActionCode } from '../model/FindDataTask';
+import { selectAskHandoffReadiness } from '../model/findDataSelectors';
 
 export interface InteractionIntentResult {
   kind: 'QUESTION' | 'OPEN_SURFACE' | 'TASK_ACTION' | 'RESOURCE_BROWSE' | 'ANALYZE' | 'CLARIFICATION_RESPONSE';
@@ -73,17 +74,26 @@ function openSurface(currentSurface: SurfaceState | undefined, surface: SurfaceT
 
 function fieldsCommand(task: FindDataTaskState | undefined, currentSurface: SurfaceState | undefined, openedBy: 'USER_EXPLICIT' | 'ACTION_CLICK', resourceId?: ResourceId): SurfaceCommand {
   const targetId = resourceId ?? task?.activeResourceId;
-  if (!targetId || task?.resources[targetId]?.availabilityByAction.discover !== 'ALLOWED') {
+  const resource = targetId ? task?.resources[targetId] : undefined;
+  if (!targetId || resource?.availabilityByAction.discover !== 'ALLOWED') {
     return { action: 'NO_CHANGE', blockedReason: '当前还没有选定资源，请先从候选结果中选择一个资源。' };
+  }
+  if (resource.availabilityByAction.viewMetadata !== 'ALLOWED') {
+    const message = resource.availabilityByAction.viewMetadata === 'REQUESTABLE'
+      ? '当前资源的字段元数据需要申请查看权限。'
+      : resource.availabilityByAction.viewMetadata === 'DENIED'
+      ? '当前没有权限查看该资源的字段元数据。'
+      : '当前资源的元数据权限状态尚未确认。';
+    return { action: 'NO_CHANGE', blockedReason: message };
   }
   return openSurface(currentSurface, 'FIELDS', openedBy, [targetId]);
 }
 
 function compareCommand(task: FindDataTaskState | undefined, currentSurface: SurfaceState | undefined, openedBy: 'USER_EXPLICIT' | 'ACTION_CLICK', resourceIds?: ResourceId[]): SurfaceCommand {
-  const ids = resourceIds ?? task?.comparisonModel?.resourceIds ?? task?.searchResult?.candidateIds ?? [];
+  const ids = resourceIds ?? task?.comparisonModel?.resourceIds ?? [];
   const validIds = ids.filter((id) => task?.resources[id]?.availabilityByAction.discover === 'ALLOWED');
   if (validIds.length < 2) {
-    return { action: 'NO_CHANGE', blockedReason: '当前至少需要 2 项已明确选定的可比资源才能展开对比。' };
+    return { action: 'NO_CHANGE', blockedReason: '当前还没有形成明确的可比候选组。' };
   }
   return openSurface(currentSurface, 'COMPARE', openedBy, validIds);
 }
@@ -97,6 +107,8 @@ function solutionCommand(task: FindDataTaskState | undefined, currentSurface: Su
 
 function askPlanCommand(task: FindDataTaskState | undefined, currentSurface: SurfaceState | undefined, openedBy: 'USER_EXPLICIT' | 'ACTION_CLICK'): SurfaceCommand {
   if (!task?.askPlan) return { action: 'NO_CHANGE', blockedReason: '当前尚未形成可执行的分析计划。' };
+  const readiness = selectAskHandoffReadiness(task);
+  if (!readiness.ready) return { action: 'NO_CHANGE', blockedReason: readiness.message };
   return openSurface(currentSurface, 'ASK_PLAN', openedBy);
 }
 

@@ -7,8 +7,81 @@ import {
   FieldMetadata,
   AvailabilityByAction,
   ResourceCandidate,
-  ExecutionAssessment
+  ExecutionAssessment,
+  AskPlan
 } from './FindDataTask';
+import { getResourceRangeIntersection, resourceCoversRange } from './timeRangeUtils';
+
+export type AskHandoffReadinessCode = 'READY' | 'SOLUTION_NOT_READY' | 'MISSING_CORE_RESOURCES' | 'PARTIAL_MATCH_ONLY' | 'NO_EXECUTABLE_CORE' | 'RELATIONSHIP_CONFLICT';
+export interface AskHandoffReadiness {
+  ready: boolean;
+  code: AskHandoffReadinessCode;
+  message: string;
+  coreResourceIds: ResourceId[];
+  missingRequirements?: string[];
+  requiresRuntimeAlignmentValidation?: boolean;
+}
+
+export function selectAskHandoffReadiness(task: FindDataTaskState): AskHandoffReadiness {
+  if (task.dataSolution.state !== 'READY') return { ready: false, code: 'SOLUTION_NOT_READY', message: '当前数据方案尚未完成评估。', coreResourceIds: [] };
+  const coreItems = task.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED' && task.resources[item.resourceId]?.availabilityByAction.discover === 'ALLOWED');
+  const coreResourceIds = coreItems.map((item) => item.resourceId);
+  if (coreItems.length === 0 && task.dataSolution.items.some((item) => item.role === 'PARTIAL_MATCH')) return { ready: false, code: 'PARTIAL_MATCH_ONLY', message: '当前只有部分匹配资源，尚未形成可执行的核心数据方案。', coreResourceIds: [] };
+  if (task.scenarioKey === 'minhang_bed_supply') {
+    const hasPopulation = coreResourceIds.includes('r01');
+    const hasBeds = coreResourceIds.includes('r04') || coreResourceIds.includes('r05');
+    if (!hasPopulation || !hasBeds) return { ready: false, code: 'MISSING_CORE_RESOURCES', message: '当前方案尚未同时覆盖老年人口规模和养老床位口径。', coreResourceIds, missingRequirements: [!hasPopulation ? '老年人口规模' : '', !hasBeds ? '养老床位口径' : ''].filter(Boolean) };
+  }
+  if (coreItems.length === 0) return { ready: false, code: 'NO_EXECUTABLE_CORE', message: '当前方案尚未形成可执行核心资源。', coreResourceIds };
+  const coreConflict = task.dataSolution.relationshipEvidence.some((evidence) => coreResourceIds.includes(evidence.sourceResourceId) && coreResourceIds.includes(evidence.targetResourceId) && evidence.verificationStatus === 'CONFLICT');
+  if (coreConflict) return { ready: false, code: 'RELATIONSHIP_CONFLICT', message: '核心资源关系存在冲突，暂不能准备分析计划。', coreResourceIds };
+  const semanticOnly = task.dataSolution.relationshipEvidence.some((evidence) => coreResourceIds.includes(evidence.sourceResourceId) && coreResourceIds.includes(evidence.targetResourceId) && evidence.verificationStatus === 'SEMANTIC_ONLY');
+  return { ready: true, code: 'READY', message: semanticOnly ? '核心资源可以围绕街镇和月份组织分析，但具体维度与时间对齐将在分析阶段验证。' : '当前核心资源已满足分析计划准备条件。', coreResourceIds, requiresRuntimeAlignmentValidation: semanticOnly };
+}
+
+export function validateAnalyticalAlignment(task: FindDataTaskState, askPlan: AskPlan): { allowed: boolean; status: 'VALIDATED' | 'INSUFFICIENT_METADATA' | 'RELATIONSHIP_CONFLICT' | 'TIME_NOT_ALIGNED' | 'GRAIN_NOT_ALIGNED'; details: string[] } {
+  const core = askPlan.coreResourceIds.map((id) => task.resources[id]).filter((resource): resource is FindDataResource => !!resource);
+  if (core.length !== askPlan.coreResourceIds.length) return { allowed: false, status: 'INSUFFICIENT_METADATA', details: ['核心资源不存在。'] };
+  const relationship = task.dataSolution.relationshipEvidence.filter((evidence) => askPlan.coreResourceIds.includes(evidence.sourceResourceId) && askPlan.coreResourceIds.includes(evidence.targetResourceId));
+  if (relationship.some((evidence) => evidence.verificationStatus === 'CONFLICT')) return { allowed: false, status: 'RELATIONSHIP_CONFLICT', details: ['核心资源关系存在冲突。'] };
+  if (!relationship.some((evidence) => evidence.relationType === 'ANALYTICAL_COMPATIBILITY' || evidence.relationType === 'TECHNICAL_JOIN')) return { allowed: false, status: 'INSUFFICIENT_METADATA', details: ['缺少核心资源分析关系证据。'] };
+  const requiredDimensions = askPlan.alignmentRequirement?.requiredDimensions ?? ['street_town', 'month'];
+  if (core.some((resource) => !resource.analysisDimensions || requiredDimensions.some((dimension) => !resource.analysisDimensions!.includes(dimension)))) return { allowed: false, status: 'INSUFFICIENT_METADATA', details: ['核心资源缺少共同分析维度。'] };
+  const requiredGrain = askPlan.alignmentRequirement?.requiredTimeGrain ?? 'MONTH';
+  if (core.some((resource) => resource.timeGrain !== requiredGrain)) return { allowed: false, status: 'GRAIN_NOT_ALIGNED', details: ['核心资源时间粒度不一致。'] };
+  if (askPlan.timeRange && (core.some((resource) => !resourceCoversRange(resource, askPlan.timeRange)) || !getResourceRangeIntersection(core))) return { allowed: false, status: 'TIME_NOT_ALIGNED', details: ['核心资源的时间覆盖交集不能满足分析时间范围。'] };
+  return { allowed: true, status: 'VALIDATED', details: ['已验证街镇、月份、月度粒度与时间覆盖交集；验证仅适用于本次分析。'] };
+}
+
+export function getDataSolutionDisplayState(task: FindDataTaskState): { code: 'EMPTY' | 'EVALUATING' | 'READY_COMPLETE' | 'READY_PARTIAL' | 'GAP_ONLY' | 'STALE'; label: string } {
+  if (task.dataSolution.state === 'EMPTY') return { code: 'EMPTY', label: '尚未形成方案' };
+  if (task.dataSolution.state === 'EVALUATING') return { code: 'EVALUATING', label: '正在重新评估' };
+  if (task.dataSolution.state === 'STALE') return { code: 'STALE', label: '需求已变化，方案待更新' };
+  const readiness = selectAskHandoffReadiness(task);
+  if (readiness.ready) return { code: 'READY_COMPLETE', label: '推荐就绪' };
+  if (task.dataSolution.items.some((item) => item.role === 'PARTIAL_MATCH')) return { code: 'READY_PARTIAL', label: '部分覆盖' };
+  return { code: 'GAP_ONLY', label: '当前仅发现缺口' };
+}
+
+/** Returns whether an action recorded in an older conversation turn is still safe to execute. */
+export function canExecuteTaskAction(task: FindDataTaskState, actionCode: import('./FindDataTask').TaskActionCode, payload?: Record<string, unknown>): boolean {
+  if (task.pendingOperation && actionCode !== 'CLOSE_SURFACE') return false;
+  switch (actionCode) {
+    case 'OPEN_SOLUTION': return task.dataSolution.items.length > 0 || task.dataSolution.gaps.length > 0;
+    case 'OPEN_ACCESS': return selectPermissionRelevantItems(task).length > 0;
+    case 'OPEN_ASK_PLAN': return Boolean(task.askPlan && selectAskHandoffReadiness(task).ready);
+    case 'REGENERATE_ASK_PLAN': return selectAskHandoffReadiness(task).ready;
+    case 'OPEN_COMPARE': return (payload?.resourceIds as ResourceId[] | undefined ?? task.comparisonModel?.resourceIds ?? [])
+      .filter((id) => Boolean(selectCandidateById(task, id))).length >= 2;
+    case 'OPEN_FIELDS': {
+      const id = payload?.resourceId as ResourceId | undefined ?? task.activeResourceId;
+      return Boolean(id && task.resources[id]?.availabilityByAction.discover === 'ALLOWED' && task.resources[id]?.availabilityByAction.viewMetadata === 'ALLOWED');
+    }
+    case 'SELECT_RESOURCE': return Boolean(selectCandidateById(task, payload?.resourceId as ResourceId | undefined));
+    case 'EVALUATE_AND_ADD': return Boolean(selectCandidateById(task, payload?.resourceId as ResourceId | undefined));
+    default: return true;
+  }
+}
 
 /**
  * Filter out any resources where discover === 'DENIED'.
@@ -60,7 +133,7 @@ export function selectResourceFields(
   resourceId?: ResourceId
 ): FieldMetadata[] {
   const resource = selectResourceById(task, resourceId);
-  return resource?.fields || [];
+  return resource?.availabilityByAction.viewMetadata === 'ALLOWED' ? resource.fields || [] : [];
 }
 
 export function selectCandidateResources(task: FindDataTaskState): ResourceCandidate[] {

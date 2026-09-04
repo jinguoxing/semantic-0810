@@ -8,7 +8,7 @@ import {
   FindDataTaskState,
   ResourceId,
   TaskAction,
-  AskPlan,
+  AskPlanRunRequest,
   AskRunResult
 } from '../model/FindDataTask';
 import { createFindDataTask } from '../model/createFindDataTask';
@@ -102,7 +102,7 @@ export class DisconnectedFindDataService implements FindDataService {
 
   async runAskPlan(
     _task: FindDataTaskState,
-    _askPlan: AskPlan,
+    _request: AskPlanRunRequest,
     operationId?: string
   ): Promise<AskRunResult> {
     return {

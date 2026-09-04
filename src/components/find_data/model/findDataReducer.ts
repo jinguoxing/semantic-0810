@@ -30,8 +30,21 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
 
   switch (action.type) {
     case 'TASK_CREATED':
-    case 'TASK_HYDRATED':
       return { ...action.payload.task, updatedAt: now };
+
+    case 'TASK_HYDRATED': {
+      const hydrated = action.payload.task;
+      if (hydrated.metadata?.localRecoveryNotice !== true) return { ...hydrated, updatedAt: now };
+      const metadata = { ...hydrated.metadata };
+      delete metadata.localRecoveryNotice;
+      const notice: ConversationTurn = {
+        turnId: `recovery_${Date.now()}`,
+        sender: 'SYSTEM',
+        createdAt: now,
+        blocks: [{ type: 'SYSTEM_NOTICE', id: `recovery_notice_${Date.now()}`, level: 'warning', message: '页面恢复后，未完成操作已安全停止。请确认当前状态后再继续。' }]
+      };
+      return { ...hydrated, metadata, pendingOperation: undefined, runtimeStatus: { active: false, message: '' }, turns: [...hydrated.turns, notice], updatedAt: now };
+    }
 
     case 'TASK_TITLE_UPDATED':
       return { ...state, title: action.payload.title, goal: action.payload.goal ?? state.goal, updatedAt: now };

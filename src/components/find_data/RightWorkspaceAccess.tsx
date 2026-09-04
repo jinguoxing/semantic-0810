@@ -83,7 +83,7 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
   const hasRequestable = items.some((item) => task.resources[item.resourceId]?.availabilityByAction?.query === 'REQUESTABLE');
 
   return (
-    <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200 select-none">
+    <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200">
       {/* Top Header */}
       <div className="h-14 px-5 border-b border-[#E2E8F0] flex items-center justify-between shrink-0 bg-[#FAFAFA]">
         <div className="flex items-center space-x-2.5">
