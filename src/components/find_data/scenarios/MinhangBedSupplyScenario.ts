@@ -43,7 +43,7 @@ const focusQuestion = {
   resolution: { status: 'OPEN' as const, selectedOptionIds: [] }
 };
 
-const benchmarkQuestion = {
+const benchmarkQuestionTemplate = {
   id: 'q_minhang_benchmark',
   question: '请确认本次分析使用的比较基准：',
   type: 'SINGLE' as const,
@@ -54,6 +54,28 @@ const benchmarkQuestion = {
   ],
   resolution: { status: 'OPEN' as const, selectedOptionIds: [] }
 };
+
+const benchmarkQuestionIdPrefix = 'q_minhang_benchmark';
+
+function isBenchmarkQuestionId(questionId: string): boolean {
+  return questionId === benchmarkQuestionIdPrefix || questionId.startsWith(`${benchmarkQuestionIdPrefix}_`);
+}
+
+function createBenchmarkQuestion(task: FindDataTaskState) {
+  const previousBenchmarkCount = task.turns
+    .flatMap((turn) => turn.blocks)
+    .filter((block) => block.type === 'CLARIFICATION' && isBenchmarkQuestionId(block.question.id))
+    .length;
+  const id = previousBenchmarkCount === 0
+    ? benchmarkQuestionIdPrefix
+    : `${benchmarkQuestionIdPrefix}_${task.requirementRevision}_${previousBenchmarkCount}`;
+  return {
+    ...benchmarkQuestionTemplate,
+    id,
+    options: benchmarkQuestionTemplate.options.map((option) => ({ ...option })),
+    resolution: { status: 'OPEN' as const, selectedOptionIds: [] }
+  };
+}
 
 const broadHypothesis: RequirementHypothesis = {
   region: '上海市闵行区',
@@ -429,7 +451,7 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
           ];
           return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
         }
-        const blocks: ConversationBlock[] = [{ type: 'CLARIFICATION', id: createScenarioId('clarification'), question: benchmarkQuestion }];
+        const blocks: ConversationBlock[] = [{ type: 'CLARIFICATION', id: createScenarioId('clarification'), question: createBenchmarkQuestion(task) }];
         return {
           ...result,
           events: [assistantEvent(blocks, 'WAITING_USER')],
@@ -545,7 +567,7 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       return { ...result, events: [assistantEvent(blocks, nextStatus)], assistantBlocks: blocks };
     }
 
-    if (questionId === benchmarkQuestion.id) {
+    if (isBenchmarkQuestionId(questionId)) {
       const readiness = selectAskHandoffReadiness(task);
       if (!readiness.ready) return { ...result, events: [assistantEvent([textBlock(readiness.message)], settledTaskStatus(task))], assistantBlocks: [textBlock(readiness.message)] };
       const askPlan = buildAskPlan(task, uniqueOptionIds[0]);

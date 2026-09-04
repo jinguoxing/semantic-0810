@@ -141,6 +141,39 @@ describe('scenario classification and turn handling', () => {
     expect(calculationSpec?.strictConclusionBoundary).toContain('严禁直接表达为“供需不足”');
   });
 
+  it('gives a regenerated benchmark clarification its own id and keeps the historical decision locked', async () => {
+    const initial = await submit(createEmptyTask(), '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。');
+    const firstHandoff = await submit(initial.task, '按当前方案分析');
+    const firstResolution = await service.executeAction(firstHandoff.task, {
+      actionCode: 'SUBMIT_CLARIFICATION',
+      payload: { questionId: 'q_minhang_benchmark', selectedOptionIds: ['benchmark_rank'] }
+    });
+    const prepared = apply(firstHandoff.task, firstResolution.events);
+    const recomposed = await service.executeAction(prepared, {
+      actionCode: 'REVISE_REQUIREMENT',
+      payload: { hypothesisPatch: { bedDefinition: '养老床位核定数' } }
+    });
+    const revised = apply(prepared, recomposed.events);
+    const secondHandoff = await submit(revised, '按当前方案分析');
+    const questions = secondHandoff.task.turns
+      .flatMap((turn) => turn.blocks)
+      .filter((block) => block.type === 'CLARIFICATION' && block.question.id.startsWith('q_minhang_benchmark'));
+    const secondQuestion = questions.at(-1);
+    const secondQuestionId = secondQuestion?.type === 'CLARIFICATION' ? secondQuestion.question.id : undefined;
+    expect(secondQuestionId).not.toBe('q_minhang_benchmark');
+
+    const secondResolution = await service.executeAction(secondHandoff.task, {
+      actionCode: 'SUBMIT_CLARIFICATION',
+      payload: { questionId: secondQuestionId!, selectedOptionIds: ['benchmark_weighted'] }
+    });
+    const next = apply(secondHandoff.task, secondResolution.events);
+    const resolvedQuestions = next.turns
+      .flatMap((turn) => turn.blocks)
+      .filter((block) => block.type === 'CLARIFICATION' && block.question.id.startsWith('q_minhang_benchmark'));
+    expect(resolvedQuestions[0]?.type === 'CLARIFICATION' && resolvedQuestions[0].question.resolution?.selectedOptionIds).toEqual(['benchmark_rank']);
+    expect(next.askPlan?.calculationSpec.benchmarkRule).toBe('WEIGHTED_DISTRICT_AVERAGE');
+  });
+
   it('rejects a fabricated clarification action that is absent from task history', async () => {
     const result = await service.executeAction(createMinhangTask(), {
       actionCode: 'SUBMIT_CLARIFICATION',

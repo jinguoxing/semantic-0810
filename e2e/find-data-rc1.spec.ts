@@ -20,7 +20,7 @@ test.describe('Find Data RC1 mock smoke', () => {
     await taskInput.press('Enter');
     await expect(page.getByText('请确认本次分析使用的比较基准：').last()).toBeVisible();
     await page.getByRole('button', { name: /与全区加权平均比较/ }).last().click();
-    await page.getByRole('button', { name: '继续' }).click();
+    await page.getByRole('button', { name: '继续' }).last().click();
 
     await page.getByRole('button', { name: '分析计划 · 待确认' }).click();
     await page.getByRole('button', { name: '执行权限重校验' }).click();
@@ -41,7 +41,7 @@ test.describe('Find Data RC1 mock smoke', () => {
     await taskInput.press('Enter');
     await expect(page.getByText('请确认本次分析使用的比较基准：').last()).toBeVisible();
     await page.getByRole('button', { name: /与全区加权平均比较/ }).last().click();
-    await page.getByRole('button', { name: '继续' }).click();
+    await page.getByRole('button', { name: '继续' }).last().click();
     await page.getByRole('button', { name: '分析计划 · 待确认' }).click();
     await expect(page.getByText('每千名 60 岁以上常住人口核定养老床位数')).toBeVisible();
     await expect(page.getByText(/养老床位核定数（正式指标）/)).toBeVisible();
@@ -66,7 +66,7 @@ test.describe('Find Data RC1 mock smoke', () => {
     await expect(page.getByRole('button', { name: /分析计划/ })).toHaveCount(0);
 
     await page.getByRole('button', { name: '人口规模与养老床位供给' }).click();
-    await page.getByRole('button', { name: '继续' }).click();
+    await page.getByRole('button', { name: '继续' }).last().click();
     await page.getByRole('button', { name: /方案 · 2 项核心资源/ }).click();
     await expect(page.getByText('60 岁以上常住人口数').last()).toBeVisible();
     await expect(page.getByText('在营可用养老床位数').last()).toBeVisible();
