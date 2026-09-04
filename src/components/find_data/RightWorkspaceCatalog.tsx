@@ -83,7 +83,7 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
                 const isAllowed = resource.availabilityByAction.query === 'ALLOWED';
                 const metadataPermission = resource.availabilityByAction.viewMetadata;
                 const queryDecision = resource.availabilityByAction.query;
-                const queryLabel = queryDecision === 'ALLOWED' ? '可直接使用' : queryDecision === 'REQUESTABLE' ? '查询需申请' : queryDecision === 'DENIED' ? '查询不可用' : '查询待确认';
+                const queryLabel = queryDecision === 'ALLOWED' ? '可直接使用' : queryDecision === 'REQUESTABLE' ? '查询需申请' : queryDecision === 'DENIED' ? '当前不可使用' : '查询待确认';
                 const solutionStatus = selectCandidateSolutionStatus(task, resource.id);
                 const isInSolution = solutionStatus === '已加入方案';
 
