@@ -21,6 +21,7 @@ import { selectAskHandoffReadiness, validateAnalyticalAlignment } from '../model
 import { findDataReducer } from '../model/findDataReducer';
 import { getMinhangBedDefinitionForCoreResources, getMinhangBedDefinitionForResource } from '../scenarios/minhangBedDefinition';
 import { FindDataEngineResult, FindDataService, FindDataTaskSummary, PermissionRecheckResult } from './FindDataService';
+import { getPermissionActionLabel } from '../model/permissionActionLabels';
 
 function assistantNotice(task: FindDataTaskState, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info'): FindDataEngineResult {
   const block: ConversationBlock = { type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level, message };
@@ -49,6 +50,7 @@ function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resul
         summary: '全区加权平均核定床位容量为 31.4 张 / 千人；该结果仅反映审批或设计容量。',
         totalPopulation: '41.2 万人',
         totalBeds: '12,936 张',
+        belowBenchmarkCount: 0,
         townResults: [
           { townName: '浦锦街道', supplyRatio: '32.0 张 / 千人', comparisonNote: '高于全区 +1.9%' },
           { townName: '七宝镇', supplyRatio: '36.5 张 / 千人', comparisonNote: '高于全区 +16.2%' }
@@ -60,6 +62,7 @@ function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resul
         summary: '全区加权平均供给水平为 24.8 张 / 千人。',
         totalPopulation: '41.2 万人',
         totalBeds: '10,218 张',
+        belowBenchmarkCount: 2,
         townResults: [
           { townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于全区 -42.7%' },
           { townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '低于全区 -33.5%' }
@@ -249,6 +252,7 @@ export class MockFindDataService implements FindDataService {
         return this.persistResult(task, { ...assistantNotice(task, '当前权限动作不受支持。', 'warning'), operationId });
       }
       const actionType = (rawActionType as PermissionRequestRef['actionType'] | undefined) ?? 'query';
+      const actionLabel = getPermissionActionLabel(actionType);
       if (requestedIds.length === 0) return this.persistResult(task, { ...assistantNotice(task, '当前资源不属于本任务可申请范围。', 'warning'), operationId });
       const invalid = requestedIds.some((id) => {
         const resource = requireDiscoverableTaskResource(task, id);
@@ -258,13 +262,13 @@ export class MockFindDataService implements FindDataService {
       if (invalid) return this.persistResult(task, { ...assistantNotice(task, '当前资源不属于本任务可申请范围。', 'warning'), operationId });
       const decisions = requestedIds.map((id) => task.resources[id].availabilityByAction[actionType]);
       if (decisions.some((decision) => decision === 'ALLOWED')) {
-        return this.persistResult(task, { ...assistantNotice(task, '该资源当前已经具备查询权限，无需重复申请。', 'info'), operationId });
+        return this.persistResult(task, { ...assistantNotice(task, `该资源当前已经具备${actionLabel}，无需重复申请。`, 'info'), operationId });
       }
       if (decisions.some((decision) => decision === 'DENIED')) {
-        return this.persistResult(task, { ...assistantNotice(task, '当前策略不支持申请该项权限。', 'warning'), operationId });
+        return this.persistResult(task, { ...assistantNotice(task, `当前策略不支持申请该项${actionLabel}。`, 'warning'), operationId });
       }
       if (decisions.some((decision) => decision === 'UNKNOWN')) {
-        return this.persistResult(task, { ...assistantNotice(task, '当前权限状态尚未确认，请稍后重试或联系管理员。', 'warning'), operationId });
+        return this.persistResult(task, { ...assistantNotice(task, `当前${actionLabel}状态尚未确认，请稍后重试或联系管理员。`, 'warning'), operationId });
       }
       const overlappingIds = requestedIds.filter((id) => Object.values(task.permissionRequests).some((request) =>
         request.status === 'SUBMITTED' && request.actionType === actionType && request.resourceIds.includes(id)
@@ -273,7 +277,7 @@ export class MockFindDataService implements FindDataService {
         const names = overlappingIds.map((id) => task.resources[id]?.name).filter((name): name is string => !!name);
         const resourceNames = names.length > 0 ? names.join('、') : '当前资源';
         const notice: ConversationBlock = {
-          type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level: 'warning', message: `${resourceNames}已有进行中的查询权限申请，本次包含的其他资源尚未提交。请移除重复项后重试。`
+          type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level: 'warning', message: `${resourceNames}已有进行中的${actionLabel}申请，本次包含的其他资源尚未提交。请移除重复项后重试。`
         };
         return this.persistResult(task, {
           ...emptyScenarioResult(task.taskId),
@@ -292,7 +296,19 @@ export class MockFindDataService implements FindDataService {
         status: 'SUBMITTED',
         submittedAt: new Date().toISOString()
       };
-      return this.persistResult(task, { ...emptyScenarioResult(task.taskId), operationId, events: [{ type: 'PERMISSION_REQUEST_CREATED', payload: { request } }], surfaceCommand });
+      const notice: ConversationBlock = {
+        type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level: 'success', message: `已提交 ${requestedIds.length} 项${actionLabel}申请。`
+      };
+      return this.persistResult(task, {
+        ...emptyScenarioResult(task.taskId),
+        operationId,
+        events: [
+          { type: 'PERMISSION_REQUEST_CREATED', payload: { request } },
+          { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [notice], nextStatus: task.status } }
+        ],
+        assistantBlocks: [notice],
+        surfaceCommand
+      });
     }
 
     if (action.actionCode === 'KEEP_AS_GAP') {

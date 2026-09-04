@@ -16,6 +16,14 @@ test.describe('Find Data RC1 mock smoke', () => {
     await expect(page.getByRole('heading', { name: '数据方案' })).toBeVisible();
 
     const taskInput = page.getByPlaceholder('发送找数据意图、提出追问或输入口径调整要求…');
+    await taskInput.fill('再加入养老服务实际使用');
+    await taskInput.press('Enter');
+    await expect(page.getByText('现有老年人口与养老床位核心方案保持不变')).toBeVisible();
+    await expect(page.getByText('60 岁以上常住人口数').last()).toBeVisible();
+    await expect(page.getByText('在营可用养老床位数').last()).toBeVisible();
+    await expect(page.getByText('居家养老服务订单').last()).toBeVisible();
+    await expect(page.getByText('部分覆盖').last()).toBeVisible();
+
     await taskInput.fill('按当前方案分析');
     await taskInput.press('Enter');
     await expect(page.getByText('请确认本次分析使用的比较基准：').last()).toBeVisible();
@@ -52,6 +60,8 @@ test.describe('Find Data RC1 mock smoke', () => {
     await expect(page.getByText('可以执行')).toBeVisible();
     await page.getByRole('button', { name: '确认并开始计算' }).click();
     await expect(page.getByText('核定床位口径 · 演示数据')).toBeVisible();
+    await expect(page.getByText('当前返回结果中未发现低于全区加权平均的街镇')).toBeVisible();
+    await expect(page.getByText('识别出 2 个供给水平相对全区加权平均偏低的街镇')).toHaveCount(0);
   });
 
   test('broad goal clarifies before creating a solution', async ({ page }) => {

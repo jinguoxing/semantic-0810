@@ -46,10 +46,11 @@ export function composeMinhangSolution(
   const bedDefinition = hypothesis.bedDefinition ?? '';
   const populationDefinition = hypothesis.populationDefinition ?? '';
   const serviceUse = includesAny(focus, [/实际服务使用/, /养老服务使用/, /服务.*实际使用/]);
+  const hasPopulationAndBedFocus = includesAny(focus, [/老年人口规模/, /老年人口/]) && includesAny(focus, [/养老床位供给/, /养老床位/]);
   const publicService = includesAny(focus, [/公共服务诉求/]);
   const unsupportedPopulation = /(失能老人|高龄独居老人|户籍老年人口)/.test(populationDefinition);
 
-  if (serviceUse) {
+  if (serviceUse && !hasPopulationAndBedFocus) {
     return {
       resourceIds: resources.r07 ? ['r07'] : [],
       items: resources.r07 ? [{ resourceId: 'r07', role: 'PARTIAL_MATCH', inclusionState: 'NOT_INCLUDED', coverage: ['仅居家养老服务订单'], limitations: ['不代表完整养老服务使用'], evidenceRefs: ['部分匹配'] }] : [],
@@ -68,7 +69,7 @@ export function composeMinhangSolution(
   if (!resources.r01 || !resources[bedResourceId]) {
     return { resourceIds: [], items: [], gaps: [openGap('gap_core_resource', '核心资源未登记', '当前方案尚未同时覆盖老年人口规模和养老床位口径。')], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], readiness: 'GAP_ONLY' };
   }
-  return {
+  const coreComposition: MinhangSolutionComposition = {
     resourceIds: ['r01', bedResourceId], items: [coreItem('r01'), coreItem(bedResourceId)], gaps: [],
     relationshipEvidence: [{
       sourceResourceId: bedResourceId, targetResourceId: 'r01', relationType: 'ANALYTICAL_COMPATIBILITY', verificationStatus: 'SEMANTIC_ONLY', evidenceLevel: 'MEDIUM',
@@ -76,5 +77,17 @@ export function composeMinhangSolution(
     }],
     coverageSummary: [`核心资源：${resources.r01.name}、${resources[bedResourceId].name}`, '核心维度：街镇、统计月份'],
     limitationSummary: ['技术连接未被长期确认，将在本次分析执行前验证维度、粒度与时间对齐。'], readiness: 'COMPLETE'
+  };
+  if (!serviceUse || !resources.r07) return coreComposition;
+
+  return {
+    ...coreComposition,
+    resourceIds: [...coreComposition.resourceIds, 'r07'],
+    items: [...coreComposition.items, {
+      resourceId: 'r07', role: 'PARTIAL_MATCH', inclusionState: 'NOT_INCLUDED', coverage: ['仅居家养老服务订单'], limitations: ['不代表完整养老服务使用'], evidenceRefs: ['部分匹配']
+    }],
+    gaps: [openGap('gap_homecare_partial', '实际服务使用覆盖缺口', '当前资源仅覆盖居家上门服务订单，不代表完整养老服务使用。')],
+    limitationSummary: [...coreComposition.limitationSummary, '仅部分覆盖实际服务使用。'],
+    readiness: 'PARTIAL'
   };
 }

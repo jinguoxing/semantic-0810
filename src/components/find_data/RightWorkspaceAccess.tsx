@@ -12,6 +12,7 @@ import {
   selectResourceById,
   selectResourceAvailability
 } from './model/findDataSelectors';
+import { getPermissionActionLabel } from './model/permissionActionLabels';
 
 interface RightWorkspaceAccessProps {
   task: FindDataTaskState;
@@ -176,7 +177,7 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
                         </span>
                       </div>
                       <div className="text-[11px] text-[#64748B]">
-                        申请权限：{req.actionType === 'query' ? '查询问数' : req.actionType} · 涉及资源：
+                        申请权限：{getPermissionActionLabel(req.actionType)} · 涉及资源：
                         {req.resourceIds.map((id) => task.resources[id]?.name || '资源已不可用').join('、')}
                       </div>
                       <div className="text-[10px] text-[#94A3B8]">

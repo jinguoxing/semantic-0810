@@ -4,6 +4,7 @@ import { FindDataTaskState } from '../model/FindDataTask';
 import { MockFindDataService } from '../services/MockFindDataService';
 import { isMinhangBedSupplyInitialGoal } from '../scenarios/MinhangBedSupplyScenario';
 import { MINHANG_RESOURCES } from '../fixtures/minhangBedSupplyFixture';
+import { getDataSolutionDisplayState } from '../model/findDataSelectors';
 import { createAskPlan, createEmptyTask, createMinhangTask, permissionsWithQuery } from './testUtils/findDataFactories';
 
 const service = new MockFindDataService();
@@ -88,13 +89,40 @@ describe('scenario classification and turn handling', () => {
     expect(task.status).toBe('READY');
   });
 
-  it('adds the partial service-use resource only when requested after the minimal solution', async () => {
+  it('extends the minimal solution with a partial service-use resource by default', async () => {
     const initial = await submit(createEmptyTask(), '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。');
     const { task } = await submit(initial.task, '查看实际服务使用');
     expect(task.dataSolution.items.find((item) => item.resourceId === 'r07')).toMatchObject({ role: 'PARTIAL_MATCH' });
     expect(task.dataSolution.gaps.map((gap) => gap.id)).toContain('gap_homecare_partial');
-    expect(task.dataSolution.items.filter((item) => ['r01', 'r04'].includes(item.resourceId))).toHaveLength(0);
-    expect(task.dataSolution.relationshipEvidence).toEqual([]);
+    expect(task.dataSolution.items.filter((item) => ['r01', 'r04'].includes(item.resourceId))).toHaveLength(2);
+    expect(task.dataSolution.relationshipEvidence).toHaveLength(1);
+    expect(getDataSolutionDisplayState(task).code).toBe('READY_PARTIAL');
+  });
+
+  it('extends an approved-bed core solution when the user asks to also inspect service use', async () => {
+    const initial = await submit(createEmptyTask(), '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与养老床位核定数。');
+    const { task } = await submit(initial.task, '同时看看实际服务使用');
+    expect(task.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+    expect(task.dataSolution.items.find((item) => item.resourceId === 'r07')).toMatchObject({ role: 'PARTIAL_MATCH', inclusionState: 'NOT_INCLUDED' });
+    expect(task.dataSolution.gaps.map((gap) => gap.id)).toContain('gap_homecare_partial');
+  });
+
+  it('replaces the core solution only for an explicit service-use-only request', async () => {
+    const base = createMinhangTask({ askPlan: createAskPlan() });
+    const { task } = await submit(base, '改为只看养老服务实际使用');
+    expect(task.dataSolution.items.filter((item) => item.role === 'CORE')).toEqual([]);
+    expect(task.dataSolution.items).toMatchObject([{ resourceId: 'r07', role: 'PARTIAL_MATCH' }]);
+    expect(task.dataSolution.gaps.map((gap) => gap.id)).toEqual(['gap_homecare_partial']);
+    expect(task.askPlan).toBeUndefined();
+    expect(getDataSolutionDisplayState(task).code).toBe('READY_PARTIAL');
+  });
+
+  it('keeps the data solution unchanged for a service-use coverage question', async () => {
+    const base = createMinhangTask();
+    const { result, task } = await submit(base, '为什么实际服务使用只有部分匹配');
+    expect(result.events.some((event) => event.type === 'REQUIREMENT_UPDATED')).toBe(false);
+    expect(result.events.some((event) => event.type === 'SEARCH_STARTED')).toBe(false);
+    expect(task.dataSolution).toEqual(base.dataSolution);
   });
 
   it('creates an Ask Plan only after the user confirms a comparison benchmark', async () => {
@@ -181,6 +209,35 @@ describe('scenario classification and turn handling', () => {
     });
     expect(result.events.some((event) => event.type === 'ASK_PLAN_PREPARED')).toBe(false);
   });
+
+  it('does not create a second open benchmark question in the same analysis stage', async () => {
+    const first = await submit(createMinhangTask(), '按当前方案分析');
+    const second = await submit(first.task, '按当前方案分析');
+    const openQuestions = second.task.turns
+      .flatMap((turn) => turn.blocks)
+      .filter((block) => block.type === 'CLARIFICATION' &&
+        block.question.id.startsWith('q_minhang_benchmark') && block.question.resolution?.status === 'OPEN');
+    expect(openQuestions).toHaveLength(1);
+    expect(second.result.events.some((event) => event.type === 'ASK_PLAN_PREPARED')).toBe(false);
+    expect(JSON.stringify(second.result.assistantBlocks)).toContain('当前比较基准尚未确认');
+  });
+
+  it('uses the institution resource only for optional drilldown', async () => {
+    const browsed = await submit(createMinhangTask(), '解释床位由哪些机构提供');
+    expect(browsed.task.searchResult?.candidateSnapshot.find((candidate) => candidate.resourceId === 'r06')?.proposedRole).toBe('OPTIONAL_DRILLDOWN');
+    const response = JSON.stringify(browsed.result.assistantBlocks);
+    expect(response).toContain('结果下钻资源');
+    expect(response).toContain('不参与每千名老人床位数的核心计算');
+    expect(response).not.toContain('月度快照更适合');
+
+    const taskWithPlan = { ...browsed.task, askPlan: createAskPlan() };
+    const calculationSpec = taskWithPlan.askPlan.calculationSpec;
+    const added = await service.executeAction(taskWithPlan, { actionCode: 'EVALUATE_AND_ADD', payload: { resourceId: 'r06' } });
+    const next = apply(taskWithPlan, added.events);
+    expect(next.dataSolution.items.find((item) => item.resourceId === 'r06')).toMatchObject({ role: 'OPTIONAL_DRILLDOWN', inclusionState: 'RECOMMENDED' });
+    expect(next.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+    expect(next.askPlan?.calculationSpec).toEqual(calculationSpec);
+  });
 });
 
 describe('clarification decisions', () => {
@@ -199,6 +256,12 @@ describe('clarification decisions', () => {
     const clarification = next.turns.flatMap((turn) => turn.blocks).find((block) => block.type === 'CLARIFICATION');
     expect(clarification?.type === 'CLARIFICATION' && clarification.question.resolution?.status).toBe('RESOLVED');
     expect(next.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+    expect(next.requirementHypothesis.populationDefinition).toBe('60 岁及以上常住人口');
+    expect(next.requirementHypothesis.bedDefinition).toBe('民政核定且在营可用养老床位数');
+    expect(next.requirementHypothesis.assumptions).toEqual(expect.arrayContaining([
+      '当前按 60 岁及以上常住人口理解，可在任务上下文中修改。',
+      '当前按在营可用养老床位理解，可在任务上下文中修改。'
+    ]));
     expect(next.askPlan).toBeUndefined();
   });
 
@@ -298,6 +361,7 @@ describe('Ask execution authorization', () => {
     const result = await service.runAskPlan(task, askRunRequest(task));
     expect(result.success).toBe(true);
     expect(result.resultArtifact?.townResults).toHaveLength(2);
+    expect(result.resultArtifact?.belowBenchmarkCount).toBe(2);
     expect(result.resultArtifact?.boundaryNotice).toBe(task.askPlan?.calculationSpec.strictConclusionBoundary);
   });
 
@@ -425,5 +489,45 @@ describe('permission request server contract', () => {
     expect(first.events.some((event) => event.type === 'PERMISSION_REQUEST_CREATED')).toBe(true);
     expect(second.events.some((event) => event.type === 'PERMISSION_REQUEST_CREATED')).toBe(false);
     expect(noticeText(second)).toContain('其他资源尚未提交');
+  });
+
+  it('uses the metadata action label for an overlapping metadata request', async () => {
+    const base = createMinhangTask();
+    const metadataRequestable = {
+      ...base,
+      resources: {
+        ...base.resources,
+        r04: {
+          ...base.resources.r04,
+          availabilityByAction: { ...base.resources.r04.availabilityByAction, viewMetadata: 'REQUESTABLE' as const }
+        }
+      }
+    };
+    const first = await service.executeAction(metadataRequestable, {
+      actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04'], actionType: 'viewMetadata' }
+    });
+    const second = await service.executeAction(apply(metadataRequestable, first.events), {
+      actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04'], actionType: 'viewMetadata' }
+    });
+    expect(noticeText(second)).toContain('元数据查看权限申请');
+    expect(noticeText(second)).not.toContain('查询权限申请');
+  });
+
+  it('uses the export action label when export permission is denied', async () => {
+    const base = createMinhangTask();
+    const exportDenied = {
+      ...base,
+      resources: {
+        ...base.resources,
+        r04: {
+          ...base.resources.r04,
+          availabilityByAction: { ...base.resources.r04.availabilityByAction, export: 'DENIED' as const }
+        }
+      }
+    };
+    const result = await service.executeAction(exportDenied, {
+      actionCode: 'CREATE_PERMISSION_REQUEST', payload: { resourceIds: ['r04'], actionType: 'export' }
+    });
+    expect(noticeText(result)).toContain('导出权限');
   });
 });

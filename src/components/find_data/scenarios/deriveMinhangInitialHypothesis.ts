@@ -47,7 +47,9 @@ function parseBedDefinition(text: string): RequirementHypothesis['bedDefinition'
 
 function buildHypothesis(text: string, bedDefinition?: string): RequirementHypothesis {
   const parsedRange = parseTimeRange(text);
-  const populationDefinition = /(60\s*岁以上|60\s*岁及以上)\s*常住人口/.test(text)
+  const hasExplicitPopulationDefinition = /(60\s*岁以上|60\s*岁及以上)\s*常住人口/.test(text);
+  const usesGenericOlderPopulation = /(老年人口|老人|老龄)/.test(text);
+  const populationDefinition = hasExplicitPopulationDefinition || usesGenericOlderPopulation
     ? '60 岁及以上常住人口'
     : undefined;
   const timeRange = parsedRange ?? DEFAULT_TIME_RANGE;
@@ -58,7 +60,12 @@ function buildHypothesis(text: string, bedDefinition?: string): RequirementHypot
     bedDefinition,
     dimensions: ['时间（月度）', '空间（街镇）'],
     analysisFocus: ['老年人口规模与分布', '养老床位供给'],
-    assumptions: parsedRange ? [] : ['当前按核心资源共同覆盖的最近 12 个完整月进行分析。'],
+    assumptions: [
+      ...(parsedRange ? [] : ['当前按核心资源共同覆盖的最近 12 个完整月进行分析。']),
+      ...(usesGenericOlderPopulation && !hasExplicitPopulationDefinition
+        ? ['当前按 60 岁及以上常住人口理解，可在任务上下文中修改。']
+        : [])
+    ],
     unresolvedQuestions: []
   };
 }

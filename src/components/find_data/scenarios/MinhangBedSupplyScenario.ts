@@ -77,6 +77,36 @@ function createBenchmarkQuestion(task: FindDataTaskState) {
   };
 }
 
+function findOpenBenchmarkQuestion(task: FindDataTaskState) {
+  return task.turns
+    .flatMap((turn) => turn.blocks)
+    .find((block) => block.type === 'CLARIFICATION' &&
+      isBenchmarkQuestionId(block.question.id) && block.question.resolution?.status === 'OPEN');
+}
+
+type ServiceUseChangeMode = 'EXTEND' | 'REPLACE';
+
+function hasCompleteMinhangCore(task: FindDataTaskState): boolean {
+  const coreIds = task.dataSolution.items
+    .filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED')
+    .map((item) => item.resourceId);
+  return coreIds.includes('r01') && (coreIds.includes('r04') || coreIds.includes('r05'));
+}
+
+function resolveServiceUseChangeMode(text: string, task: FindDataTaskState): ServiceUseChangeMode {
+  if (/(改为只看(?:养老)?服务实际使用|改为只看实际服务使用|只分析(?:养老)?服务实际使用|只分析实际服务使用|不看床位[，,、 ]*只看服务使用|仅关注养老服务实际使用)/.test(text)) {
+    return 'REPLACE';
+  }
+  if (/(再加入实际服务使用|再加入养老服务实际使用|还要看实际服务使用|同时看看服务使用|补充养老服务使用|另外看看实际服务使用|也想看服务使用)/.test(text)) {
+    return 'EXTEND';
+  }
+  return hasCompleteMinhangCore(task) ? 'EXTEND' : 'REPLACE';
+}
+
+function isServiceUseQuestion(text: string): boolean {
+  return /(实际服务使用字段有哪些|为什么实际服务使用只有部分匹配|查看实际服务使用缺口)/.test(text);
+}
+
 const broadHypothesis: RequirementHypothesis = {
   region: '上海市闵行区',
   dimensions: [],
@@ -135,7 +165,7 @@ function searchEvents(
       title: resource?.name ?? '相关资源',
       reason: isCore ? '直接满足当前供给分析的核心指标需要。' : resourceId === 'r07' ? '仅覆盖居家养老服务订单，属于部分匹配。' : '与当前目标相关，可进一步评估。',
       matchType: isCore ? 'DIRECT' as const : resourceId === 'r07' ? 'PARTIAL' as const : 'RELATED' as const,
-      proposedRole: isCore ? 'CORE' as const : resourceId === 'r07' ? 'PARTIAL_MATCH' as const : resourceId === 'r06' ? 'CONDITIONAL_SUPPORT' as const : 'OPTIONAL_DRILLDOWN' as const,
+      proposedRole: isCore ? 'CORE' as const : resourceId === 'r07' ? 'PARTIAL_MATCH' as const : 'OPTIONAL_DRILLDOWN' as const,
       sourceSearchRevision: searchRevision
     };
   };
@@ -310,14 +340,15 @@ function buildServiceUseResult(
   requirementRevision: number,
   prerequisiteEvents: FindDataEvent[],
   mode: 'REPLACE' | 'MERGE',
-  query?: string
+  query: string | undefined,
+  message: string
 ): FindDataEngineResult {
   const item = MINHANG_DATA_SOLUTION.items.find((entry) => entry.resourceId === 'r07')!;
   const gaps = mode === 'MERGE'
     ? [...task.dataSolution.gaps.filter((gap) => gap.id !== serviceUseGap.id), serviceUseGap]
     : [serviceUseGap];
   const blocks: ConversationBlock[] = [
-    textBlock('当前仅检索到「居家养老服务订单」，已作为部分匹配并登记覆盖缺口。')
+    textBlock(message)
   ];
   return {
     ...emptyScenarioResult(task.taskId),
@@ -328,6 +359,34 @@ function buildServiceUseResult(
     ],
     assistantBlocks: blocks
   };
+}
+
+function buildServiceUseGoalResult(
+  task: FindDataTaskState,
+  text: string,
+  changeMode: ServiceUseChangeMode
+): FindDataEngineResult {
+  const requirementRevision = task.requirementRevision + 1;
+  const extend = changeMode === 'EXTEND';
+  const analysisFocus = extend
+    ? Array.from(new Set([...task.requirementHypothesis.analysisFocus, '养老服务实际使用']))
+    : ['养老服务实际使用'];
+  const prerequisiteEvents: FindDataEvent[] = [
+    { type: 'REQUIREMENT_UPDATED', payload: { hypothesis: { analysisFocus }, bumpRevision: true } },
+    { type: 'ASK_PLAN_INVALIDATED', payload: { reason: '需求或口径已修改，原分析计划不再有效。' } },
+    { type: 'COMPARISON_MODEL_CLEARED' },
+    { type: 'SOLUTION_EVALUATION_STARTED', payload: { requirementRevision } }
+  ];
+  return buildServiceUseResult(
+    task,
+    requirementRevision,
+    prerequisiteEvents,
+    extend ? 'MERGE' : 'REPLACE',
+    text,
+    extend
+      ? '已将养老服务实际使用补充到当前目标。现有老年人口与养老床位核心方案保持不变；目前仅发现居家养老服务订单，已记录为部分匹配，完整服务使用仍是当前方案缺口。'
+      : '已将当前目标切换为养老服务实际使用。当前只发现居家养老服务订单，尚不能代表完整养老服务使用。'
+  );
 }
 
 function settledTaskStatus(task: FindDataTaskState): FindDataTaskState['status'] {
@@ -435,6 +494,13 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
         const blocks = [textBlock(buildGapSummary(task))];
         return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
       }
+      if (isServiceUseQuestion(text)) {
+        const message = text.includes('为什么')
+          ? '当前仅找到居家养老服务订单，它只覆盖居家服务，不能代表机构养老和其他服务使用，因此记录为部分匹配并保留为方案缺口。'
+          : buildGapSummary(task);
+        const blocks = [textBlock(message)];
+        return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
+      }
       if (intent.matchedRule === 'compare-summary-question') {
         const blocks: ConversationBlock[] = [
           textBlock('这两项资源可以从粒度、时间形态和查询权限三个维度比较。'),
@@ -443,6 +509,10 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
         return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
       }
       if (intent.kind === 'ANALYZE' && !task.askPlan) {
+        if (findOpenBenchmarkQuestion(task)) {
+          const blocks = [textBlock('当前比较基准尚未确认，请先完成上方选择。')];
+          return { ...result, events: [assistantEvent(blocks, 'WAITING_USER')], assistantBlocks: blocks };
+        }
         const readiness = selectAskHandoffReadiness(task);
         if (!readiness.ready) {
           const blocks: ConversationBlock[] = [
@@ -458,16 +528,18 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
           assistantBlocks: blocks
         };
       }
-      if (text.includes('实际服务使用')) {
-        return buildRequirementReevaluationResult(task, { analysisFocus: ['养老服务实际使用'] });
+      if (/(实际服务使用|养老服务实际使用|服务实际使用|养老服务使用|服务使用)/.test(text)) {
+        return buildServiceUseGoalResult(task, text, resolveServiceUseChangeMode(text, task));
       }
-      if (intent.kind === 'RESOURCE_BROWSE' || /(查看明细|解释机构|浏览相关资源|人口明细|民政相关资源|养老相关数据|查看养老相关数据|养老资源|浏览民政数据)/.test(text)) {
-        const isInstitution = /(解释机构|养老机构|床位来源机构)/.test(text);
+      if (intent.kind === 'RESOURCE_BROWSE' || /(查看明细|解释机构|解释床位.*机构|查看养老机构|浏览相关资源|人口明细|民政相关资源|养老相关数据|查看养老相关数据|养老资源|浏览民政数据)/.test(text)) {
+        const isInstitution = /(解释机构|解释床位.*机构|查看养老机构|养老机构|床位来源机构)/.test(text);
         const isCivilAffairs = /(民政相关资源|养老相关数据|查看养老相关数据|还有哪些养老资源|浏览民政数据)/.test(text);
         const ids = isInstitution ? ['r06'] : isCivilAffairs ? ['r05', 'r06', 'r07'] : ['r02', 'r03'];
         const blocks: ConversationBlock[] = [
           textBlock(isCivilAffairs
             ? '当前发现 3 项民政相关候选资源，分别用于床位口径替代、机构下钻和服务使用补充，尚未自动纳入当前方案。'
+            : isInstitution
+            ? '当前找到「养老机构基本信息」，可用于解释各街镇床位主要由哪些机构提供。它属于结果下钻资源，不参与每千名老人床位数的核心计算。'
             : `当前发现 ${ids.length} 项可选明细资源。基于过去 12 个月的目标，月度快照更适合。`),
           { type: 'ACTION_GROUP', id: createScenarioId('actions'), actions: isCivilAffairs
             ? []
@@ -598,7 +670,27 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       };
     }
 
-    const recomposed = buildRequirementReevaluationResult(task, { analysisFocus: labels });
+    const shouldApplyBroadGoalDefaults = questionId === focusQuestion.id &&
+      labels.includes('人口规模与养老床位供给') &&
+      !task.requirementHypothesis.populationDefinition &&
+      !task.requirementHypothesis.bedDefinition;
+    const defaultAssumptions = shouldApplyBroadGoalDefaults
+      ? Array.from(new Set([
+          ...task.requirementHypothesis.assumptions,
+          '当前按 60 岁及以上常住人口理解，可在任务上下文中修改。',
+          '当前按在营可用养老床位理解，可在任务上下文中修改。'
+        ]))
+      : task.requirementHypothesis.assumptions;
+    const recomposed = buildRequirementReevaluationResult(task, {
+      analysisFocus: labels,
+      ...(shouldApplyBroadGoalDefaults
+        ? {
+            populationDefinition: '60 岁及以上常住人口',
+            bedDefinition: '民政核定且在营可用养老床位数',
+            assumptions: defaultAssumptions
+          }
+        : {})
+    });
     return {
       ...recomposed,
       events: [

@@ -98,7 +98,7 @@ function replaceTaskIdInUrl(taskId: string): void {
   window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
-function askRunCompletionMessage(plan: AskPlan, result: AskRunResult): string {
+export function askRunCompletionMessage(plan: AskPlan, result: AskRunResult): string {
   const count = result.resultArtifact?.townResults.length ?? 0;
   if (plan.calculationSpec.benchmarkRule === 'RANK_ONLY') {
     return `分析已完成，已生成 ${count} 个街镇的指标排名。完整结果和边界说明已在右侧展示。`;
@@ -106,7 +106,14 @@ function askRunCompletionMessage(plan: AskPlan, result: AskRunResult): string {
   if (plan.calculationSpec.benchmarkRule === 'POLICY_TARGET') {
     return `分析已完成，已按计划登记的政策目标生成 ${count} 个街镇比较结果。完整结果和边界说明已在右侧展示。`;
   }
-  return `分析已完成，识别出 ${count} 个供给水平相对全区加权平均偏低的街镇。完整结果和边界说明已在右侧展示。`;
+  const belowBenchmarkCount = result.resultArtifact?.belowBenchmarkCount;
+  if (typeof belowBenchmarkCount !== 'number') {
+    return `分析已完成，已生成 ${count} 个街镇比较结果。完整结果和边界说明已在右侧展示。`;
+  }
+  if (belowBenchmarkCount === 0) {
+    return `分析已完成，已生成 ${count} 个街镇比较结果；当前返回结果中未发现低于全区加权平均的街镇。完整结果和边界说明已在右侧展示。`;
+  }
+  return `分析已完成，识别出 ${belowBenchmarkCount} 个相对全区加权平均偏低的街镇。完整结果和边界说明已在右侧展示。`;
 }
 
 export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorkspaceProps> = ({

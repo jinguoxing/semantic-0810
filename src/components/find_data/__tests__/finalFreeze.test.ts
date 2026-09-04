@@ -6,6 +6,7 @@ import { deriveMinhangInitialHypothesis } from '../scenarios/deriveMinhangInitia
 import { buildMinhangCalculationSpec } from '../scenarios/MinhangBedSupplyScenario';
 import { MockFindDataService } from '../services/MockFindDataService';
 import { createAskPlan, createEmptyTask, createMinhangTask } from './testUtils/findDataFactories';
+import { askRunCompletionMessage } from '../../DataAssistantFindDataWorkspace';
 
 const apply = (task: ReturnType<typeof createEmptyTask>, events: Parameters<typeof findDataReducer>[1][]) => events.reduce(findDataReducer, task);
 
@@ -32,6 +33,55 @@ describe('final freeze Minhang initial hypothesis', () => {
     expect(deriveMinhangInitialHypothesis('分析闵行区各街镇老年人口与养老床位。')).toMatchObject({
       status: 'NEEDS_CLARIFICATION', question: { id: 'q_minhang_bed_definition' }
     });
+  });
+
+  it('records the 60-and-over definition as an assumption when older population is generic', () => {
+    const resolution = deriveMinhangInitialHypothesis('分析闵行区各街镇老年人口与在营养老床位供给。');
+    expect(resolution).toMatchObject({
+      status: 'READY',
+      hypothesis: {
+        populationDefinition: '60 岁及以上常住人口',
+        assumptions: expect.arrayContaining(['当前按 60 岁及以上常住人口理解，可在任务上下文中修改。'])
+      }
+    });
+  });
+
+  it('does not record the default population assumption when the user supplies the definition', () => {
+    const resolution = deriveMinhangInitialHypothesis('分析闵行区各街镇 60 岁及以上常住人口与在营养老床位供给。');
+    expect(resolution).toMatchObject({ status: 'READY', hypothesis: { populationDefinition: '60 岁及以上常住人口' } });
+    expect(resolution.status === 'READY' && resolution.hypothesis.assumptions).not.toContain('当前按 60 岁及以上常住人口理解，可在任务上下文中修改。');
+  });
+});
+
+describe('final freeze completion summaries', () => {
+  const weightedPlan = createAskPlan({ calculationSpec: { ...createAskPlan().calculationSpec, benchmarkRule: 'WEIGHTED_DISTRICT_AVERAGE' } });
+  const resultWith = (belowBenchmarkCount?: number) => ({
+    success: true,
+    executedAt: '2026-09-04T00:00:00.000Z',
+    permissionSnapshot: {},
+    resultArtifact: {
+      benchmarkLabel: '全区加权平均',
+      summary: '测试',
+      townResults: [{ townName: '浦锦街道', supplyRatio: '1', comparisonNote: '测试' }, { townName: '七宝镇', supplyRatio: '2', comparisonNote: '测试' }],
+      boundaryNotice: '测试',
+      ...(belowBenchmarkCount === undefined ? {} : { belowBenchmarkCount })
+    }
+  });
+
+  it('reports the service-provided below-benchmark count rather than the row count', () => {
+    expect(askRunCompletionMessage(weightedPlan, resultWith(2))).toContain('识别出 2 个相对全区加权平均偏低的街镇');
+  });
+
+  it('reports no below-benchmark towns for an r05-style result', () => {
+    const message = askRunCompletionMessage(weightedPlan, resultWith(0));
+    expect(message).toContain('当前返回结果中未发现低于全区加权平均的街镇');
+    expect(message).not.toContain('识别出 2 个');
+  });
+
+  it('uses a neutral message when an HTTP artifact omits belowBenchmarkCount', () => {
+    const message = askRunCompletionMessage(weightedPlan, resultWith());
+    expect(message).toContain('已生成 2 个街镇比较结果');
+    expect(message).not.toContain('偏低');
   });
 });
 
@@ -73,6 +123,7 @@ describe('final freeze scenario semantics', () => {
     });
     expect(result.resultArtifact?.totalBeds).toBe('12,936 张');
     expect(result.resultArtifact?.summary).toContain('核定床位容量');
+    expect(result.resultArtifact?.belowBenchmarkCount).toBe(0);
   });
 
   it('keeps civil-affairs candidates out of a comparison model', async () => {

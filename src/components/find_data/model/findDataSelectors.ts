@@ -57,10 +57,14 @@ export function getDataSolutionDisplayState(task: FindDataTaskState): { code: 'E
   if (task.dataSolution.state === 'EMPTY') return { code: 'EMPTY', label: '尚未形成方案' };
   if (task.dataSolution.state === 'EVALUATING') return { code: 'EVALUATING', label: '正在重新评估' };
   if (task.dataSolution.state === 'STALE') return { code: 'STALE', label: '需求已变化，方案待更新' };
+  const hasUnresolvedGap = task.dataSolution.gaps.some((gap) => gap.status === 'OPEN' || gap.status === 'ACKNOWLEDGED');
+  if (task.dataSolution.items.length === 0 && hasUnresolvedGap) return { code: 'GAP_ONLY', label: '当前仅发现缺口' };
+  if (task.dataSolution.items.some((item) => item.role === 'PARTIAL_MATCH') || hasUnresolvedGap) {
+    return { code: 'READY_PARTIAL', label: '部分覆盖' };
+  }
   const readiness = selectAskHandoffReadiness(task);
   if (readiness.ready) return { code: 'READY_COMPLETE', label: '推荐就绪' };
-  if (task.dataSolution.items.some((item) => item.role === 'PARTIAL_MATCH')) return { code: 'READY_PARTIAL', label: '部分覆盖' };
-  return { code: 'GAP_ONLY', label: '当前仅发现缺口' };
+  return { code: 'READY_PARTIAL', label: '部分覆盖' };
 }
 
 /** Returns whether an action recorded in an older conversation turn is still safe to execute. */

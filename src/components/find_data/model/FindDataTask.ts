@@ -222,6 +222,8 @@ export interface AskRunResult {
     summary: string;
     totalPopulation?: string;
     totalBeds?: string;
+    /** Count supplied by the execution service; the browser must not infer it from result rows. */
+    belowBenchmarkCount?: number;
     townResults: Array<{
       townName: string;
       supplyRatio: string;
