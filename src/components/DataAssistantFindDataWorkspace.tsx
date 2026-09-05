@@ -35,6 +35,10 @@ import {
   selectResourceById,
   selectResourceFields
 } from './find_data/model/findDataSelectors';
+import {
+  buildAskPlanScopeDisclosure,
+  buildAskRunCompletionSummary
+} from './find_data/presenters/conversationPresenters';
 
 // Blocks
 import { AssistantTextBlock } from './find_data/blocks/AssistantTextBlock';
@@ -98,23 +102,7 @@ function replaceTaskIdInUrl(taskId: string): void {
   window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
-export function askRunCompletionMessage(plan: AskPlan, result: AskRunResult): string {
-  const count = result.resultArtifact?.townResults.length ?? 0;
-  if (plan.calculationSpec.benchmarkRule === 'RANK_ONLY') {
-    return `分析已完成，已生成 ${count} 个街镇的指标排名。完整结果和边界说明已在右侧展示。`;
-  }
-  if (plan.calculationSpec.benchmarkRule === 'POLICY_TARGET') {
-    return `分析已完成，已按计划登记的政策目标生成 ${count} 个街镇比较结果。完整结果和边界说明已在右侧展示。`;
-  }
-  const belowBenchmarkCount = result.resultArtifact?.belowBenchmarkCount;
-  if (typeof belowBenchmarkCount !== 'number') {
-    return `分析已完成，已生成 ${count} 个街镇比较结果。完整结果和边界说明已在右侧展示。`;
-  }
-  if (belowBenchmarkCount === 0) {
-    return `分析已完成，已生成 ${count} 个街镇比较结果；当前返回结果中未发现低于全区加权平均的街镇。完整结果和边界说明已在右侧展示。`;
-  }
-  return `分析已完成，识别出 ${belowBenchmarkCount} 个相对全区加权平均偏低的街镇。完整结果和边界说明已在右侧展示。`;
-}
+export const askRunCompletionMessage = buildAskRunCompletionSummary;
 
 export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorkspaceProps> = ({
   initialQuery,
@@ -492,7 +480,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             nextStatus: 'READY',
             blocks: [
               { type: 'TEXT', id: createUiId('text'), content: askRunCompletionMessage(taskAtStart.askPlan!, runResult) },
-              { type: 'ACTION_GROUP', id: createUiId('actions'), actions: [{ id: createUiId('view_result'), label: '查看完整结果', actionCode: 'OPEN_ASK_PLAN', variant: 'weak' }] }
+              { type: 'ACTION_GROUP', id: createUiId('actions'), actions: [{ id: createUiId('view_result'), label: '查看完整结果和计算依据', actionCode: 'OPEN_ASK_PLAN', variant: 'weak' }] }
             ]
           }
       });
@@ -1027,6 +1015,10 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           {activeSurfaceType === 'ASK_PLAN' && (
             <RightWorkspaceAskPlan
               task={task}
+              executionScopeDisclosure={buildAskPlanScopeDisclosure(
+                task.askPlan,
+                serviceMode === 'mock' ? 'MOCK_FIXTURE' : undefined
+              )}
               onCheckPermission={handleCheckPermissionForAskPlan}
               onRunPlan={handleRunAskPlan}
               onReturnToSolution={() => void handleAction('OPEN_SOLUTION')}

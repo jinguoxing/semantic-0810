@@ -286,6 +286,17 @@ describe('scenario classification and turn handling', () => {
     expect(next.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r04']);
     expect(next.askPlan?.calculationSpec).toEqual(calculationSpec);
   });
+
+  it('returns a comparison conclusion in the conversation before opening the comparison surface', async () => {
+    const detail = await submit(createMinhangTask(), '我还想看人口明细');
+    const compared = await service.submitTurn(detail.task, '比较这两张表');
+    expect(compared.surfaceCommand).toMatchObject({ action: 'OPEN', surface: 'COMPARE' });
+    const response = JSON.stringify(compared.assistantBlocks);
+    expect(response).toContain('人口基本信息视图');
+    expect(response).toContain('常住人口月度快照');
+    expect(response).toContain('推荐「常住人口月度快照」');
+    expect(response).toContain('查询权限方面');
+  });
 });
 
 describe('clarification decisions', () => {

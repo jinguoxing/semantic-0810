@@ -18,9 +18,13 @@ import {
   MINHANG_RESOURCES
 } from '../fixtures/minhangBedSupplyFixture';
 import {
+  buildAskPlanPreparedSummary,
+  buildCandidateDiscoverySummary,
+  buildComparisonSummary,
   buildFieldSummary,
   buildGapSummary,
-  buildRecommendationExplanation
+  buildRecommendationExplanation,
+  buildSolutionCompletionSummary
 } from '../presenters/conversationPresenters';
 import { InteractionIntent } from '../policy/surfacePolicy';
 import { FindDataEngineResult } from '../services/FindDataService';
@@ -30,6 +34,7 @@ import { deriveMinhangInitialHypothesis, minhangBedDefinitionQuestion } from './
 import { getMinhangBedDefinitionForCoreResources } from './minhangBedDefinition';
 import { selectAskHandoffReadiness } from '../model/findDataSelectors';
 import { resourceCoversRange, validateMonthRange } from '../model/timeRangeUtils';
+import { findDataReducer } from '../model/findDataReducer';
 
 const focusQuestion = {
   id: 'q_minhang_focus',
@@ -153,6 +158,29 @@ function assistantEvent(blocks: ConversationBlock[], nextStatus: FindDataTaskSta
   return {
     type: 'ASSISTANT_TURN_RECEIVED',
     payload: { turnId: createScenarioId('assistant'), blocks, nextStatus }
+  };
+}
+
+/**
+ * Scenario handlers emit events rather than mutating a task. Reducing the
+ * pending events here lets the accompanying assistant summary describe the
+ * exact snapshot the user will receive, without creating a second state path.
+ */
+function effectiveTaskAfter(task: FindDataTaskState, events: FindDataEvent[]): FindDataTaskState {
+  return events.reduce(findDataReducer, task);
+}
+
+function solutionFollowUpBlock(task: FindDataTaskState): ConversationBlock {
+  const hasItems = task.dataSolution.items.length > 0;
+  return {
+    type: 'ACTION_GROUP',
+    id: createScenarioId('actions'),
+    actions: [{
+      id: createScenarioId('solution'),
+      label: hasItems ? '查看完整方案' : '查看当前缺口',
+      actionCode: 'OPEN_SOLUTION',
+      variant: 'primary'
+    }]
   };
 }
 
@@ -336,24 +364,19 @@ function buildAskPlan(task: FindDataTaskState, benchmarkOptionId?: string): AskP
 
 function buildInitialCompositionResult(task: FindDataTaskState, hypothesis: RequirementHypothesis): FindDataEngineResult {
   const requirementRevision = task.requirementRevision + 1;
-  const composition = composeMinhangSolution(hypothesis, MINHANG_RESOURCES);
+  const lifecycleEvents: FindDataEvent[] = [
+    { type: 'REQUIREMENT_UPDATED', payload: { hypothesis, bumpRevision: true } },
+    ...buildCompositionSearchEvents(task, hypothesis, requirementRevision, task.goal)
+  ];
+  const effectiveTask = effectiveTaskAfter(task, lifecycleEvents);
   const blocks: ConversationBlock[] = [
-    textBlock('已按当前已登记的指标定义完成初次检索，形成最小数据方案。'),
-    {
-      type: 'RESULT_BRIEF', id: createScenarioId('result'), briefKind: 'SOLUTION_SUMMARY',
-      title: `已形成 ${composition.items.length} 项核心资源的最小数据方案`,
-      candidates: composition.items.map((item) => {
-        const resource = MINHANG_RESOURCES[item.resourceId];
-        return { resourceId: resource.id, title: resource.name, typeBadge: resource.type, statusBadge: '可用于问数', description: resource.desc, granularity: resource.granularity };
-      }),
-      primaryAction: { label: '查看当前方案', actionCode: 'OPEN_SOLUTION' }
-    }
+    textBlock(buildSolutionCompletionSummary(effectiveTask)),
+    solutionFollowUpBlock(effectiveTask)
   ];
   return {
     ...emptyScenarioResult(task.taskId),
     events: [
-      { type: 'REQUIREMENT_UPDATED', payload: { hypothesis, bumpRevision: true } },
-      ...buildCompositionSearchEvents(task, hypothesis, requirementRevision, task.goal),
+      ...lifecycleEvents,
       assistantEvent(blocks, 'READY')
     ],
     assistantBlocks: blocks
@@ -374,21 +397,22 @@ function buildServiceUseResult(
   requirementRevision: number,
   prerequisiteEvents: FindDataEvent[],
   mode: 'REPLACE' | 'MERGE',
-  query: string | undefined,
-  message: string
+  query: string | undefined
 ): FindDataEngineResult {
   const item = MINHANG_DATA_SOLUTION.items.find((entry) => entry.resourceId === 'r07')!;
   const gaps = mode === 'MERGE'
     ? [...task.dataSolution.gaps.filter((gap) => gap.id !== serviceUseGap.id), serviceUseGap]
     : [serviceUseGap];
-  const blocks: ConversationBlock[] = [
-    textBlock(message)
+  const lifecycleEvents = [
+    ...prerequisiteEvents,
+    ...searchEvents(task, { requirementRevision, resourceIds: ['r07'], items: [item], gaps, mode, query })
   ];
+  const effectiveTask = effectiveTaskAfter(task, lifecycleEvents);
+  const blocks: ConversationBlock[] = [textBlock(buildSolutionCompletionSummary(effectiveTask)), solutionFollowUpBlock(effectiveTask)];
   return {
     ...emptyScenarioResult(task.taskId),
     events: [
-      ...prerequisiteEvents,
-      ...searchEvents(task, { requirementRevision, resourceIds: ['r07'], items: [item], gaps, mode, query }),
+      ...lifecycleEvents,
       assistantEvent(blocks, 'READY')
     ],
     assistantBlocks: blocks
@@ -417,10 +441,7 @@ function buildServiceUseGoalResult(
     requirementRevision,
     prerequisiteEvents,
     extend ? 'MERGE' : 'REPLACE',
-    text,
-    extend
-      ? '已将养老服务实际使用补充到当前目标。现有老年人口与养老床位核心方案保持不变；目前仅发现居家养老服务订单，已记录为部分匹配，完整服务使用仍是当前方案缺口。'
-      : '已将当前目标切换为养老服务实际使用。当前只发现居家养老服务订单，尚不能代表完整养老服务使用。'
+    text
   );
 }
 
@@ -475,25 +496,33 @@ function buildRequirementReevaluationResult(
       mitigation: '接入该区域的正式资源目录与检索场景后重新评估。',
       status: 'OPEN'
     };
-    const blocks = [textBlock('已按新的区域重新评估；当前演示服务尚未配置该区域的数据资源检索场景。')];
+    const lifecycleEvents: FindDataEvent[] = [
+      ...prerequisite,
+      { type: 'SCENARIO_RECLASSIFIED', payload: { fromScenarioKey: 'minhang_bed_supply', toScenarioKey: 'generic', reason: '区域已变更为非闵行区。' } },
+      ...searchEvents(task, { requirementRevision, resourceIds: [], items: [], gaps: [gap], mode: 'REPLACE', query: '需求修改后重新检索' })
+    ];
+    const effectiveTask = effectiveTaskAfter(task, lifecycleEvents);
+    const blocks = [textBlock(buildSolutionCompletionSummary(effectiveTask)), solutionFollowUpBlock(effectiveTask)];
     return {
       ...emptyScenarioResult(task.taskId),
       events: [
-        ...prerequisite,
-        { type: 'SCENARIO_RECLASSIFIED', payload: { fromScenarioKey: 'minhang_bed_supply', toScenarioKey: 'generic', reason: '区域已变更为非闵行区。' } },
-        ...searchEvents(task, { requirementRevision, resourceIds: [], items: [], gaps: [gap], mode: 'REPLACE', query: '需求修改后重新检索' }),
+        ...lifecycleEvents,
         assistantEvent(blocks, 'READY')
       ],
       assistantBlocks: blocks
     };
   }
 
-  const blocks = [textBlock('正在按新口径重新评估；已更新候选资源、覆盖范围和关系证据。')];
+  const lifecycleEvents = [
+    ...prerequisite,
+    ...buildCompositionSearchEvents(task, nextHypothesis, requirementRevision, '需求修改后重新检索')
+  ];
+  const effectiveTask = effectiveTaskAfter(task, lifecycleEvents);
+  const blocks = [textBlock(buildSolutionCompletionSummary(effectiveTask)), solutionFollowUpBlock(effectiveTask)];
   return {
     ...emptyScenarioResult(task.taskId),
     events: [
-      ...prerequisite,
-      ...buildCompositionSearchEvents(task, nextHypothesis, requirementRevision, '需求修改后重新检索'),
+      ...lifecycleEvents,
       assistantEvent(blocks, 'READY')
     ],
     assistantBlocks: blocks
@@ -519,7 +548,7 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
 
     if (task.scenarioKey) {
       if (text.includes('字段')) {
-        const blocks = [textBlock(buildFieldSummary(task))];
+        const blocks = [textBlock(buildFieldSummary(task, text))];
         return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
       }
       if (text.includes('为什么推荐') || text.includes('适合')) {
@@ -537,10 +566,12 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
         const blocks = [textBlock(message)];
         return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
       }
-      if (intent.matchedRule === 'compare-summary-question') {
+      if (intent.matchedRule === 'compare-summary-question' || (intent.kind === 'OPEN_SURFACE' && intent.surface === 'COMPARE')) {
         const blocks: ConversationBlock[] = [
-          textBlock('这两项资源可以从粒度、时间形态和查询权限三个维度比较。'),
-          { type: 'ACTION_GROUP', id: createScenarioId('actions'), actions: [{ id: createScenarioId('compare'), label: '比较 2 项资源', actionCode: 'OPEN_COMPARE', variant: 'weak' }] }
+          textBlock(buildComparisonSummary(task)),
+          ...(intent.matchedRule === 'compare-summary-question'
+            ? [{ type: 'ACTION_GROUP' as const, id: createScenarioId('actions'), actions: [{ id: createScenarioId('compare'), label: '比较 2 项资源', actionCode: 'OPEN_COMPARE' as const, variant: 'weak' as const }] }]
+            : [])
         ];
         return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
       }
@@ -571,28 +602,33 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
         const isInstitution = /(解释机构|解释床位.*机构|查看养老机构|养老机构|床位来源机构)/.test(text);
         const isCivilAffairs = /(民政相关资源|养老相关数据|查看养老相关数据|还有哪些养老资源|浏览民政数据)/.test(text);
         const ids = isInstitution ? ['r06'] : isCivilAffairs ? ['r05', 'r06', 'r07'] : ['r02', 'r03'];
-        const blocks: ConversationBlock[] = [
-          textBlock(isCivilAffairs
-            ? '当前发现 3 项民政相关候选资源，分别用于床位口径替代、机构下钻和服务使用补充，尚未自动纳入当前方案。'
-            : isInstitution
-            ? '当前找到「养老机构基本信息」，可用于解释各街镇床位主要由哪些机构提供。它属于结果下钻资源，不参与每千名老人床位数的核心计算。'
-            : `当前发现 ${ids.length} 项可选明细资源。基于过去 12 个月的目标，月度快照更适合。`),
-          { type: 'ACTION_GROUP', id: createScenarioId('actions'), actions: isCivilAffairs
-            ? []
-            : ids.length >= 2
-            ? [{ id: createScenarioId('compare'), label: '比较 2 项资源', actionCode: 'OPEN_COMPARE', variant: 'weak' }, ...(ids.includes('r03') ? [{ id: createScenarioId('select'), label: '使用月度快照', actionCode: 'SELECT_RESOURCE' as const, payload: { resourceId: 'r03' }, variant: 'primary' as const }] : [])]
-            : [{ id: createScenarioId('fields'), label: '查看机构元数据', actionCode: 'OPEN_FIELDS', payload: { resourceId: 'r06' }, variant: 'weak' }] }
-        ];
         const comparisonEvents = isCivilAffairs
           ? [{ type: 'COMPARISON_MODEL_CLEARED' as const }]
           : ids.length >= 2
           ? [{ type: 'COMPARISON_MODEL_SET' as const, payload: { comparisonModel: { resourceIds: ids, recommendedResourceId: 'r03', rows: [] } } }]
           : [];
+        const candidateEvents = searchEvents(task, {
+          requirementRevision: task.requirementRevision,
+          resourceIds: ids,
+          items: [],
+          mode: 'MERGE',
+          query: text,
+          relatedCandidateIds: isCivilAffairs ? ['r05', 'r06', 'r07'] : undefined
+        });
+        const effectiveTask = effectiveTaskAfter(task, [...comparisonEvents, ...candidateEvents]);
+        const delta = candidateEvents.find((event) => event.type === 'SEARCH_RESULTS_RECEIVED')?.payload.candidateDelta;
+        const actions = isCivilAffairs
+          ? []
+          : ids.length >= 2
+          ? [{ id: createScenarioId('compare'), label: '比较 2 项资源', actionCode: 'OPEN_COMPARE' as const, variant: 'weak' as const }, ...(ids.includes('r03') ? [{ id: createScenarioId('select'), label: '使用月度快照', actionCode: 'SELECT_RESOURCE' as const, payload: { resourceId: 'r03' }, variant: 'primary' as const }] : [])]
+          : [{ id: createScenarioId('fields'), label: '查看机构元数据', actionCode: 'OPEN_FIELDS' as const, payload: { resourceId: 'r06' }, variant: 'weak' as const }];
+        const blocks: ConversationBlock[] = [textBlock(buildCandidateDiscoverySummary(effectiveTask, ids, delta?.addedIds ?? []))];
+        if (actions.length > 0) blocks.push({ type: 'ACTION_GROUP', id: createScenarioId('actions'), actions });
         return {
           ...result,
           events: [
             ...comparisonEvents,
-            ...searchEvents(task, { requirementRevision: task.requirementRevision, resourceIds: ids, items: [], mode: 'MERGE', query: text, relatedCandidateIds: isCivilAffairs ? ['r05', 'r06', 'r07'] : undefined }),
+            ...candidateEvents,
             assistantEvent(blocks, 'READY')
           ],
           assistantBlocks: blocks
@@ -683,7 +719,7 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       const readiness = selectAskHandoffReadiness(task);
       if (!readiness.ready) return { ...result, events: [assistantEvent([textBlock(readiness.message)], settledTaskStatus(task))], assistantBlocks: [textBlock(readiness.message)] };
       const askPlan = buildAskPlan(task, uniqueOptionIds[0]);
-      const blocks: ConversationBlock[] = [textBlock('比较基准已确认，分析计划已准备完成，请先执行权限重检。')];
+      const blocks: ConversationBlock[] = [textBlock(buildAskPlanPreparedSummary(askPlan, 'MOCK_FIXTURE'))];
       return {
         ...result,
         events: [{ type: 'CLARIFICATION_RESOLVED', payload: { questionId, selectedOptionIds: uniqueOptionIds, selectedOptionLabels: labels, requirementRevision: task.requirementRevision, resolvedAt: new Date().toISOString() } }, { type: 'ASK_PLAN_PREPARED', payload: { askPlan } }, assistantEvent(blocks, 'WAITING_USER')],

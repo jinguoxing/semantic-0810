@@ -137,12 +137,14 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
         onCheckPermission={async () => ({ decision: 'CHANGED', updatedPermissions: {} })}
         onRunPlan={async () => {}}
         onReturnToSolution={() => {}}
+        executionScopeDisclosure="演示仅返回 2026-08 月度样例。"
         onClose={() => {}}
       />
     );
     expect(screen.getByText('权限发生变化')).toBeInTheDocument();
     expect(screen.getByText('查看权限变化')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '确认并开始计算' })).toBeDisabled();
+    expect(screen.getByText(/演示仅返回 2026-08 月度样例/)).toBeInTheDocument();
   });
 
   it('renders relationship evidence with business names instead of internal resource ids', () => {

@@ -22,6 +22,8 @@ import { findDataReducer } from '../model/findDataReducer';
 import { getMinhangBedDefinitionForCoreResources, getMinhangBedDefinitionForResource } from '../scenarios/minhangBedDefinition';
 import { FindDataEngineResult, FindDataService, FindDataTaskSummary, PermissionRecheckResult } from './FindDataService';
 import { getPermissionActionLabel } from '../model/permissionActionLabels';
+import { buildSelectionSuccessSummary } from '../presenters/conversationPresenters';
+import { MINHANG_MOCK_RESULT_SCOPE } from '../fixtures/minhangBedSupplyFixture';
 
 function assistantNotice(task: FindDataTaskState, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info'): FindDataEngineResult {
   const block: ConversationBlock = { type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level, message };
@@ -75,6 +77,7 @@ function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resul
       townResults: bedDefinition.key === 'APPROVED'
         ? [{ townName: '七宝镇', supplyRatio: '36.5 张 / 千人', comparisonNote: '样例排名第 1' }, { townName: '浦锦街道', supplyRatio: '32.0 张 / 千人', comparisonNote: '样例排名第 2' }]
         : [{ townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '样例排名第 1' }, { townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '样例排名第 2' }],
+      actualScope: MINHANG_MOCK_RESULT_SCOPE,
       boundaryNotice
     };
   }
@@ -92,11 +95,13 @@ function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resul
           ? [{ townName: '浦锦街道', supplyRatio: '32.0 张 / 千人', comparisonNote: '高于演示目标 +6.7%' }, { townName: '七宝镇', supplyRatio: '36.5 张 / 千人', comparisonNote: '高于演示目标 +21.7%' }]
           : [{ townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于演示目标 -52.7%' }, { townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '低于演示目标 -45.0%' }]
         : [],
+      actualScope: MINHANG_MOCK_RESULT_SCOPE,
       boundaryNotice
     };
   }
   return {
     ...fixture,
+    actualScope: MINHANG_MOCK_RESULT_SCOPE,
     boundaryNotice
   };
 }
@@ -186,13 +191,24 @@ export class MockFindDataService implements FindDataService {
         evidenceRefs: ['用户确认纳入当前方案'],
         selectionGroupId: ['r02', 'r03'].includes(resourceId) ? 'population_detail_alternative' : undefined
       };
+      const stateEvents: FindDataEvent[] = [
+        ...(existing ? [] : [{ type: 'SOLUTION_ITEM_UPSERTED' as const, payload: { item } }]),
+        { type: 'RESOURCE_SELECTED', payload: { resourceId } }
+      ];
+      const nextTask = stateEvents.reduce(findDataReducer, task);
+      const block: ConversationBlock = {
+        type: 'TEXT',
+        id: createScenarioId('text'),
+        content: buildSelectionSuccessSummary(nextTask, resourceId)
+      };
       return this.persistResult(task, {
         ...emptyScenarioResult(task.taskId),
         operationId,
         events: [
-          ...(existing ? [] : [{ type: 'SOLUTION_ITEM_UPSERTED' as const, payload: { item } }]),
-          { type: 'RESOURCE_SELECTED', payload: { resourceId } }
+          ...stateEvents,
+          { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [block], nextStatus: 'READY' } }
         ],
+        assistantBlocks: [block],
         surfaceCommand: task.activeSurface.type === 'COMPARE' ? { action: 'CLOSE', surface: 'CLOSED' } : surfaceCommand
       });
     }
@@ -227,16 +243,16 @@ export class MockFindDataService implements FindDataService {
         limitations: [resource.roleNote ?? '需进一步确认分析口径'],
         evidenceRefs: ['用户在相关资源中主动关联']
       };
+      const stateEvents: FindDataEvent[] = [{ type: 'SOLUTION_ITEM_UPSERTED', payload: { item } }];
+      const nextTask = stateEvents.reduce(findDataReducer, task);
       const block: ConversationBlock = {
-        type: 'TEXT', id: createScenarioId('text'), content: resourceId === 'r07'
-          ? '已将「居家养老服务订单」记录为部分匹配资源；它只覆盖居家服务，目前不进入核心执行方案。'
-          : `已将「${resource.name}」加入当前数据方案。`
+        type: 'TEXT', id: createScenarioId('text'), content: buildSelectionSuccessSummary(nextTask, resourceId)
       };
       return this.persistResult(task, {
         ...emptyScenarioResult(task.taskId),
         operationId,
         events: [
-          { type: 'SOLUTION_ITEM_UPSERTED', payload: { item } },
+          ...stateEvents,
           { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [block], nextStatus: 'READY' } }
         ],
         assistantBlocks: [block],

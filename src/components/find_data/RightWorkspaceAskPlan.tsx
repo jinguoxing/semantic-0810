@@ -3,6 +3,7 @@ import { X, Calculator, CheckCircle2, ShieldCheck, Play, Edit3, Loader2, Refresh
 import { AskPlan, FindDataTaskState, PermissionCheckState } from './model/FindDataTask';
 import { PermissionRecheckResult } from './services/FindDataService';
 import { getMinhangBedDefinitionForNumerator } from './scenarios/minhangBedDefinition';
+import { buildActualScopeLabel } from './presenters/conversationPresenters';
 
 interface RightWorkspaceAskPlanProps {
   task: FindDataTaskState;
@@ -12,6 +13,7 @@ interface RightWorkspaceAskPlanProps {
   onModifySpec?: () => void;
   onViewPermissionChanges?: () => void;
   onRegeneratePlan?: () => void;
+  executionScopeDisclosure?: string;
   onClose: () => void;
 }
 
@@ -38,6 +40,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   onModifySpec,
   onViewPermissionChanges,
   onRegeneratePlan,
+  executionScopeDisclosure = '本次执行范围将在服务返回后确认。',
   onClose
 }) => {
   const plan = task.askPlan;
@@ -187,6 +190,10 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
               <span className="font-semibold">约束边界：</span>
               {plan.calculationSpec.strictConclusionBoundary}
             </div>
+            <div className="p-2 bg-[#EFF6FF] rounded border border-[#BFDBFE] text-[11px] text-[#1D4ED8] leading-relaxed">
+              <span className="font-semibold">执行范围说明：</span>
+              {executionScopeDisclosure}
+            </div>
           </div>
         </div>
 
@@ -275,7 +282,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
                 <span className="text-[10px] px-2 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] font-mono border border-[#E2E8F0]">
                   {lastRunResult.dataOrigin === 'MOCK_FIXTURE' ? `${resultDefinitionLabel} · 演示数据` : '实时查询引擎'}
                 </span>
-                <span className="text-[11px] text-[#64748B]">{plan.timeRange?.end ? `${plan.timeRange.end} 最新月度` : '时间未指定'}</span>
+                <span className="text-[11px] text-[#64748B]">{buildActualScopeLabel(lastRunResult.resultArtifact.actualScope)}</span>
               </div>
             </div>
 

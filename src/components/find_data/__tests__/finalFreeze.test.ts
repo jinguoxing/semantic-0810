@@ -69,18 +69,18 @@ describe('final freeze completion summaries', () => {
   });
 
   it('reports the service-provided below-benchmark count rather than the row count', () => {
-    expect(askRunCompletionMessage(weightedPlan, resultWith(2))).toContain('识别出 2 个相对全区加权平均偏低的街镇');
+    expect(askRunCompletionMessage(weightedPlan, resultWith(2))).toContain('有 2 个街镇低于当前比较基准');
   });
 
   it('reports no below-benchmark towns for an r05-style result', () => {
     const message = askRunCompletionMessage(weightedPlan, resultWith(0));
-    expect(message).toContain('当前返回结果中未发现低于全区加权平均的街镇');
+    expect(message).toContain('本次结果范围内未发现低于当前比较基准的街镇');
     expect(message).not.toContain('识别出 2 个');
   });
 
   it('uses a neutral message when an HTTP artifact omits belowBenchmarkCount', () => {
     const message = askRunCompletionMessage(weightedPlan, resultWith());
-    expect(message).toContain('已生成 2 个街镇比较结果');
+    expect(message).toContain('本次返回的街镇记录包括');
     expect(message).not.toContain('偏低');
   });
 });
@@ -124,6 +124,9 @@ describe('final freeze scenario semantics', () => {
     expect(result.resultArtifact?.totalBeds).toBe('12,936 张');
     expect(result.resultArtifact?.summary).toContain('核定床位容量');
     expect(result.resultArtifact?.belowBenchmarkCount).toBe(0);
+    expect(result.resultArtifact?.actualScope).toEqual({
+      region: '上海市闵行区', timeRange: { start: '2026-08', end: '2026-08' }, grain: 'MONTH'
+    });
   });
 
   it('keeps civil-affairs candidates out of a comparison model', async () => {

@@ -11,14 +11,15 @@ test.describe('Find Data RC1 mock smoke', () => {
     await homeInput.fill(goal);
     await homeInput.press('Enter');
 
-    await expect(page.getByText('已形成 2 项核心资源的最小数据方案')).toBeVisible();
-    await page.getByRole('button', { name: '查看当前方案' }).click();
+    await expect(page.getByText('已形成 2 项核心资源').last()).toBeVisible();
+    await expect(page.getByText('两项资源均按街镇和月份组织，可用于后续供给水平分析。')).toBeVisible();
+    await page.getByRole('button', { name: '查看完整方案' }).click();
     await expect(page.getByRole('heading', { name: '数据方案' })).toBeVisible();
 
     const taskInput = page.getByPlaceholder('发送找数据意图、提出追问或输入口径调整要求…');
     await taskInput.fill('再加入养老服务实际使用');
     await taskInput.press('Enter');
-    await expect(page.getByText('现有老年人口与养老床位核心方案保持不变')).toBeVisible();
+    await expect(page.getByText('核心供给分析已具备基础')).toBeVisible();
     await expect(page.getByText('60 岁以上常住人口数').last()).toBeVisible();
     await expect(page.getByText('在营可用养老床位数').last()).toBeVisible();
     await expect(page.getByText('居家养老服务订单').last()).toBeVisible();
@@ -41,7 +42,7 @@ test.describe('Find Data RC1 mock smoke', () => {
     const inputs = page.locator('.fixed input');
     await inputs.nth(5).fill('养老床位核定数');
     await page.getByRole('button', { name: '保存并更新口径' }).click();
-    await expect(page.getByText('正在按新口径重新评估')).toBeVisible();
+    await expect(page.getByText('已形成 2 项核心资源').last()).toBeVisible();
     await page.getByRole('button', { name: /方案 · 2 项核心资源/ }).click();
     await expect(page.getByText('养老床位核定数', { exact: true })).toBeVisible();
 
@@ -60,7 +61,7 @@ test.describe('Find Data RC1 mock smoke', () => {
     await expect(page.getByText('可以执行')).toBeVisible();
     await page.getByRole('button', { name: '确认并开始计算' }).click();
     await expect(page.getByText('核定床位口径 · 演示数据')).toBeVisible();
-    await expect(page.getByText('当前返回结果中未发现低于全区加权平均的街镇')).toBeVisible();
+    await expect(page.getByText('本次结果范围内未发现低于当前比较基准的街镇')).toBeVisible();
     await expect(page.getByText('识别出 2 个供给水平相对全区加权平均偏低的街镇')).toHaveCount(0);
   });
 
@@ -81,5 +82,22 @@ test.describe('Find Data RC1 mock smoke', () => {
     await expect(page.getByText('60 岁以上常住人口数').last()).toBeVisible();
     await expect(page.getByText('在营可用养老床位数').last()).toBeVisible();
     await expect(page.getByRole('button', { name: /分析计划/ })).toHaveCount(0);
+  });
+
+  test('keeps candidate and selection decisions readable in the conversation without opening a workspace', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: '找数据' }).click();
+    const homeInput = page.getByPlaceholder(/描述你要查找的数据或分析目标/);
+    await homeInput.fill(goal);
+    await homeInput.press('Enter');
+
+    const taskInput = page.getByPlaceholder('发送找数据意图、提出追问或输入口径调整要求…');
+    await taskInput.fill('我还想看人口明细');
+    await taskInput.press('Enter');
+    await expect(page.getByText('本轮新增 2 项候选资源，尚未自动纳入当前方案。')).toBeVisible();
+    await expect(page.getByText(/月度快照保留相应的月度切片，因此更适合作为明细下钻候选/)).toBeVisible();
+    await page.getByRole('button', { name: '使用月度快照' }).click();
+    await expect(page.getByText(/已将「常住人口月度快照」加入方案/)).toBeVisible();
+    await expect(page.getByText(/「人口基本信息视图」仍保留在候选中，未加入正式方案/)).toBeVisible();
   });
 });

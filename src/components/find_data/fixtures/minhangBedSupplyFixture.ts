@@ -1,4 +1,5 @@
 import {
+  ActualExecutionScope,
   FindDataResource,
   FieldMetadata,
   ResourceComparisonRow,
@@ -7,6 +8,16 @@ import {
   AskPlan,
   RequirementHypothesis
 } from '../model/FindDataTask';
+
+/**
+ * The Mock service intentionally returns only this registered month-level
+ * sample. It must not be inferred from a plan request or an execution time.
+ */
+export const MINHANG_MOCK_RESULT_SCOPE: ActualExecutionScope = {
+  timeRange: { start: '2026-08', end: '2026-08' },
+  region: '上海市闵行区',
+  grain: 'MONTH'
+};
 
 export const R03_FIELDS: FieldMetadata[] = [
   {

@@ -212,6 +212,20 @@ export interface AskPlanCalculationSpec {
   strictConclusionBoundary: string;
 }
 
+/**
+ * The factual data scope supplied by an execution service. It is deliberately
+ * separate from an AskPlan's requested time range: a request can be broader
+ * than the data a service actually returned.
+ */
+export interface ActualExecutionScope {
+  timeRange?: {
+    start: string;
+    end: string;
+  };
+  region?: string;
+  grain?: string;
+}
+
 export interface AskRunResult {
   operationId?: string;
   success: boolean;
@@ -224,6 +238,8 @@ export interface AskRunResult {
     summary: string;
     totalPopulation?: string;
     totalBeds?: string;
+    /** Actual data scope reported by the execution service, when available. */
+    actualScope?: ActualExecutionScope;
     /** Count supplied by the execution service; the browser must not infer it from result rows. */
     belowBenchmarkCount?: number;
     townResults: Array<{
