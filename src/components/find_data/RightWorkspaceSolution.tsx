@@ -75,7 +75,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
               {isEmpty
                 ? '暂无活跃数据方案'
                 : isReevaluating
-                ? '正在按新口径重新评估，旧内容仅供过渡查看'
+                ? '正在按新条件重新评估，旧内容仅供过渡查看'
                 : isExecutableMode
                 ? '仅核验具备即时查询权限的直接可执行范围'
                 : '完整业务推荐方案与缺口声明'}
@@ -139,7 +139,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
           <>
             {isReevaluating && (
               <div className="p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl text-xs text-[#92400E]">
-                正在按新口径重新评估。旧方案暂不作为推荐就绪方案，也不能进入 Ask Data。
+                正在按新条件重新评估。旧方案暂不作为推荐就绪方案，也不能进入 Ask Data。
               </div>
             )}
             {/* Coverage Scope Card */}

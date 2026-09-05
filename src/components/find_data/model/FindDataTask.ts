@@ -406,11 +406,24 @@ export type ConversationBlock =
   | RuntimeStatusBlock
   | SystemNoticeBlock;
 
+/**
+ * Optional provenance for summaries whose current applicability matters.
+ * It is a reference to the facts used at creation time, never a task snapshot.
+ */
+export interface ConversationSource {
+  kind: 'SOLUTION' | 'CANDIDATES' | 'ASK_PLAN' | 'ASK_RESULT' | 'PERMISSION';
+  requirementRevision?: number;
+  searchRevision?: number;
+  askPlanId?: string;
+  resultExecutedAt?: string;
+}
+
 export interface ConversationTurn {
   turnId: string;
   sender: 'USER' | 'ASSISTANT' | 'SYSTEM';
   createdAt: string;
   blocks: ConversationBlock[];
+  source?: ConversationSource;
 }
 
 export type TaskStatus =

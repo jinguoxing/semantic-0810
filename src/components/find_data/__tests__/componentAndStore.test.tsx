@@ -129,6 +129,23 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
     expect(screen.queryByDisplayValue('上海市闵行区')).not.toBeInTheDocument();
   });
 
+  it('does not trigger a re-evaluation when the task context has not changed', () => {
+    const onApplyChanges = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <TaskContextDrawer
+        isOpen
+        onClose={onClose}
+        hypothesis={createMinhangTask().requirementHypothesis}
+        scenarioKey="minhang_bed_supply"
+        onApplyChanges={onApplyChanges}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: '保存并更新口径' }));
+    expect(onApplyChanges).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it('renders CHANGED as a distinct non-runnable Ask state', () => {
     const askPlan = createAskPlan({ permissionCheckState: 'CHANGED' });
     render(

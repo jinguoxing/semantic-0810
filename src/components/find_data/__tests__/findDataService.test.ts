@@ -484,6 +484,10 @@ describe('fourth-round task recomposition and candidate pool', () => {
     expect(next.askPlan).toBeUndefined();
     expect(next.dataSolution).toMatchObject({ state: 'READY', basedOnRequirementRevision: 2, basedOnSearchRevision: 2 });
     expect(next.requirementHypothesis.timeRange).toEqual({ start: '2024.09', end: '2025.08' });
+    const summary = result.events.find((event) => event.type === 'ASSISTANT_TURN_RECEIVED');
+    expect(summary).toMatchObject({ payload: { source: { kind: 'SOLUTION', requirementRevision: 2, searchRevision: 2 } } });
+    expect(JSON.stringify(summary)).toContain('原核心指标仍能覆盖本次请求，资源组合保持不变');
+    expect(JSON.stringify(summary)).toContain('原分析计划已失效');
   });
 
   it('does not leave Minhang resources in an active solution after a non-Minhang revision', async () => {
@@ -496,6 +500,8 @@ describe('fourth-round task recomposition and candidate pool', () => {
     expect(next.dataSolution.items).toEqual([]);
     expect(Object.keys(next.resources)).toEqual([]);
     expect(next.dataSolution.gaps[0]?.description).toContain('尚未配置该区域');
+    expect(JSON.stringify(result)).toContain('旧方案不能继续作为新需求的有效方案');
+    expect(JSON.stringify(result)).not.toContain('60 岁以上常住人口数保持不变');
   });
 
   it('upgrades an empty generic task after the user supplies complete Minhang context', async () => {

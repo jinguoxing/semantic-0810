@@ -134,21 +134,21 @@ describe('workspace tracked task pipeline', () => {
     expect(vi.mocked(service.submitTurn).mock.calls[0][0].taskId).toBe('created_task');
   });
 
-  it('returns a failed turn to an interactive state when the service rejects', async () => {
+  it('returns a failed turn to an interactive state with a recoverable business message', async () => {
     const service = createService({ submitTurn: vi.fn(async () => { throw new Error('服务暂时不可用'); }) });
     render(<DataAssistantFindDataWorkspace initialQuery="失败请求" serviceOverride={service} taskStoreOverride={new MemoryTaskStore()} />);
-    expect(await screen.findByText('服务暂时不可用')).toBeInTheDocument();
+    expect(await screen.findByText('本次检索未完成，当前还没有形成新的有效方案。可以补充条件后重试。')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…')).not.toBeDisabled();
   });
 
-  it('shows an interactive failed task when initial task creation rejects', async () => {
+  it('shows an interactive failed task with a safe business message when initial creation rejects', async () => {
     const service = createService({ createTask: vi.fn(async () => { throw new Error('建任务失败'); }) });
     render(<DataAssistantFindDataWorkspace serviceOverride={service} taskStoreOverride={new MemoryTaskStore()} />);
-    expect(await screen.findByText('建任务失败')).toBeInTheDocument();
+    expect(await screen.findByText('本次操作未完成，当前已形成的任务内容保持不变。请根据当前方案继续操作或稍后重试。')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…')).not.toBeDisabled();
   });
 
-  it('surfaces action failures and does not leave the workspace busy', async () => {
+  it('surfaces action failures without exposing the service error and does not leave the workspace busy', async () => {
     const store = new MemoryTaskStore();
     const task = createMinhangTask({ taskId: 'action_task' });
     store.save(task);
@@ -156,7 +156,7 @@ describe('workspace tracked task pipeline', () => {
     const service = createService({ executeAction: vi.fn(async () => { throw new Error('操作服务失败'); }) });
     render(<DataAssistantFindDataWorkspace serviceOverride={service} taskStoreOverride={store} />);
     fireEvent.click(await screen.findByRole('button', { name: '方案 · 2 项核心资源' }));
-    expect(await screen.findByText('操作服务失败')).toBeInTheDocument();
+    expect(await screen.findByText('本次操作未完成，当前已形成的任务内容保持不变。请根据当前方案继续操作或稍后重试。')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…')).not.toBeDisabled();
   });
 
@@ -177,5 +177,32 @@ describe('workspace tracked task pipeline', () => {
     expect(service.getTask).toHaveBeenCalledWith('http_task');
     await new Promise((resolve) => window.setTimeout(resolve, 400));
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it('reads back a saved HTTP requirement change without pretending a stale solution is ready', async () => {
+    window.history.replaceState({}, '', '/?findTaskId=http_recheck');
+    const before = createMinhangTask({ taskId: 'http_recheck', title: 'HTTP 修改任务' });
+    const afterSave = {
+      ...before,
+      requirementRevision: 2,
+      status: 'WAITING_USER' as const,
+      requirementHypothesis: { ...before.requirementHypothesis, bedDefinition: '养老床位核定数' },
+      dataSolution: { ...before.dataSolution, state: 'STALE' as const }
+    };
+    const getTask = vi.fn()
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(afterSave);
+    const service = createService({
+      getTask,
+      executeAction: vi.fn(async () => { throw new Error('写入结果超时'); })
+    });
+    render(<DataAssistantFindDataWorkspace serviceOverride={service} serviceModeOverride="http" taskStoreOverride={new MemoryTaskStore()} />);
+    await screen.findByRole('heading', { name: 'HTTP 修改任务' });
+    fireEvent.click(screen.getByRole('button', { name: '查看口径上下文' }));
+    fireEvent.change(screen.getByDisplayValue('在营可用养老床位'), { target: { value: '养老床位核定数' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存并更新口径' }));
+    expect(await screen.findByText('新需求已保存，但重新检索尚未形成新方案。旧方案仅供历史参考；可以稍后重试。')).toBeInTheDocument();
+    expect(getTask).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: '正在重新评估' })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   selectDiscoverableResources,
+  selectConversationTurnApplicability,
   selectExecutionAssessments,
   selectExecutableSolutionItems,
   selectPermissionRelevantItems,
@@ -12,7 +13,7 @@ import {
   getDataSolutionDisplayState
 } from '../model/findDataSelectors';
 import { deniedResourceFixture } from './fixtures/deniedResourceFixture';
-import { createEmptyTask, createResource, createSolutionItem, permissionsWithQuery } from './testUtils/findDataFactories';
+import { createAskPlan, createEmptyTask, createResource, createSolutionItem, permissionsWithQuery } from './testUtils/findDataFactories';
 
 describe('find-data selectors', () => {
   it('never exposes a discovery-denied test resource', () => {
@@ -163,5 +164,37 @@ describe('find-data selectors', () => {
     expect(getDataSolutionDisplayState(complete).label).toBe('推荐就绪');
     expect(getDataSolutionDisplayState(partial).label).toBe('部分覆盖');
     expect(getDataSolutionDisplayState(gapOnly).label).toBe('当前仅发现缺口');
+  });
+
+  it('keeps historic bodies intact while exposing only the applicable source warning', () => {
+    const task = createEmptyTask({ requirementRevision: 2, searchRevision: 3 });
+    const resultTurn = {
+      turnId: 'old_result', sender: 'ASSISTANT' as const, createdAt: '',
+      blocks: [{ type: 'TEXT' as const, id: 'summary', content: '原始分析摘要，不应被改写。' }],
+      source: { kind: 'ASK_RESULT' as const, requirementRevision: 1, searchRevision: 1, askPlanId: 'old_plan', resultExecutedAt: '2026-09-04T00:00:00.000Z' }
+    };
+    expect(selectConversationTurnApplicability(task, resultTurn)).toEqual({
+      historical: true, kind: 'ASK_RESULT', message: '历史结果，尚未按新需求重新计算。'
+    });
+    expect(resultTurn.blocks[0].content).toBe('原始分析摘要，不应被改写。');
+
+    const legacyTurn = { ...resultTurn, turnId: 'legacy', source: undefined };
+    expect(selectConversationTurnApplicability(task, legacyTurn).message).toBe('历史内容，当前适用性需结合最新方案确认。');
+  });
+
+  it('does not mark a source-linked analysis result historical just because candidates changed', () => {
+    const task = createEmptyTask({
+      requirementRevision: 1,
+      searchRevision: 2,
+      askPlan: createAskPlan({
+        id: 'plan_current', status: 'COMPLETED', coreResourceIds: [],
+        lastRunResult: { success: true, executedAt: '2026-09-05T00:00:00.000Z', permissionSnapshot: {} }
+      })
+    });
+    const resultTurn = {
+      turnId: 'current_result', sender: 'ASSISTANT' as const, createdAt: '', blocks: [],
+      source: { kind: 'ASK_RESULT' as const, requirementRevision: 1, searchRevision: 1, askPlanId: 'plan_current', resultExecutedAt: '2026-09-05T00:00:00.000Z' }
+    };
+    expect(selectConversationTurnApplicability(task, resultTurn).historical).toBe(false);
   });
 });

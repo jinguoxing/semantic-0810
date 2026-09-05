@@ -110,7 +110,8 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
         turnId: action.payload.turnId,
         sender: 'ASSISTANT',
         createdAt: now,
-        blocks: action.payload.blocks
+        blocks: action.payload.blocks,
+        ...(action.payload.source ? { source: action.payload.source } : {})
       };
       return {
         ...state,

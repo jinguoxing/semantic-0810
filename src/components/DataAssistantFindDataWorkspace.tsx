@@ -32,12 +32,16 @@ import {
 import { SurfaceCommand } from './find_data/policy/surfacePolicy';
 import {
   selectActiveResource,
+  selectConversationTurnApplicability,
   selectResourceById,
   selectResourceFields
 } from './find_data/model/findDataSelectors';
 import {
   buildAskPlanScopeDisclosure,
-  buildAskRunCompletionSummary
+  buildAskRunCompletionSummary,
+  buildAskRunFailureSummary,
+  buildOperationFailureSummary,
+  buildPermissionRecheckSummary
 } from './find_data/presenters/conversationPresenters';
 
 // Blocks
@@ -130,6 +134,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const [savedTaskList, setSavedTaskList] = useState<FindDataTaskSummary[]>(() => taskStore.list().map(toTaskSummary));
   const [clarificationErrors, setClarificationErrors] = useState<Record<string, string>>({});
   const [clarificationSubmittingId, setClarificationSubmittingId] = useState<string>();
+  const [permissionCheckFailure, setPermissionCheckFailure] = useState<string>();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationScrollRef = useRef<HTMLDivElement>(null);
@@ -215,9 +220,16 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     return true;
   }, [applySurfaceCommand, dispatchTracked, dispatchTrackedEvents]);
 
-  const applyServiceFailure = useCallback((taskId: string, error: unknown, operationId?: string) => {
+  const applyServiceFailure = useCallback((
+    taskId: string,
+    error: unknown,
+    operationId?: string,
+    actionCode?: TaskActionCode,
+    uncertain = false
+  ) => {
     if (taskId !== taskRef.current.taskId) return;
     if (operationId && taskRef.current.pendingOperation?.operationId !== operationId) return;
+    const operationType = taskRef.current.pendingOperation?.operationType ?? 'ACTION';
     if (operationId) dispatchTracked({ type: 'OPERATION_FAILED', payload: { operationId } });
     dispatchTracked({
       type: 'ASSISTANT_TURN_RECEIVED',
@@ -228,7 +240,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           type: 'SYSTEM_NOTICE',
           id: createUiId('notice'),
           level: 'error',
-          message: error instanceof Error ? error.message : '数据服务请求失败，请稍后重试。'
+          message: buildOperationFailureSummary(taskRef.current, operationType, actionCode, uncertain)
         }]
       }
     });
@@ -404,11 +416,53 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     const operationId = isSurfaceAction ? undefined : startOperation('ACTION');
     if (!isSurfaceAction && !operationId) return;
     const actionTaskId = taskRef.current.taskId;
+    const actionTaskAtStart = taskRef.current;
     try {
       const engineResult = await service.executeAction(taskRef.current, { actionCode, payload }, operationId);
       applyEngineResult(engineResult);
     } catch (error: unknown) {
-      applyServiceFailure(actionTaskId, error, operationId);
+      const needsReadBack = serviceMode === 'http' &&
+        (actionCode === 'REVISE_REQUIREMENT' || actionCode === 'CREATE_PERMISSION_REQUEST');
+      if (needsReadBack) {
+        try {
+          const refreshed = await service.getTask(actionTaskId);
+          if (taskRef.current.taskId === actionTaskId && taskRef.current.pendingOperation?.operationId === operationId) {
+            const requirementSaved = actionCode === 'REVISE_REQUIREMENT' &&
+              refreshed.requirementRevision > actionTaskAtStart.requirementRevision;
+            const refreshedSolutionReady = requirementSaved &&
+              refreshed.dataSolution.state === 'READY' &&
+              refreshed.dataSolution.basedOnRequirementRevision === refreshed.requirementRevision;
+            const newPermissionRequestExists = actionCode === 'CREATE_PERMISSION_REQUEST' &&
+              Object.keys(refreshed.permissionRequests).some((requestId) => !actionTaskAtStart.permissionRequests[requestId]);
+            const readbackMessage = refreshedSolutionReady
+              ? '已从当前任务状态读取到新的数据方案。请以最新方案为准，再决定是否继续分析。'
+              : requirementSaved
+              ? '新需求已保存，但重新检索尚未形成新方案。旧方案仅供历史参考；可以稍后重试。'
+              : newPermissionRequestExists
+              ? '已从当前任务状态读取到新的权限申请记录。申请已提交，权限尚未获得，请以当前申请记录为准。'
+              : '本次操作状态尚未确认，已读取当前任务状态。请以当前方案和申请记录为准，再决定是否重试。';
+            dispatchTracked({ type: 'OPERATION_FAILED', payload: { operationId } });
+            dispatchTracked({ type: 'TASK_HYDRATED', payload: { task: refreshed } });
+            dispatchTracked({
+              type: 'ASSISTANT_TURN_RECEIVED',
+              payload: {
+                turnId: createUiId('state_readback'),
+                nextStatus: refreshed.status,
+                blocks: [{
+                  type: 'SYSTEM_NOTICE',
+                  id: createUiId('notice'),
+                  level: 'warning',
+                  message: readbackMessage
+                }]
+              }
+            });
+            return;
+          }
+        } catch {
+          // Keep the operation unresolved to the user rather than inferring a write outcome.
+        }
+      }
+      applyServiceFailure(actionTaskId, error, operationId, actionCode, serviceMode === 'http' && actionCode === 'REVISE_REQUIREMENT');
     }
   };
 
@@ -417,11 +471,13 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     if (!taskAtStart.askPlan) return { decision: 'BLOCKED', updatedPermissions: {}, details: '当前没有分析计划。' };
     const operationId = startOperation('PERMISSION_CHECK');
     if (!operationId) return { decision: 'BLOCKED', updatedPermissions: {}, details: '当前任务正在处理，请稍后重试。' };
+    setPermissionCheckFailure(undefined);
     dispatchTracked({
       type: 'PERMISSION_RECHECK_STARTED',
       payload: { resourceIds: taskAtStart.askPlan.coreResourceIds }
     });
     let checkResult: PermissionRecheckResult;
+    let serviceFailed = false;
     try {
       checkResult = await service.recheckPermissions(
         taskAtStart,
@@ -430,6 +486,8 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         operationId
       );
     } catch (error: unknown) {
+      serviceFailed = true;
+      setPermissionCheckFailure('权限状态未能完成确认，暂不能执行。可以稍后重新校验。');
       checkResult = {
         operationId,
         decision: 'BLOCKED',
@@ -438,9 +496,27 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       };
     }
     if (taskRef.current.taskId === taskAtStart.taskId && taskRef.current.pendingOperation?.operationId === operationId && (!checkResult.operationId || checkResult.operationId === operationId)) {
-      dispatchTracked({
+      const taskAfterRecheck = dispatchTracked({
         type: 'PERMISSION_RECHECK_COMPLETED',
         payload: { decision: checkResult.decision, updatedPermissions: checkResult.updatedPermissions }
+      });
+      dispatchTracked({
+        type: 'ASSISTANT_TURN_RECEIVED',
+        payload: {
+          turnId: createUiId('permission_recheck'),
+          nextStatus: taskAfterRecheck.status,
+          source: {
+            kind: 'PERMISSION',
+            requirementRevision: taskAfterRecheck.requirementRevision,
+            searchRevision: taskAfterRecheck.searchRevision,
+            askPlanId: taskAfterRecheck.askPlan?.id
+          },
+          blocks: [{
+            type: 'TEXT',
+            id: createUiId('text'),
+            content: buildPermissionRecheckSummary(taskAfterRecheck, checkResult, serviceFailed)
+          }]
+        }
       });
       dispatchTracked({ type: 'OPERATION_COMPLETED', payload: { operationId } });
     }
@@ -478,6 +554,13 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           payload: {
             turnId: createUiId('ask_complete'),
             nextStatus: 'READY',
+            source: {
+              kind: 'ASK_RESULT',
+              requirementRevision: taskAtStart.requirementRevision,
+              searchRevision: taskAtStart.searchRevision,
+              askPlanId: taskAtStart.askPlan!.id,
+              resultExecutedAt: runResult.executedAt
+            },
             blocks: [
               { type: 'TEXT', id: createUiId('text'), content: askRunCompletionMessage(taskAtStart.askPlan!, runResult) },
               { type: 'ACTION_GROUP', id: createUiId('actions'), actions: [{ id: createUiId('view_result'), label: '查看完整结果和计算依据', actionCode: 'OPEN_ASK_PLAN', variant: 'weak' }] }
@@ -486,6 +569,23 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       });
     } else {
       dispatchTracked({ type: 'ASK_RUN_FAILED', payload: { error: runResult.error || '执行分析计算失败' } });
+      dispatchTracked({
+        type: 'ASSISTANT_TURN_RECEIVED',
+        payload: {
+          turnId: createUiId('ask_failed'),
+          nextStatus: 'WAITING_USER',
+          source: {
+            kind: 'ASK_PLAN',
+            requirementRevision: taskAtStart.requirementRevision,
+            searchRevision: taskAtStart.searchRevision,
+            askPlanId: taskAtStart.askPlan!.id
+          },
+          blocks: [
+            { type: 'TEXT', id: createUiId('text'), content: buildAskRunFailureSummary(taskAtStart, runResult.error) },
+            { type: 'ACTION_GROUP', id: createUiId('actions'), actions: [{ id: createUiId('view_plan'), label: '查看当前分析计划', actionCode: 'OPEN_ASK_PLAN', variant: 'weak' }] }
+          ]
+        }
+      });
     }
     dispatchTracked({ type: 'OPERATION_COMPLETED', payload: { operationId } });
   };
@@ -790,6 +890,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             ) : (
               task.turns.map((turn) => {
                 const isUser = turn.sender === 'USER';
+                const applicability = selectConversationTurnApplicability(task, turn);
 
                 return (
                   <div
@@ -813,6 +914,11 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                         isUser ? 'items-end' : 'items-start'
                       }`}
                     >
+                      {applicability.message && (
+                        <p className="rounded-md border border-[#E2E8F0] bg-[#F8FAFC] px-2.5 py-1.5 text-[11px] text-[#64748B]">
+                          {applicability.message}
+                        </p>
+                      )}
                       {turn.blocks.map((block) => {
                         switch (block.type) {
                           case 'TEXT':
@@ -862,6 +968,8 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                                 <ActionGroupBlock
                                   actions={block.actions}
                                   task={task}
+                                  historical={applicability.historical}
+                                  historicalKind={applicability.historical ? applicability.kind : undefined}
                                   onActionClick={(code, p) => handleAction(code, p)}
                                 />
                               </div>
@@ -1024,6 +1132,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               onReturnToSolution={() => void handleAction('OPEN_SOLUTION')}
               onViewPermissionChanges={() => void handleAction('OPEN_ACCESS')}
               onRegeneratePlan={() => void handleAction('REGENERATE_ASK_PLAN')}
+              permissionCheckFailure={permissionCheckFailure}
               onModifySpec={() => setIsContextDrawerOpen(true)}
               onClose={() => void handleAction('CLOSE_SURFACE')}
             />

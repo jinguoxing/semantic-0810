@@ -23,6 +23,8 @@ describe('ClarificationBlock submission lifecycle', () => {
     expect(screen.getByRole('button', { name: '继续' })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: '继续' }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+    expect(onSubmit).toHaveBeenNthCalledWith(1, 'question_1', ['average']);
+    expect(onSubmit).toHaveBeenNthCalledWith(2, 'question_1', ['average']);
   });
 
   it('renders a resolved historical question as read-only', () => {

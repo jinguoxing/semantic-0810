@@ -8,7 +8,8 @@ import {
   AvailabilityByAction,
   ResourceCandidate,
   ExecutionAssessment,
-  AskPlan
+  AskPlan,
+  ConversationTurn
 } from './FindDataTask';
 import { getResourceRangeIntersection, resourceCoversRange } from './timeRangeUtils';
 
@@ -381,4 +382,55 @@ export function getQueryStatusDisplay(availability?: AvailabilityByAction): {
         isExecutable: false
       };
   }
+}
+
+export interface ConversationTurnApplicability {
+  historical: boolean;
+  message?: string;
+  kind?: ConversationTurn['source']['kind'];
+}
+
+/**
+ * Classifies only summaries that carry a source reference. Older turns remain
+ * intact; when their provenance is absent we communicate that uncertainty
+ * rather than inventing a revision.
+ */
+export function selectConversationTurnApplicability(
+  task: FindDataTaskState,
+  turn: ConversationTurn
+): ConversationTurnApplicability {
+  const source = turn.source;
+  if (!source) {
+    return task.requirementRevision > 1 && turn.sender === 'ASSISTANT'
+      ? { historical: true, message: '历史内容，当前适用性需结合最新方案确认。' }
+      : { historical: false };
+  }
+
+  const requirementChanged = source.requirementRevision !== undefined &&
+    source.requirementRevision < task.requirementRevision;
+  if (requirementChanged) {
+    switch (source.kind) {
+      case 'SOLUTION':
+        return { historical: true, kind: source.kind, message: '历史方案，当前需求已更新。' };
+      case 'CANDIDATES':
+        return { historical: true, kind: source.kind, message: '历史候选列表，当前需求已更新，候选情况以最新为准。' };
+      case 'ASK_PLAN':
+        return { historical: true, kind: source.kind, message: '历史分析计划，当前需求已更新。' };
+      case 'ASK_RESULT':
+        return { historical: true, kind: source.kind, message: '历史结果，尚未按新需求重新计算。' };
+      default:
+        return { historical: true, kind: source.kind, message: '历史权限信息，当前需求已更新，请以当前方案为准。' };
+    }
+  }
+
+  if (source.kind === 'CANDIDATES' && source.searchRevision !== undefined && source.searchRevision < task.searchRevision) {
+    return { historical: true, kind: source.kind, message: '历史候选列表，不是最新候选列表。' };
+  }
+  if (source.kind === 'ASK_PLAN' && source.askPlanId && source.askPlanId !== task.askPlan?.id) {
+    return { historical: true, kind: source.kind, message: '历史分析计划，当前计划已更新。' };
+  }
+  if (source.kind === 'ASK_RESULT' && source.resultExecutedAt && source.resultExecutedAt !== task.askPlan?.lastRunResult?.executedAt) {
+    return { historical: true, kind: source.kind, message: '上次分析结果，当前结果已更新。' };
+  }
+  return { historical: false, kind: source.kind };
 }

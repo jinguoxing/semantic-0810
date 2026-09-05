@@ -19,7 +19,7 @@ test.describe('Find Data RC1 mock smoke', () => {
     const taskInput = page.getByPlaceholder('发送找数据意图、提出追问或输入口径调整要求…');
     await taskInput.fill('再加入养老服务实际使用');
     await taskInput.press('Enter');
-    await expect(page.getByText('核心供给分析已具备基础')).toBeVisible();
+    await expect(page.getByText('新增居家养老服务订单等部分匹配资源，完整服务使用缺口仍保留。')).toBeVisible();
     await expect(page.getByText('60 岁以上常住人口数').last()).toBeVisible();
     await expect(page.getByText('在营可用养老床位数').last()).toBeVisible();
     await expect(page.getByText('居家养老服务订单').last()).toBeVisible();
@@ -42,8 +42,13 @@ test.describe('Find Data RC1 mock smoke', () => {
     const inputs = page.locator('.fixed input');
     await inputs.nth(5).fill('养老床位核定数');
     await page.getByRole('button', { name: '保存并更新口径' }).click();
-    await expect(page.getByText('已形成 2 项核心资源').last()).toBeVisible();
-    await page.getByRole('button', { name: /方案 · 2 项核心资源/ }).click();
+    await expect(page.getByText('已按新条件完成重评：养老床位口径已更新。')).toBeVisible();
+    await expect(page.getByText('床位核心指标由在营可用养老床位数替换为养老床位核定数。')).toBeVisible();
+    await expect(page.getByText('后续分析反映核定容量，不代表实际可用容量。')).toBeVisible();
+    await expect(page.getByText('历史结果，尚未按新需求重新计算。')).toBeVisible();
+    await expect(page.getByText('全区加权平均供给水平为 24.8 张 / 千人。')).toBeVisible();
+    await page.getByRole('button', { name: '查看最新方案' }).last().click();
+    await expect(page.getByRole('heading', { name: '数据方案' })).toBeVisible();
     await expect(page.getByText('养老床位核定数', { exact: true })).toBeVisible();
 
     await taskInput.fill('按当前方案分析');

@@ -14,6 +14,7 @@ interface RightWorkspaceAskPlanProps {
   onViewPermissionChanges?: () => void;
   onRegeneratePlan?: () => void;
   executionScopeDisclosure?: string;
+  permissionCheckFailure?: string;
   onClose: () => void;
 }
 
@@ -41,6 +42,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   onViewPermissionChanges,
   onRegeneratePlan,
   executionScopeDisclosure = '本次执行范围将在服务返回后确认。',
+  permissionCheckFailure,
   onClose
 }) => {
   const plan = task.askPlan;
@@ -236,7 +238,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
                 : checkState === 'CHECKING'
                 ? '正在向权限服务核查资源查询权限快照…'
                 : checkState === 'BLOCKED'
-                ? '由于核心资源查询权限缺失，暂不可开始计算。'
+                ? permissionCheckFailure ?? '由于核心资源查询权限缺失，暂不可开始计算。'
                 : checkState === 'CHANGED'
                 ? '部分核心资源的查询权限自分析计划生成后发生变化，请先确认新的可执行范围。'
                 : '系统要求在正式触发运算前显式完成权限状态校验。'}

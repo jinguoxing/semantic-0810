@@ -2,6 +2,7 @@ import {
   AskPlan,
   AskPlanCalculationSpec,
   ConversationBlock,
+  ConversationSource,
   DataSolutionItem,
   FindDataResource,
   FindDataTaskState,
@@ -20,9 +21,11 @@ import {
 import {
   buildAskPlanPreparedSummary,
   buildCandidateDiscoverySummary,
+  buildRequirementChangeSummary,
   buildComparisonSummary,
   buildFieldSummary,
   buildGapSummary,
+  buildPermissionImpactSummary,
   buildRecommendationExplanation,
   buildSolutionCompletionSummary
 } from '../presenters/conversationPresenters';
@@ -154,10 +157,14 @@ function textBlock(content: string): ConversationBlock {
   return { type: 'TEXT', id: createScenarioId('text'), content };
 }
 
-function assistantEvent(blocks: ConversationBlock[], nextStatus: FindDataTaskState['status']): FindDataEvent {
+function assistantEvent(
+  blocks: ConversationBlock[],
+  nextStatus: FindDataTaskState['status'],
+  source?: ConversationSource
+): FindDataEvent {
   return {
     type: 'ASSISTANT_TURN_RECEIVED',
-    payload: { turnId: createScenarioId('assistant'), blocks, nextStatus }
+    payload: { turnId: createScenarioId('assistant'), blocks, nextStatus, source }
   };
 }
 
@@ -377,7 +384,11 @@ function buildInitialCompositionResult(task: FindDataTaskState, hypothesis: Requ
     ...emptyScenarioResult(task.taskId),
     events: [
       ...lifecycleEvents,
-      assistantEvent(blocks, 'READY')
+      assistantEvent(blocks, 'READY', {
+        kind: 'SOLUTION',
+        requirementRevision: effectiveTask.requirementRevision,
+        searchRevision: effectiveTask.searchRevision
+      })
     ],
     assistantBlocks: blocks
   };
@@ -408,12 +419,16 @@ function buildServiceUseResult(
     ...searchEvents(task, { requirementRevision, resourceIds: ['r07'], items: [item], gaps, mode, query })
   ];
   const effectiveTask = effectiveTaskAfter(task, lifecycleEvents);
-  const blocks: ConversationBlock[] = [textBlock(buildSolutionCompletionSummary(effectiveTask)), solutionFollowUpBlock(effectiveTask)];
+  const blocks: ConversationBlock[] = [textBlock(buildRequirementChangeSummary(task, effectiveTask)), solutionFollowUpBlock(effectiveTask)];
   return {
     ...emptyScenarioResult(task.taskId),
     events: [
       ...lifecycleEvents,
-      assistantEvent(blocks, 'READY')
+      assistantEvent(blocks, 'READY', {
+        kind: 'SOLUTION',
+        requirementRevision: effectiveTask.requirementRevision,
+        searchRevision: effectiveTask.searchRevision
+      })
     ],
     assistantBlocks: blocks
   };
@@ -502,12 +517,16 @@ function buildRequirementReevaluationResult(
       ...searchEvents(task, { requirementRevision, resourceIds: [], items: [], gaps: [gap], mode: 'REPLACE', query: '需求修改后重新检索' })
     ];
     const effectiveTask = effectiveTaskAfter(task, lifecycleEvents);
-    const blocks = [textBlock(buildSolutionCompletionSummary(effectiveTask)), solutionFollowUpBlock(effectiveTask)];
+    const blocks = [textBlock(buildRequirementChangeSummary(task, effectiveTask)), solutionFollowUpBlock(effectiveTask)];
     return {
       ...emptyScenarioResult(task.taskId),
       events: [
         ...lifecycleEvents,
-        assistantEvent(blocks, 'READY')
+        assistantEvent(blocks, 'READY', {
+          kind: 'SOLUTION',
+          requirementRevision: effectiveTask.requirementRevision,
+          searchRevision: effectiveTask.searchRevision
+        })
       ],
       assistantBlocks: blocks
     };
@@ -518,12 +537,16 @@ function buildRequirementReevaluationResult(
     ...buildCompositionSearchEvents(task, nextHypothesis, requirementRevision, '需求修改后重新检索')
   ];
   const effectiveTask = effectiveTaskAfter(task, lifecycleEvents);
-  const blocks = [textBlock(buildSolutionCompletionSummary(effectiveTask)), solutionFollowUpBlock(effectiveTask)];
+  const blocks = [textBlock(buildRequirementChangeSummary(task, effectiveTask)), solutionFollowUpBlock(effectiveTask)];
   return {
     ...emptyScenarioResult(task.taskId),
     events: [
       ...lifecycleEvents,
-      assistantEvent(blocks, 'READY')
+      assistantEvent(blocks, 'READY', {
+        kind: 'SOLUTION',
+        requirementRevision: effectiveTask.requirementRevision,
+        searchRevision: effectiveTask.searchRevision
+      })
     ],
     assistantBlocks: blocks
   };
@@ -547,6 +570,19 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
     const result = emptyScenarioResult(task.taskId);
 
     if (task.scenarioKey) {
+      if (/(这些数据现在能用吗|这些资源现在能用吗|权限.*(能用|可用|查询|情况)|数据.*能用)/.test(text)) {
+        const blocks: ConversationBlock[] = [
+          textBlock(buildPermissionImpactSummary(task)),
+          { type: 'ACTION_GROUP', id: createScenarioId('actions'), actions: [{ id: createScenarioId('access'), label: '查看权限详情', actionCode: 'OPEN_ACCESS', variant: 'weak' }] }
+        ];
+        return {
+          ...result,
+          events: [assistantEvent(blocks, settledTaskStatus(task), {
+            kind: 'PERMISSION', requirementRevision: task.requirementRevision, searchRevision: task.searchRevision
+          })],
+          assistantBlocks: blocks
+        };
+      }
       if (text.includes('字段')) {
         const blocks = [textBlock(buildFieldSummary(task, text))];
         return { ...result, events: [assistantEvent(blocks, settledTaskStatus(task))], assistantBlocks: blocks };
@@ -629,7 +665,11 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
           events: [
             ...comparisonEvents,
             ...candidateEvents,
-            assistantEvent(blocks, 'READY')
+            assistantEvent(blocks, 'READY', {
+              kind: 'CANDIDATES',
+              requirementRevision: effectiveTask.requirementRevision,
+              searchRevision: effectiveTask.searchRevision
+            })
           ],
           assistantBlocks: blocks
         };
@@ -674,7 +714,9 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       const blocks: ConversationBlock[] = [textBlock('已按当前需求与权限基线重新生成分析计划。')];
       return {
         ...result,
-        events: [{ type: 'ASK_PLAN_PREPARED', payload: { askPlan } }, assistantEvent(blocks, 'WAITING_USER')],
+        events: [{ type: 'ASK_PLAN_PREPARED', payload: { askPlan } }, assistantEvent(blocks, 'WAITING_USER', {
+          kind: 'ASK_PLAN', requirementRevision: task.requirementRevision, searchRevision: task.searchRevision, askPlanId: askPlan.id
+        })],
         assistantBlocks: blocks
       };
     }
@@ -722,7 +764,9 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       const blocks: ConversationBlock[] = [textBlock(buildAskPlanPreparedSummary(askPlan, 'MOCK_FIXTURE'))];
       return {
         ...result,
-        events: [{ type: 'CLARIFICATION_RESOLVED', payload: { questionId, selectedOptionIds: uniqueOptionIds, selectedOptionLabels: labels, requirementRevision: task.requirementRevision, resolvedAt: new Date().toISOString() } }, { type: 'ASK_PLAN_PREPARED', payload: { askPlan } }, assistantEvent(blocks, 'WAITING_USER')],
+        events: [{ type: 'CLARIFICATION_RESOLVED', payload: { questionId, selectedOptionIds: uniqueOptionIds, selectedOptionLabels: labels, requirementRevision: task.requirementRevision, resolvedAt: new Date().toISOString() } }, { type: 'ASK_PLAN_PREPARED', payload: { askPlan } }, assistantEvent(blocks, 'WAITING_USER', {
+          kind: 'ASK_PLAN', requirementRevision: task.requirementRevision, searchRevision: task.searchRevision, askPlanId: askPlan.id
+        })],
         assistantBlocks: blocks
       };
     }

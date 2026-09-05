@@ -2,17 +2,23 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAskPlanPreparedSummary,
   buildAskRunCompletionSummary,
+  buildAskRunFailureSummary,
   buildCandidateDiscoverySummary,
   buildCoverageSummary,
   buildFieldSummary,
   buildGapSummary,
+  buildOperationFailureSummary,
+  buildPermissionImpactSummary,
+  buildPermissionRecheckSummary,
+  buildPermissionRequestSubmittedSummary,
   buildPermissionSummary,
+  buildRequirementChangeSummary,
   buildRecommendationExplanation,
   buildSelectionSuccessSummary,
   buildSolutionCompletionSummary
 } from '../presenters/conversationPresenters';
 import { MINHANG_MOCK_RESULT_SCOPE, MINHANG_RESOURCES, R03_FIELDS } from '../fixtures/minhangBedSupplyFixture';
-import { createAskPlan, createEmptyTask, createMinhangTask, createResource, createSolutionItem } from './testUtils/findDataFactories';
+import { createAskPlan, createEmptyTask, createMinhangTask, createResource, createSolutionItem, permissionsWithQuery } from './testUtils/findDataFactories';
 
 describe('conversation presenters derive answers from task state', () => {
   it('does not fall back to a fixture resource when none is active', () => {
@@ -158,5 +164,96 @@ describe('conversation presenters derive answers from task state', () => {
     expect(summary).toContain('本次实际分析范围：上海市闵行区，2026-08，月度');
     expect(summary).toContain('有 2 个街镇低于当前比较基准');
     expect(summary).toContain('结果来源：演示数据');
+  });
+
+  it('summarizes a time-only recomposition without re-listing candidates and invalidates the old plan', () => {
+    const before = createMinhangTask({ askPlan: createAskPlan() });
+    const effective = createMinhangTask({
+      requirementRevision: 2,
+      searchRevision: 2,
+      askPlan: undefined,
+      requirementHypothesis: { ...before.requirementHypothesis, timeRange: { start: '2024.09', end: '2025.08' } }
+    });
+    const summary = buildRequirementChangeSummary(before, effective);
+    expect(summary).toContain('时间范围更新为 2024.09 至 2025.08');
+    expect(summary).toContain('原核心指标仍能覆盖本次请求，资源组合保持不变');
+    expect(summary).toContain('原分析计划已失效，需要按当前需求重新准备分析');
+    expect(summary).not.toContain('候选资源');
+  });
+
+  it('describes an r04-to-r05 replacement with the approved-capacity conclusion boundary', () => {
+    const before = createMinhangTask({ askPlan: createAskPlan() });
+    const effective = createMinhangTask({
+      requirementRevision: 2,
+      searchRevision: 2,
+      askPlan: undefined,
+      resources: { r01: MINHANG_RESOURCES.r01, r05: MINHANG_RESOURCES.r05 },
+      requirementHypothesis: { ...before.requirementHypothesis, bedDefinition: '养老床位核定数' },
+      dataSolution: {
+        ...before.dataSolution,
+        basedOnRequirementRevision: 2,
+        basedOnSearchRevision: 2,
+        items: [createSolutionItem({ resourceId: 'r01' }), createSolutionItem({ resourceId: 'r05' })]
+      }
+    });
+    const summary = buildRequirementChangeSummary(before, effective);
+    expect(summary).toContain('60 岁以上常住人口数保持不变');
+    expect(summary).toContain('床位核心指标由在营可用养老床位数替换为养老床位核定数');
+    expect(summary).toContain('后续分析反映核定容量，不代表实际可用容量');
+    expect(summary).toContain('原分析计划已失效');
+  });
+
+  it('explains that a requestable candidate does not block queryable core metrics', () => {
+    const base = createMinhangTask();
+    const task = {
+      ...base,
+      resources: { ...base.resources, r02: MINHANG_RESOURCES.r02 },
+      searchResult: {
+        ...base.searchResult!,
+        candidateIds: ['r01', 'r04', 'r02'],
+        candidateSnapshot: [
+          ...base.searchResult!.candidateSnapshot,
+          { resourceId: 'r02', title: MINHANG_RESOURCES.r02.name, reason: '人口明细', matchType: 'RELATED' as const, proposedRole: 'OPTIONAL_DRILLDOWN' as const, sourceSearchRevision: 1 }
+        ]
+      }
+    };
+    const summary = buildPermissionImpactSummary(task);
+    expect(summary).toContain('2 项核心指标当前可查询');
+    expect(summary).toContain('人口基本信息视图');
+    expect(summary).toContain('这不阻塞当前核心计算');
+    expect(summary).toContain('执行前仍会重新校验权限');
+  });
+
+  it('explains blocked and unknown core query permissions without claiming they are allowed or denied interchangeably', () => {
+    const requestable = createMinhangTask({
+      resources: {
+        ...createMinhangTask().resources,
+        r04: { ...createMinhangTask().resources.r04, availabilityByAction: permissionsWithQuery('REQUESTABLE') }
+      }
+    });
+    expect(buildPermissionImpactSummary(requestable)).toContain('当前未获查询许可，但可以申请');
+
+    const unknown = createMinhangTask({
+      resources: {
+        ...createMinhangTask().resources,
+        r04: { ...createMinhangTask().resources.r04, availabilityByAction: permissionsWithQuery('UNKNOWN') }
+      }
+    });
+    expect(buildPermissionImpactSummary(unknown)).toContain('查询权限状态尚未确认');
+  });
+
+  it('reports submitted permission and failed recheck or analysis as recoverable business states', () => {
+    const task = createMinhangTask({ askPlan: createAskPlan() });
+    const submitted = buildPermissionRequestSubmittedSummary(task, {
+      requestId: 'permission_42', resourceIds: ['r04'], actionType: 'query', status: 'SUBMITTED', submittedAt: '2026-09-05T00:00:00.000Z'
+    });
+    expect(submitted).toContain('在营可用养老床位数');
+    expect(submitted).toContain('查询权限');
+    expect(submitted).toContain('permission_42');
+    expect(submitted).toContain('权限尚未获得');
+
+    expect(buildPermissionRecheckSummary(task, { decision: 'BLOCKED', updatedPermissions: {} }, true)).toContain('权限状态未能完成确认，暂不能执行');
+    expect(buildAskRunFailureSummary({ ...task, askPlan: createAskPlan({ lastRunResult: { success: true, executedAt: '', permissionSnapshot: {} } }) }, '服务暂时不可用')).toContain('上次结果仍作为历史结果保留');
+    expect(buildOperationFailureSummary(task, 'TURN')).toContain('原方案未因这次失败而改变');
   });
 });

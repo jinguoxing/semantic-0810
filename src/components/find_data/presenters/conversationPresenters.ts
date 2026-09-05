@@ -1,13 +1,16 @@
-import type { ActualExecutionScope, AskPlan, AskRunResult, DataSolutionItem, FindDataResource, FindDataTaskState, ResourceCandidate, ResourceId } from '../model/FindDataTask';
+import type { ActualExecutionScope, AskPlan, AskRunResult, DataSolutionItem, FindDataResource, FindDataTaskState, PermissionDecision, PermissionRequestRef, ResourceCandidate, ResourceId } from '../model/FindDataTask';
 import {
   selectActiveResource,
+  selectAskHandoffReadiness,
   selectCandidateById,
+  selectCandidateResources,
   selectDiscoverableResources,
   selectResourceById,
   selectResourceFields
 } from '../model/findDataSelectors';
 import { resourceCoversRange } from '../model/timeRangeUtils';
 import { MINHANG_MOCK_RESULT_SCOPE } from '../fixtures/minhangBedSupplyFixture';
+import { getPermissionActionLabel } from '../model/permissionActionLabels';
 
 function inlineList(values: string[]): string {
   return values.filter(Boolean).join('、');
@@ -47,6 +50,43 @@ function actionPermissionSummary(resource: FindDataResource): string {
     case 'DENIED': return '当前不可查询';
     default: return '查询权限尚未确认';
   }
+}
+
+function permissionPhrase(decision: PermissionDecision | undefined): string {
+  switch (decision) {
+    case 'ALLOWED': return '当前可查询';
+    case 'REQUESTABLE': return '当前未获查询许可，但可以申请';
+    case 'DENIED': return '当前策略不支持查询申请';
+    default: return '查询权限状态尚未确认';
+  }
+}
+
+function equalStringArrays(first: string[] = [], second: string[] = []): boolean {
+  return first.length === second.length && first.every((value, index) => value === second[index]);
+}
+
+function requirementChangeLabels(before: FindDataTaskState, effective: FindDataTaskState): string[] {
+  const changes: string[] = [];
+  const beforeRange = formatRange(before.requirementHypothesis.timeRange);
+  const effectiveRange = formatRange(effective.requirementHypothesis.timeRange);
+  if (beforeRange !== effectiveRange && effectiveRange) changes.push(`时间范围更新为 ${effectiveRange}`);
+  if (before.requirementHypothesis.region !== effective.requirementHypothesis.region && effective.requirementHypothesis.region) changes.push(`区域更新为 ${effective.requirementHypothesis.region}`);
+  if (before.requirementHypothesis.populationDefinition !== effective.requirementHypothesis.populationDefinition && effective.requirementHypothesis.populationDefinition) changes.push('老年人口统计口径已更新');
+  if (before.requirementHypothesis.bedDefinition !== effective.requirementHypothesis.bedDefinition && effective.requirementHypothesis.bedDefinition) changes.push('养老床位口径已更新');
+  if (!equalStringArrays(before.requirementHypothesis.analysisFocus, effective.requirementHypothesis.analysisFocus)) changes.push('分析方向已更新');
+  return changes;
+}
+
+function coreSolutionItems(task: FindDataTaskState): DataSolutionItem[] {
+  return task.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED' && !!selectResourceById(task, item.resourceId));
+}
+
+function safePreviousResourceName(before: FindDataTaskState, effective: FindDataTaskState, resourceId: ResourceId): string | undefined {
+  const current = selectResourceById(effective, resourceId);
+  if (current) return current.name;
+  if (effective.scenarioKey !== 'minhang_bed_supply') return undefined;
+  const previous = selectResourceById(before, resourceId);
+  return previous?.name;
 }
 
 function describeCandidate(resource: FindDataResource): string {
@@ -240,6 +280,154 @@ export function buildCoverageSummary(task: FindDataTaskState): string {
   return task.dataSolution.coverageSummary.length
     ? task.dataSolution.coverageSummary.join('\n')
     : '当前方案尚未登记覆盖范围摘要。';
+}
+
+/** Builds a one-off explanation from the old task and the effective re-evaluated task. */
+export function buildRequirementChangeSummary(before: FindDataTaskState, effective: FindDataTaskState): string {
+  const changes = requirementChangeLabels(before, effective);
+  const beforeCore = coreSolutionItems(before);
+  const effectiveCore = coreSolutionItems(effective);
+  const beforeCoreIds = beforeCore.map((item) => item.resourceId);
+  const effectiveCoreIds = effectiveCore.map((item) => item.resourceId);
+  const retainedCoreIds = effectiveCoreIds.filter((id) => beforeCoreIds.includes(id));
+  const addedCoreIds = effectiveCoreIds.filter((id) => !beforeCoreIds.includes(id));
+  const removedCoreIds = beforeCoreIds.filter((id) => !effectiveCoreIds.includes(id));
+  const beforePartialIds = before.dataSolution.items.filter((item) => item.role === 'PARTIAL_MATCH').map((item) => item.resourceId);
+  const addedPartial = effective.dataSolution.items.filter((item) => item.role === 'PARTIAL_MATCH' && !beforePartialIds.includes(item.resourceId));
+  const paragraphs: string[] = [];
+
+  if (changes.length > 0) paragraphs.push(`已按新条件完成重评：${inlineList(changes)}。`);
+  else paragraphs.push('已完成当前需求的重新评估。');
+
+  if (effectiveCore.length === 0) {
+    const hasPartial = effective.dataSolution.items.some((item) => item.role === 'PARTIAL_MATCH');
+    paragraphs.push(hasPartial
+      ? '当前目标已切换，原人口与床位核心方案不再用于新目标；目前只形成部分匹配资源和覆盖缺口。'
+      : '新条件已记录，但当前没有形成足够的核心方案。旧方案不能继续作为新需求的有效方案。');
+  } else if (beforeCoreIds.length > 0 && equalStringArrays(beforeCoreIds, effectiveCoreIds)) {
+    const range = effective.requirementHypothesis.timeRange;
+    const coreResources = effectiveCore.map((item) => selectResourceById(effective, item.resourceId)).filter((resource): resource is FindDataResource => !!resource);
+    const coversRange = !!range && coreResources.every((resource) => resourceCoversRange(resource, range));
+    paragraphs.push(coversRange
+      ? '原核心指标仍能覆盖本次请求，资源组合保持不变。'
+      : '核心资源组合保持不变，覆盖范围仍需结合当前方案确认。');
+  } else {
+    const retainedNames = retainedCoreIds.map((id) => safePreviousResourceName(before, effective, id)).filter((name): name is string => !!name);
+    const addedNames = addedCoreIds.map((id) => selectResourceById(effective, id)?.name).filter((name): name is string => !!name);
+    const removedNames = removedCoreIds.map((id) => safePreviousResourceName(before, effective, id)).filter((name): name is string => !!name);
+    if (retainedNames.length > 0) paragraphs.push(`${inlineList(retainedNames)}保持不变。`);
+    if (addedNames.length > 0 && removedNames.length > 0) {
+      paragraphs.push(`床位核心指标由${inlineList(removedNames)}替换为${inlineList(addedNames)}。`);
+    } else if (addedNames.length > 0) {
+      paragraphs.push(`新增核心资源：${inlineList(addedNames)}。`);
+    }
+  }
+
+  if (before.requirementHypothesis.bedDefinition !== effective.requirementHypothesis.bedDefinition && /核定/.test(effective.requirementHypothesis.bedDefinition ?? '')) {
+    paragraphs.push('后续分析反映核定容量，不代表实际可用容量。');
+  }
+
+  if (addedPartial.length > 0) {
+    const names = addedPartial.map((item) => selectResourceById(effective, item.resourceId)?.name).filter((name): name is string => !!name);
+    const hasOpenGap = effective.dataSolution.gaps.some((gap) => gap.status !== 'RESOLVED');
+    paragraphs.push(`新增${inlineList(names)}等部分匹配资源${hasOpenGap ? '，完整服务使用缺口仍保留。' : '。'}`);
+  }
+
+  const oldPlanInvalidated = !!before.askPlan && !effective.askPlan;
+  if (oldPlanInvalidated) {
+    paragraphs.push('原分析计划已失效，需要按当前需求重新准备分析。');
+    if (before.askPlan?.lastRunResult?.success) paragraphs.push('原分析结果不再适用于新需求。');
+  }
+
+  const readiness = selectAskHandoffReadiness(effective);
+  paragraphs.push(readiness.ready
+    ? '可以查看最新方案，或重新确认分析。'
+    : '可以调整条件后继续评估。');
+  return paragraphs.join('\n\n');
+}
+
+/** Explains query permissions by their effect on the current task, not as a matrix. */
+export function buildPermissionImpactSummary(task: FindDataTaskState): string {
+  const core = coreSolutionItems(task);
+  if (core.length === 0) return '当前尚未形成可执行核心方案。是否具备查询权限需要在形成核心资源后再判断。';
+  const coreResources = core.map((item) => selectResourceById(task, item.resourceId)).filter((resource): resource is FindDataResource => !!resource);
+  const blocked = coreResources.filter((resource) => resource.availabilityByAction.query !== 'ALLOWED');
+  if (blocked.length > 0) {
+    const details = blocked.map((resource) => `「${resource.name}」${permissionPhrase(resource.availabilityByAction.query)}`).join('；');
+    return `当前核心计算受到查询权限影响：${details}。在核心查询权限就绪前，不能完成本次核心计算。`;
+  }
+  const requestableCandidates = selectCandidateResources(task)
+    .map((candidate) => selectResourceById(task, candidate.resourceId))
+    .filter((resource): resource is FindDataResource => !!resource)
+    .filter((resource) => !coreResources.some((coreResource) => coreResource.id === resource.id) && resource.availabilityByAction.query === 'REQUESTABLE');
+  const coreLead = `${coreResources.length} 项核心指标当前可查询。`;
+  if (requestableCandidates.length > 0) {
+    return `${coreLead}${inlineList(requestableCandidates.map((resource) => `「${resource.name}」`))}仍需申请查询权限，这不阻塞当前核心计算；执行前仍会重新校验权限。`;
+  }
+  return `${coreLead}当前没有发现会阻塞核心计算的查询权限问题；执行前仍会重新校验权限。`;
+}
+
+export function buildPermissionRequestSubmittedSummary(task: FindDataTaskState, request: PermissionRequestRef): string {
+  const names = request.resourceIds.map((id) => selectResourceById(task, id)?.name).filter((name): name is string => !!name);
+  const label = getPermissionActionLabel(request.actionType);
+  return `已提交${inlineList(names)}的${label}申请。申请编号：${request.requestId}；当前状态：已提交，等待处理。\n\n申请已提交，权限尚未获得。`;
+}
+
+export function buildPermissionRecheckSummary(
+  task: FindDataTaskState,
+  result: { decision: 'ALLOWED' | 'BLOCKED' | 'CHANGED'; updatedPermissions: Record<ResourceId, { query: PermissionDecision }> },
+  serviceFailed = false
+): string {
+  if (serviceFailed) return '权限状态未能完成确认，暂不能执行。当前方案和已有权限记录没有因此被认定为拒绝；可以稍后重新校验。';
+  if (result.decision === 'ALLOWED') return '本次核心资源查询权限重检已通过。正式执行仍会遵守原有运行门禁。';
+  const coreIds = task.askPlan?.coreResourceIds ?? coreSolutionItems(task).map((item) => item.resourceId);
+  const affected = coreIds.map((id) => {
+    const resource = selectResourceById(task, id);
+    const decision = result.updatedPermissions[id]?.query ?? resource?.availabilityByAction.query;
+    return resource ? `「${resource.name}」${permissionPhrase(decision)}` : undefined;
+  }).filter((entry): entry is string => !!entry);
+  if (result.decision === 'CHANGED') return `本次权限快照发生变化：${inlineList(affected)}。请先确认新的可执行范围，再继续分析。`;
+  return affected.length > 0
+    ? `当前不能执行：${inlineList(affected)}。请根据当前状态申请权限或稍后重新校验。`
+    : '当前不能执行，因为核心资源查询权限尚未满足。请先重新校验权限。';
+}
+
+export function buildAskRunFailureSummary(task: FindDataTaskState, error?: string): string {
+  const hadHistoricalResult = task.askPlan?.lastRunResult?.success;
+  const stable = hadHistoricalResult ? '上次结果仍作为历史结果保留，但不是本次执行结果。' : '本次没有形成新的成功结果。';
+  if (/权限/.test(error ?? '')) return `${stable}\n\n权限尚未完成确认，请重新校验后再执行。`;
+  if (/需求|检索|计划/.test(error ?? '')) return `${stable}\n\n当前需求或计划已变化，请重新准备分析计划。`;
+  if (/未连接|无法连接/.test(error ?? '')) return `${stable}\n\n分析服务尚未连接，暂时无法执行。`;
+  return `${stable}\n\n可以在条件确认后，通过当前分析计划再次执行。`;
+}
+
+export function buildOperationFailureSummary(
+  task: FindDataTaskState,
+  operation: 'TURN' | 'ACTION' | 'SEARCH' | 'PERMISSION_CHECK' | 'ASK_RUN',
+  actionCode?: string,
+  uncertain = false
+): string {
+  if (operation === 'PERMISSION_CHECK') return buildPermissionRecheckSummary(task, { decision: 'BLOCKED', updatedPermissions: {} }, true);
+  if (operation === 'ASK_RUN') return buildAskRunFailureSummary(task, '');
+  if (actionCode === 'REVISE_REQUIREMENT') {
+    return uncertain
+      ? '本次操作状态尚未确认。当前仍显示最后一次已读取的任务状态；请重新读取任务后再决定是否继续修改。'
+      : '本次修改没有保存成功，当前仍是原需求，原方案也没有因此被替换。可以调整条件后重试。';
+  }
+  if (actionCode === 'SELECT_RESOURCE' || actionCode === 'EVALUATE_AND_ADD') {
+    return '本次资源选择未完成，当前方案没有新增资源。可以在候选列表中重试。';
+  }
+  if (actionCode === 'CREATE_PERMISSION_REQUEST') {
+    return uncertain
+      ? '本次权限申请状态尚未确认，当前不认定为已提交。请先读取当前申请记录后再决定是否重试。'
+      : '本次权限申请未完成，当前没有新增已提交申请。可以检查申请范围后重试。';
+  }
+  if (operation === 'TURN' || operation === 'SEARCH') {
+    return task.dataSolution.state === 'READY'
+      ? '本次补充检索未完成，原方案未因这次失败而改变。可以稍后重试。'
+      : '本次检索未完成，当前还没有形成新的有效方案。可以补充条件后重试。';
+  }
+  return '本次操作未完成，当前已形成的任务内容保持不变。请根据当前方案继续操作或稍后重试。';
 }
 
 export function buildPermissionSummary(task: FindDataTaskState): string {

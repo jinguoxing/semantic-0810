@@ -22,7 +22,7 @@ import { findDataReducer } from '../model/findDataReducer';
 import { getMinhangBedDefinitionForCoreResources, getMinhangBedDefinitionForResource } from '../scenarios/minhangBedDefinition';
 import { FindDataEngineResult, FindDataService, FindDataTaskSummary, PermissionRecheckResult } from './FindDataService';
 import { getPermissionActionLabel } from '../model/permissionActionLabels';
-import { buildSelectionSuccessSummary } from '../presenters/conversationPresenters';
+import { buildPermissionRequestSubmittedSummary, buildSelectionSuccessSummary } from '../presenters/conversationPresenters';
 import { MINHANG_MOCK_RESULT_SCOPE } from '../fixtures/minhangBedSupplyFixture';
 
 function assistantNotice(task: FindDataTaskState, message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info'): FindDataEngineResult {
@@ -206,7 +206,9 @@ export class MockFindDataService implements FindDataService {
         operationId,
         events: [
           ...stateEvents,
-          { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [block], nextStatus: 'READY' } }
+          { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [block], nextStatus: 'READY', source: {
+            kind: 'SOLUTION', requirementRevision: nextTask.requirementRevision, searchRevision: nextTask.searchRevision
+          } } }
         ],
         assistantBlocks: [block],
         surfaceCommand: task.activeSurface.type === 'COMPARE' ? { action: 'CLOSE', surface: 'CLOSED' } : surfaceCommand
@@ -253,7 +255,9 @@ export class MockFindDataService implements FindDataService {
         operationId,
         events: [
           ...stateEvents,
-          { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [block], nextStatus: 'READY' } }
+          { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [block], nextStatus: 'READY', source: {
+            kind: 'SOLUTION', requirementRevision: nextTask.requirementRevision, searchRevision: nextTask.searchRevision
+          } } }
         ],
         assistantBlocks: [block],
         surfaceCommand
@@ -312,15 +316,18 @@ export class MockFindDataService implements FindDataService {
         status: 'SUBMITTED',
         submittedAt: new Date().toISOString()
       };
+      const nextTask = [{ type: 'PERMISSION_REQUEST_CREATED' as const, payload: { request } }].reduce(findDataReducer, task);
       const notice: ConversationBlock = {
-        type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level: 'success', message: `已提交 ${requestedIds.length} 项${actionLabel}申请。`
+        type: 'TEXT', id: createScenarioId('notice'), content: buildPermissionRequestSubmittedSummary(nextTask, request)
       };
       return this.persistResult(task, {
         ...emptyScenarioResult(task.taskId),
         operationId,
         events: [
           { type: 'PERMISSION_REQUEST_CREATED', payload: { request } },
-          { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [notice], nextStatus: task.status } }
+          { type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: createScenarioId('assistant'), blocks: [notice], nextStatus: task.status, source: {
+            kind: 'PERMISSION', requirementRevision: nextTask.requirementRevision, searchRevision: nextTask.searchRevision
+          } } }
         ],
         assistantBlocks: [notice],
         surfaceCommand

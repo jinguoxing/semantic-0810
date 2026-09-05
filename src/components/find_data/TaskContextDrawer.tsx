@@ -47,13 +47,24 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
       return;
     }
     setValidationError(undefined);
-    onApplyChanges({
+    const updated = {
       region,
       timeRange,
       analysisFocus: analysisFocus.split(/[、,]/).map((value) => value.trim()).filter(Boolean),
       populationDefinition: popDef,
       bedDefinition: bedDef
-    });
+    };
+    const unchanged = updated.region === (hypothesis.region || '') &&
+      updated.timeRange?.start === hypothesis.timeRange?.start &&
+      updated.timeRange?.end === hypothesis.timeRange?.end &&
+      updated.analysisFocus.join('、') === hypothesis.analysisFocus.join('、') &&
+      updated.populationDefinition === (hypothesis.populationDefinition || '') &&
+      updated.bedDefinition === (hypothesis.bedDefinition || '');
+    if (unchanged) {
+      onClose();
+      return;
+    }
+    onApplyChanges(updated);
     onClose();
   };
 
@@ -163,6 +174,10 @@ export const TaskContextDrawer: React.FC<TaskContextDrawerProps> = ({
               当前聚焦资源：<span className="font-semibold text-[#0F172A]">{activeResourceName}</span>
             </div>
           )}
+
+          <p className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-[11px] leading-relaxed text-[#1D4ED8]">
+            保存后将重新评估数据方案，已有分析计划和结果可能不再适用于新需求。
+          </p>
 
           {/* Strict Conclusion Boundary Notice */}
           {scenarioKey === 'minhang_bed_supply' && <div className="p-3 bg-[#FFFBEB] rounded-xl border border-[#FDE68A] space-y-1 text-[#92400E]">

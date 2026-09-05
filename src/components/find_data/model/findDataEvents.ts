@@ -8,6 +8,7 @@ import {
   SurfaceState,
   ConversationTurn,
   ConversationBlock,
+  ConversationSource,
   AskPlan,
   AvailabilityByAction,
   AskRunResult,
@@ -40,6 +41,7 @@ export type FindDataEvent =
         turnId: string;
         blocks: ConversationBlock[];
         nextStatus?: TaskStatus;
+        source?: ConversationSource;
       };
     }
   | {
