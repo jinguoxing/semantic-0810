@@ -13,7 +13,7 @@ import {
   Trash2
 } from 'lucide-react';
 
-import { AskPlan, AskRunResult, FindDataTaskState, PendingOperation, TaskActionCode } from './find_data/model/FindDataTask';
+import { AskPlan, AskRunResult, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode } from './find_data/model/FindDataTask';
 import { FindDataEvent } from './find_data/model/findDataEvents';
 import { findDataReducer, initialFindDataTaskState } from './find_data/model/findDataReducer';
 import {
@@ -32,7 +32,9 @@ import {
 import { SurfaceCommand } from './find_data/policy/surfacePolicy';
 import {
   selectActiveResource,
+  selectCandidateById,
   selectConversationTurnApplicability,
+  selectRelatedResourceCandidates,
   selectResourceById,
   selectResourceFields
 } from './find_data/model/findDataSelectors';
@@ -106,6 +108,30 @@ function replaceTaskIdInUrl(taskId: string): void {
   window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
+type DetailReturnSource = 'COMPARE' | 'SOLUTION' | 'RELATED_RESOURCES';
+
+interface DetailReturnContext {
+  taskId: string;
+  source: DetailReturnSource;
+  resourceId: ResourceId;
+  comparisonResourceIds?: ResourceId[];
+  comparisonSelectedResourceId?: ResourceId;
+  solutionMode?: 'recommended' | 'executable';
+}
+
+interface ComparisonDraft {
+  taskId: string;
+  resourceIds: ResourceId[];
+  selectedResourceId: ResourceId;
+}
+
+function hasSameResourceIds(left: ResourceId[], right: ResourceId[]): boolean {
+  if (left.length !== right.length) return false;
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return sortedLeft.every((id, index) => id === sortedRight[index]);
+}
+
 export const askRunCompletionMessage = buildAskRunCompletionSummary;
 
 export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorkspaceProps> = ({
@@ -135,13 +161,40 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const [clarificationErrors, setClarificationErrors] = useState<Record<string, string>>({});
   const [clarificationSubmittingId, setClarificationSubmittingId] = useState<string>();
   const [permissionCheckFailure, setPermissionCheckFailure] = useState<string>();
+  const [comparisonDraft, setComparisonDraft] = useState<ComparisonDraft>();
+  const comparisonDraftRef = useRef<ComparisonDraft>();
+  const [detailReturnContext, setDetailReturnContext] = useState<DetailReturnContext>();
+  const detailReturnContextRef = useRef<DetailReturnContext>();
+  const [surfaceMessage, setSurfaceMessage] = useState<string>();
+  const returnFocusRef = useRef<HTMLElement>();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const localContextTaskIdRef = useRef(task.taskId);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationScrollRef = useRef<HTMLDivElement>(null);
 
+  const updateComparisonDraft = useCallback((next?: ComparisonDraft) => {
+    comparisonDraftRef.current = next;
+    setComparisonDraft(next);
+  }, []);
+
+  const updateDetailReturnContext = useCallback((next?: DetailReturnContext) => {
+    detailReturnContextRef.current = next;
+    setDetailReturnContext(next);
+  }, []);
+
   useEffect(() => {
     taskRef.current = task;
   }, [task]);
+
+  useEffect(() => {
+    if (localContextTaskIdRef.current === task.taskId) return;
+    localContextTaskIdRef.current = task.taskId;
+    updateComparisonDraft(undefined);
+    updateDetailReturnContext(undefined);
+    setSurfaceMessage(undefined);
+    returnFocusRef.current = undefined;
+  }, [task.taskId, updateComparisonDraft, updateDetailReturnContext]);
 
   const dispatchTracked = useCallback((event: FindDataEvent) => {
     taskRef.current = findDataReducer(taskRef.current, event);
@@ -179,35 +232,42 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const applySurfaceCommand = useCallback((command?: SurfaceCommand) => {
     if (!command) return;
     if (command.blockedReason) {
-      dispatchTracked({
-        type: 'ASSISTANT_TURN_RECEIVED',
-        payload: {
-          turnId: createUiId('surface_blocked'),
-          nextStatus: taskRef.current.status,
-          blocks: [{
-            type: 'SYSTEM_NOTICE',
-            id: createUiId('notice'),
-            level: 'info',
-            message: command.blockedReason
-          }]
-        }
-      });
+      setSurfaceMessage(command.blockedReason);
       return;
     }
     if ((command.action === 'OPEN' || command.action === 'REPLACE') && command.surface) {
+      setSurfaceMessage(undefined);
+      if (command.surface === 'COMPARE') {
+        const resourceIds = command.resourceIds ?? [];
+        const currentDraft = comparisonDraftRef.current;
+        const currentSelectionIsValid = Boolean(currentDraft && currentDraft.taskId === taskRef.current.taskId &&
+          hasSameResourceIds(currentDraft.resourceIds, resourceIds) && resourceIds.includes(currentDraft.selectedResourceId));
+        if (!currentSelectionIsValid && resourceIds.length >= 2) {
+          const recommended = taskRef.current.comparisonModel?.recommendedResourceId;
+          updateComparisonDraft({
+            taskId: taskRef.current.taskId,
+            resourceIds,
+            selectedResourceId: recommended && resourceIds.includes(recommended) ? recommended : resourceIds[0]
+          });
+        }
+      }
       dispatchTracked({
         type: 'SURFACE_OPENED',
         payload: {
           type: command.surface,
           mode: command.mode,
           resourceIds: command.resourceIds,
-          openedBy: command.openedBy
+          openedBy: command.openedBy,
+          focusSection: command.focusSection,
+          focusRequestId: command.focusRequestId,
+          focusTarget: command.focusTarget
         }
       });
     } else if (command.action === 'CLOSE') {
+      updateDetailReturnContext(undefined);
       dispatchTracked({ type: 'SURFACE_CLOSED' });
     }
-  }, [dispatchTracked]);
+  }, [dispatchTracked, updateComparisonDraft, updateDetailReturnContext]);
 
   const applyEngineResult = useCallback((result: FindDataEngineResult) => {
     if (result.taskId !== taskRef.current.taskId) return false;
@@ -421,6 +481,10 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       const engineResult = await service.executeAction(taskRef.current, { actionCode, payload }, operationId);
       applyEngineResult(engineResult);
     } catch (error: unknown) {
+      if (isSurfaceAction) {
+        setSurfaceMessage('当前工作区暂时无法打开，请稍后重试。');
+        return;
+      }
       const needsReadBack = serviceMode === 'http' &&
         (actionCode === 'REVISE_REQUIREMENT' || actionCode === 'CREATE_PERMISSION_REQUEST');
       if (needsReadBack) {
@@ -549,6 +613,19 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     if (taskRef.current.taskId !== taskAtStart.taskId || taskRef.current.pendingOperation?.operationId !== operationId || (runResult.operationId && runResult.operationId !== operationId)) return;
     if (runResult.success) {
       dispatchTracked({ type: 'ASK_RUN_COMPLETED', payload: { result: runResult } });
+      const activeSurface = taskRef.current.activeSurface;
+      if (activeSurface.type === 'ASK_PLAN' && taskRef.current.askPlan?.id === taskAtStart.askPlan.id) {
+        dispatchTracked({
+          type: 'SURFACE_OPENED',
+          payload: {
+            ...activeSurface,
+            focusSection: 'RESULT',
+            focusRequestId: createUiId('ask_focus'),
+            // A completed run is not an explicit navigation click, so do not steal keyboard focus.
+            focusTarget: false
+          }
+        });
+      }
       dispatchTracked({
           type: 'ASSISTANT_TURN_RECEIVED',
           payload: {
@@ -563,7 +640,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             },
             blocks: [
               { type: 'TEXT', id: createUiId('text'), content: askRunCompletionMessage(taskAtStart.askPlan!, runResult) },
-              { type: 'ACTION_GROUP', id: createUiId('actions'), actions: [{ id: createUiId('view_result'), label: '查看完整结果和计算依据', actionCode: 'OPEN_ASK_PLAN', variant: 'weak' }] }
+              { type: 'ACTION_GROUP', id: createUiId('actions'), actions: [{ id: createUiId('view_result'), label: '查看完整结果和计算依据', actionCode: 'OPEN_ASK_PLAN', payload: { focusSection: 'RESULT' }, variant: 'weak' }] }
             ]
           }
       });
@@ -615,6 +692,86 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     }
   };
 
+  const captureReturnFocus = () => {
+    if (document.activeElement instanceof HTMLElement) returnFocusRef.current = document.activeElement;
+  };
+
+  const openFieldsFrom = (source: DetailReturnSource, resourceId: ResourceId) => {
+    const currentTask = taskRef.current;
+    const activeSurface = currentTask.activeSurface;
+    const comparisonResourceIds = source === 'COMPARE' ? activeSurface.resourceIds : undefined;
+    const existingDraft = comparisonDraftRef.current;
+    const comparisonSelectedResourceId = source === 'COMPARE' && comparisonResourceIds?.length
+      ? existingDraft && existingDraft.taskId === currentTask.taskId &&
+        hasSameResourceIds(existingDraft.resourceIds, comparisonResourceIds) && comparisonResourceIds.includes(existingDraft.selectedResourceId)
+        ? existingDraft.selectedResourceId
+        : currentTask.comparisonModel?.recommendedResourceId && comparisonResourceIds.includes(currentTask.comparisonModel.recommendedResourceId)
+        ? currentTask.comparisonModel.recommendedResourceId
+        : comparisonResourceIds[0]
+      : undefined;
+    if (source === 'COMPARE' && comparisonResourceIds && comparisonSelectedResourceId) {
+      updateComparisonDraft({
+        taskId: currentTask.taskId,
+        resourceIds: comparisonResourceIds,
+        selectedResourceId: comparisonSelectedResourceId
+      });
+    }
+    const context: DetailReturnContext = {
+      taskId: currentTask.taskId,
+      source,
+      resourceId,
+      solutionMode: source === 'SOLUTION' ? solutionMode : undefined,
+      comparisonResourceIds,
+      comparisonSelectedResourceId
+    };
+    captureReturnFocus();
+    updateDetailReturnContext(context);
+    void handleAction('OPEN_FIELDS', { resourceId });
+  };
+
+  const relatedResourceIds = selectRelatedResourceCandidates(task).map((candidate) => candidate.resourceId);
+  const isReturnContextCurrent = detailReturnContext?.taskId === task.taskId;
+  const isReturnContextValid = Boolean(detailReturnContext && isReturnContextCurrent && (
+    detailReturnContext.source === 'COMPARE'
+      ? Boolean(
+          detailReturnContext.comparisonResourceIds &&
+          task.comparisonModel &&
+          hasSameResourceIds(task.comparisonModel.resourceIds, detailReturnContext.comparisonResourceIds) &&
+          detailReturnContext.comparisonResourceIds.every((id) => Boolean(selectCandidateById(task, id))) &&
+          detailReturnContext.comparisonSelectedResourceId &&
+          detailReturnContext.comparisonResourceIds.includes(detailReturnContext.comparisonSelectedResourceId)
+        )
+      : detailReturnContext.source === 'SOLUTION'
+      ? task.dataSolution.items.some((item) => item.resourceId === detailReturnContext.resourceId)
+      : relatedResourceIds.includes(detailReturnContext.resourceId)
+  ));
+
+  const returnFromFields = () => {
+    const context = detailReturnContextRef.current;
+    if (!context || !isReturnContextValid) return;
+    if (context.source === 'COMPARE' && context.comparisonResourceIds && context.comparisonSelectedResourceId) {
+      updateComparisonDraft({
+        taskId: task.taskId,
+        resourceIds: context.comparisonResourceIds,
+        selectedResourceId: context.comparisonSelectedResourceId
+      });
+      void handleAction('OPEN_COMPARE', { resourceIds: context.comparisonResourceIds });
+      return;
+    }
+    if (context.source === 'SOLUTION') {
+      setSolutionMode(context.solutionMode ?? 'recommended');
+      void handleAction('OPEN_SOLUTION');
+      return;
+    }
+    void handleAction('OPEN_RELATED_RESOURCES');
+  };
+
+  const closeFields = () => {
+    updateDetailReturnContext(undefined);
+    void handleAction('CLOSE_SURFACE');
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
   const activeSurfaceType = task.activeSurface.type;
   const isSurfaceOpen = activeSurfaceType !== 'CLOSED';
   const isReevaluating = task.dataSolution.state === 'EVALUATING' || task.dataSolution.state === 'STALE';
@@ -628,6 +785,24 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const targetFieldResourceId = task.activeSurface.resourceIds?.[0] ?? task.activeResourceId;
   const targetFieldResource = selectResourceById(task, targetFieldResourceId);
   const targetFieldList = selectResourceFields(task, targetFieldResourceId);
+  const fieldBackLabel = detailReturnContext?.source === 'COMPARE'
+    ? '返回资源比较'
+    : detailReturnContext?.source === 'SOLUTION'
+    ? '返回数据方案'
+    : detailReturnContext?.source === 'RELATED_RESOURCES'
+    ? '返回相关资源'
+    : undefined;
+  const fieldReturnMessage = detailReturnContext && !isReturnContextValid
+    ? '原比较上下文已变化，请查看最新方案。'
+    : undefined;
+
+  useEffect(() => {
+    const context = detailReturnContextRef.current;
+    const focusTarget = returnFocusRef.current;
+    if (!context || !focusTarget || task.activeSurface.type !== context.source) return;
+    if (focusTarget.isConnected) focusTarget.focus();
+    returnFocusRef.current = undefined;
+  }, [task.activeSurface.type, task.activeSurface.focusRequestId]);
 
   // Filter sessions
   const filteredSessions = savedTaskList.filter((s) =>
@@ -821,7 +996,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           <div className="flex items-center space-x-2 shrink-0">
             {isSurfaceOpen && (
               <button
-                onClick={() => void handleAction('CLOSE_SURFACE')}
+                onClick={() => activeSurfaceType === 'FIELDS' ? closeFields() : void handleAction('CLOSE_SURFACE')}
                 className="px-2.5 py-1 text-xs text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] rounded-lg transition-colors cursor-pointer border border-[#E2E8F0]"
               >
                 收起右侧工作区
@@ -868,6 +1043,12 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             </div>}
           </div>
         </header>
+
+        {surfaceMessage && (
+          <div role="status" className="mx-5 mt-3 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-xs leading-relaxed text-[#1E40AF]">
+            {surfaceMessage}
+          </div>
+        )}
 
         {/* Vertically Scrollable Conversation Stream */}
         <div
@@ -1026,16 +1207,19 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           >
             <div className="flex items-center space-x-2 bg-[#F8FAFC] border border-[#CBD5E1] rounded-2xl p-1.5 focus-within:border-[#2563EB] focus-within:ring-1 focus-within:ring-[#2563EB] transition-all">
               <input
+                ref={inputRef}
                 type="text"
                 value={inputMessage}
                 disabled={isInputBlocked}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyDown={(e) => {
+                  if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleSendMessage();
                   }
                 }}
+                aria-label="发送找数据意图"
                 placeholder={isInputBlocked ? '当前任务正在处理，请稍候…' : '发送找数据意图、提出追问或输入口径调整要求…'}
                 className="flex-1 bg-transparent px-3 py-1.5 text-xs text-[#0F172A] placeholder-[#94A3B8] focus:outline-none"
               />
@@ -1044,6 +1228,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                 type="button"
                 onClick={handleSendMessage}
                 disabled={!inputMessage.trim() || isInputBlocked}
+                aria-label={isInputBlocked ? '任务处理中' : '发送消息'}
                 className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
                   inputMessage.trim() && !isInputBlocked
                     ? 'bg-[#2563EB] text-white hover:bg-[#1D4ED8] shadow-2xs'
@@ -1070,12 +1255,18 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               comparisonRows={task.comparisonModel?.rows ?? []}
               recommendationConclusion={task.comparisonModel?.recommendationSummary}
               recommendedResourceId={task.comparisonModel?.recommendedResourceId}
-              selectedResourceId={task.activeResourceId}
+              selectedResourceId={comparisonDraft?.taskId === task.taskId && hasSameResourceIds(comparisonDraft.resourceIds, task.activeSurface.resourceIds ?? []) ? comparisonDraft.selectedResourceId : undefined}
+              onSelectionChange={(resourceId) => {
+                const resourceIds = task.activeSurface.resourceIds ?? [];
+                if (!resourceIds.includes(resourceId)) return;
+                updateComparisonDraft({ taskId: task.taskId, resourceIds, selectedResourceId: resourceId });
+              }}
               onConfirmSelection={(resId) => {
+                updateComparisonDraft(undefined);
                 void handleAction('SELECT_RESOURCE', { resourceId: resId });
               }}
               onViewFields={(resId) => {
-                handleAction('OPEN_FIELDS', { resourceId: resId });
+                openFieldsFrom('COMPARE', resId);
               }}
               onClose={() => void handleAction('CLOSE_SURFACE')}
             />
@@ -1085,8 +1276,16 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             <RightWorkspaceFields
               resource={targetFieldResource}
               fields={targetFieldList}
-              onClose={() => void handleAction('CLOSE_SURFACE')}
-              onBackToSolution={() => void handleAction('OPEN_SOLUTION')}
+              onClose={closeFields}
+              onBack={isReturnContextValid ? returnFromFields : undefined}
+              backLabel={isReturnContextValid ? fieldBackLabel : undefined}
+              returnContextMessage={fieldReturnMessage}
+              onViewLatestSolution={fieldReturnMessage && (task.dataSolution.items.length > 0 || task.dataSolution.gaps.length > 0)
+                ? () => {
+                    updateDetailReturnContext(undefined);
+                    void handleAction('OPEN_SOLUTION');
+                  }
+                : undefined}
             />
           )}
 
@@ -1096,6 +1295,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               mode={solutionMode}
               onModeChange={(m) => setSolutionMode(m)}
               onAction={(code, p) => handleAction(code, p)}
+              onViewFields={(resId) => openFieldsFrom('SOLUTION', resId)}
               onClose={() => void handleAction('CLOSE_SURFACE')}
             />
           )}
@@ -1115,7 +1315,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               onReturnToAnalysis={() => void handleAction('OPEN_SOLUTION')}
               onAction={(code, p) => handleAction(code, p)}
               onViewFields={(resId) => {
-                handleAction('OPEN_FIELDS', { resourceId: resId });
+                openFieldsFrom('RELATED_RESOURCES', resId);
               }}
             />
           )}
@@ -1133,6 +1333,10 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               onViewPermissionChanges={() => void handleAction('OPEN_ACCESS')}
               onRegeneratePlan={() => void handleAction('REGENERATE_ASK_PLAN')}
               permissionCheckFailure={permissionCheckFailure}
+              focusSection={task.activeSurface.focusSection}
+              focusRequestId={task.activeSurface.focusRequestId}
+              focusTarget={task.activeSurface.focusTarget}
+              onFocusSection={(focusSection) => void handleAction('OPEN_ASK_PLAN', { focusSection })}
               onModifySpec={() => setIsContextDrawerOpen(true)}
               onClose={() => void handleAction('CLOSE_SURFACE')}
             />

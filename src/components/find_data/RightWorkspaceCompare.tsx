@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { X, Check, ArrowRight, FileText, Info } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { X, ArrowRight, FileText, Info } from 'lucide-react';
 import { FindDataResource, ResourceComparisonRow, ResourceId } from './model/FindDataTask';
 
 interface RightWorkspaceCompareProps {
@@ -8,6 +8,7 @@ interface RightWorkspaceCompareProps {
   recommendationConclusion?: string;
   recommendedResourceId?: ResourceId;
   selectedResourceId?: ResourceId;
+  onSelectionChange?: (resourceId: ResourceId) => void;
   onConfirmSelection: (resourceId: ResourceId) => void;
   onViewFields: (resourceId: ResourceId) => void;
   onClose: () => void;
@@ -19,6 +20,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
   recommendationConclusion,
   recommendedResourceId,
   selectedResourceId,
+  onSelectionChange,
   onConfirmSelection,
   onViewFields,
   onClose
@@ -26,12 +28,28 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
   const resA = resources[0];
   const resB = resources[1];
 
-  const defaultSelectedId = selectedResourceId || recommendedResourceId || resA?.id;
+  const comparisonKey = [resA?.id, resB?.id].filter((id): id is ResourceId => !!id).sort().join('|');
+  const defaultSelectedId = selectedResourceId && [resA?.id, resB?.id].includes(selectedResourceId)
+    ? selectedResourceId
+    : recommendedResourceId && [resA?.id, resB?.id].includes(recommendedResourceId)
+    ? recommendedResourceId
+    : resA?.id;
   const [selectedId, setSelectedId] = useState<ResourceId | undefined>(defaultSelectedId);
+  const comparisonKeyRef = useRef(comparisonKey);
 
   useEffect(() => {
-    setSelectedId(selectedResourceId || recommendedResourceId || resources[0]?.id);
-  }, [selectedResourceId, recommendedResourceId, resources]);
+    const ids = [resA?.id, resB?.id].filter((id): id is ResourceId => !!id);
+    const selectionIsValid = selectedId !== undefined && ids.includes(selectedId);
+    if (comparisonKeyRef.current !== comparisonKey || !selectionIsValid) {
+      comparisonKeyRef.current = comparisonKey;
+      setSelectedId(defaultSelectedId);
+    }
+  }, [comparisonKey, defaultSelectedId, resA?.id, resB?.id, selectedId]);
+
+  const selectCandidate = (resourceId: ResourceId) => {
+    setSelectedId(resourceId);
+    onSelectionChange?.(resourceId);
+  };
 
   if (!resA || !resB) {
     return (
@@ -43,6 +61,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
         </p>
         <button
           onClick={onClose}
+          aria-label="关闭右侧工作区"
           className="mt-2 px-3 py-1 bg-[#F1F5F9] hover:bg-[#E2E8F0] rounded text-[#475569] cursor-pointer"
         >
           关闭工作区
@@ -106,6 +125,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
         </div>
         <button
           onClick={onClose}
+          aria-label="关闭资源比较"
           className="w-8 h-8 rounded-lg hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors cursor-pointer"
           title="关闭工作区"
         >
@@ -127,31 +147,33 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
         </div>
 
         {/* 2 Candidate Cards */}
-        <div className="grid grid-cols-2 gap-3">
+        <fieldset className="grid grid-cols-2 gap-3" aria-label="选择要加入方案的候选资源">
+          <legend className="sr-only">选择要加入方案的候选资源</legend>
           {/* Resource A */}
           <div
-            onClick={() => setSelectedId(resA.id)}
             className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2 relative ${
               selectedId === resA.id
                 ? 'border-[#2563EB] bg-[#EFF6FF]/20 ring-1 ring-[#2563EB]/40'
                 : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] font-medium border border-[#E2E8F0]">
                 {resA.type}
               </span>
-              <div
-                className={`w-4 h-4 rounded-full flex items-center justify-center border ${
-                  selectedId === resA.id
-                    ? 'border-[#2563EB] bg-[#2563EB] text-white'
-                    : 'border-[#CBD5E1]'
-                }`}
-              >
-                {selectedId === resA.id && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-              </div>
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-[#334155] focus-within:outline-none focus-within:ring-2 focus-within:ring-[#2563EB] rounded">
+                <input
+                  type="radio"
+                  name="comparison-candidate"
+                  aria-label={`选择 ${resA.name}`}
+                  checked={selectedId === resA.id}
+                  onChange={() => selectCandidate(resA.id)}
+                  className="h-4 w-4 accent-[#2563EB]"
+                />
+                <span>选择</span>
+              </label>
             </div>
-            <div className="font-bold text-xs text-[#0F172A] truncate">{resA.name}</div>
+            <div className="font-bold text-xs text-[#0F172A] break-words">{resA.name}</div>
             <p className="text-[11px] text-[#64748B] line-clamp-2 leading-relaxed">{resA.desc}</p>
             <div className="pt-1 border-t border-[#F1F5F9] flex justify-between items-center text-[10px] text-[#64748B]">
               <span>权限：{resA.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '需申请'}</span>
@@ -161,7 +183,8 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
                   e.stopPropagation();
                   onViewFields(resA.id);
                 }}
-                className="text-[#2563EB] hover:underline"
+                aria-label={`查看${resA.name}字段`}
+                className="text-[#2563EB] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
               >
                 查看字段
               </button>
@@ -170,28 +193,29 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
 
           {/* Resource B */}
           <div
-            onClick={() => setSelectedId(resB.id)}
             className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2 relative ${
               selectedId === resB.id
                 ? 'border-[#2563EB] bg-[#EFF6FF]/20 ring-1 ring-[#2563EB]/40'
                 : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
             }`}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] font-medium border border-[#E2E8F0]">
                 {resB.type}
               </span>
-              <div
-                className={`w-4 h-4 rounded-full flex items-center justify-center border ${
-                  selectedId === resB.id
-                    ? 'border-[#2563EB] bg-[#2563EB] text-white'
-                    : 'border-[#CBD5E1]'
-                }`}
-              >
-                {selectedId === resB.id && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-              </div>
+              <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-[#334155] focus-within:outline-none focus-within:ring-2 focus-within:ring-[#2563EB] rounded">
+                <input
+                  type="radio"
+                  name="comparison-candidate"
+                  aria-label={`选择 ${resB.name}`}
+                  checked={selectedId === resB.id}
+                  onChange={() => selectCandidate(resB.id)}
+                  className="h-4 w-4 accent-[#2563EB]"
+                />
+                <span>选择</span>
+              </label>
             </div>
-            <div className="font-bold text-xs text-[#0F172A] truncate">{resB.name}</div>
+            <div className="font-bold text-xs text-[#0F172A] break-words">{resB.name}</div>
             <p className="text-[11px] text-[#64748B] line-clamp-2 leading-relaxed">{resB.desc}</p>
             <div className="pt-1 border-t border-[#F1F5F9] flex justify-between items-center text-[10px] text-[#64748B]">
               <span>权限：{resB.availabilityByAction.query === 'ALLOWED' ? '可直接查询' : '需申请'}</span>
@@ -201,17 +225,18 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
                   e.stopPropagation();
                   onViewFields(resB.id);
                 }}
-                className="text-[#2563EB] hover:underline"
+                aria-label={`查看${resB.name}字段`}
+                className="text-[#2563EB] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
               >
                 查看字段
               </button>
             </div>
           </div>
-        </div>
+        </fieldset>
 
         {/* Detailed Comparison Table */}
-        <div className="border border-[#E2E8F0] rounded-xl overflow-hidden shadow-2xs">
-          <table className="w-full text-left border-collapse text-xs">
+        <div className="border border-[#E2E8F0] rounded-xl overflow-x-auto shadow-2xs">
+          <table className="min-w-[620px] w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] text-[#475569]">
                 <th className="py-2.5 px-3 font-semibold w-1/4">比对维度</th>
@@ -248,6 +273,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
       <div className="p-4 border-t border-[#E2E8F0] bg-[#FAFAFA] flex items-center justify-between shrink-0">
         <button
           onClick={onClose}
+          aria-label="关闭右侧工作区"
           className="px-3 py-1.5 text-xs text-[#64748B] hover:text-[#0F172A] hover:bg-[#E2E8F0] rounded-lg transition-colors cursor-pointer"
         >
           取消
@@ -262,7 +288,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
               : 'text-[#94A3B8] bg-[#F1F5F9] cursor-not-allowed'
           }`}
         >
-          <span>锁定选定资源入方案</span>
+          <span>将所选资源加入方案</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>

@@ -28,7 +28,7 @@ test.describe('Find Data RC1 mock smoke', () => {
     await taskInput.fill('按当前方案分析');
     await taskInput.press('Enter');
     await expect(page.getByText('请确认本次分析使用的比较基准：').last()).toBeVisible();
-    await page.getByRole('button', { name: /与全区加权平均比较/ }).last().click();
+    await page.getByRole('radio', { name: /与全区加权平均比较/ }).last().check({ force: true });
     await page.getByRole('button', { name: '继续' }).last().click();
 
     await page.getByRole('button', { name: '分析计划 · 待确认' }).click();
@@ -54,7 +54,7 @@ test.describe('Find Data RC1 mock smoke', () => {
     await taskInput.fill('按当前方案分析');
     await taskInput.press('Enter');
     await expect(page.getByText('请确认本次分析使用的比较基准：').last()).toBeVisible();
-    await page.getByRole('button', { name: /与全区加权平均比较/ }).last().click();
+    await page.getByRole('radio', { name: /与全区加权平均比较/ }).last().check({ force: true });
     await page.getByRole('button', { name: '继续' }).last().click();
     await page.getByRole('button', { name: '分析计划 · 待确认' }).click();
     await expect(page.getByText('每千名 60 岁以上常住人口核定养老床位数')).toBeVisible();
@@ -81,7 +81,7 @@ test.describe('Find Data RC1 mock smoke', () => {
     await expect(page.getByRole('button', { name: '查看当前方案' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /分析计划/ })).toHaveCount(0);
 
-    await page.getByRole('button', { name: '人口规模与养老床位供给' }).click();
+    await page.getByRole('radio', { name: '人口规模与养老床位供给' }).check({ force: true });
     await page.getByRole('button', { name: '继续' }).last().click();
     await page.getByRole('button', { name: /方案 · 2 项核心资源/ }).click();
     await expect(page.getByText('60 岁以上常住人口数').last()).toBeVisible();
@@ -104,5 +104,53 @@ test.describe('Find Data RC1 mock smoke', () => {
     await page.getByRole('button', { name: '使用月度快照' }).click();
     await expect(page.getByText(/已将「常住人口月度快照」加入方案/)).toBeVisible();
     await expect(page.getByText(/「人口基本信息视图」仍保留在候选中，未加入正式方案/)).toBeVisible();
+  });
+
+  test('returns from candidate fields to the same comparison draft before confirming the selection', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: '找数据' }).click();
+    const homeInput = page.getByPlaceholder(/描述你要查找的数据或分析目标/);
+    await homeInput.fill(goal);
+    await homeInput.press('Enter');
+
+    const taskInput = page.getByPlaceholder('发送找数据意图、提出追问或输入口径调整要求…');
+    await taskInput.fill('我还想看人口明细');
+    await taskInput.press('Enter');
+    await page.getByRole('button', { name: '比较 2 项资源' }).last().click();
+    await expect(page.getByRole('heading', { name: '资源选型对比' })).toBeVisible();
+
+    await page.getByRole('radio', { name: '选择 常住人口月度快照' }).click();
+    await page.getByRole('button', { name: '查看常住人口月度快照字段' }).click();
+    await expect(page.getByRole('heading', { name: /字段检视 · 常住人口月度快照/ })).toBeVisible();
+    await page.getByRole('button', { name: '返回资源比较' }).click();
+    await expect(page.getByRole('heading', { name: '资源选型对比' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: '选择 常住人口月度快照' })).toBeChecked();
+    await page.getByRole('button', { name: '将所选资源加入方案' }).click();
+    await expect(page.getByText(/已将「常住人口月度快照」加入方案/)).toBeVisible();
+  });
+
+  test('keeps Ask Plan result and calculation targets in the same scrollable workspace', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: '找数据' }).click();
+    const homeInput = page.getByPlaceholder(/描述你要查找的数据或分析目标/);
+    await homeInput.fill(goal);
+    await homeInput.press('Enter');
+
+    const taskInput = page.getByPlaceholder('发送找数据意图、提出追问或输入口径调整要求…');
+    await taskInput.fill('按当前方案分析');
+    await taskInput.press('Enter');
+    await page.getByRole('radio', { name: /与全区加权平均比较/ }).last().check({ force: true });
+    await page.getByRole('button', { name: '继续' }).last().click();
+    await page.getByRole('button', { name: '分析计划 · 待确认' }).click();
+    await page.getByRole('button', { name: '执行权限重校验' }).click();
+    await expect(page.getByText('可以执行')).toBeVisible();
+    await page.getByRole('button', { name: '确认并开始计算' }).click();
+
+    const resultHeading = page.getByText('分析执行结论与基线核查');
+    await expect(resultHeading).toBeInViewport();
+    await page.getByRole('button', { name: '查看计算依据' }).click();
+    await expect(page.getByText('计算公式：')).toBeInViewport();
+    await page.getByRole('button', { name: '查看完整结果和计算依据' }).last().click();
+    await expect(resultHeading).toBeInViewport();
   });
 });

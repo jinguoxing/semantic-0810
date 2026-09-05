@@ -41,6 +41,7 @@ export const RightWorkspaceCatalog: React.FC<RightWorkspaceCatalogProps> = ({
         </div>
         <button
           onClick={onClose}
+          aria-label="关闭相关资源"
           className="w-8 h-8 rounded-lg hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors cursor-pointer"
           title="关闭工作区"
         >

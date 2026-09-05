@@ -74,7 +74,10 @@ export function canExecuteTaskAction(task: FindDataTaskState, actionCode: import
   switch (actionCode) {
     case 'OPEN_SOLUTION': return task.dataSolution.items.length > 0 || task.dataSolution.gaps.length > 0;
     case 'OPEN_ACCESS': return selectPermissionRelevantItems(task).length > 0;
-    case 'OPEN_ASK_PLAN': return Boolean(task.askPlan && selectAskHandoffReadiness(task).ready);
+    case 'OPEN_ASK_PLAN': {
+      if (!task.askPlan || !selectAskHandoffReadiness(task).ready) return false;
+      return payload?.focusSection !== 'RESULT' || Boolean(task.askPlan.lastRunResult?.success);
+    }
     case 'REGENERATE_ASK_PLAN': return selectAskHandoffReadiness(task).ready;
     case 'OPEN_COMPARE': return (payload?.resourceIds as ResourceId[] | undefined ?? task.comparisonModel?.resourceIds ?? [])
       .filter((id) => Boolean(selectCandidateById(task, id))).length >= 2;

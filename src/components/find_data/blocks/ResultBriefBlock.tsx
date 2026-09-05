@@ -18,7 +18,7 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
   const actionEnabled = (action?: { actionCode: TaskActionCode; payload?: Record<string, unknown> }) => !task || !action || canExecuteTaskAction(task, action.actionCode, action.payload);
 
   return (
-    <div className="pt-1 text-xs space-y-2 select-none w-full">
+    <div className="pt-1 text-xs space-y-2 w-full">
       {/* Title & Badge */}
       <div className="flex items-center justify-between pb-1 border-b border-[#F1F5F9]">
         <span className="font-semibold text-[#0F172A] tracking-tight truncate">

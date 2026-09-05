@@ -5,6 +5,7 @@ import { RightWorkspaceFields } from '../RightWorkspaceFields';
 import { RightWorkspaceAskPlan } from '../RightWorkspaceAskPlan';
 import { RightWorkspaceSolution } from '../RightWorkspaceSolution';
 import { RightWorkspaceCatalog } from '../RightWorkspaceCatalog';
+import { RightWorkspaceCompare } from '../RightWorkspaceCompare';
 import { TaskContextDrawer } from '../TaskContextDrawer';
 import { MINHANG_RESOURCES } from '../fixtures/minhangBedSupplyFixture';
 import {
@@ -217,5 +218,37 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
     expect(onAction).toHaveBeenCalledWith('REVISE_REQUIREMENT', {
       hypothesisPatch: { bedDefinition: '民政核定且在营可用养老床位数' }
     });
+  });
+
+  it('keeps a comparison draft selection through an ordinary re-render and confirms only the chosen candidate', () => {
+    const first = MINHANG_RESOURCES.r02;
+    const second = MINHANG_RESOURCES.r03;
+    const onConfirmSelection = vi.fn();
+    const onSelectionChange = vi.fn();
+    const view = render(
+      <RightWorkspaceCompare
+        resources={[first, second]}
+        recommendedResourceId={first.id}
+        onSelectionChange={onSelectionChange}
+        onConfirmSelection={onConfirmSelection}
+        onViewFields={() => {}}
+        onClose={() => {}}
+      />
+    );
+    fireEvent.click(screen.getByRole('radio', { name: `选择 ${second.name}` }));
+    expect(onSelectionChange).toHaveBeenCalledWith(second.id);
+    view.rerender(
+      <RightWorkspaceCompare
+        resources={[{ ...first }, { ...second }]}
+        recommendedResourceId={first.id}
+        onSelectionChange={onSelectionChange}
+        onConfirmSelection={onConfirmSelection}
+        onViewFields={() => {}}
+        onClose={() => {}}
+      />
+    );
+    expect(screen.getByRole('radio', { name: `选择 ${second.name}` })).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: '将所选资源加入方案' }));
+    expect(onConfirmSelection).toHaveBeenCalledWith(second.id);
   });
 });

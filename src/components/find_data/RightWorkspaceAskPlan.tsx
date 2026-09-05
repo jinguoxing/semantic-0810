@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { X, Calculator, CheckCircle2, ShieldCheck, Play, Edit3, Loader2, RefreshCw } from 'lucide-react';
-import { AskPlan, FindDataTaskState, PermissionCheckState } from './model/FindDataTask';
+import { AskPlan, AskPlanFocusSection, FindDataTaskState, PermissionCheckState } from './model/FindDataTask';
 import { PermissionRecheckResult } from './services/FindDataService';
 import { getMinhangBedDefinitionForNumerator } from './scenarios/minhangBedDefinition';
 import { buildActualScopeLabel } from './presenters/conversationPresenters';
@@ -15,6 +15,10 @@ interface RightWorkspaceAskPlanProps {
   onRegeneratePlan?: () => void;
   executionScopeDisclosure?: string;
   permissionCheckFailure?: string;
+  focusSection?: AskPlanFocusSection;
+  focusRequestId?: string;
+  focusTarget?: boolean;
+  onFocusSection?: (section: AskPlanFocusSection) => void;
   onClose: () => void;
 }
 
@@ -43,11 +47,19 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   onRegeneratePlan,
   executionScopeDisclosure = '本次执行范围将在服务返回后确认。',
   permissionCheckFailure,
+  focusSection = 'PLAN',
+  focusRequestId,
+  focusTarget = false,
+  onFocusSection,
   onClose
 }) => {
   const plan = task.askPlan;
   const [isChecking, setIsChecking] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const planSectionRef = useRef<HTMLDivElement>(null);
+  const calculationSectionRef = useRef<HTMLDivElement>(null);
+  const resultSectionRef = useRef<HTMLDivElement>(null);
 
   if (!plan) {
     return (
@@ -57,7 +69,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
             <Calculator className="w-4 h-4 text-[#2563EB]" />
             <h3 className="text-sm font-bold text-[#0F172A]">Ask Data 分析计划</h3>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-[#F1F5F9] text-[#64748B] flex items-center justify-center">
+          <button onClick={onClose} aria-label="关闭分析计划" className="w-8 h-8 rounded-lg hover:bg-[#F1F5F9] text-[#64748B] flex items-center justify-center">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -78,6 +90,20 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   const coreResources = plan.coreResourceIds.map((id) => task.resources[id]).filter(Boolean);
   const selectedBenchmark = benchmarkCopy[plan.calculationSpec.benchmarkRule];
   const resultDefinitionLabel = getMinhangBedDefinitionForNumerator(plan.calculationSpec.numerator).resultDefinitionLabel;
+
+  useLayoutEffect(() => {
+    if (!focusRequestId) return;
+    const target = focusSection === 'RESULT'
+      ? resultSectionRef.current
+      : focusSection === 'CALCULATION'
+      ? calculationSectionRef.current
+      : planSectionRef.current;
+    const container = scrollContainerRef.current;
+    if (!target || !container) return;
+    const nextTop = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 12;
+    container.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' });
+    if (focusTarget) target.focus({ preventScroll: true });
+  }, [focusRequestId, focusSection, focusTarget]);
 
   const handleCheckPermission = async () => {
     if (isChecking || isExecuting) return;
@@ -119,6 +145,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
         </div>
         <button
           onClick={onClose}
+          aria-label="关闭分析计划"
           className="w-8 h-8 rounded-lg hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors cursor-pointer"
           title="关闭工作区"
         >
@@ -127,9 +154,9 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar text-xs">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar text-xs">
         {/* Section 1: 本次分析计算定义 */}
-        <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl space-y-2.5">
+        <div ref={planSectionRef} tabIndex={-1} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl space-y-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]">
           <div className="flex items-center justify-between">
             <span className="font-bold text-xs text-[#0F172A]">一、本次分析计算定义</span>
             <span className="text-[10px] px-2 py-0.5 rounded bg-[#FEF3C7] text-[#D97706] font-bold border border-[#FDE68A]">
@@ -141,7 +168,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
           </div>
 
           {/* Formula Display */}
-          <div className="p-3 bg-white rounded-lg border border-[#E2E8F0] font-mono text-xs text-[#1E293B] space-y-1">
+          <div ref={calculationSectionRef} tabIndex={-1} className="p-3 bg-white rounded-lg border border-[#E2E8F0] font-mono text-xs text-[#1E293B] space-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]">
             <div className="text-[10px] font-sans font-semibold text-[#64748B] mb-1">计算公式：</div>
             <div className="text-[#2563EB] font-bold">
               {plan.calculationSpec.formula}
@@ -274,9 +301,9 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
 
         {/* Section 5: P0-15 隔离计算结果: 仅在执行后呈现 */}
         {hasExecuted && lastRunResult?.resultArtifact && (
-          <div className="pt-4 pb-2 border-t border-[#E2E8F0] space-y-3.5 text-xs animate-in fade-in">
+          <div ref={resultSectionRef} tabIndex={-1} className="pt-4 pb-2 border-t border-[#E2E8F0] space-y-3.5 text-xs animate-in fade-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]">
             <div className="flex items-center justify-between pb-1.5 border-b border-[#F1F5F9]">
-              <div className="flex items-center space-x-2 font-bold text-[#0F172A]">
+              <div className="flex items-center space-x-2 font-bold text-[#0F172A]" role="status" aria-live="polite">
                 <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
                 <span className="text-sm">分析执行结论与基线核查</span>
               </div>
@@ -358,6 +385,15 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>修改口径</span>
+            </button>
+          )}
+          {hasExecuted && (
+            <button
+              type="button"
+              onClick={() => onFocusSection?.('CALCULATION')}
+              className="px-3 py-1.5 text-xs text-[#475569] hover:bg-[#E2E8F0] rounded-lg transition-colors cursor-pointer"
+            >
+              查看计算依据
             </button>
           )}
         </div>

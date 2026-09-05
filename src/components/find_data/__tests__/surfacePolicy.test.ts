@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateSurfacePolicy, resolveInteractionIntent } from '../policy/surfacePolicy';
-import { createEmptyTask, createMinhangTask, createResource } from './testUtils/findDataFactories';
+import { createAskPlan, createEmptyTask, createMinhangTask, createResource } from './testUtils/findDataFactories';
 
 describe('surface policy and structured natural-language intent', () => {
   it.each(['这个表有哪些字段？', '它有多少字段', '为什么推荐它', '当前还缺什么', '这两个资源有什么不同'])(
@@ -46,6 +46,23 @@ describe('surface policy and structured natural-language intent', () => {
 
   it('OPEN_ASK_PLAN is blocked when no plan exists', () => {
     expect(evaluateSurfacePolicy(resolveInteractionIntent('', createMinhangTask()), 'OPEN_ASK_PLAN', { type: 'CLOSED' }, createMinhangTask())).toMatchObject({ action: 'NO_CHANGE', blockedReason: expect.any(String) });
+  });
+
+  it('carries a structured focus target for the plan, calculation, or completed result', () => {
+    const withoutResult = createMinhangTask({ askPlan: createAskPlan({ permissionCheckState: 'ALLOWED' }) });
+    expect(evaluateSurfacePolicy(resolveInteractionIntent('', withoutResult), 'OPEN_ASK_PLAN', { type: 'ASK_PLAN' }, withoutResult, { focusSection: 'RESULT' }))
+      .toMatchObject({ action: 'NO_CHANGE', blockedReason: '当前分析计划尚未产生可查看的成功结果。' });
+
+    const withResult = createMinhangTask({
+      askPlan: createAskPlan({
+        permissionCheckState: 'ALLOWED',
+        status: 'COMPLETED',
+        lastRunResult: { success: true, executedAt: '2026-09-05T00:00:00.000Z', permissionSnapshot: {} }
+      })
+    });
+    const command = evaluateSurfacePolicy(resolveInteractionIntent('', withResult), 'OPEN_ASK_PLAN', { type: 'ASK_PLAN' }, withResult, { focusSection: 'RESULT' });
+    expect(command).toMatchObject({ action: 'REPLACE', surface: 'ASK_PLAN', focusSection: 'RESULT', focusTarget: true });
+    expect(command.focusRequestId).toEqual(expect.any(String));
   });
 
   it('related resources and close remain policy commands', () => {

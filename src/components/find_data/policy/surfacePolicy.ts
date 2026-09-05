@@ -1,4 +1,4 @@
-import { FindDataTaskState, ResourceId, SurfaceState, SurfaceType, TaskActionCode } from '../model/FindDataTask';
+import { AskPlanFocusSection, FindDataTaskState, ResourceId, SurfaceState, SurfaceType, TaskActionCode } from '../model/FindDataTask';
 import { selectAskHandoffReadiness } from '../model/findDataSelectors';
 
 export interface InteractionIntentResult {
@@ -17,8 +17,13 @@ export interface SurfaceCommand {
   mode?: 'QUICK_PREVIEW' | 'WORKBENCH';
   resourceIds?: ResourceId[];
   openedBy?: 'USER_EXPLICIT' | 'ACTION_CLICK' | 'TASK_REQUIRED';
+  focusSection?: AskPlanFocusSection;
+  focusRequestId?: string;
+  focusTarget?: boolean;
   blockedReason?: string;
 }
+
+let askPlanFocusSequence = 0;
 
 const surfaceActionCodes: ReadonlySet<TaskActionCode> = new Set([
   'OPEN_COMPARE', 'OPEN_FIELDS', 'OPEN_SOLUTION', 'OPEN_ACCESS',
@@ -105,11 +110,26 @@ function solutionCommand(task: FindDataTaskState | undefined, currentSurface: Su
   return openSurface(currentSurface, 'SOLUTION', openedBy);
 }
 
-function askPlanCommand(task: FindDataTaskState | undefined, currentSurface: SurfaceState | undefined, openedBy: 'USER_EXPLICIT' | 'ACTION_CLICK'): SurfaceCommand {
+function askPlanCommand(
+  task: FindDataTaskState | undefined,
+  currentSurface: SurfaceState | undefined,
+  openedBy: 'USER_EXPLICIT' | 'ACTION_CLICK',
+  requestedFocus?: AskPlanFocusSection
+): SurfaceCommand {
   if (!task?.askPlan) return { action: 'NO_CHANGE', blockedReason: '当前尚未形成可执行的分析计划。' };
   const readiness = selectAskHandoffReadiness(task);
   if (!readiness.ready) return { action: 'NO_CHANGE', blockedReason: readiness.message };
-  return openSurface(currentSurface, 'ASK_PLAN', openedBy);
+  const focusSection = requestedFocus ?? 'PLAN';
+  if (focusSection === 'RESULT' && !task.askPlan.lastRunResult?.success) {
+    return { action: 'NO_CHANGE', blockedReason: '当前分析计划尚未产生可查看的成功结果。' };
+  }
+  askPlanFocusSequence += 1;
+  return {
+    ...openSurface(currentSurface, 'ASK_PLAN', openedBy),
+    focusSection,
+    focusRequestId: `ask_focus_${askPlanFocusSequence}`,
+    focusTarget: true
+  };
 }
 
 export function evaluateSurfacePolicy(intent: InteractionIntentResult, actionCode?: TaskActionCode, currentSurface?: SurfaceState, task?: FindDataTaskState, actionPayload?: Record<string, unknown>): SurfaceCommand {
@@ -118,7 +138,7 @@ export function evaluateSurfacePolicy(intent: InteractionIntentResult, actionCod
       case 'OPEN_FIELDS': return fieldsCommand(task, currentSurface, 'ACTION_CLICK', actionPayload?.resourceId as ResourceId | undefined);
       case 'OPEN_COMPARE': return compareCommand(task, currentSurface, 'ACTION_CLICK', actionPayload?.resourceIds as ResourceId[] | undefined);
       case 'OPEN_SOLUTION': return solutionCommand(task, currentSurface, 'ACTION_CLICK');
-      case 'OPEN_ASK_PLAN': return askPlanCommand(task, currentSurface, 'ACTION_CLICK');
+      case 'OPEN_ASK_PLAN': return askPlanCommand(task, currentSurface, 'ACTION_CLICK', actionPayload?.focusSection as AskPlanFocusSection | undefined);
       case 'OPEN_ACCESS': return openSurface(currentSurface, 'ACCESS', 'ACTION_CLICK');
       case 'OPEN_RELATED_RESOURCES': return openSurface(currentSurface, 'RELATED_RESOURCES', 'ACTION_CLICK');
       case 'CLOSE_SURFACE': return { action: 'CLOSE', surface: 'CLOSED' };

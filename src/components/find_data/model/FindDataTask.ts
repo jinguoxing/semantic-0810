@@ -172,11 +172,18 @@ export type SurfaceType =
   | 'RELATED_RESOURCES'
   | 'ASK_PLAN';
 
+/** A one-off display target within the existing Ask Plan workspace. */
+export type AskPlanFocusSection = 'PLAN' | 'RESULT' | 'CALCULATION';
+
 export interface SurfaceState {
   type: SurfaceType;
   mode?: 'QUICK_PREVIEW' | 'WORKBENCH';
   resourceIds?: ResourceId[];
   openedBy?: 'USER_EXPLICIT' | 'ACTION_CLICK' | 'TASK_REQUIRED';
+  /** UI-only focus intent; it never changes an analysis plan or result. */
+  focusSection?: AskPlanFocusSection;
+  focusRequestId?: string;
+  focusTarget?: boolean;
 }
 
 export interface ResourceComparisonRow {

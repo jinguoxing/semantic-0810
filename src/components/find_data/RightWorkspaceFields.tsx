@@ -6,14 +6,21 @@ interface RightWorkspaceFieldsProps {
   resource?: FindDataResource;
   fields?: FieldMetadata[];
   onClose: () => void;
-  onBackToSolution?: () => void;
+  /** One-layer UI return only; it must not reconstruct an earlier task snapshot. */
+  onBack?: () => void;
+  backLabel?: string;
+  returnContextMessage?: string;
+  onViewLatestSolution?: () => void;
 }
 
 export const RightWorkspaceFields: React.FC<RightWorkspaceFieldsProps> = ({
   resource,
   fields,
   onClose,
-  onBackToSolution
+  onBack,
+  backLabel,
+  returnContextMessage,
+  onViewLatestSolution
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
@@ -51,26 +58,38 @@ export const RightWorkspaceFields: React.FC<RightWorkspaceFieldsProps> = ({
           <div className="w-7 h-7 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB] shrink-0">
             <Database className="w-4 h-4" />
           </div>
-          <div className="truncate">
+          <div className="min-w-0">
             <div className="flex items-center space-x-2">
-              <h3 className="text-sm font-bold text-[#0F172A] tracking-tight truncate">
+              <h3 className="text-sm font-bold text-[#0F172A] tracking-tight break-words" tabIndex={-1}>
                 字段检视 · {resourceName}
               </h3>
               <span className="text-[10px] px-1.5 py-0.2 bg-[#F1F5F9] text-[#64748B] rounded border border-[#E2E8F0] font-mono shrink-0">
                 {fields?.length || 0} 字段
               </span>
             </div>
-            <p className="text-[11px] text-[#64748B] truncate">{resourceDesc}</p>
+            <p className="text-[11px] text-[#64748B] leading-relaxed">{resourceDesc}</p>
           </div>
         </div>
         <button
           onClick={onClose}
+          aria-label="关闭字段检视"
           className="w-8 h-8 rounded-lg hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors cursor-pointer shrink-0"
           title="关闭工作区"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
+
+      {returnContextMessage && (
+        <div className="mx-4 mt-3 rounded-lg border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2 text-xs leading-relaxed text-[#92400E]" role="status">
+          {returnContextMessage}
+          {onViewLatestSolution && (
+            <button type="button" onClick={onViewLatestSolution} className="ml-2 font-semibold text-[#2563EB] underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]">
+              查看最新方案
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Filter and Search Bar */}
       <div className="p-3.5 bg-[#F8FAFC] border-b border-[#E2E8F0] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 text-xs">
@@ -130,12 +149,12 @@ export const RightWorkspaceFields: React.FC<RightWorkspaceFieldsProps> = ({
                 该资源属于高阶机构名录或外部汇聚数据，未在此版本开通物理字段元数据字典。
               </p>
             </div>
-            {onBackToSolution && (
+            {onBack && backLabel && (
               <button
-                onClick={onBackToSolution}
+                onClick={onBack}
                 className="mt-2 px-3 py-1.5 bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] font-semibold rounded-lg transition-colors cursor-pointer"
               >
-                返回数据方案
+                {backLabel}
               </button>
             )}
           </div>
@@ -144,8 +163,8 @@ export const RightWorkspaceFields: React.FC<RightWorkspaceFieldsProps> = ({
             未找到匹配的字段。
           </div>
         ) : (
-          <div className="border border-[#E2E8F0] rounded-xl overflow-hidden shadow-2xs">
-            <table className="w-full text-left border-collapse text-xs">
+          <div className="border border-[#E2E8F0] rounded-xl overflow-x-auto shadow-2xs">
+            <table className="min-w-[720px] w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-[#F8FAFC] border-b border-[#E2E8F0] text-[11px] text-[#475569]">
                   <th className="py-2.5 px-3 font-semibold w-8">#</th>
@@ -195,12 +214,12 @@ export const RightWorkspaceFields: React.FC<RightWorkspaceFieldsProps> = ({
         <div className="text-[11px] text-[#64748B]">
           当前显示 {filteredFields.length} / {fields?.length || 0} 个字段
         </div>
-        {onBackToSolution && (
+        {onBack && backLabel && (
           <button
-            onClick={onBackToSolution}
+            onClick={onBack}
             className="px-3 py-1.5 text-xs text-[#2563EB] hover:underline font-semibold cursor-pointer"
           >
-            返回数据方案
+            {backLabel}
           </button>
         )}
       </div>

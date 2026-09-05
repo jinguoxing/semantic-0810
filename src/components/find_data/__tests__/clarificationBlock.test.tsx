@@ -17,7 +17,7 @@ describe('ClarificationBlock submission lifecycle', () => {
       .mockRejectedValueOnce(new Error('提交失败，请重试。'))
       .mockResolvedValueOnce(undefined);
     render(<ClarificationBlock question={openQuestion} onSubmit={onSubmit} />);
-    fireEvent.click(screen.getByRole('button', { name: '全区平均' }));
+    fireEvent.click(screen.getByRole('radio', { name: '全区平均' }));
     fireEvent.click(screen.getByRole('button', { name: '继续' }));
     expect(await screen.findByText('提交失败，请重试。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '继续' })).not.toBeDisabled();
@@ -27,9 +27,20 @@ describe('ClarificationBlock submission lifecycle', () => {
     expect(onSubmit).toHaveBeenNthCalledWith(2, 'question_1', ['average']);
   });
 
-  it('renders a resolved historical question as read-only', () => {
+  it('renders a resolved historical question as a compact, expandable read-only record', () => {
     render(<ClarificationBlock question={{ ...openQuestion, resolution: { status: 'RESOLVED', selectedOptionIds: ['average'], resolvedAt: '', resolvedAtRequirementRevision: 2 } }} onSubmit={vi.fn(async () => {})} />);
-    expect(screen.getByRole('button', { name: '已确认' })).toBeDisabled();
-    expect(screen.getByText('已确认')).toBeInTheDocument();
+    expect(screen.getByText('已确认比较基准：全区平均')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '继续' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '展开历史选项' }));
+    expect(screen.getByText('请选择比较基准')).toBeInTheDocument();
+    expect(screen.getByText('全区平均')).toBeInTheDocument();
+  });
+
+  it('keeps a stale decision viewable but never submit-ready', () => {
+    render(<ClarificationBlock question={{ ...openQuestion, resolution: { status: 'STALE', selectedOptionIds: ['average'], staleReason: '需求更新' } }} onSubmit={vi.fn(async () => {})} />);
+    expect(screen.getByText('当前需求已变化，此选择已失效。')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '继续' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '展开历史选项' }));
+    expect(screen.getByText('全区平均')).toBeInTheDocument();
   });
 });

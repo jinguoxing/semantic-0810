@@ -18,6 +18,7 @@ interface RightWorkspaceSolutionProps {
   mode?: 'recommended' | 'executable';
   onModeChange?: (mode: 'recommended' | 'executable') => void;
   onAction?: (actionCode: TaskActionCode, payload?: Record<string, unknown>) => void;
+  onViewFields?: (resourceId: ResourceId) => void;
   onClose: () => void;
 }
 
@@ -26,6 +27,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
   mode = 'recommended',
   onModeChange,
   onAction,
+  onViewFields,
   onClose
 }) => {
   const currentMode: 'recommended' | 'executable' = mode === 'executable' ? 'executable' : 'recommended';
@@ -84,6 +86,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
         </div>
         <button
           onClick={onClose}
+          aria-label="关闭数据方案"
           className="w-8 h-8 rounded-lg hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition-colors cursor-pointer shrink-0"
           title="关闭工作区"
         >
@@ -233,9 +236,22 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
 
                       <p className="text-[11px] text-[#64748B] leading-relaxed">{res.desc}</p>
 
-                      <div className="flex items-center justify-between pt-1 border-t border-[#F8FAFC] text-[11px] text-[#475569]">
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#F8FAFC] text-[11px] text-[#475569]">
                         <span>粒度：{res.granularity}</span>
-                        <span>覆盖：{res.timeCoverage}</span>
+                        <div className="flex items-center gap-2">
+                          <span>覆盖：{res.timeCoverage}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onViewFields) onViewFields(res.id);
+                              else onAction?.('OPEN_FIELDS', { resourceId: res.id });
+                            }}
+                            aria-label={`查看${res.name}字段`}
+                            className="shrink-0 text-[#2563EB] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]"
+                          >
+                            查看字段
+                          </button>
+                        </div>
                       </div>
                       {task.scenarioKey === 'minhang_bed_supply' && alternativeBedDefinition && !isExecutableMode && (
                         <button
@@ -299,7 +315,11 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
                           <span className="text-[#475569]">{res.roleNote || res.granularity}</span>
                           <button
                             type="button"
-                            onClick={() => onAction?.('OPEN_FIELDS', { resourceId: res.id })}
+                            onClick={() => {
+                              if (onViewFields) onViewFields(res.id);
+                              else onAction?.('OPEN_FIELDS', { resourceId: res.id });
+                            }}
+                            aria-label={`查看${res.name}字段`}
                             className="text-[#2563EB] hover:underline cursor-pointer flex items-center space-x-0.5"
                           >
                             <span>检视字段</span>
