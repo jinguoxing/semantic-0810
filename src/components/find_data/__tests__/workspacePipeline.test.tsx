@@ -155,7 +155,7 @@ describe('workspace tracked task pipeline', () => {
     expect(screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…')).not.toBeDisabled();
   });
 
-  it('keeps a surface-open failure local to the workspace and does not leave the task busy', async () => {
+  it('opens a display-only workspace locally without leaving the task busy', async () => {
     const store = new MemoryTaskStore();
     const task = createMinhangTask({ taskId: 'action_task' });
     store.save(task);
@@ -163,7 +163,8 @@ describe('workspace tracked task pipeline', () => {
     const service = createService({ executeAction: vi.fn(async () => { throw new Error('操作服务失败'); }) });
     render(<DataAssistantFindDataWorkspace serviceOverride={service} taskStoreOverride={store} />);
     fireEvent.click(await screen.findByRole('button', { name: '方案 · 2 项核心资源' }));
-    expect(await screen.findByText('当前工作区暂时无法打开，请稍后重试。')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /数据方案/ })).toBeInTheDocument();
+    expect(service.executeAction).not.toHaveBeenCalled();
     expect(screen.queryByText('本次操作未完成，当前已形成的任务内容保持不变。请根据当前方案继续操作或稍后重试。')).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…')).not.toBeDisabled();
   });
@@ -231,57 +232,14 @@ describe('workspace tracked task pipeline', () => {
     });
     store.save(task);
     store.currentTaskId = task.taskId;
-    const executeAction = vi.fn(async (currentTask, action, operationId) => ({
-      taskId: currentTask.taskId,
-      operationId: operationId ?? 'surface',
-      events: [],
-      assistantBlocks: [],
-      surfaceCommand: action.actionCode === 'OPEN_FIELDS'
-        ? { action: 'REPLACE' as const, surface: 'FIELDS' as const, resourceIds: [action.payload?.resourceId as string] }
-        : action.actionCode === 'OPEN_COMPARE'
-        ? { action: 'REPLACE' as const, surface: 'COMPARE' as const, resourceIds: action.payload?.resourceIds as string[] }
-        : { action: 'NO_CHANGE' as const }
-    }));
-    render(<DataAssistantFindDataWorkspace serviceOverride={createService({ executeAction })} taskStoreOverride={store} />);
+    const service = createService();
+    render(<DataAssistantFindDataWorkspace serviceOverride={service} taskStoreOverride={store} />);
     await screen.findByRole('heading', { name: '资源选型对比' });
     fireEvent.click(screen.getByRole('button', { name: `查看${MINHANG_RESOURCES.r03.name}字段` }));
     await screen.findByRole('heading', { name: new RegExp(`字段检视 · ${MINHANG_RESOURCES.r03.name}`) });
     fireEvent.click(screen.getByRole('button', { name: '返回资源比较' }));
-    await waitFor(() => expect(executeAction).toHaveBeenLastCalledWith(expect.anything(), {
-      actionCode: 'OPEN_COMPARE', payload: { resourceIds: ['r02', 'r03'] }
-    }, undefined));
     expect(screen.getByRole('heading', { name: '资源选型对比' })).toBeInTheDocument();
-  });
-
-  it('does not restore a changed comparison context from the fields view', async () => {
-    const store = new MemoryTaskStore();
-    const task = createMinhangTask({
-      taskId: 'invalid_compare_return',
-      resources: { ...createMinhangTask().resources, r02: MINHANG_RESOURCES.r02, r03: MINHANG_RESOURCES.r03 },
-      searchResult: {
-        query: '人口明细', totalMatches: 2, returnedCount: 2, candidateIds: ['r02', 'r03'],
-        candidateSnapshot: [
-          { resourceId: 'r02', title: MINHANG_RESOURCES.r02.name, reason: '候选', matchType: 'RELATED', sourceSearchRevision: 1 },
-          { resourceId: 'r03', title: MINHANG_RESOURCES.r03.name, reason: '候选', matchType: 'RELATED', sourceSearchRevision: 1 }
-        ]
-      },
-      comparisonModel: { resourceIds: ['r02', 'r03'], recommendedResourceId: 'r03', rows: [] },
-      activeSurface: { type: 'COMPARE', resourceIds: ['r02', 'r03'], mode: 'QUICK_PREVIEW' }
-    });
-    store.save(task);
-    store.currentTaskId = task.taskId;
-    const executeAction = vi.fn(async (currentTask, action, operationId) => ({
-      taskId: currentTask.taskId,
-      operationId: operationId ?? 'surface',
-      events: action.actionCode === 'OPEN_FIELDS' ? [{ type: 'COMPARISON_MODEL_CLEARED' as const }] : [],
-      assistantBlocks: [],
-      surfaceCommand: { action: 'REPLACE' as const, surface: 'FIELDS' as const, resourceIds: [action.payload?.resourceId as string] }
-    }));
-    render(<DataAssistantFindDataWorkspace serviceOverride={createService({ executeAction })} taskStoreOverride={store} />);
-    await screen.findByRole('heading', { name: '资源选型对比' });
-    fireEvent.click(screen.getByRole('button', { name: `查看${MINHANG_RESOURCES.r03.name}字段` }));
-    expect(await screen.findByText('原比较上下文已变化，请查看最新方案。')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '返回资源比较' })).not.toBeInTheDocument();
+    expect(service.executeAction).not.toHaveBeenCalled();
   });
 
   it('checks and runs a bound analysis plan from the conversation without opening the workspace', async () => {
@@ -373,6 +331,9 @@ describe('workspace tracked task pipeline', () => {
     expect(runButtons).toHaveLength(1);
     fireEvent.click(runButtons[0]);
     expect(runAskPlan).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: '方案 · 2 项核心资源' }));
+    expect(await screen.findByRole('heading', { name: /数据方案/ })).toBeInTheDocument();
+    expect(runAskPlan).toHaveBeenCalledOnce();
     await act(async () => {
       resolveRun?.({
         success: true, executedAt: '2026-09-06T10:00:00.000Z', dataOrigin: 'MOCK_FIXTURE', permissionSnapshot: {},
@@ -380,6 +341,8 @@ describe('workspace tracked task pipeline', () => {
       });
     });
     expect(await screen.findByText('分析已完成，关键结果如下。')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /数据方案/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '分析结果' })).not.toBeInTheDocument();
     expect(runAskPlan).toHaveBeenCalledOnce();
   });
 
@@ -426,9 +389,8 @@ describe('workspace tracked task pipeline', () => {
     fireEvent.click(r02Radio);
     expect(screen.getByRole('radio', { name: MINHANG_RESOURCES.r02.name })).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: `查看${MINHANG_RESOURCES.r03.name}字段` }));
-    await waitFor(() => expect(executeAction).toHaveBeenCalledWith(expect.anything(), {
-      actionCode: 'OPEN_FIELDS', payload: { resourceId: 'r03' }
-    }, undefined));
+    expect(await screen.findByRole('heading', { name: new RegExp(`字段检视 · ${MINHANG_RESOURCES.r03.name}`) })).toBeInTheDocument();
+    expect(executeAction).not.toHaveBeenCalled();
     expect(screen.getByRole('radio', { name: MINHANG_RESOURCES.r02.name })).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: '将所选资源加入方案' }));
     await waitFor(() => expect(executeAction).toHaveBeenLastCalledWith(expect.anything(), {

@@ -216,6 +216,32 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
     expect(screen.getByText('不可计算：分母为零')).toBeInTheDocument();
   });
 
+  it('keeps an all-zero structured result in the chart view', () => {
+    const plan = createAskPlan({
+      status: 'COMPLETED',
+      permissionCheckState: 'ALLOWED',
+      lastRunResult: {
+        success: true, executedAt: '2026-09-06T00:00:00.000Z', dataOrigin: 'MOCK_FIXTURE', permissionSnapshot: {},
+        resultArtifact: {
+          content: {
+            kind: 'TABLE',
+            columns: [{ id: 'town', label: '街镇', kind: 'TEXT' }, { id: 'ratio', label: '每千名老人床位数', kind: 'NUMBER', unit: '张 / 千人' }],
+            rows: [
+              { id: 'pujin', cells: { town: { kind: 'TEXT', state: 'VALUE', value: '浦锦街道' }, ratio: { kind: 'NUMBER', state: 'VALUE', value: 0, unit: '张 / 千人', precision: 1 } } },
+              { id: 'qibao', cells: { town: { kind: 'TEXT', state: 'VALUE', value: '七宝镇' }, ratio: { kind: 'NUMBER', state: 'VALUE', value: 0, unit: '张 / 千人', precision: 1 } } }
+            ],
+            chart: { kind: 'BAR', categoryColumnId: 'town', valueColumnId: 'ratio' }
+          }
+        }
+      }
+    });
+    render(<RightWorkspaceAskPlan task={createMinhangTask({ askPlan: plan })} onCheckPermission={async () => ({ decision: 'ALLOWED', updatedPermissions: {} })} onRunPlan={async () => {}} onReturnToSolution={() => {}} focusSection="RESULT" resultView="CHART" onClose={() => {}} />);
+
+    expect(screen.getByTestId('ask-result-chart')).toBeInTheDocument();
+    expect(screen.getByText('本次服务返回的所有可绘制数值均为 0。')).toBeInTheDocument();
+    expect(screen.getAllByText('0.0 张 / 千人')).toHaveLength(2);
+  });
+
   it('renders relationship evidence with business names instead of internal resource ids', () => {
     const task = createMinhangTask();
     render(<RightWorkspaceSolution task={{

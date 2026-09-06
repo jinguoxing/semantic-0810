@@ -121,15 +121,16 @@ const ResultBarChart: React.FC<{ content: AskResultTableContent }> = ({ content 
   const maximum = Math.max(0, ...rows.map((row) => row.value.value ?? 0));
   const unit = rows[0]?.value.unit;
   const title = content.chart?.title ?? '结果比较图表';
-  if (!content.chart || rows.length === 0 || maximum <= 0) {
+  if (!content.chart || rows.length === 0) {
     return <div className="rounded-lg border border-dashed border-[#CBD5E1] bg-[#FAFCFF] px-3 py-5 text-center text-[11px] text-[#64748B]">当前结构化结果不足以绘制图表；请查看数据视图。</div>;
   }
+  const allValuesAreZero = maximum === 0;
   return (
     <figure className="rounded-lg border border-[#E2E8F0] bg-white p-3" data-testid="ask-result-chart">
       <figcaption className="mb-3 text-xs font-semibold text-[#0F172A]">{title}{unit ? `（${unit}）` : ''}</figcaption>
       <div className="space-y-3" role="img" aria-label={`${title}：${rows.map((row) => `${row.label} ${resultStateLabel(row.value)}`).join('；')} `}>
         {rows.map((row) => {
-          const ratio = ((row.value.value ?? 0) / maximum) * 100;
+          const ratio = allValuesAreZero ? 0 : ((row.value.value ?? 0) / maximum) * 100;
           return (
             <div key={row.id} className="grid grid-cols-[minmax(5rem,1fr)_minmax(0,3fr)_auto] items-center gap-2 text-[11px]">
               <span className="truncate font-medium text-[#334155]">{row.label}</span>
@@ -139,7 +140,7 @@ const ResultBarChart: React.FC<{ content: AskResultTableContent }> = ({ content 
           );
         })}
       </div>
-      <p className="mt-3 text-[10px] text-[#64748B]">图表从 0 起点展示本次服务返回的结构化数值。</p>
+      <p className="mt-3 text-[10px] text-[#64748B]">{allValuesAreZero ? '本次服务返回的所有可绘制数值均为 0。' : '图表从 0 起点展示本次服务返回的结构化数值。'}</p>
     </figure>
   );
 };

@@ -63,7 +63,16 @@ describe('HTTP find-data task lifecycle', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ success: true, executedAt: '', permissionSnapshot: {} }))));
     const service = new HttpFindDataService('/api/find-data');
     const task = createMinhangTask({ askPlan: createAskPlan() });
-    await expect(service.runAskPlan(task, { askPlanId: 'plan_test', expectedRequirementRevision: 1, expectedSearchRevision: 1, idempotencyKey: 'idem_1' })).rejects.toThrow('数据来源合同');
+    await expect(service.runAskPlan(task, { askPlanId: 'plan_test', expectedRequirementRevision: 1, expectedSearchRevision: 1, idempotencyKey: 'idem_1' })).rejects.toThrow('实时查询数据');
+  });
+
+  it('rejects a Mock result returned by the HTTP service', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      success: true, executedAt: '', permissionSnapshot: {}, dataOrigin: 'MOCK_FIXTURE'
+    }))));
+    const service = new HttpFindDataService('/api/find-data');
+    const task = createMinhangTask({ askPlan: createAskPlan() });
+    await expect(service.runAskPlan(task, { askPlanId: 'plan_test', expectedRequirementRevision: 1, expectedSearchRevision: 1, idempotencyKey: 'idem_1' })).rejects.toThrow('不能使用演示数据来源');
   });
 
   it('preserves typed result content and service result references without a Mock fallback', async () => {

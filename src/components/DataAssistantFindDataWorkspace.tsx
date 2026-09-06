@@ -29,7 +29,7 @@ import {
   FindDataTaskSummary,
   PermissionRecheckResult
 } from './find_data/services/FindDataService';
-import { SurfaceCommand } from './find_data/policy/surfacePolicy';
+import { evaluateSurfacePolicy, isSurfaceActionCode, SurfaceCommand } from './find_data/policy/surfacePolicy';
 import {
   selectActiveResource,
   selectCandidateById,
@@ -203,6 +203,10 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const returnFocusRef = useRef<HTMLElement>();
   const inputRef = useRef<HTMLInputElement>(null);
   const localContextTaskIdRef = useRef(task.taskId);
+  // Display-only surface changes must remain visible while an execution is in
+  // flight. This sequence lets the completion callback distinguish the panel
+  // it started from from a panel the user chose afterwards.
+  const surfaceNavigationSequenceRef = useRef(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationScrollRef = useRef<HTMLDivElement>(null);
@@ -271,6 +275,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       return;
     }
     if ((command.action === 'OPEN' || command.action === 'REPLACE') && command.surface) {
+      surfaceNavigationSequenceRef.current += 1;
       setSurfaceMessage(undefined);
       if (command.surface === 'COMPARE') {
         const resourceIds = command.resourceIds ?? [];
@@ -316,6 +321,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         }
       });
     } else if (command.action === 'CLOSE') {
+      surfaceNavigationSequenceRef.current += 1;
       updateDetailReturnContext(undefined);
       dispatchTracked({ type: 'SURFACE_CLOSED' });
     }
@@ -534,19 +540,27 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       setSurfaceMessage('当前工作区无法恢复这次历史结果的详情。');
       return;
     }
-    const isSurfaceAction = ['OPEN_FIELDS', 'OPEN_COMPARE', 'OPEN_SOLUTION', 'OPEN_ACCESS', 'OPEN_RELATED_RESOURCES', 'OPEN_ASK_PLAN', 'CLOSE_SURFACE'].includes(actionCode);
-    const operationId = isSurfaceAction ? undefined : startOperation('ACTION');
-    if (!isSurfaceAction && !operationId) return;
+    if (isSurfaceActionCode(actionCode)) {
+      // Opening and closing the existing workspaces is a local display action:
+      // it uses the same surface policy and Task events, but must not wait for
+      // (or compete with) an in-flight calculation request.
+      applySurfaceCommand(evaluateSurfacePolicy(
+        { kind: 'TASK_ACTION', explicit: true, confidence: 'HIGH' },
+        actionCode,
+        taskRef.current.activeSurface,
+        taskRef.current,
+        payload
+      ));
+      return;
+    }
+    const operationId = startOperation('ACTION');
+    if (!operationId) return;
     const actionTaskId = taskRef.current.taskId;
     const actionTaskAtStart = taskRef.current;
     try {
       const engineResult = await service.executeAction(taskRef.current, { actionCode, payload }, operationId);
       applyEngineResult(engineResult);
     } catch (error: unknown) {
-      if (isSurfaceAction) {
-        setSurfaceMessage('当前工作区暂时无法打开，请稍后重试。');
-        return;
-      }
       const needsReadBack = serviceMode === 'http' &&
         (actionCode === 'REVISE_REQUIREMENT' || actionCode === 'CREATE_PERMISSION_REQUEST');
       if (needsReadBack) {
@@ -665,6 +679,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     }
     const operationId = startOperation('ASK_RUN');
     if (!operationId) return;
+    const surfaceNavigationSequenceAtStart = surfaceNavigationSequenceRef.current;
     dispatchTracked({ type: 'ASK_RUN_STARTED' });
     let runResult: AskRunResult;
     try {
@@ -688,7 +703,11 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       dispatchTracked({ type: 'ASK_RUN_COMPLETED', payload: { result: runResult } });
       const resultSnapshot = buildAskResultSnapshot(taskAtStart, askPlanAtStart, runResult);
       const activeSurface = taskRef.current.activeSurface;
-      if (activeSurface.type === 'ASK_PLAN' && taskRef.current.askPlan?.id === askPlanAtStart.id) {
+      if (
+        surfaceNavigationSequenceRef.current === surfaceNavigationSequenceAtStart &&
+        activeSurface.type === 'ASK_PLAN' &&
+        taskRef.current.askPlan?.id === askPlanAtStart.id
+      ) {
         dispatchTracked({
           type: 'SURFACE_OPENED',
           payload: {

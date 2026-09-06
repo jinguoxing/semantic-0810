@@ -119,8 +119,8 @@ export class HttpFindDataService implements FindDataService {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
     }
     const result = await resp.json();
-    if (result?.dataOrigin !== 'LIVE_QUERY' && result?.dataOrigin !== 'MOCK_FIXTURE') {
-      throw new Error('找数据后端返回了无效的数据来源合同。');
+    if (result?.dataOrigin !== 'LIVE_QUERY') {
+      throw new Error('找数据后端必须返回实时查询数据，不能使用演示数据来源。');
     }
     return { ...result, operationId };
   }
