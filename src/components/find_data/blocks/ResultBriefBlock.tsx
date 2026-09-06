@@ -1,21 +1,41 @@
 import React from 'react';
 import { ChevronRight, ExternalLink } from 'lucide-react';
-import { FindDataTaskState, ResultBriefBlock as ResultBriefBlockType, TaskActionCode } from '../model/FindDataTask';
+import { FindDataTaskState, ResourceId, ResultBriefBlock as ResultBriefBlockType, TaskActionCode } from '../model/FindDataTask';
 import { canExecuteTaskAction } from '../model/findDataSelectors';
+import { InlineCandidateSelection } from './InlineCandidateSelection';
 
 interface ResultBriefBlockProps {
   block: ResultBriefBlockType;
   task?: FindDataTaskState;
   onActionClick?: (actionCode: TaskActionCode, payload?: Record<string, unknown>) => void;
+  selectedCandidateResourceId?: ResourceId;
+  onSelectedCandidateChange?: (resourceId: ResourceId) => void;
+  onViewCandidateFields?: (resourceId: ResourceId, comparisonResourceIds: ResourceId[]) => void;
 }
 
 export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
   block,
   task,
-  onActionClick
+  onActionClick,
+  selectedCandidateResourceId,
+  onSelectedCandidateChange,
+  onViewCandidateFields
 }) => {
   const { title, candidates, keyPoints, primaryAction, secondaryAction, textLinkAction } = block;
   const actionEnabled = (action?: { actionCode: TaskActionCode; payload?: Record<string, unknown> }) => !task || !action || canExecuteTaskAction(task, action.actionCode, action.payload);
+
+  if (block.briefKind === 'CANDIDATE_SUMMARY' && block.candidateSelection && task && onActionClick && onSelectedCandidateChange && onViewCandidateFields) {
+    return (
+      <InlineCandidateSelection
+        block={block}
+        task={task}
+        selectedResourceId={selectedCandidateResourceId}
+        onSelectedResourceChange={onSelectedCandidateChange}
+        onActionClick={onActionClick}
+        onViewFields={onViewCandidateFields}
+      />
+    );
+  }
 
   return (
     <div className="pt-1 text-xs space-y-2 w-full">

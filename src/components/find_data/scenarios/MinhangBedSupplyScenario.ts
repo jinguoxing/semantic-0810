@@ -21,6 +21,7 @@ import {
 import {
   buildAskPlanPreparedSummary,
   buildCandidateDiscoverySummary,
+  buildInlineCandidateSelectionIntro,
   buildRequirementChangeSummary,
   buildComparisonSummary,
   buildFieldSummary,
@@ -653,13 +654,30 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
         });
         const effectiveTask = effectiveTaskAfter(task, [...comparisonEvents, ...candidateEvents]);
         const delta = candidateEvents.find((event) => event.type === 'SEARCH_RESULTS_RECEIVED')?.payload.candidateDelta;
+        const isPopulationDetailSelection = !isInstitution && !isCivilAffairs && ids.length === 2;
         const actions = isCivilAffairs
           ? []
           : ids.length >= 2
           ? [{ id: createScenarioId('compare'), label: '比较 2 项资源', actionCode: 'OPEN_COMPARE' as const, variant: 'weak' as const }, ...(ids.includes('r03') ? [{ id: createScenarioId('select'), label: '使用月度快照', actionCode: 'SELECT_RESOURCE' as const, payload: { resourceId: 'r03' }, variant: 'primary' as const }] : [])]
           : [{ id: createScenarioId('fields'), label: '查看机构元数据', actionCode: 'OPEN_FIELDS' as const, payload: { resourceId: 'r06' }, variant: 'weak' as const }];
-        const blocks: ConversationBlock[] = [textBlock(buildCandidateDiscoverySummary(effectiveTask, ids, delta?.addedIds ?? []))];
-        if (actions.length > 0) blocks.push({ type: 'ACTION_GROUP', id: createScenarioId('actions'), actions });
+        const blocks: ConversationBlock[] = isPopulationDetailSelection
+          ? [
+              textBlock(buildInlineCandidateSelectionIntro(effectiveTask, ids, 'r03')),
+              {
+                type: 'RESULT_BRIEF',
+                id: createScenarioId('candidate-summary'),
+                briefKind: 'CANDIDATE_SUMMARY',
+                title: '人口明细候选',
+                subtitle: '选择一项补充明细方案；两项候选互为替代，不会自动纳入核心计算。',
+                candidateSelection: {
+                  resourceIds: ids,
+                  recommendedResourceId: 'r03',
+                  selectionGroupId: `population-detail-${effectiveTask.searchRevision}`
+                }
+              }
+            ]
+          : [textBlock(buildCandidateDiscoverySummary(effectiveTask, ids, delta?.addedIds ?? []))];
+        if (!isPopulationDetailSelection && actions.length > 0) blocks.push({ type: 'ACTION_GROUP', id: createScenarioId('actions'), actions });
         return {
           ...result,
           events: [

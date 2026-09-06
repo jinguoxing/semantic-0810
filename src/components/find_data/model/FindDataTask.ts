@@ -328,6 +328,40 @@ export interface ResultBriefCandidate {
   granularity?: string;
 }
 
+/** A display-safe reference to the exact plan a conversation block represents. */
+export interface AskPlanBinding {
+  taskId: string;
+  askPlanId: string;
+  requirementRevision: number;
+  searchRevision: number;
+}
+
+/**
+ * Candidate selection is a presentation contract only. Resource metadata,
+ * access and solution inclusion stay in the task and are resolved at render
+ * time.
+ */
+export interface CandidateSelectionBrief {
+  resourceIds: ResourceId[];
+  recommendedResourceId?: ResourceId;
+  /** Present only when these candidates are genuine alternatives. */
+  selectionGroupId?: string;
+}
+
+/** The concise, at-creation explanation for an executable analysis plan. */
+export interface AskReadyBrief {
+  binding: AskPlanBinding;
+  metricName: string;
+  region?: string;
+  requestedTimeRange?: {
+    start: string;
+    end: string;
+  };
+  benchmarkLabel: string;
+  scopeDisclosure: string;
+  coreResourceNames?: string[];
+}
+
 export type TaskActionCode =
   | 'OPEN_FIELDS'
   | 'OPEN_COMPARE'
@@ -359,6 +393,8 @@ export interface ResultBriefBlock {
   title: string;
   subtitle?: string;
   candidates?: ResultBriefCandidate[];
+  candidateSelection?: CandidateSelectionBrief;
+  askReady?: AskReadyBrief;
   keyPoints?: string[];
   primaryAction?: {
     label: string;
@@ -375,6 +411,27 @@ export interface ResultBriefBlock {
     actionCode: TaskActionCode;
     payload?: Record<string, unknown>;
   };
+}
+
+/**
+ * An immutable, display-safe snapshot of one completed analysis execution.
+ * It is not a task snapshot and is never an authorization source.
+ */
+export interface AskResultSnapshot {
+  binding: AskPlanBinding;
+  operationId?: string;
+  executedAt: string;
+  metricName: string;
+  numeratorLabel: string;
+  formulaExplanation?: string;
+  dataOrigin?: AskRunResult['dataOrigin'];
+  resultArtifact: NonNullable<AskRunResult['resultArtifact']>;
+}
+
+export interface AskResultBlock {
+  type: 'ASK_RESULT';
+  id: string;
+  snapshot: AskResultSnapshot;
 }
 
 export interface ActionGroupItem {
@@ -409,6 +466,7 @@ export type ConversationBlock =
   | AssistantTextBlock
   | ClarificationBlock
   | ResultBriefBlock
+  | AskResultBlock
   | ActionGroupBlock
   | RuntimeStatusBlock
   | SystemNoticeBlock;

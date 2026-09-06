@@ -193,6 +193,24 @@ export function buildCandidateDiscoverySummary(
   return paragraphs.join('\n\n');
 }
 
+/** A short introduction paired with the inline alternative-resource selector. */
+export function buildInlineCandidateSelectionIntro(
+  task: FindDataTaskState,
+  resourceIds: ResourceId[],
+  recommendedResourceId?: ResourceId
+): string {
+  const recommended = recommendedResourceId ? selectResourceById(task, recommendedResourceId) : undefined;
+  const count = resourceIds
+    .map((resourceId) => selectCandidateById(task, resourceId))
+    .filter(Boolean).length;
+  if (count === 0) return '本轮没有可供选择的明细候选资源。';
+  if (!recommended) return `发现 ${count} 项可选明细资源。选择后仅会补充明细方案，不会加入当前核心计算。`;
+  const coverageReason = task.requirementHypothesis.timeRange && resourceCoversRange(recommended, task.requirementHypothesis.timeRange)
+    ? '能覆盖当前请求的时间范围'
+    : `保留${recommended.timeCoverage}的${recommended.granularity}`;
+  return `发现 ${count} 项可选明细资源。「${recommended.name}」${coverageReason}，更适合作为明细下钻；选择后不会加入当前核心床位比率计算。`;
+}
+
 export function buildComparisonSummary(task: FindDataTaskState): string {
   const ids = task.comparisonModel?.resourceIds ?? [];
   const resources = ids.map((id) => selectResourceById(task, id)).filter((resource): resource is FindDataResource => !!resource);

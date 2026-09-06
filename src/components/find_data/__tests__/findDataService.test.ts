@@ -89,6 +89,26 @@ describe('scenario classification and turn handling', () => {
     expect(task.status).toBe('READY');
   });
 
+  it('returns population detail alternatives as a compact candidate brief without adding either to the solution', async () => {
+    const { result, task } = await submit(createMinhangTask(), '查看人口明细');
+    const assistantEvent = result.events.find((event) => event.type === 'ASSISTANT_TURN_RECEIVED');
+    const candidateBrief = assistantEvent?.type === 'ASSISTANT_TURN_RECEIVED'
+      ? assistantEvent.payload.blocks.find((block) => block.type === 'RESULT_BRIEF')
+      : undefined;
+
+    expect(candidateBrief).toMatchObject({
+      type: 'RESULT_BRIEF',
+      briefKind: 'CANDIDATE_SUMMARY',
+      candidateSelection: {
+        resourceIds: ['r02', 'r03'],
+        recommendedResourceId: 'r03'
+      }
+    });
+    expect(candidateBrief?.type === 'RESULT_BRIEF' && candidateBrief.candidateSelection?.selectionGroupId).toContain('population-detail');
+    expect(task.searchResult?.candidateIds).toEqual(['r01', 'r04', 'r02', 'r03']);
+    expect(task.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+  });
+
   it('extends the minimal solution with a partial service-use resource by default', async () => {
     const initial = await submit(createEmptyTask(), '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。');
     const { task } = await submit(initial.task, '查看实际服务使用');

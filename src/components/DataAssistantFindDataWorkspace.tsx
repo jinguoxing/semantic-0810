@@ -696,10 +696,16 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     if (document.activeElement instanceof HTMLElement) returnFocusRef.current = document.activeElement;
   };
 
-  const openFieldsFrom = (source: DetailReturnSource, resourceId: ResourceId) => {
+  const openFieldsFrom = (
+    source: DetailReturnSource,
+    resourceId: ResourceId,
+    sourceComparisonResourceIds?: ResourceId[]
+  ) => {
     const currentTask = taskRef.current;
     const activeSurface = currentTask.activeSurface;
-    const comparisonResourceIds = source === 'COMPARE' ? activeSurface.resourceIds : undefined;
+    const comparisonResourceIds = source === 'COMPARE'
+      ? sourceComparisonResourceIds ?? activeSurface.resourceIds
+      : undefined;
     const existingDraft = comparisonDraftRef.current;
     const comparisonSelectedResourceId = source === 'COMPARE' && comparisonResourceIds?.length
       ? existingDraft && existingDraft.taskId === currentTask.taskId &&
@@ -1091,8 +1097,8 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
 
                     {/* Message Bubble Column */}
                     <div
-                      className={`flex flex-col space-y-2.5 max-w-[85%] ${
-                        isUser ? 'items-end' : 'items-start'
+                      className={`flex min-w-0 flex-col space-y-2.5 ${
+                        isUser ? 'max-w-[85%] items-end' : 'w-full max-w-none items-start'
                       }`}
                     >
                       {applicability.message && (
@@ -1132,16 +1138,34 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                               </div>
                             );
 
-                          case 'RESULT_BRIEF':
+                          case 'RESULT_BRIEF': {
+                            const candidateResourceIds = block.candidateSelection?.resourceIds ?? [];
+                            const currentCandidateDraft = comparisonDraft?.taskId === task.taskId &&
+                              hasSameResourceIds(comparisonDraft.resourceIds, candidateResourceIds)
+                              ? comparisonDraft
+                              : undefined;
                             return (
                               <div key={block.id} className="w-full">
                                 <ResultBriefBlock
                                   block={block}
                                   task={task}
                                   onActionClick={(code, p) => handleAction(code, p)}
+                                  selectedCandidateResourceId={currentCandidateDraft?.selectedResourceId}
+                                  onSelectedCandidateChange={(resourceId) => {
+                                    if (!candidateResourceIds.includes(resourceId)) return;
+                                    updateComparisonDraft({
+                                      taskId: task.taskId,
+                                      resourceIds: candidateResourceIds,
+                                      selectedResourceId: resourceId
+                                    });
+                                  }}
+                                  onViewCandidateFields={(resourceId, resourceIds) => {
+                                    openFieldsFrom('COMPARE', resourceId, resourceIds);
+                                  }}
                                 />
                               </div>
                             );
+                          }
 
                           case 'ACTION_GROUP':
                             return (
