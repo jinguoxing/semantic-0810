@@ -160,6 +160,21 @@ describe('scenario classification and turn handling', () => {
     const prepared = apply(handoff.task, action.events);
     expect(prepared.askPlan).toMatchObject({ status: 'READY_TO_RUN', permissionCheckState: 'NOT_CHECKED' });
     expect(prepared.status).toBe('WAITING_USER');
+    const assistantEvent = action.events.find((event) => event.type === 'ASSISTANT_TURN_RECEIVED');
+    const askReady = assistantEvent?.type === 'ASSISTANT_TURN_RECEIVED'
+      ? assistantEvent.payload.blocks.find((block) => block.type === 'RESULT_BRIEF' && block.briefKind === 'ASK_READY')
+      : undefined;
+    expect(askReady).toMatchObject({
+      askReady: {
+        binding: {
+          taskId: handoff.task.taskId,
+          askPlanId: prepared.askPlan?.id,
+          requirementRevision: prepared.requirementRevision,
+          searchRevision: prepared.searchRevision
+        },
+        scopeDisclosure: expect.stringContaining('演示')
+      }
+    });
   });
 
   it.each([

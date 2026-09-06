@@ -1,14 +1,14 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { X, Calculator, CheckCircle2, ShieldCheck, Play, Edit3, Loader2, RefreshCw } from 'lucide-react';
-import { AskPlan, AskPlanFocusSection, FindDataTaskState, PermissionCheckState } from './model/FindDataTask';
+import { AskPlan, AskPlanBinding, AskPlanFocusSection, FindDataTaskState, PermissionCheckState } from './model/FindDataTask';
 import { PermissionRecheckResult } from './services/FindDataService';
 import { getMinhangBedDefinitionForNumerator } from './scenarios/minhangBedDefinition';
 import { buildActualScopeLabel } from './presenters/conversationPresenters';
 
 interface RightWorkspaceAskPlanProps {
   task: FindDataTaskState;
-  onCheckPermission: () => Promise<PermissionRecheckResult>;
-  onRunPlan: () => Promise<void>;
+  onCheckPermission: (binding: AskPlanBinding) => Promise<PermissionRecheckResult>;
+  onRunPlan: (binding: AskPlanBinding) => Promise<void>;
   onReturnToSolution: () => void;
   onModifySpec?: () => void;
   onViewPermissionChanges?: () => void;
@@ -54,8 +54,6 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   onClose
 }) => {
   const plan = task.askPlan;
-  const [isChecking, setIsChecking] = useState(false);
-  const [isExecuting, setIsExecuting] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const planSectionRef = useRef<HTMLDivElement>(null);
   const calculationSectionRef = useRef<HTMLDivElement>(null);
@@ -87,6 +85,14 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   const lastRunResult = plan.lastRunResult;
   const hasExecuted = plan.status === 'COMPLETED' && !!lastRunResult?.success;
   const checkState: PermissionCheckState = plan.permissionCheckState;
+  const planBinding: AskPlanBinding = {
+    taskId: task.taskId,
+    askPlanId: plan.id,
+    requirementRevision: plan.requirementRevision ?? task.requirementRevision,
+    searchRevision: plan.basedOnSearchRevision ?? task.searchRevision
+  };
+  const isChecking = checkState === 'CHECKING' || task.pendingOperation?.operationType === 'PERMISSION_CHECK';
+  const isExecuting = plan.status === 'RUNNING' || task.pendingOperation?.operationType === 'ASK_RUN';
   const coreResources = plan.coreResourceIds.map((id) => task.resources[id]).filter(Boolean);
   const selectedBenchmark = benchmarkCopy[plan.calculationSpec.benchmarkRule];
   const resultDefinitionLabel = getMinhangBedDefinitionForNumerator(plan.calculationSpec.numerator).resultDefinitionLabel;
@@ -107,22 +113,12 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
 
   const handleCheckPermission = async () => {
     if (isChecking || isExecuting) return;
-    setIsChecking(true);
-    try {
-      await onCheckPermission();
-    } finally {
-      setIsChecking(false);
-    }
+    await onCheckPermission(planBinding);
   };
 
   const handleRunClick = async () => {
     if (checkState !== 'ALLOWED' || isChecking || isExecuting) return;
-    setIsExecuting(true);
-    try {
-      await onRunPlan();
-    } finally {
-      setIsExecuting(false);
-    }
+    await onRunPlan(planBinding);
   };
 
   return (

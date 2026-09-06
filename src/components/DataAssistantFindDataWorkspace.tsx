@@ -13,7 +13,7 @@ import {
   Trash2
 } from 'lucide-react';
 
-import { AskPlan, AskRunResult, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode } from './find_data/model/FindDataTask';
+import { AskPlan, AskPlanBinding, AskRunResult, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode } from './find_data/model/FindDataTask';
 import { FindDataEvent } from './find_data/model/findDataEvents';
 import { findDataReducer, initialFindDataTaskState } from './find_data/model/findDataReducer';
 import {
@@ -132,6 +132,13 @@ function hasSameResourceIds(left: ResourceId[], right: ResourceId[]): boolean {
   return sortedLeft.every((id, index) => id === sortedRight[index]);
 }
 
+function isCurrentAskPlanBinding(task: FindDataTaskState, binding: AskPlanBinding): boolean {
+  const plan = task.askPlan;
+  return task.taskId === binding.taskId && plan?.id === binding.askPlanId &&
+    plan.requirementRevision === binding.requirementRevision &&
+    plan.basedOnSearchRevision === binding.searchRevision;
+}
+
 export const askRunCompletionMessage = buildAskRunCompletionSummary;
 
 export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorkspaceProps> = ({
@@ -161,6 +168,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const [clarificationErrors, setClarificationErrors] = useState<Record<string, string>>({});
   const [clarificationSubmittingId, setClarificationSubmittingId] = useState<string>();
   const [permissionCheckFailure, setPermissionCheckFailure] = useState<string>();
+  const [askPlanInteractionErrors, setAskPlanInteractionErrors] = useState<Record<string, string>>({});
   const [comparisonDraft, setComparisonDraft] = useState<ComparisonDraft>();
   const comparisonDraftRef = useRef<ComparisonDraft>();
   const [detailReturnContext, setDetailReturnContext] = useState<DetailReturnContext>();
@@ -193,6 +201,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     updateComparisonDraft(undefined);
     updateDetailReturnContext(undefined);
     setSurfaceMessage(undefined);
+    setAskPlanInteractionErrors({});
     returnFocusRef.current = undefined;
   }, [task.taskId, updateComparisonDraft, updateDetailReturnContext]);
 
@@ -472,6 +481,11 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       setIsContextDrawerOpen(true);
       return;
     }
+    const boundPlan = payload?.askPlanBinding as AskPlanBinding | undefined;
+    if (actionCode === 'OPEN_ASK_PLAN' && boundPlan && !isCurrentAskPlanBinding(taskRef.current, boundPlan)) {
+      setSurfaceMessage('当前需求或计划已变化，请使用最新分析计划。');
+      return;
+    }
     const isSurfaceAction = ['OPEN_FIELDS', 'OPEN_COMPARE', 'OPEN_SOLUTION', 'OPEN_ACCESS', 'OPEN_RELATED_RESOURCES', 'OPEN_ASK_PLAN', 'CLOSE_SURFACE'].includes(actionCode);
     const operationId = isSurfaceAction ? undefined : startOperation('ACTION');
     if (!isSurfaceAction && !operationId) return;
@@ -530,28 +544,35 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     }
   };
 
-  const handleCheckPermissionForAskPlan = async (): Promise<PermissionRecheckResult> => {
+  const handleCheckPermissionForAskPlan = async (binding: AskPlanBinding): Promise<PermissionRecheckResult> => {
     const taskAtStart = taskRef.current;
-    if (!taskAtStart.askPlan) return { decision: 'BLOCKED', updatedPermissions: {}, details: '当前没有分析计划。' };
+    const askPlanAtStart = taskAtStart.askPlan;
+    if (!askPlanAtStart || !isCurrentAskPlanBinding(taskAtStart, binding)) {
+      const details = '当前需求或计划已变化，请使用最新分析计划。';
+      setAskPlanInteractionErrors((errors) => ({ ...errors, [binding.askPlanId]: details }));
+      return { decision: 'BLOCKED', updatedPermissions: {}, details };
+    }
     const operationId = startOperation('PERMISSION_CHECK');
     if (!operationId) return { decision: 'BLOCKED', updatedPermissions: {}, details: '当前任务正在处理，请稍后重试。' };
     setPermissionCheckFailure(undefined);
+    setAskPlanInteractionErrors((errors) => ({ ...errors, [binding.askPlanId]: '' }));
     dispatchTracked({
       type: 'PERMISSION_RECHECK_STARTED',
-      payload: { resourceIds: taskAtStart.askPlan.coreResourceIds }
+      payload: { resourceIds: askPlanAtStart.coreResourceIds }
     });
     let checkResult: PermissionRecheckResult;
     let serviceFailed = false;
     try {
       checkResult = await service.recheckPermissions(
         taskAtStart,
-        taskAtStart.askPlan.coreResourceIds,
+        askPlanAtStart.coreResourceIds,
         'query',
         operationId
       );
     } catch (error: unknown) {
       serviceFailed = true;
       setPermissionCheckFailure('权限状态未能完成确认，暂不能执行。可以稍后重新校验。');
+      setAskPlanInteractionErrors((errors) => ({ ...errors, [binding.askPlanId]: '权限状态未能完成确认，暂不能执行。可以稍后重新校验。' }));
       checkResult = {
         operationId,
         decision: 'BLOCKED',
@@ -587,16 +608,20 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     return checkResult;
   };
 
-  const handleRunAskPlan = async () => {
+  const handleRunAskPlan = async (binding: AskPlanBinding): Promise<void> => {
     const taskAtStart = taskRef.current;
-    if (!taskAtStart.askPlan) return;
+    const askPlanAtStart = taskAtStart.askPlan;
+    if (!askPlanAtStart || !isCurrentAskPlanBinding(taskAtStart, binding)) {
+      setAskPlanInteractionErrors((errors) => ({ ...errors, [binding.askPlanId]: '当前需求或计划已变化，请使用最新分析计划。' }));
+      return;
+    }
     const operationId = startOperation('ASK_RUN');
     if (!operationId) return;
     dispatchTracked({ type: 'ASK_RUN_STARTED' });
     let runResult: AskRunResult;
     try {
       runResult = await service.runAskPlan(taskAtStart, {
-        askPlanId: taskAtStart.askPlan.id,
+        askPlanId: askPlanAtStart.id,
         expectedRequirementRevision: taskAtStart.requirementRevision,
         expectedSearchRevision: taskAtStart.searchRevision,
         idempotencyKey: operationId
@@ -614,7 +639,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     if (runResult.success) {
       dispatchTracked({ type: 'ASK_RUN_COMPLETED', payload: { result: runResult } });
       const activeSurface = taskRef.current.activeSurface;
-      if (activeSurface.type === 'ASK_PLAN' && taskRef.current.askPlan?.id === taskAtStart.askPlan.id) {
+      if (activeSurface.type === 'ASK_PLAN' && taskRef.current.askPlan?.id === askPlanAtStart.id) {
         dispatchTracked({
           type: 'SURFACE_OPENED',
           payload: {
@@ -635,11 +660,11 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               kind: 'ASK_RESULT',
               requirementRevision: taskAtStart.requirementRevision,
               searchRevision: taskAtStart.searchRevision,
-              askPlanId: taskAtStart.askPlan!.id,
+              askPlanId: askPlanAtStart.id,
               resultExecutedAt: runResult.executedAt
             },
             blocks: [
-              { type: 'TEXT', id: createUiId('text'), content: askRunCompletionMessage(taskAtStart.askPlan!, runResult) },
+              { type: 'TEXT', id: createUiId('text'), content: askRunCompletionMessage(askPlanAtStart, runResult) },
               { type: 'ACTION_GROUP', id: createUiId('actions'), actions: [{ id: createUiId('view_result'), label: '查看完整结果和计算依据', actionCode: 'OPEN_ASK_PLAN', payload: { focusSection: 'RESULT' }, variant: 'weak' }] }
             ]
           }
@@ -655,7 +680,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             kind: 'ASK_PLAN',
             requirementRevision: taskAtStart.requirementRevision,
             searchRevision: taskAtStart.searchRevision,
-            askPlanId: taskAtStart.askPlan!.id
+            askPlanId: askPlanAtStart.id
           },
           blocks: [
             { type: 'TEXT', id: createUiId('text'), content: buildAskRunFailureSummary(taskAtStart, runResult.error) },
@@ -1162,6 +1187,9 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                                   onViewCandidateFields={(resourceId, resourceIds) => {
                                     openFieldsFrom('COMPARE', resourceId, resourceIds);
                                   }}
+                                  onCheckAskPlan={async (binding) => { await handleCheckPermissionForAskPlan(binding); }}
+                                  onRunAskPlan={handleRunAskPlan}
+                                  askPlanError={block.askReady ? askPlanInteractionErrors[block.askReady.binding.askPlanId] : undefined}
                                 />
                               </div>
                             );

@@ -1,8 +1,9 @@
 import React from 'react';
 import { ChevronRight, ExternalLink } from 'lucide-react';
-import { FindDataTaskState, ResourceId, ResultBriefBlock as ResultBriefBlockType, TaskActionCode } from '../model/FindDataTask';
+import { AskPlanBinding, FindDataTaskState, ResourceId, ResultBriefBlock as ResultBriefBlockType, TaskActionCode } from '../model/FindDataTask';
 import { canExecuteTaskAction } from '../model/findDataSelectors';
 import { InlineCandidateSelection } from './InlineCandidateSelection';
+import { InlineAskReady } from './InlineAskReady';
 
 interface ResultBriefBlockProps {
   block: ResultBriefBlockType;
@@ -11,6 +12,9 @@ interface ResultBriefBlockProps {
   selectedCandidateResourceId?: ResourceId;
   onSelectedCandidateChange?: (resourceId: ResourceId) => void;
   onViewCandidateFields?: (resourceId: ResourceId, comparisonResourceIds: ResourceId[]) => void;
+  onCheckAskPlan?: (binding: AskPlanBinding) => Promise<void>;
+  onRunAskPlan?: (binding: AskPlanBinding) => Promise<void>;
+  askPlanError?: string;
 }
 
 export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
@@ -19,7 +23,10 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
   onActionClick,
   selectedCandidateResourceId,
   onSelectedCandidateChange,
-  onViewCandidateFields
+  onViewCandidateFields,
+  onCheckAskPlan,
+  onRunAskPlan,
+  askPlanError
 }) => {
   const { title, candidates, keyPoints, primaryAction, secondaryAction, textLinkAction } = block;
   const actionEnabled = (action?: { actionCode: TaskActionCode; payload?: Record<string, unknown> }) => !task || !action || canExecuteTaskAction(task, action.actionCode, action.payload);
@@ -33,6 +40,19 @@ export const ResultBriefBlock: React.FC<ResultBriefBlockProps> = ({
         onSelectedResourceChange={onSelectedCandidateChange}
         onActionClick={onActionClick}
         onViewFields={onViewCandidateFields}
+      />
+    );
+  }
+
+  if (block.briefKind === 'ASK_READY' && block.askReady && task && onActionClick && onCheckAskPlan && onRunAskPlan) {
+    return (
+      <InlineAskReady
+        block={block}
+        task={task}
+        onCheckPermission={onCheckAskPlan}
+        onRunPlan={onRunAskPlan}
+        onActionClick={onActionClick}
+        error={askPlanError}
       />
     );
   }

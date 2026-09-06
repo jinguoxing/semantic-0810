@@ -19,7 +19,7 @@ import {
   MINHANG_RESOURCES
 } from '../fixtures/minhangBedSupplyFixture';
 import {
-  buildAskPlanPreparedSummary,
+  buildAskReadyBrief,
   buildCandidateDiscoverySummary,
   buildInlineCandidateSelectionIntro,
   buildRequirementChangeSummary,
@@ -729,7 +729,16 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       const readiness = selectAskHandoffReadiness(task);
       if (!readiness.ready) return { ...result, events: [assistantEvent([textBlock(readiness.message)], settledTaskStatus(task))], assistantBlocks: [textBlock(readiness.message)] };
       const askPlan = buildAskPlan(task);
-      const blocks: ConversationBlock[] = [textBlock('已按当前需求与权限基线重新生成分析计划。')];
+      const blocks: ConversationBlock[] = [
+        textBlock('已按当前需求重新生成分析计划。'),
+        {
+          type: 'RESULT_BRIEF',
+          id: createScenarioId('ask-ready'),
+          briefKind: 'ASK_READY',
+          title: '本次计算确认',
+          askReady: buildAskReadyBrief(task, askPlan, 'MOCK_FIXTURE')
+        }
+      ];
       return {
         ...result,
         events: [{ type: 'ASK_PLAN_PREPARED', payload: { askPlan } }, assistantEvent(blocks, 'WAITING_USER', {
@@ -779,7 +788,16 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
       const readiness = selectAskHandoffReadiness(task);
       if (!readiness.ready) return { ...result, events: [assistantEvent([textBlock(readiness.message)], settledTaskStatus(task))], assistantBlocks: [textBlock(readiness.message)] };
       const askPlan = buildAskPlan(task, uniqueOptionIds[0]);
-      const blocks: ConversationBlock[] = [textBlock(buildAskPlanPreparedSummary(askPlan, 'MOCK_FIXTURE'))];
+      const blocks: ConversationBlock[] = [
+        textBlock('比较基准已确认，已生成本次分析计划。'),
+        {
+          type: 'RESULT_BRIEF',
+          id: createScenarioId('ask-ready'),
+          briefKind: 'ASK_READY',
+          title: '本次计算确认',
+          askReady: buildAskReadyBrief(task, askPlan, 'MOCK_FIXTURE')
+        }
+      ];
       return {
         ...result,
         events: [{ type: 'CLARIFICATION_RESOLVED', payload: { questionId, selectedOptionIds: uniqueOptionIds, selectedOptionLabels: labels, requirementRevision: task.requirementRevision, resolvedAt: new Date().toISOString() } }, { type: 'ASK_PLAN_PREPARED', payload: { askPlan } }, assistantEvent(blocks, 'WAITING_USER', {

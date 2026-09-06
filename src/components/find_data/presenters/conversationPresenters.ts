@@ -1,4 +1,4 @@
-import type { ActualExecutionScope, AskPlan, AskRunResult, DataSolutionItem, FindDataResource, FindDataTaskState, PermissionDecision, PermissionRequestRef, ResourceCandidate, ResourceId } from '../model/FindDataTask';
+import type { ActualExecutionScope, AskPlan, AskReadyBrief, AskRunResult, DataSolutionItem, FindDataResource, FindDataTaskState, PermissionDecision, PermissionRequestRef, ResourceCandidate, ResourceId } from '../model/FindDataTask';
 import {
   selectActiveResource,
   selectAskHandoffReadiness,
@@ -473,6 +473,34 @@ export function buildAskPlanScopeDisclosure(plan: AskPlan, dataOrigin?: AskRunRe
 
 export function buildAskPlanPreparedSummary(plan: AskPlan, dataOrigin?: AskRunResult['dataOrigin']): string {
   return `比较基准已确认，分析计划已准备完成。${buildAskPlanScopeDisclosure(plan, dataOrigin)}\n\n正式计算前仍需执行权限重校验。`;
+}
+
+export function buildAskReadyBrief(
+  task: FindDataTaskState,
+  plan: AskPlan,
+  dataOrigin?: AskRunResult['dataOrigin']
+): AskReadyBrief {
+  const benchmarkLabel = plan.calculationSpec.benchmarkRule === 'RANK_ONLY'
+    ? '只展示街镇排名'
+    : plan.calculationSpec.benchmarkRule === 'POLICY_TARGET'
+    ? '使用正式政策目标'
+    : '与全区加权平均比较';
+  return {
+    binding: {
+      taskId: task.taskId,
+      askPlanId: plan.id,
+      requirementRevision: plan.requirementRevision ?? task.requirementRevision,
+      searchRevision: plan.basedOnSearchRevision ?? task.searchRevision
+    },
+    metricName: plan.calculationSpec.metricName,
+    region: task.requirementHypothesis.region,
+    requestedTimeRange: plan.timeRange,
+    benchmarkLabel,
+    scopeDisclosure: buildAskPlanScopeDisclosure(plan, dataOrigin),
+    coreResourceNames: plan.coreResourceIds
+      .map((resourceId) => selectResourceById(task, resourceId)?.name)
+      .filter((name): name is string => !!name)
+  };
 }
 
 export function buildAskRunCompletionSummary(plan: AskPlan, result: AskRunResult): string {
