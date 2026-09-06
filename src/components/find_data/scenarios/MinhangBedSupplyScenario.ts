@@ -642,7 +642,7 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
         const comparisonEvents = isCivilAffairs
           ? [{ type: 'COMPARISON_MODEL_CLEARED' as const }]
           : ids.length >= 2
-          ? [{ type: 'COMPARISON_MODEL_SET' as const, payload: { comparisonModel: { resourceIds: ids, recommendedResourceId: 'r03', rows: [] } } }]
+          ? [{ type: 'COMPARISON_MODEL_SET' as const, payload: { comparisonModel: { resourceIds: ids, recommendedResourceId: 'r03', selectionGroupId: 'population_detail_alternative', rows: [] } } }]
           : [];
         const candidateEvents = searchEvents(task, {
           requirementRevision: task.requirementRevision,
@@ -672,7 +672,7 @@ export class MinhangBedSupplyScenario implements FindDataScenario {
                 candidateSelection: {
                   resourceIds: ids,
                   recommendedResourceId: 'r03',
-                  selectionGroupId: `population-detail-${effectiveTask.searchRevision}`
+                  selectionGroupId: 'population_detail_alternative'
                 }
               }
             ]

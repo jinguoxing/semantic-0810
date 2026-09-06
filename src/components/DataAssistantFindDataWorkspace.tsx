@@ -35,6 +35,7 @@ import {
   selectCandidateById,
   selectConversationTurnApplicability,
   selectRelatedResourceCandidates,
+  resolveCandidateSelection,
   selectResourceById,
   selectResourceFields
 } from './find_data/model/findDataSelectors';
@@ -118,6 +119,7 @@ interface DetailReturnContext {
   resourceId: ResourceId;
   comparisonResourceIds?: ResourceId[];
   comparisonSelectedResourceId?: ResourceId;
+  comparisonSelectionGroupId?: string;
   solutionMode?: 'recommended' | 'executable';
 }
 
@@ -125,6 +127,7 @@ interface ComparisonDraft {
   taskId: string;
   resourceIds: ResourceId[];
   selectedResourceId: ResourceId;
+  selectionGroupId?: string;
 }
 
 function hasSameResourceIds(left: ResourceId[], right: ResourceId[]): boolean {
@@ -132,6 +135,20 @@ function hasSameResourceIds(left: ResourceId[], right: ResourceId[]): boolean {
   const sortedLeft = [...left].sort();
   const sortedRight = [...right].sort();
   return sortedLeft.every((id, index) => id === sortedRight[index]);
+}
+
+function hasCurrentComparisonDraft(
+  draft: ComparisonDraft | undefined,
+  taskId: string,
+  resourceIds: ResourceId[],
+  selectionGroupId?: string
+): draft is ComparisonDraft {
+  return Boolean(
+    draft && draft.taskId === taskId &&
+    draft.selectionGroupId === selectionGroupId &&
+    hasSameResourceIds(draft.resourceIds, resourceIds) &&
+    resourceIds.includes(draft.selectedResourceId)
+  );
 }
 
 function isCurrentAskPlanBinding(task: FindDataTaskState, binding: AskPlanBinding): boolean {
@@ -258,14 +275,30 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       if (command.surface === 'COMPARE') {
         const resourceIds = command.resourceIds ?? [];
         const currentDraft = comparisonDraftRef.current;
-        const currentSelectionIsValid = Boolean(currentDraft && currentDraft.taskId === taskRef.current.taskId &&
-          hasSameResourceIds(currentDraft.resourceIds, resourceIds) && resourceIds.includes(currentDraft.selectedResourceId));
+        const comparisonModel = taskRef.current.comparisonModel;
+        const selectionGroupId = (comparisonModel && hasSameResourceIds(comparisonModel.resourceIds, resourceIds)
+          ? comparisonModel.selectionGroupId
+          : undefined) ?? (currentDraft && currentDraft.taskId === taskRef.current.taskId && hasSameResourceIds(currentDraft.resourceIds, resourceIds)
+          ? currentDraft.selectionGroupId
+          : undefined);
+        const currentSelectionIsValid = hasCurrentComparisonDraft(
+          currentDraft,
+          taskRef.current.taskId,
+          resourceIds,
+          selectionGroupId
+        );
         if (!currentSelectionIsValid && resourceIds.length >= 2) {
-          const recommended = taskRef.current.comparisonModel?.recommendedResourceId;
+          const resolution = resolveCandidateSelection(taskRef.current, {
+            resourceIds,
+            selectionGroupId,
+            recommendedResourceId: comparisonModel?.recommendedResourceId
+          });
+          if (!resolution.resourceId) return;
           updateComparisonDraft({
             taskId: taskRef.current.taskId,
             resourceIds,
-            selectedResourceId: recommended && resourceIds.includes(recommended) ? recommended : resourceIds[0]
+            selectedResourceId: resolution.resourceId,
+            selectionGroupId
           });
         }
       }
@@ -749,19 +782,30 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       ? sourceComparisonResourceIds ?? activeSurface.resourceIds
       : undefined;
     const existingDraft = comparisonDraftRef.current;
+    const comparisonModel = currentTask.comparisonModel;
+    const selectionGroupId = (comparisonResourceIds && comparisonModel &&
+      hasSameResourceIds(comparisonModel.resourceIds, comparisonResourceIds)
+      ? comparisonModel.selectionGroupId
+      : undefined) ?? (comparisonResourceIds && existingDraft && existingDraft.taskId === currentTask.taskId &&
+        hasSameResourceIds(existingDraft.resourceIds, comparisonResourceIds)
+      ? existingDraft.selectionGroupId
+      : undefined);
     const comparisonSelectedResourceId = source === 'COMPARE' && comparisonResourceIds?.length
-      ? existingDraft && existingDraft.taskId === currentTask.taskId &&
-        hasSameResourceIds(existingDraft.resourceIds, comparisonResourceIds) && comparisonResourceIds.includes(existingDraft.selectedResourceId)
-        ? existingDraft.selectedResourceId
-        : currentTask.comparisonModel?.recommendedResourceId && comparisonResourceIds.includes(currentTask.comparisonModel.recommendedResourceId)
-        ? currentTask.comparisonModel.recommendedResourceId
-        : comparisonResourceIds[0]
+      ? resolveCandidateSelection(currentTask, {
+        resourceIds: comparisonResourceIds,
+        selectionGroupId,
+        recommendedResourceId: comparisonModel?.recommendedResourceId,
+        draftResourceId: hasCurrentComparisonDraft(existingDraft, currentTask.taskId, comparisonResourceIds, selectionGroupId)
+          ? existingDraft.selectedResourceId
+          : undefined
+      }).resourceId
       : undefined;
     if (source === 'COMPARE' && comparisonResourceIds && comparisonSelectedResourceId) {
       updateComparisonDraft({
         taskId: currentTask.taskId,
         resourceIds: comparisonResourceIds,
-        selectedResourceId: comparisonSelectedResourceId
+        selectedResourceId: comparisonSelectedResourceId,
+        selectionGroupId
       });
     }
     const context: DetailReturnContext = {
@@ -770,7 +814,8 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       resourceId,
       solutionMode: source === 'SOLUTION' ? solutionMode : undefined,
       comparisonResourceIds,
-      comparisonSelectedResourceId
+      comparisonSelectedResourceId,
+      comparisonSelectionGroupId: selectionGroupId
     };
     captureReturnFocus();
     updateDetailReturnContext(context);
@@ -801,7 +846,8 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       updateComparisonDraft({
         taskId: task.taskId,
         resourceIds: context.comparisonResourceIds,
-        selectedResourceId: context.comparisonSelectedResourceId
+        selectedResourceId: context.comparisonSelectedResourceId,
+        selectionGroupId: context.comparisonSelectionGroupId
       });
       void handleAction('OPEN_COMPARE', { resourceIds: context.comparisonResourceIds });
       return;
@@ -1182,9 +1228,20 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
 
                           case 'RESULT_BRIEF': {
                             const candidateResourceIds = block.candidateSelection?.resourceIds ?? [];
-                            const currentCandidateDraft = comparisonDraft?.taskId === task.taskId &&
-                              hasSameResourceIds(comparisonDraft.resourceIds, candidateResourceIds)
-                              ? comparisonDraft
+                            const candidateSelectionGroupId = block.candidateSelection?.selectionGroupId;
+                            const currentCandidateDraft = hasCurrentComparisonDraft(
+                              comparisonDraft,
+                              task.taskId,
+                              candidateResourceIds,
+                              candidateSelectionGroupId
+                            ) ? comparisonDraft : undefined;
+                            const candidateSelection = block.candidateSelection
+                              ? resolveCandidateSelection(task, {
+                                resourceIds: candidateResourceIds,
+                                selectionGroupId: candidateSelectionGroupId,
+                                recommendedResourceId: block.candidateSelection.recommendedResourceId,
+                                draftResourceId: currentCandidateDraft?.selectedResourceId
+                              })
                               : undefined;
                             return (
                               <div key={block.id} className="w-full">
@@ -1192,13 +1249,14 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                                   block={block}
                                   task={task}
                                   onActionClick={(code, p) => handleAction(code, p)}
-                                  selectedCandidateResourceId={currentCandidateDraft?.selectedResourceId}
+                                  selectedCandidateResourceId={candidateSelection?.resourceId}
                                   onSelectedCandidateChange={(resourceId) => {
                                     if (!candidateResourceIds.includes(resourceId)) return;
                                     updateComparisonDraft({
                                       taskId: task.taskId,
                                       resourceIds: candidateResourceIds,
-                                      selectedResourceId: resourceId
+                                      selectedResourceId: resourceId,
+                                      selectionGroupId: candidateSelectionGroupId
                                     });
                                   }}
                                   onViewCandidateFields={(resourceId, resourceIds) => {
@@ -1336,14 +1394,39 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               comparisonRows={task.comparisonModel?.rows ?? []}
               recommendationConclusion={task.comparisonModel?.recommendationSummary}
               recommendedResourceId={task.comparisonModel?.recommendedResourceId}
-              selectedResourceId={comparisonDraft?.taskId === task.taskId && hasSameResourceIds(comparisonDraft.resourceIds, task.activeSurface.resourceIds ?? []) ? comparisonDraft.selectedResourceId : undefined}
+              selectedResourceId={(() => {
+                const resourceIds = task.activeSurface.resourceIds ?? [];
+                const comparisonModel = task.comparisonModel;
+                const selectionGroupId = (comparisonModel && hasSameResourceIds(comparisonModel.resourceIds, resourceIds)
+                  ? comparisonModel.selectionGroupId
+                  : undefined) ?? (comparisonDraft && comparisonDraft.taskId === task.taskId && hasSameResourceIds(comparisonDraft.resourceIds, resourceIds)
+                  ? comparisonDraft.selectionGroupId
+                  : undefined);
+                return resolveCandidateSelection(task, {
+                  resourceIds,
+                  selectionGroupId,
+                  recommendedResourceId: comparisonModel?.recommendedResourceId,
+                  draftResourceId: hasCurrentComparisonDraft(comparisonDraft, task.taskId, resourceIds, selectionGroupId)
+                    ? comparisonDraft.selectedResourceId
+                    : undefined
+                }).resourceId;
+              })()}
               onSelectionChange={(resourceId) => {
                 const resourceIds = task.activeSurface.resourceIds ?? [];
                 if (!resourceIds.includes(resourceId)) return;
-                updateComparisonDraft({ taskId: task.taskId, resourceIds, selectedResourceId: resourceId });
+                const comparisonModel = task.comparisonModel;
+                updateComparisonDraft({
+                  taskId: task.taskId,
+                  resourceIds,
+                  selectedResourceId: resourceId,
+                  selectionGroupId: (comparisonModel && hasSameResourceIds(comparisonModel.resourceIds, resourceIds)
+                    ? comparisonModel.selectionGroupId
+                    : undefined) ?? (comparisonDraft && comparisonDraft.taskId === task.taskId && hasSameResourceIds(comparisonDraft.resourceIds, resourceIds)
+                    ? comparisonDraft.selectionGroupId
+                    : undefined)
+                });
               }}
               onConfirmSelection={(resId) => {
-                updateComparisonDraft(undefined);
                 void handleAction('SELECT_RESOURCE', { resourceId: resId });
               }}
               onViewFields={(resId) => {

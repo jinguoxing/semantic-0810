@@ -182,17 +182,30 @@ export class MockFindDataService implements FindDataService {
         return this.persistResult(task, { ...assistantNotice(task, '当前资源不属于本任务可发现范围，无法执行该操作。', 'warning'), operationId });
       }
       const existing = task.dataSolution.items.find((item) => item.resourceId === resourceId);
-      const item: DataSolutionItem = existing ?? {
+      const selectionGroupId = existing?.selectionGroupId ?? (
+        task.comparisonModel?.resourceIds.includes(resourceId)
+          ? task.comparisonModel.selectionGroupId
+          : undefined
+      );
+      if (existing?.inclusionState === 'SELECTED') {
+        return this.persistResult(task, {
+          ...assistantNotice(task, '该资源已加入当前方案，无需重复确认。', 'info'),
+          operationId
+        });
+      }
+      const item: DataSolutionItem = {
+        ...(existing ?? {
         resourceId,
         role: candidate.proposedRole ?? 'OPTIONAL_DRILLDOWN',
-        inclusionState: 'SELECTED',
         coverage: [candidate.reason],
         limitations: [],
-        evidenceRefs: ['用户确认纳入当前方案'],
-        selectionGroupId: ['r02', 'r03'].includes(resourceId) ? 'population_detail_alternative' : undefined
+        evidenceRefs: ['用户确认纳入当前方案']
+        }),
+        inclusionState: 'SELECTED',
+        selectionGroupId
       };
       const stateEvents: FindDataEvent[] = [
-        ...(existing ? [] : [{ type: 'SOLUTION_ITEM_UPSERTED' as const, payload: { item } }]),
+        { type: 'SOLUTION_ITEM_UPSERTED' as const, payload: { item } },
         { type: 'RESOURCE_SELECTED', payload: { resourceId } }
       ];
       const nextTask = stateEvents.reduce(findDataReducer, task);

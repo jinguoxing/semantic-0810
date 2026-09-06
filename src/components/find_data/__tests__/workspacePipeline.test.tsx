@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DataAssistantFindDataWorkspace } from '../../DataAssistantFindDataWorkspace';
 import { FindDataTaskStore } from '../model/findDataStore';
@@ -10,8 +10,14 @@ import {
 } from '../services/FindDataService';
 import { createAskPlan, createEmptyTask, createMinhangTask } from './testUtils/findDataFactories';
 import { MINHANG_RESOURCES } from '../fixtures/minhangBedSupplyFixture';
+import { MockFindDataService } from '../services/MockFindDataService';
 
 Object.defineProperty(Element.prototype, 'scrollIntoView', {
+  configurable: true,
+  value: vi.fn()
+});
+
+Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
   configurable: true,
   value: vi.fn()
 });
@@ -332,6 +338,50 @@ describe('workspace tracked task pipeline', () => {
     expect(screen.getByText('演示数据')).toBeInTheDocument();
     expect(runAskPlan).toHaveBeenCalledOnce();
     expect(screen.queryByRole('heading', { name: 'Ask Data 分析计划' })).not.toBeInTheDocument();
+    const completedConfirmation = screen.getByLabelText('已完成的本次计算确认');
+    expect(within(completedConfirmation).queryByRole('button', { name: /校验执行权限|确认并开始计算/ })).not.toBeInTheDocument();
+    fireEvent.click(within(completedConfirmation).getByText('查看当时确认内容'));
+    expect(within(completedConfirmation).getByText('本次计划请求范围为 2025.09 至 2026.08。当前演示仅返回单月样例。')).toBeInTheDocument();
+    expect(runAskPlan).toHaveBeenCalledOnce();
+  });
+
+  it('accepts only one run while inline and right-side confirmations compete', async () => {
+    const store = new MemoryTaskStore();
+    const plan = createAskPlan({ id: 'shared_run_plan', requirementRevision: 1, basedOnSearchRevision: 1, permissionCheckState: 'ALLOWED' });
+    const base = createMinhangTask({ taskId: 'shared_run_task', askPlan: plan, activeSurface: { type: 'ASK_PLAN', mode: 'WORKBENCH' } });
+    const task = {
+      ...base,
+      turns: [{
+        turnId: 'ask_ready_turn', sender: 'ASSISTANT' as const, createdAt: '',
+        blocks: [{
+          type: 'RESULT_BRIEF' as const, id: 'ask_ready', briefKind: 'ASK_READY' as const, title: '本次计算确认',
+          askReady: {
+            binding: { taskId: base.taskId, askPlanId: plan.id, requirementRevision: 1, searchRevision: 1 },
+            metricName: plan.calculationSpec.metricName, region: '上海市闵行区', requestedTimeRange: plan.timeRange,
+            benchmarkLabel: '与全区加权平均比较', scopeDisclosure: '当前演示仅返回单月样例。'
+          }
+        }]
+      }]
+    };
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    let resolveRun: ((result: Awaited<ReturnType<FindDataService['runAskPlan']>>) => void) | undefined;
+    const runAskPlan = vi.fn(() => new Promise<Awaited<ReturnType<FindDataService['runAskPlan']>>>((resolve) => { resolveRun = resolve; }));
+    render(<DataAssistantFindDataWorkspace serviceOverride={createService({ runAskPlan })} taskStoreOverride={store} />);
+
+    const runButtons = await screen.findAllByRole('button', { name: '确认并开始计算' });
+    expect(runButtons).toHaveLength(2);
+    fireEvent.click(runButtons[0]);
+    fireEvent.click(runButtons[1]);
+    expect(runAskPlan).toHaveBeenCalledOnce();
+    await act(async () => {
+      resolveRun?.({
+        success: true, executedAt: '2026-09-06T10:00:00.000Z', dataOrigin: 'MOCK_FIXTURE', permissionSnapshot: {},
+        resultArtifact: { benchmarkLabel: '基准', summary: '完成', townResults: [], boundaryNotice: '边界' }
+      });
+    });
+    expect(await screen.findByText('分析已完成，关键结果如下。')).toBeInTheDocument();
+    expect(runAskPlan).toHaveBeenCalledOnce();
   });
 
   it('keeps an inline candidate draft while viewing the other candidate fields and confirms only that draft', async () => {
@@ -354,7 +404,7 @@ describe('workspace tracked task pipeline', () => {
         blocks: [{
           type: 'RESULT_BRIEF' as const, id: 'candidate_brief', briefKind: 'CANDIDATE_SUMMARY' as const,
           title: '人口明细候选',
-          candidateSelection: { resourceIds: ['r02', 'r03'], recommendedResourceId: 'r03', selectionGroupId: 'population-detail-1' }
+          candidateSelection: { resourceIds: ['r02', 'r03'], recommendedResourceId: 'r03', selectionGroupId: 'population_detail_alternative' }
         }]
       }]
     };
@@ -375,15 +425,167 @@ describe('workspace tracked task pipeline', () => {
     const r03Radio = screen.getByRole('radio', { name: MINHANG_RESOURCES.r03.name });
     expect(r03Radio).toBeChecked();
     fireEvent.click(r02Radio);
-    expect(r02Radio).toBeChecked();
+    expect(screen.getByRole('radio', { name: MINHANG_RESOURCES.r02.name })).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: `查看${MINHANG_RESOURCES.r03.name}字段` }));
     await waitFor(() => expect(executeAction).toHaveBeenCalledWith(expect.anything(), {
       actionCode: 'OPEN_FIELDS', payload: { resourceId: 'r03' }
     }, undefined));
-    expect(r02Radio).toBeChecked();
+    expect(screen.getByRole('radio', { name: MINHANG_RESOURCES.r02.name })).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: '将所选资源加入方案' }));
     await waitFor(() => expect(executeAction).toHaveBeenLastCalledWith(expect.anything(), {
       actionCode: 'SELECT_RESOURCE', payload: { resourceId: 'r02' }
     }, expect.any(String)));
+  });
+
+  it('keeps the formal non-default selection in both conversation and comparison after a right-side confirmation', async () => {
+    const store = new MemoryTaskStore();
+    const base = createMinhangTask({ taskId: 'right_confirm_candidate_task' });
+    const task = {
+      ...base,
+      resources: { ...base.resources, r02: MINHANG_RESOURCES.r02, r03: MINHANG_RESOURCES.r03 },
+      searchResult: {
+        query: '人口明细', totalMatches: 2, returnedCount: 2, candidateIds: ['r01', 'r04', 'r02', 'r03'],
+        candidateSnapshot: [
+          ...base.searchResult!.candidateSnapshot,
+          { resourceId: 'r02', title: MINHANG_RESOURCES.r02.name, reason: '当前最新状态，不保留历史月度快照。', matchType: 'RELATED' as const, proposedRole: 'OPTIONAL_DRILLDOWN' as const, sourceSearchRevision: 1 },
+          { resourceId: 'r03', title: MINHANG_RESOURCES.r03.name, reason: '按月固化，可用于对应月份的明细下钻。', matchType: 'RELATED' as const, proposedRole: 'OPTIONAL_DRILLDOWN' as const, sourceSearchRevision: 1 }
+        ]
+      },
+      comparisonModel: { resourceIds: ['r02', 'r03'], recommendedResourceId: 'r03', selectionGroupId: 'population_detail_alternative', rows: [] },
+      turns: [{
+        turnId: 'candidate_turn', sender: 'ASSISTANT' as const, createdAt: '',
+        blocks: [{
+          type: 'RESULT_BRIEF' as const, id: 'candidate_brief', briefKind: 'CANDIDATE_SUMMARY' as const,
+          title: '人口明细候选',
+          candidateSelection: { resourceIds: ['r02', 'r03'], recommendedResourceId: 'r03', selectionGroupId: 'population_detail_alternative' }
+        }]
+      }]
+    };
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    render(<DataAssistantFindDataWorkspace serviceOverride={new MockFindDataService()} taskStoreOverride={store} />);
+
+    await screen.findByRole('radio', { name: MINHANG_RESOURCES.r02.name });
+    fireEvent.click(screen.getByRole('radio', { name: MINHANG_RESOURCES.r02.name }));
+    fireEvent.click(screen.getByRole('button', { name: '详细比较' }));
+    await screen.findByRole('heading', { name: '资源选型对比' });
+    expect(screen.getByRole('radio', { name: `选择 ${MINHANG_RESOURCES.r02.name}` })).toBeChecked();
+    fireEvent.click(screen.getAllByRole('button', { name: '将所选资源加入方案' }).at(-1)!);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '已加入方案' })).toBeInTheDocument());
+    expect(screen.getByRole('radio', { name: MINHANG_RESOURCES.r02.name })).toBeChecked();
+    expect(screen.getByRole('radio', { name: MINHANG_RESOURCES.r03.name })).not.toBeChecked();
+    expect(screen.queryByRole('heading', { name: '资源选型对比' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '详细比较' }));
+    expect(await screen.findByRole('radio', { name: `选择 ${MINHANG_RESOURCES.r02.name}` })).toBeChecked();
+  });
+
+  it.each(['business rejection', 'request failure'])('keeps a non-default candidate draft after %s', async (outcome) => {
+    const store = new MemoryTaskStore();
+    const base = createMinhangTask({ taskId: `candidate_${outcome.replace(' ', '_')}` });
+    const task = {
+      ...base,
+      resources: { ...base.resources, r02: MINHANG_RESOURCES.r02, r03: MINHANG_RESOURCES.r03 },
+      searchResult: {
+        query: '人口明细', totalMatches: 2, returnedCount: 2, candidateIds: ['r01', 'r04', 'r02', 'r03'],
+        candidateSnapshot: [
+          ...base.searchResult!.candidateSnapshot,
+          { resourceId: 'r02', title: MINHANG_RESOURCES.r02.name, reason: '当前最新状态。', matchType: 'RELATED' as const, sourceSearchRevision: 1 },
+          { resourceId: 'r03', title: MINHANG_RESOURCES.r03.name, reason: '按月固化。', matchType: 'RELATED' as const, sourceSearchRevision: 1 }
+        ]
+      },
+      comparisonModel: { resourceIds: ['r02', 'r03'], recommendedResourceId: 'r03', selectionGroupId: 'population_detail_alternative', rows: [] },
+      turns: [{ turnId: 'candidate_turn', sender: 'ASSISTANT' as const, createdAt: '', blocks: [{
+        type: 'RESULT_BRIEF' as const, id: 'candidate_brief', briefKind: 'CANDIDATE_SUMMARY' as const, title: '人口明细候选',
+        candidateSelection: { resourceIds: ['r02', 'r03'], recommendedResourceId: 'r03', selectionGroupId: 'population_detail_alternative' }
+      }] }]
+    };
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const executeAction = vi.fn(async (currentTask, action, operationId) => {
+      if (action.actionCode === 'SELECT_RESOURCE' && outcome === 'request failure') throw new Error('选择服务暂时不可用');
+      return {
+        taskId: currentTask.taskId,
+        operationId: operationId ?? 'surface',
+        events: action.actionCode === 'SELECT_RESOURCE' ? [{
+          type: 'ASSISTANT_TURN_RECEIVED' as const,
+          payload: { turnId: 'rejected', nextStatus: 'READY' as const, blocks: [{ type: 'SYSTEM_NOTICE' as const, id: 'notice', level: 'warning' as const, message: '当前选择暂未获业务确认。' }] }
+        }] : [],
+        assistantBlocks: [],
+        surfaceCommand: { action: 'NO_CHANGE' as const }
+      };
+    });
+    render(<DataAssistantFindDataWorkspace serviceOverride={createService({ executeAction })} taskStoreOverride={store} />);
+
+    fireEvent.click(await screen.findByRole('radio', { name: MINHANG_RESOURCES.r02.name }));
+    fireEvent.click(screen.getByRole('button', { name: '将所选资源加入方案' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: MINHANG_RESOURCES.r02.name })).toBeChecked());
+    expect(screen.getByRole('button', { name: '将所选资源加入方案' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '已加入方案' })).not.toBeInTheDocument();
+  });
+
+  it('keeps an unexecuted historical confirmation read-only after the plan changes', async () => {
+    const store = new MemoryTaskStore();
+    const currentPlan = createAskPlan({ id: 'new_plan', requirementRevision: 2, basedOnSearchRevision: 2 });
+    const base = createMinhangTask({ taskId: 'historic_confirmation_task', requirementRevision: 2, searchRevision: 2, askPlan: currentPlan });
+    const task = {
+      ...base,
+      turns: [{
+        turnId: 'old_confirmation', sender: 'ASSISTANT' as const, createdAt: '',
+        blocks: [{
+          type: 'RESULT_BRIEF' as const, id: 'old_ready', briefKind: 'ASK_READY' as const, title: '本次计算确认',
+          askReady: {
+            binding: { taskId: base.taskId, askPlanId: 'old_plan', requirementRevision: 1, searchRevision: 1 },
+            metricName: '旧口径每千名老人养老床位数', region: '上海市闵行区',
+            requestedTimeRange: { start: '2025.09', end: '2026.08' }, benchmarkLabel: '与全区加权平均比较', scopeDisclosure: '旧计划仅用于历史确认。'
+          }
+        }]
+      }]
+    };
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const runAskPlan = vi.fn();
+    render(<DataAssistantFindDataWorkspace serviceOverride={createService({ runAskPlan })} taskStoreOverride={store} />);
+    const historical = await screen.findByLabelText('历史计算确认');
+    expect(within(historical).queryByRole('button', { name: /校验执行权限|确认并开始计算/ })).not.toBeInTheDocument();
+    fireEvent.click(within(historical).getByText('查看当时确认内容'));
+    expect(within(historical).getByText('旧计划仅用于历史确认。')).toBeInTheDocument();
+    expect(runAskPlan).not.toHaveBeenCalled();
+  });
+
+  it('collapses a completed historical confirmation without pointing it at the replacement plan', async () => {
+    const store = new MemoryTaskStore();
+    const currentPlan = createAskPlan({ id: 'replacement_plan', requirementRevision: 2, basedOnSearchRevision: 2 });
+    const base = createMinhangTask({ taskId: 'historic_completed_task', requirementRevision: 2, searchRevision: 2, askPlan: currentPlan });
+    const oldBinding = { taskId: base.taskId, askPlanId: 'completed_old_plan', requirementRevision: 1, searchRevision: 1 };
+    const task = {
+      ...base,
+      turns: [{
+        turnId: 'old_confirmation', sender: 'ASSISTANT' as const, createdAt: '',
+        blocks: [
+          {
+            type: 'RESULT_BRIEF' as const, id: 'old_ready', briefKind: 'ASK_READY' as const, title: '本次计算确认',
+            askReady: {
+              binding: oldBinding, metricName: '旧口径每千名老人养老床位数', region: '上海市闵行区',
+              requestedTimeRange: { start: '2025.09', end: '2026.08' }, benchmarkLabel: '与全区加权平均比较', scopeDisclosure: '旧计划范围限制。'
+            }
+          },
+          {
+            type: 'ASK_RESULT' as const, id: 'old_result', snapshot: {
+              binding: oldBinding, executedAt: '2026-09-06T00:00:00.000Z', metricName: '旧口径每千名老人养老床位数', numeratorLabel: '在营可用养老床位数',
+              resultArtifact: { benchmarkLabel: '旧基准', summary: '旧摘要', townResults: [], boundaryNotice: '旧边界' }
+            }
+          }
+        ]
+      }]
+    };
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    render(<DataAssistantFindDataWorkspace serviceOverride={createService()} taskStoreOverride={store} />);
+    const historical = await screen.findByLabelText('已完成的本次计算确认');
+    expect(within(historical).getByText('该计划曾执行，当前需求或计划已更新。')).toBeInTheDocument();
+    expect(within(historical).queryByRole('button', { name: /校验执行权限|确认并开始计算|查看完整计划/ })).not.toBeInTheDocument();
+    fireEvent.click(within(historical).getByText('查看当时确认内容'));
+    expect(within(historical).getByText('旧计划范围限制。')).toBeInTheDocument();
   });
 });

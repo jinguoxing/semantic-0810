@@ -104,7 +104,7 @@ describe('scenario classification and turn handling', () => {
         recommendedResourceId: 'r03'
       }
     });
-    expect(candidateBrief?.type === 'RESULT_BRIEF' && candidateBrief.candidateSelection?.selectionGroupId).toContain('population-detail');
+    expect(candidateBrief?.type === 'RESULT_BRIEF' && candidateBrief.candidateSelection?.selectionGroupId).toBe('population_detail_alternative');
     expect(task.searchResult?.candidateIds).toEqual(['r01', 'r04', 'r02', 'r03']);
     expect(task.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
   });
@@ -563,6 +563,19 @@ describe('fourth-round task recomposition and candidate pool', () => {
     const next = apply(detail.task, selected.events);
     expect(next.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04', 'r03']);
     expect(next.dataSolution.items.some((item) => item.resourceId === 'r02')).toBe(false);
+  });
+
+  it('records one explicit population-detail alternative and deselects the prior formal choice', async () => {
+    const detail = await submit(createMinhangTask(), '我还想看人口明细');
+    const firstSelection = await service.executeAction(detail.task, { actionCode: 'SELECT_RESOURCE', payload: { resourceId: 'r02' } });
+    const firstTask = apply(detail.task, firstSelection.events);
+    expect(firstTask.dataSolution.items.find((item) => item.resourceId === 'r02')).toMatchObject({
+      inclusionState: 'SELECTED', selectionGroupId: 'population_detail_alternative'
+    });
+    const secondSelection = await service.executeAction(firstTask, { actionCode: 'SELECT_RESOURCE', payload: { resourceId: 'r03' } });
+    const secondTask = apply(firstTask, secondSelection.events);
+    expect(secondTask.dataSolution.items.filter((item) => item.selectionGroupId === 'population_detail_alternative' && item.inclusionState === 'SELECTED'))
+      .toMatchObject([{ resourceId: 'r03' }]);
   });
 });
 

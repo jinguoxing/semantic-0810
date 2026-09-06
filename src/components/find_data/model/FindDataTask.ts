@@ -195,6 +195,8 @@ export interface ResourceComparisonRow {
 export interface ResourceComparisonModel {
   resourceIds: ResourceId[];
   recommendedResourceId?: ResourceId;
+  /** The formal solution group shared by genuine alternative candidates. */
+  selectionGroupId?: string;
   recommendationSummary?: string;
   rows: ResourceComparisonRow[];
 }

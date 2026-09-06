@@ -10,7 +10,9 @@ import {
   selectResourceById,
   selectResourceFields,
   selectSolutionGroups,
-  getDataSolutionDisplayState
+  getDataSolutionDisplayState,
+  hasAskPlanExecutionEvidence,
+  resolveCandidateSelection
 } from '../model/findDataSelectors';
 import { deniedResourceFixture } from './fixtures/deniedResourceFixture';
 import { createAskPlan, createEmptyTask, createResource, createSolutionItem, permissionsWithQuery } from './testUtils/findDataFactories';
@@ -98,6 +100,55 @@ describe('find-data selectors', () => {
     expect(selectPermissionRelevantItems(task)).toEqual([]);
     expect(task.dataSolution.items).toEqual([]);
     expect(selectExecutionAssessments(task)).toEqual([]);
+  });
+
+  it('restores a unique formal alternative selection before falling back to its recommendation', () => {
+    const task = createEmptyTask({
+      resources: { r02: createResource({ id: 'r02' }), r03: createResource({ id: 'r03' }) },
+      searchResult: {
+        query: '人口明细', totalMatches: 2, returnedCount: 2, candidateIds: ['r02', 'r03'],
+        candidateSnapshot: [
+          { resourceId: 'r02', title: '人口基本信息视图', reason: '当前状态', matchType: 'RELATED', sourceSearchRevision: 1 },
+          { resourceId: 'r03', title: '常住人口月度快照', reason: '月度快照', matchType: 'RELATED', sourceSearchRevision: 1 }
+        ]
+      },
+      dataSolution: {
+        ...createEmptyTask().dataSolution,
+        state: 'READY',
+        items: [createSolutionItem({ resourceId: 'r02', role: 'OPTIONAL_DRILLDOWN', inclusionState: 'SELECTED', selectionGroupId: 'population_detail_alternative' })]
+      }
+    });
+    expect(resolveCandidateSelection(task, {
+      resourceIds: ['r02', 'r03'],
+      selectionGroupId: 'population_detail_alternative',
+      recommendedResourceId: 'r03'
+    })).toEqual({ resourceId: 'r02', source: 'FORMAL_SELECTION' });
+  });
+
+  it('does not turn ambiguous solution membership into a formal selection', () => {
+    const task = createEmptyTask({
+      resources: { r02: createResource({ id: 'r02' }), r03: createResource({ id: 'r03' }) },
+      searchResult: {
+        query: '人口明细', totalMatches: 2, returnedCount: 2, candidateIds: ['r02', 'r03'],
+        candidateSnapshot: [
+          { resourceId: 'r02', title: '人口基本信息视图', reason: '当前状态', matchType: 'RELATED', sourceSearchRevision: 1 },
+          { resourceId: 'r03', title: '常住人口月度快照', reason: '月度快照', matchType: 'RELATED', sourceSearchRevision: 1 }
+        ]
+      },
+      dataSolution: {
+        ...createEmptyTask().dataSolution,
+        state: 'READY',
+        items: [
+          createSolutionItem({ resourceId: 'r02', role: 'OPTIONAL_DRILLDOWN', inclusionState: 'SELECTED', selectionGroupId: 'population_detail_alternative' }),
+          createSolutionItem({ resourceId: 'r03', role: 'OPTIONAL_DRILLDOWN', inclusionState: 'SELECTED', selectionGroupId: 'population_detail_alternative' })
+        ]
+      }
+    });
+    expect(resolveCandidateSelection(task, {
+      resourceIds: ['r02', 'r03'],
+      selectionGroupId: 'population_detail_alternative',
+      recommendedResourceId: 'r03'
+    })).toEqual({ resourceId: 'r03', source: 'RECOMMENDATION' });
   });
 
   it('explains permission, partial-match, optional and relationship exclusions', () => {
@@ -196,5 +247,25 @@ describe('find-data selectors', () => {
       source: { kind: 'ASK_RESULT' as const, requirementRevision: 1, searchRevision: 1, askPlanId: 'plan_current', resultExecutedAt: '2026-09-05T00:00:00.000Z' }
     };
     expect(selectConversationTurnApplicability(task, resultTurn).historical).toBe(false);
+  });
+
+  it('uses immutable result blocks as execution evidence for an older confirmation', () => {
+    const binding = { taskId: 'task', askPlanId: 'old_plan', requirementRevision: 1, searchRevision: 1 };
+    const task = createEmptyTask({
+      taskId: 'task',
+      turns: [{
+        turnId: 'old_result', sender: 'ASSISTANT', createdAt: '',
+        blocks: [{
+          type: 'ASK_RESULT', id: 'result', snapshot: {
+            binding,
+            executedAt: '2026-09-06T00:00:00.000Z',
+            metricName: '旧指标', numeratorLabel: '旧分子',
+            resultArtifact: { benchmarkLabel: '基准', summary: '摘要', townResults: [], boundaryNotice: '边界' }
+          }
+        }]
+      }]
+    });
+    expect(hasAskPlanExecutionEvidence(task, binding)).toBe(true);
+    expect(hasAskPlanExecutionEvidence(task, { ...binding, askPlanId: 'new_plan' })).toBe(false);
   });
 });

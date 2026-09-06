@@ -50,9 +50,19 @@ test.describe('Find Data inline mock smoke', () => {
     await expect(page.getByText('浦锦街道')).toBeVisible();
     await expect(page.getByText('实际范围：上海市闵行区，2026-08，月度')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Ask Data 分析计划' })).toHaveCount(0);
+    const completedConfirmation = page.getByLabel('已完成的本次计算确认');
+    await expect(completedConfirmation).toBeVisible();
+    await expect(completedConfirmation.getByRole('button', { name: /校验执行权限|确认并开始计算/ })).toHaveCount(0);
+    await completedConfirmation.getByText('查看当时确认内容').click();
+    await expect(completedConfirmation.getByText(/当前演示实际仅返回/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ask Data 分析计划' })).toHaveCount(0);
+    await completedConfirmation.getByText('查看当时确认内容').click();
+    await completedConfirmation.scrollIntoViewIfNeeded();
+    await captureQaState(page, 'completed-confirmation-and-result');
   });
 
-  test('E2E-B: keeps a candidate choice through detail viewing and returns to the same detailed comparison', async ({ page }) => {
+  test('E2E-B: preserves the confirmed choice and historical result across a second bed-definition analysis', async ({ page }) => {
+    test.setTimeout(90_000);
     const taskInput = await startGoal(page);
 
     await taskInput.fill('我还想看人口明细');
@@ -66,5 +76,52 @@ test.describe('Find Data inline mock smoke', () => {
     await expect(page.getByRole('heading', { name: /字段检视 · 常住人口月度快照/ })).toBeVisible();
     await page.getByRole('button', { name: '返回资源比较' }).click();
     await expect(page.getByRole('radio', { name: '选择 人口基本信息视图' })).toBeChecked();
+    await page.getByRole('button', { name: '将所选资源加入方案' }).last().click();
+    await expect(page.getByRole('button', { name: '已加入方案' })).toBeVisible();
+    await expect(realtimeView).toBeChecked();
+    await expect(page.getByRole('radio', { name: '常住人口月度快照' })).not.toBeChecked();
+    await captureQaState(page, 'right-confirmed-non-default-selection');
+    await page.getByRole('button', { name: '详细比较' }).click();
+    await expect(page.getByRole('radio', { name: '选择 人口基本信息视图' })).toBeChecked();
+
+    await page.getByRole('button', { name: '关闭资源比较' }).click();
+    await taskInput.fill('按当前方案分析');
+    await taskInput.press('Enter');
+    await page.getByRole('radio', { name: /与全区加权平均比较/ }).last().check({ force: true });
+    await page.getByRole('button', { name: '继续' }).last().click();
+    await page.getByRole('button', { name: '校验执行权限' }).click();
+    await page.getByRole('button', { name: '确认并开始计算' }).click();
+    const firstResult = page.getByLabel('分析结果').first();
+    await expect(firstResult.getByText('24.8 张 / 千人', { exact: true })).toBeVisible();
+    await expect(firstResult.getByText('浦锦街道')).toBeVisible();
+    await expect(firstResult.getByText('分子口径：在营可用养老床位数（正式指标）')).toBeVisible();
+
+    await firstResult.getByRole('button', { name: '查看完整结果' }).click();
+    await expect(page.getByRole('heading', { name: 'Ask Data 分析计划' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '查看计算依据' }).last()).toBeVisible();
+    await page.getByRole('button', { name: '关闭分析计划' }).click();
+
+    await page.getByRole('button', { name: '查看口径上下文' }).click();
+    const bedDefinitionInput = page.locator('label:has-text("养老床位供给口径定义")').locator('..').locator('input');
+    await bedDefinitionInput.fill('养老床位核定数');
+    await page.getByRole('button', { name: '保存并更新口径' }).click();
+    await expect(page.getByText('正在按新口径重新评估')).toHaveCount(0);
+    await expect(page.getByText(/养老床位核定数/).last()).toBeVisible();
+    await expect(page.getByText('24.8 张 / 千人', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('已完成的本次计算确认').first().getByRole('button', { name: /校验执行权限|确认并开始计算/ })).toHaveCount(0);
+
+    await taskInput.fill('按当前方案分析');
+    await taskInput.press('Enter');
+    await page.getByRole('radio', { name: /与全区加权平均比较/ }).last().check({ force: true });
+    await page.getByRole('button', { name: '继续' }).last().click();
+    await page.getByRole('button', { name: '校验执行权限' }).last().click();
+    await page.getByRole('button', { name: '确认并开始计算' }).last().click();
+    const results = page.getByLabel('分析结果');
+    await expect(results).toHaveCount(2);
+    await expect(results.first().getByText('24.8 张 / 千人', { exact: true })).toBeVisible();
+    await expect(results.first().getByText('分子口径：在营可用养老床位数（正式指标）')).toBeVisible();
+    await expect(results.last().getByText('31.4 张 / 千人', { exact: true })).toBeVisible();
+    await expect(results.last().getByText('分子口径：养老床位核定数（正式指标）')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Ask Data 分析计划' })).toHaveCount(0);
   });
 });

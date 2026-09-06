@@ -9,7 +9,8 @@ import {
 import {
   selectCandidateById,
   selectCandidateSolutionStatus,
-  selectResourceById
+  selectResourceById,
+  isFormallySelectedCandidate
 } from '../model/findDataSelectors';
 
 interface InlineCandidateSelectionProps {
@@ -65,12 +66,15 @@ export const InlineCandidateSelection: React.FC<InlineCandidateSelectionProps> =
     : resourceIds.includes(selection.recommendedResourceId ?? '')
       ? selection.recommendedResourceId
       : resourceIds[0];
-  const selectedStatus = effectiveSelectedResourceId
-    ? selectCandidateSolutionStatus(task, effectiveSelectedResourceId)
-    : 'NOT_INCLUDED';
+  const selectedIsFormallyConfirmed = isFormallySelectedCandidate(
+    task,
+    resourceIds,
+    selection.selectionGroupId,
+    effectiveSelectedResourceId
+  );
   const canConfirm = Boolean(
     effectiveSelectedResourceId
-    && selectedStatus === 'NOT_INCLUDED'
+    && !selectedIsFormallyConfirmed
     && !task.pendingOperation
   );
   const isAlternativeGroup = Boolean(selection.selectionGroupId && resourceIds.length > 1);
@@ -91,7 +95,10 @@ export const InlineCandidateSelection: React.FC<InlineCandidateSelectionProps> =
         <div className="space-y-2" role="radiogroup" aria-label="选择要加入方案的人口明细资源">
           {candidates.map(({ resource, candidate }) => {
             const isSelected = resource.id === effectiveSelectedResourceId;
-            const solutionStatus = solutionStatusLabel(selectCandidateSolutionStatus(task, resource.id));
+            const isFormallyConfirmed = isFormallySelectedCandidate(task, resourceIds, selection.selectionGroupId, resource.id);
+            const solutionStatus = isFormallyConfirmed
+              ? solutionStatusLabel(selectCandidateSolutionStatus(task, resource.id))
+              : undefined;
             const canViewFields = resource.availabilityByAction.viewMetadata === 'ALLOWED';
             return (
               <label
@@ -156,13 +163,13 @@ export const InlineCandidateSelection: React.FC<InlineCandidateSelectionProps> =
           type="button"
           disabled={!canConfirm}
           onClick={() => effectiveSelectedResourceId && onActionClick('SELECT_RESOURCE', { resourceId: effectiveSelectedResourceId })}
-          title={selectedStatus === 'INCLUDED' ? '所选资源已加入方案' : task.pendingOperation ? '当前任务正在处理，暂不能变更方案' : undefined}
+          title={selectedIsFormallyConfirmed ? '所选资源已加入方案' : task.pendingOperation ? '当前任务正在处理，暂不能变更方案' : undefined}
           className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${
             canConfirm ? 'bg-[#2563EB] text-white hover:bg-[#1D4ED8]' : 'cursor-not-allowed bg-[#E2E8F0] text-[#94A3B8]'
           }`}
         >
-          {selectedStatus === 'INCLUDED' ? <Check className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          {selectedStatus === 'INCLUDED' ? '已加入方案' : '将所选资源加入方案'}
+          {selectedIsFormallyConfirmed ? <Check className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          {selectedIsFormallyConfirmed ? '已加入方案' : '将所选资源加入方案'}
         </button>
         <button
           type="button"

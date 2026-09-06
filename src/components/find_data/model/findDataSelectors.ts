@@ -9,7 +9,8 @@ import {
   ResourceCandidate,
   ExecutionAssessment,
   AskPlan,
-  ConversationTurn
+  ConversationTurn,
+  AskPlanBinding
 } from './FindDataTask';
 import { getResourceRangeIntersection, resourceCoversRange } from './timeRangeUtils';
 
@@ -162,6 +163,78 @@ export function selectCandidateById(task: FindDataTaskState, resourceId?: Resour
 export function selectCandidatesForComparison(task: FindDataTaskState): ResourceCandidate[] {
   const comparisonIds = task.comparisonModel?.resourceIds ?? [];
   return selectCandidateResources(task).filter((candidate) => comparisonIds.includes(candidate.resourceId));
+}
+
+export interface CandidateSelectionResolution {
+  resourceId?: ResourceId;
+  /** This indicates why the UI currently highlights an option, not a business fact. */
+  source: 'DRAFT' | 'FORMAL_SELECTION' | 'RECOMMENDATION' | 'FIRST_VALID_CANDIDATE' | 'NONE';
+}
+
+interface CandidateSelectionInput {
+  resourceIds: ResourceId[];
+  selectionGroupId?: string;
+  recommendedResourceId?: ResourceId;
+  draftResourceId?: ResourceId;
+}
+
+/**
+ * Resolves a candidate choice once for both the conversation and comparison
+ * workspace. A draft is local UI intent; only a unique SELECTED solution item
+ * is treated as a confirmed business choice.
+ */
+export function resolveCandidateSelection(
+  task: FindDataTaskState,
+  { resourceIds, selectionGroupId, recommendedResourceId, draftResourceId }: CandidateSelectionInput
+): CandidateSelectionResolution {
+  const validResourceIds = resourceIds.filter((resourceId) => Boolean(selectCandidateById(task, resourceId)));
+  if (validResourceIds.length === 0) return { source: 'NONE' };
+  if (draftResourceId && validResourceIds.includes(draftResourceId)) {
+    return { resourceId: draftResourceId, source: 'DRAFT' };
+  }
+
+  const formalResourceIds = selectionGroupId
+    ? task.dataSolution.items
+      .filter((item) =>
+        validResourceIds.includes(item.resourceId) &&
+        item.selectionGroupId === selectionGroupId &&
+        item.inclusionState === 'SELECTED' &&
+        task.resources[item.resourceId]?.availabilityByAction.discover === 'ALLOWED'
+      )
+      .map((item) => item.resourceId)
+    : [];
+  if (formalResourceIds.length === 1) {
+    return { resourceId: formalResourceIds[0], source: 'FORMAL_SELECTION' };
+  }
+  if (recommendedResourceId && validResourceIds.includes(recommendedResourceId)) {
+    return { resourceId: recommendedResourceId, source: 'RECOMMENDATION' };
+  }
+  return { resourceId: validResourceIds[0], source: 'FIRST_VALID_CANDIDATE' };
+}
+
+/** Returns true only for the unique, explicit selection in the same solution group. */
+export function isFormallySelectedCandidate(
+  task: FindDataTaskState,
+  resourceIds: ResourceId[],
+  selectionGroupId: string | undefined,
+  resourceId: ResourceId | undefined
+): boolean {
+  const resolution = resolveCandidateSelection(task, { resourceIds, selectionGroupId });
+  return Boolean(resourceId && resolution.source === 'FORMAL_SELECTION' && resolution.resourceId === resourceId);
+}
+
+function matchesAskPlanBinding(left: AskPlanBinding, right: AskPlanBinding): boolean {
+  return left.taskId === right.taskId &&
+    left.askPlanId === right.askPlanId &&
+    left.requirementRevision === right.requirementRevision &&
+    left.searchRevision === right.searchRevision;
+}
+
+/** Historical result blocks are the only evidence that an older confirmation actually executed. */
+export function hasAskPlanExecutionEvidence(task: FindDataTaskState, binding: AskPlanBinding): boolean {
+  return task.turns.some((turn) => turn.blocks.some((block) =>
+    block.type === 'ASK_RESULT' && matchesAskPlanBinding(block.snapshot.binding, binding)
+  ));
 }
 
 export type CandidateSolutionStatus = 'INCLUDED' | 'PARTIAL_RECORDED' | 'NOT_INCLUDED';

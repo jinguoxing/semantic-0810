@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { X, ArrowRight, FileText, Info } from 'lucide-react';
 import { FindDataResource, ResourceComparisonRow, ResourceId } from './model/FindDataTask';
 
@@ -28,26 +28,12 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
   const resA = resources[0];
   const resB = resources[1];
 
-  const comparisonKey = [resA?.id, resB?.id].filter((id): id is ResourceId => !!id).sort().join('|');
   const defaultSelectedId = selectedResourceId && [resA?.id, resB?.id].includes(selectedResourceId)
     ? selectedResourceId
     : recommendedResourceId && [resA?.id, resB?.id].includes(recommendedResourceId)
     ? recommendedResourceId
     : resA?.id;
-  const [selectedId, setSelectedId] = useState<ResourceId | undefined>(defaultSelectedId);
-  const comparisonKeyRef = useRef(comparisonKey);
-
-  useEffect(() => {
-    const ids = [resA?.id, resB?.id].filter((id): id is ResourceId => !!id);
-    const selectionIsValid = selectedId !== undefined && ids.includes(selectedId);
-    if (comparisonKeyRef.current !== comparisonKey || !selectionIsValid) {
-      comparisonKeyRef.current = comparisonKey;
-      setSelectedId(defaultSelectedId);
-    }
-  }, [comparisonKey, defaultSelectedId, resA?.id, resB?.id, selectedId]);
-
   const selectCandidate = (resourceId: ResourceId) => {
-    setSelectedId(resourceId);
     onSelectionChange?.(resourceId);
   };
 
@@ -152,7 +138,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
           {/* Resource A */}
           <div
             className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2 relative ${
-              selectedId === resA.id
+              defaultSelectedId === resA.id
                 ? 'border-[#2563EB] bg-[#EFF6FF]/20 ring-1 ring-[#2563EB]/40'
                 : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
             }`}
@@ -166,7 +152,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
                   type="radio"
                   name="comparison-candidate"
                   aria-label={`选择 ${resA.name}`}
-                  checked={selectedId === resA.id}
+                  checked={defaultSelectedId === resA.id}
                   onChange={() => selectCandidate(resA.id)}
                   className="h-4 w-4 accent-[#2563EB]"
                 />
@@ -194,7 +180,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
           {/* Resource B */}
           <div
             className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2 relative ${
-              selectedId === resB.id
+              defaultSelectedId === resB.id
                 ? 'border-[#2563EB] bg-[#EFF6FF]/20 ring-1 ring-[#2563EB]/40'
                 : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
             }`}
@@ -208,7 +194,7 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
                   type="radio"
                   name="comparison-candidate"
                   aria-label={`选择 ${resB.name}`}
-                  checked={selectedId === resB.id}
+                  checked={defaultSelectedId === resB.id}
                   onChange={() => selectCandidate(resB.id)}
                   className="h-4 w-4 accent-[#2563EB]"
                 />
@@ -280,10 +266,10 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
         </button>
 
         <button
-          onClick={() => selectedId && onConfirmSelection(selectedId)}
-          disabled={!selectedId}
+          onClick={() => defaultSelectedId && onConfirmSelection(defaultSelectedId)}
+          disabled={!defaultSelectedId}
           className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center space-x-1.5 ${
-            selectedId
+            defaultSelectedId
               ? 'text-white bg-[#2563EB] hover:bg-[#1D4ED8] shadow-2xs'
               : 'text-[#94A3B8] bg-[#F1F5F9] cursor-not-allowed'
           }`}

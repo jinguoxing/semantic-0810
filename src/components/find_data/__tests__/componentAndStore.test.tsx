@@ -220,7 +220,7 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
     });
   });
 
-  it('keeps a comparison draft selection through an ordinary re-render and confirms only the chosen candidate', () => {
+  it('renders the workspace selection controlled by the shared comparison draft and confirms only the chosen candidate', () => {
     const first = MINHANG_RESOURCES.r02;
     const second = MINHANG_RESOURCES.r03;
     const onConfirmSelection = vi.fn();
@@ -241,6 +241,7 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
       <RightWorkspaceCompare
         resources={[{ ...first }, { ...second }]}
         recommendedResourceId={first.id}
+        selectedResourceId={second.id}
         onSelectionChange={onSelectionChange}
         onConfirmSelection={onConfirmSelection}
         onViewFields={() => {}}

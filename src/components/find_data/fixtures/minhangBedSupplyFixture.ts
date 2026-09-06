@@ -385,6 +385,7 @@ export const MINHANG_COMPARISON_ROWS: ResourceComparisonRow[] = [
 export const MINHANG_COMPARISON_MODEL: ResourceComparisonModel = {
   resourceIds: ['r02', 'r03'],
   recommendedResourceId: 'r03',
+  selectionGroupId: 'population_detail_alternative',
   recommendationSummary:
     '本次分析覆盖过去 12 个月（2025.09 — 2026.08），推荐将「常住人口月度快照」作为可选下钻资源；而「实时人员底册」仅含实时最新状态、无历史月度切片，且权限需申请，不建议纳入本次分析方案。',
   rows: MINHANG_COMPARISON_ROWS
