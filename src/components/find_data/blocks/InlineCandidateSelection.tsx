@@ -104,6 +104,7 @@ export const InlineCandidateSelection: React.FC<InlineCandidateSelectionProps> =
                   <input
                     type="radio"
                     name={`candidate-${selection.selectionGroupId}`}
+                    aria-label={resource.name}
                     value={resource.id}
                     checked={isSelected}
                     onChange={() => onSelectedResourceChange(resource.id)}

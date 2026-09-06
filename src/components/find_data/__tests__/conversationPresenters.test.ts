@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAskPlanPreparedSummary,
+  buildAskResultSnapshot,
   buildAskRunCompletionSummary,
   buildAskRunFailureSummary,
   buildCandidateDiscoverySummary,
@@ -164,6 +165,33 @@ describe('conversation presenters derive answers from task state', () => {
     expect(summary).toContain('本次实际分析范围：上海市闵行区，2026-08，月度');
     expect(summary).toContain('有 2 个街镇低于当前比较基准');
     expect(summary).toContain('结果来源：演示数据');
+  });
+
+  it('creates an immutable display snapshot from the execution that returned it', () => {
+    const task = createMinhangTask({ taskId: 'result_task', requirementRevision: 3, searchRevision: 4 });
+    const plan = createAskPlan({ id: 'result_plan', requirementRevision: 3, basedOnSearchRevision: 4 });
+    const result = {
+      operationId: 'run_1',
+      success: true,
+      executedAt: '2026-09-06T10:00:00.000Z',
+      dataOrigin: 'MOCK_FIXTURE' as const,
+      permissionSnapshot: {},
+      resultArtifact: {
+        benchmarkLabel: '全区加权平均供给水平',
+        benchmarkValue: '24.8 张 / 千人',
+        summary: '本次返回摘要',
+        townResults: [{ townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于全区' }],
+        boundaryNotice: '仅用于本次演示'
+      }
+    };
+    const snapshot = buildAskResultSnapshot(task, plan, result);
+    expect(snapshot).toMatchObject({
+      binding: { taskId: 'result_task', askPlanId: 'result_plan', requirementRevision: 3, searchRevision: 4 },
+      operationId: 'run_1',
+      metricName: plan.calculationSpec.metricName,
+      resultArtifact: { summary: '本次返回摘要' }
+    });
+    expect(buildAskResultSnapshot(task, plan, { ...result, success: false })).toBeUndefined();
   });
 
   it('summarizes a time-only recomposition without re-listing candidates and invalidates the old plan', () => {

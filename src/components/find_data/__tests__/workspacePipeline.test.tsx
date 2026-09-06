@@ -8,7 +8,7 @@ import {
   FindDataService,
   PermissionRecheckResult
 } from '../services/FindDataService';
-import { createEmptyTask, createMinhangTask } from './testUtils/findDataFactories';
+import { createAskPlan, createEmptyTask, createMinhangTask } from './testUtils/findDataFactories';
 import { MINHANG_RESOURCES } from '../fixtures/minhangBedSupplyFixture';
 
 Object.defineProperty(Element.prototype, 'scrollIntoView', {
@@ -276,5 +276,114 @@ describe('workspace tracked task pipeline', () => {
     fireEvent.click(screen.getByRole('button', { name: `查看${MINHANG_RESOURCES.r03.name}字段` }));
     expect(await screen.findByText('原比较上下文已变化，请查看最新方案。')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '返回资源比较' })).not.toBeInTheDocument();
+  });
+
+  it('checks and runs a bound analysis plan from the conversation without opening the workspace', async () => {
+    const store = new MemoryTaskStore();
+    const plan = createAskPlan({ id: 'inline_plan', requirementRevision: 1, basedOnSearchRevision: 1 });
+    const base = createMinhangTask({ taskId: 'inline_ask_task', askPlan: plan });
+    const task = {
+      ...base,
+      turns: [{
+        turnId: 'ask_ready_turn', sender: 'ASSISTANT' as const, createdAt: '',
+        blocks: [{
+          type: 'RESULT_BRIEF' as const,
+          id: 'ask_ready',
+          briefKind: 'ASK_READY' as const,
+          title: '本次计算确认',
+          askReady: {
+            binding: { taskId: base.taskId, askPlanId: plan.id, requirementRevision: 1, searchRevision: 1 },
+            metricName: plan.calculationSpec.metricName,
+            region: '上海市闵行区',
+            requestedTimeRange: plan.timeRange,
+            benchmarkLabel: '与全区加权平均比较',
+            scopeDisclosure: '本次计划请求范围为 2025.09 至 2026.08。当前演示仅返回单月样例。'
+          }
+        }]
+      }]
+    };
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const recheckPermissions = vi.fn(async (_task, _ids, _action, operationId?: string): Promise<PermissionRecheckResult> => ({
+      operationId,
+      decision: 'ALLOWED',
+      updatedPermissions: { r01: task.resources.r01.availabilityByAction, r04: task.resources.r04.availabilityByAction }
+    }));
+    const runAskPlan = vi.fn(async (_task, _request, operationId?: string) => ({
+      operationId,
+      success: true,
+      executedAt: '2026-09-06T10:00:00.000Z',
+      dataOrigin: 'MOCK_FIXTURE' as const,
+      permissionSnapshot: { r01: task.resources.r01.availabilityByAction, r04: task.resources.r04.availabilityByAction },
+      resultArtifact: {
+        benchmarkLabel: '全区加权平均供给水平',
+        benchmarkValue: '24.8 张 / 千人',
+        summary: '浦锦街道低于本次比较基准。',
+        townResults: [{ townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于全区' }],
+        boundaryNotice: '仅用于演示。'
+      }
+    }));
+    render(<DataAssistantFindDataWorkspace serviceOverride={createService({ recheckPermissions, runAskPlan })} taskStoreOverride={store} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '校验执行权限' }));
+    expect(await screen.findByRole('button', { name: '确认并开始计算' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '确认并开始计算' }));
+    expect(await screen.findByText('浦锦街道')).toBeInTheDocument();
+    expect(screen.getByText('演示数据')).toBeInTheDocument();
+    expect(runAskPlan).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('heading', { name: 'Ask Data 分析计划' })).not.toBeInTheDocument();
+  });
+
+  it('keeps an inline candidate draft while viewing the other candidate fields and confirms only that draft', async () => {
+    const store = new MemoryTaskStore();
+    const base = createMinhangTask({ taskId: 'inline_candidate_task' });
+    const task = {
+      ...base,
+      resources: { ...base.resources, r02: MINHANG_RESOURCES.r02, r03: MINHANG_RESOURCES.r03 },
+      searchResult: {
+        query: '人口明细', totalMatches: 2, returnedCount: 2, candidateIds: ['r01', 'r04', 'r02', 'r03'],
+        candidateSnapshot: [
+          ...base.searchResult!.candidateSnapshot,
+          { resourceId: 'r02', title: MINHANG_RESOURCES.r02.name, reason: '当前最新状态，不保留历史月度快照。', matchType: 'RELATED' as const, proposedRole: 'OPTIONAL_DRILLDOWN' as const, sourceSearchRevision: 1 },
+          { resourceId: 'r03', title: MINHANG_RESOURCES.r03.name, reason: '按月固化，可用于对应月份的明细下钻。', matchType: 'RELATED' as const, proposedRole: 'OPTIONAL_DRILLDOWN' as const, sourceSearchRevision: 1 }
+        ]
+      },
+      comparisonModel: { resourceIds: ['r02', 'r03'], recommendedResourceId: 'r03', rows: [] },
+      turns: [{
+        turnId: 'candidate_turn', sender: 'ASSISTANT' as const, createdAt: '',
+        blocks: [{
+          type: 'RESULT_BRIEF' as const, id: 'candidate_brief', briefKind: 'CANDIDATE_SUMMARY' as const,
+          title: '人口明细候选',
+          candidateSelection: { resourceIds: ['r02', 'r03'], recommendedResourceId: 'r03', selectionGroupId: 'population-detail-1' }
+        }]
+      }]
+    };
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const executeAction = vi.fn(async (currentTask, action, operationId) => ({
+      taskId: currentTask.taskId,
+      operationId: operationId ?? 'surface',
+      events: [],
+      assistantBlocks: [],
+      surfaceCommand: action.actionCode === 'OPEN_FIELDS'
+        ? { action: 'REPLACE' as const, surface: 'FIELDS' as const, resourceIds: [action.payload?.resourceId as string] }
+        : { action: 'NO_CHANGE' as const }
+    }));
+    render(<DataAssistantFindDataWorkspace serviceOverride={createService({ executeAction })} taskStoreOverride={store} />);
+
+    const r02Radio = await screen.findByRole('radio', { name: MINHANG_RESOURCES.r02.name });
+    const r03Radio = screen.getByRole('radio', { name: MINHANG_RESOURCES.r03.name });
+    expect(r03Radio).toBeChecked();
+    fireEvent.click(r02Radio);
+    expect(r02Radio).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: `查看${MINHANG_RESOURCES.r03.name}字段` }));
+    await waitFor(() => expect(executeAction).toHaveBeenCalledWith(expect.anything(), {
+      actionCode: 'OPEN_FIELDS', payload: { resourceId: 'r03' }
+    }, undefined));
+    expect(r02Radio).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: '将所选资源加入方案' }));
+    await waitFor(() => expect(executeAction).toHaveBeenLastCalledWith(expect.anything(), {
+      actionCode: 'SELECT_RESOURCE', payload: { resourceId: 'r02' }
+    }, expect.any(String)));
   });
 });

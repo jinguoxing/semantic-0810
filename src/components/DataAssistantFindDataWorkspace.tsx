@@ -13,7 +13,7 @@ import {
   Trash2
 } from 'lucide-react';
 
-import { AskPlan, AskPlanBinding, AskRunResult, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode } from './find_data/model/FindDataTask';
+import { AskPlan, AskPlanBinding, AskResultSnapshot, AskRunResult, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode } from './find_data/model/FindDataTask';
 import { FindDataEvent } from './find_data/model/findDataEvents';
 import { findDataReducer, initialFindDataTaskState } from './find_data/model/findDataReducer';
 import {
@@ -40,6 +40,7 @@ import {
 } from './find_data/model/findDataSelectors';
 import {
   buildAskPlanScopeDisclosure,
+  buildAskResultSnapshot,
   buildAskRunCompletionSummary,
   buildAskRunFailureSummary,
   buildOperationFailureSummary,
@@ -53,6 +54,7 @@ import { ResultBriefBlock } from './find_data/blocks/ResultBriefBlock';
 import { ActionGroupBlock } from './find_data/blocks/ActionGroupBlock';
 import { RuntimeStatusBlock } from './find_data/blocks/RuntimeStatusBlock';
 import { SystemNoticeBlock } from './find_data/blocks/SystemNoticeBlock';
+import { AskResultContent } from './find_data/blocks/AskResultContent';
 
 // Right Workspaces
 import { RightWorkspaceCompare } from './find_data/RightWorkspaceCompare';
@@ -137,6 +139,13 @@ function isCurrentAskPlanBinding(task: FindDataTaskState, binding: AskPlanBindin
   return task.taskId === binding.taskId && plan?.id === binding.askPlanId &&
     plan.requirementRevision === binding.requirementRevision &&
     plan.basedOnSearchRevision === binding.searchRevision;
+}
+
+function canOpenAskResultDetails(task: FindDataTaskState, snapshot: AskResultSnapshot): boolean {
+  const result = task.askPlan?.lastRunResult;
+  return isCurrentAskPlanBinding(task, snapshot.binding) && result?.success === true &&
+    result.executedAt === snapshot.executedAt &&
+    (!snapshot.operationId || !result.operationId || result.operationId === snapshot.operationId);
 }
 
 export const askRunCompletionMessage = buildAskRunCompletionSummary;
@@ -486,6 +495,11 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       setSurfaceMessage('当前需求或计划已变化，请使用最新分析计划。');
       return;
     }
+    const expectedExecutedAt = payload?.executedAt as string | undefined;
+    if (actionCode === 'OPEN_ASK_PLAN' && expectedExecutedAt && taskRef.current.askPlan?.lastRunResult?.executedAt !== expectedExecutedAt) {
+      setSurfaceMessage('当前工作区无法恢复这次历史结果的详情。');
+      return;
+    }
     const isSurfaceAction = ['OPEN_FIELDS', 'OPEN_COMPARE', 'OPEN_SOLUTION', 'OPEN_ACCESS', 'OPEN_RELATED_RESOURCES', 'OPEN_ASK_PLAN', 'CLOSE_SURFACE'].includes(actionCode);
     const operationId = isSurfaceAction ? undefined : startOperation('ACTION');
     if (!isSurfaceAction && !operationId) return;
@@ -638,6 +652,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     if (taskRef.current.taskId !== taskAtStart.taskId || taskRef.current.pendingOperation?.operationId !== operationId || (runResult.operationId && runResult.operationId !== operationId)) return;
     if (runResult.success) {
       dispatchTracked({ type: 'ASK_RUN_COMPLETED', payload: { result: runResult } });
+      const resultSnapshot = buildAskResultSnapshot(taskAtStart, askPlanAtStart, runResult);
       const activeSurface = taskRef.current.activeSurface;
       if (activeSurface.type === 'ASK_PLAN' && taskRef.current.askPlan?.id === askPlanAtStart.id) {
         dispatchTracked({
@@ -663,10 +678,12 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               askPlanId: askPlanAtStart.id,
               resultExecutedAt: runResult.executedAt
             },
-            blocks: [
-              { type: 'TEXT', id: createUiId('text'), content: askRunCompletionMessage(askPlanAtStart, runResult) },
-              { type: 'ACTION_GROUP', id: createUiId('actions'), actions: [{ id: createUiId('view_result'), label: '查看完整结果和计算依据', actionCode: 'OPEN_ASK_PLAN', payload: { focusSection: 'RESULT' }, variant: 'weak' }] }
-            ]
+            blocks: resultSnapshot
+              ? [
+                  { type: 'TEXT', id: createUiId('text'), content: '分析已完成，关键结果如下。' },
+                  { type: 'ASK_RESULT', id: createUiId('ask_result'), snapshot: resultSnapshot }
+                ]
+              : [{ type: 'TEXT', id: createUiId('text'), content: '分析已完成，但服务未返回可展示的结构化结果。' }]
           }
       });
     } else {
@@ -1194,6 +1211,18 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                               </div>
                             );
                           }
+
+                          case 'ASK_RESULT':
+                            return (
+                              <div key={block.id} className="w-full">
+                                <AskResultContent
+                                  snapshot={block.snapshot}
+                                  mode="compact"
+                                  canOpenDetails={canOpenAskResultDetails(task, block.snapshot)}
+                                  onActionClick={(code, payload) => handleAction(code, payload)}
+                                />
+                              </div>
+                            );
 
                           case 'ACTION_GROUP':
                             return (

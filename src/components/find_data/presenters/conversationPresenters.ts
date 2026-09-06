@@ -1,4 +1,4 @@
-import type { ActualExecutionScope, AskPlan, AskReadyBrief, AskRunResult, DataSolutionItem, FindDataResource, FindDataTaskState, PermissionDecision, PermissionRequestRef, ResourceCandidate, ResourceId } from '../model/FindDataTask';
+import type { ActualExecutionScope, AskPlan, AskReadyBrief, AskResultSnapshot, AskRunResult, DataSolutionItem, FindDataResource, FindDataTaskState, PermissionDecision, PermissionRequestRef, ResourceCandidate, ResourceId } from '../model/FindDataTask';
 import {
   selectActiveResource,
   selectAskHandoffReadiness,
@@ -500,6 +500,30 @@ export function buildAskReadyBrief(
     coreResourceNames: plan.coreResourceIds
       .map((resourceId) => selectResourceById(task, resourceId)?.name)
       .filter((name): name is string => !!name)
+  };
+}
+
+/** Creates the immutable, display-safe payload for a completed conversation result. */
+export function buildAskResultSnapshot(
+  task: FindDataTaskState,
+  plan: AskPlan,
+  result: AskRunResult
+): AskResultSnapshot | undefined {
+  if (!result.success || !result.resultArtifact) return undefined;
+  return {
+    binding: {
+      taskId: task.taskId,
+      askPlanId: plan.id,
+      requirementRevision: plan.requirementRevision ?? task.requirementRevision,
+      searchRevision: plan.basedOnSearchRevision ?? task.searchRevision
+    },
+    operationId: result.operationId,
+    executedAt: result.executedAt,
+    metricName: plan.calculationSpec.metricName,
+    numeratorLabel: plan.calculationSpec.numerator,
+    formulaExplanation: plan.calculationSpec.formulaExplanation,
+    dataOrigin: result.dataOrigin,
+    resultArtifact: result.resultArtifact
   };
 }
 

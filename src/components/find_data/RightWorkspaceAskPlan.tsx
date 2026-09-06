@@ -2,8 +2,8 @@ import React, { useLayoutEffect, useRef } from 'react';
 import { X, Calculator, CheckCircle2, ShieldCheck, Play, Edit3, Loader2, RefreshCw } from 'lucide-react';
 import { AskPlan, AskPlanBinding, AskPlanFocusSection, FindDataTaskState, PermissionCheckState } from './model/FindDataTask';
 import { PermissionRecheckResult } from './services/FindDataService';
-import { getMinhangBedDefinitionForNumerator } from './scenarios/minhangBedDefinition';
-import { buildActualScopeLabel } from './presenters/conversationPresenters';
+import { buildAskResultSnapshot } from './presenters/conversationPresenters';
+import { AskResultContent } from './blocks/AskResultContent';
 
 interface RightWorkspaceAskPlanProps {
   task: FindDataTaskState;
@@ -95,7 +95,7 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
   const isExecuting = plan.status === 'RUNNING' || task.pendingOperation?.operationType === 'ASK_RUN';
   const coreResources = plan.coreResourceIds.map((id) => task.resources[id]).filter(Boolean);
   const selectedBenchmark = benchmarkCopy[plan.calculationSpec.benchmarkRule];
-  const resultDefinitionLabel = getMinhangBedDefinitionForNumerator(plan.calculationSpec.numerator).resultDefinitionLabel;
+  const resultSnapshot = lastRunResult ? buildAskResultSnapshot(task, plan, lastRunResult) : undefined;
 
   useLayoutEffect(() => {
     if (!focusRequestId) return;
@@ -295,72 +295,16 @@ export const RightWorkspaceAskPlan: React.FC<RightWorkspaceAskPlanProps> = ({
           )}
         </div>
 
-        {/* Section 5: P0-15 隔离计算结果: 仅在执行后呈现 */}
-        {hasExecuted && lastRunResult?.resultArtifact && (
+        {/* Section 5: only a completed, display-safe result snapshot is rendered. */}
+        {hasExecuted && resultSnapshot && (
           <div ref={resultSectionRef} tabIndex={-1} className="pt-4 pb-2 border-t border-[#E2E8F0] space-y-3.5 text-xs animate-in fade-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]">
             <div className="flex items-center justify-between pb-1.5 border-b border-[#F1F5F9]">
               <div className="flex items-center space-x-2 font-bold text-[#0F172A]" role="status" aria-live="polite">
                 <CheckCircle2 className="w-4 h-4 text-[#16A34A]" />
                 <span className="text-sm">分析执行结论与基线核查</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-[10px] px-2 py-0.5 rounded bg-[#F1F5F9] text-[#64748B] font-mono border border-[#E2E8F0]">
-                  {lastRunResult.dataOrigin === 'MOCK_FIXTURE' ? `${resultDefinitionLabel} · 演示数据` : '实时查询引擎'}
-                </span>
-                <span className="text-[11px] text-[#64748B]">{buildActualScopeLabel(lastRunResult.resultArtifact.actualScope)}</span>
-              </div>
             </div>
-
-            {/* Core Finding Text */}
-            <div className="space-y-1 text-xs text-[#1E293B] leading-relaxed">
-              <div className="font-semibold text-[#0F172A]">
-                {lastRunResult.resultArtifact.benchmarkLabel}：
-              </div>
-              <p className="text-[#334155] leading-relaxed">
-                {lastRunResult.resultArtifact.summary}
-              </p>
-              {lastRunResult.resultArtifact.benchmarkValue && (
-                <div className="font-mono text-sm text-[#2563EB] font-bold">
-                  {lastRunResult.resultArtifact.benchmarkValue}
-                </div>
-              )}
-              {(lastRunResult.resultArtifact.totalPopulation || lastRunResult.resultArtifact.totalBeds) && (
-                <p className="text-[11px] text-[#64748B]">
-                  全区 60 岁以上常住人口约 {lastRunResult.resultArtifact.totalPopulation ?? '未返回'}，{plan.calculationSpec.numerator.replace('（正式指标）', '')}共{' '}
-                  {lastRunResult.resultArtifact.totalBeds ?? '未返回'}。
-                </p>
-              )}
-              {lastRunResult.resultArtifact.benchmarkReference && (
-                <p className="text-[11px] text-[#64748B]">
-                  基准来源：{lastRunResult.resultArtifact.benchmarkReference}
-                </p>
-              )}
-            </div>
-
-            {/* Town Result Text List */}
-            <div className="space-y-1.5 text-xs text-[#1E293B] leading-relaxed">
-              <div className="font-semibold text-[#0F172A]">
-                街镇结果：
-              </div>
-              <ul className="space-y-1.5 pl-1">
-                {lastRunResult.resultArtifact.townResults.map((town, idx) => (
-                  <li key={idx} className="flex items-baseline space-x-2 text-xs">
-                    <span className="text-[#94A3B8]">•</span>
-                    <span className="font-medium text-[#0F172A]">{town.townName}：</span>
-                    <span className="font-mono font-bold text-[#D97706]">{town.supplyRatio}</span>
-                    <span className="text-[11px] text-[#64748B]">（{town.comparisonNote}）</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Strict Conclusion Boundary Notice as Plain Text */}
-            <div className="pt-2 text-[11px] text-[#64748B] leading-relaxed border-t border-[#F1F5F9] space-y-1">
-              <div className="font-semibold text-[#475569]">结论合规与边界声明：</div>
-              <p className="text-[#64748B] leading-relaxed">
-                {lastRunResult.resultArtifact.boundaryNotice}
-              </p>
-            </div>
+            <AskResultContent snapshot={resultSnapshot} mode="full" />
           </div>
         )}
       </div>
