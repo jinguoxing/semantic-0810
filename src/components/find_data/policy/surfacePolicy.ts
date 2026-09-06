@@ -1,4 +1,4 @@
-import { AskPlanFocusSection, FindDataTaskState, ResourceId, SurfaceState, SurfaceType, TaskActionCode } from '../model/FindDataTask';
+import { AskPlanFocusSection, AskResultView, FindDataTaskState, ResourceId, SurfaceState, SurfaceType, TaskActionCode } from '../model/FindDataTask';
 import { selectAskHandoffReadiness } from '../model/findDataSelectors';
 
 export interface InteractionIntentResult {
@@ -18,6 +18,7 @@ export interface SurfaceCommand {
   resourceIds?: ResourceId[];
   openedBy?: 'USER_EXPLICIT' | 'ACTION_CLICK' | 'TASK_REQUIRED';
   focusSection?: AskPlanFocusSection;
+  resultView?: AskResultView;
   focusRequestId?: string;
   focusTarget?: boolean;
   blockedReason?: string;
@@ -114,7 +115,8 @@ function askPlanCommand(
   task: FindDataTaskState | undefined,
   currentSurface: SurfaceState | undefined,
   openedBy: 'USER_EXPLICIT' | 'ACTION_CLICK',
-  requestedFocus?: AskPlanFocusSection
+  requestedFocus?: AskPlanFocusSection,
+  requestedResultView?: AskResultView
 ): SurfaceCommand {
   if (!task?.askPlan) return { action: 'NO_CHANGE', blockedReason: '当前尚未形成可执行的分析计划。' };
   const readiness = selectAskHandoffReadiness(task);
@@ -127,6 +129,7 @@ function askPlanCommand(
   return {
     ...openSurface(currentSurface, 'ASK_PLAN', openedBy),
     focusSection,
+    resultView: requestedResultView ?? (currentSurface?.type === 'ASK_PLAN' ? currentSurface.resultView : undefined),
     focusRequestId: `ask_focus_${askPlanFocusSequence}`,
     focusTarget: true
   };
@@ -138,7 +141,13 @@ export function evaluateSurfacePolicy(intent: InteractionIntentResult, actionCod
       case 'OPEN_FIELDS': return fieldsCommand(task, currentSurface, 'ACTION_CLICK', actionPayload?.resourceId as ResourceId | undefined);
       case 'OPEN_COMPARE': return compareCommand(task, currentSurface, 'ACTION_CLICK', actionPayload?.resourceIds as ResourceId[] | undefined);
       case 'OPEN_SOLUTION': return solutionCommand(task, currentSurface, 'ACTION_CLICK');
-      case 'OPEN_ASK_PLAN': return askPlanCommand(task, currentSurface, 'ACTION_CLICK', actionPayload?.focusSection as AskPlanFocusSection | undefined);
+      case 'OPEN_ASK_PLAN': return askPlanCommand(
+        task,
+        currentSurface,
+        'ACTION_CLICK',
+        actionPayload?.focusSection as AskPlanFocusSection | undefined,
+        actionPayload?.resultView as AskResultView | undefined
+      );
       case 'OPEN_ACCESS': return openSurface(currentSurface, 'ACCESS', 'ACTION_CLICK');
       case 'OPEN_RELATED_RESOURCES': return openSurface(currentSurface, 'RELATED_RESOURCES', 'ACTION_CLICK');
       case 'CLOSE_SURFACE': return { action: 'CLOSE', surface: 'CLOSED' };

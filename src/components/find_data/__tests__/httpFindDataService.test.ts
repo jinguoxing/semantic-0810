@@ -65,4 +65,22 @@ describe('HTTP find-data task lifecycle', () => {
     const task = createMinhangTask({ askPlan: createAskPlan() });
     await expect(service.runAskPlan(task, { askPlanId: 'plan_test', expectedRequirementRevision: 1, expectedSearchRevision: 1, idempotencyKey: 'idem_1' })).rejects.toThrow('数据来源合同');
   });
+
+  it('preserves typed result content and service result references without a Mock fallback', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      success: true, executedAt: '2026-09-06T00:00:00.000Z', permissionSnapshot: {}, dataOrigin: 'LIVE_QUERY',
+      resultArtifact: {
+        resultRef: { kind: 'SERVICE_RESULT', id: 'result_123' },
+        content: {
+          kind: 'SCALAR', label: '正式指标值',
+          value: { kind: 'NUMBER', state: 'VALUE', value: 0, unit: '户', precision: 0 }
+        }
+      }
+    }))));
+    const service = new HttpFindDataService('/api/find-data');
+    const task = createMinhangTask({ askPlan: createAskPlan() });
+    const result = await service.runAskPlan(task, { askPlanId: 'plan_test', expectedRequirementRevision: 1, expectedSearchRevision: 1, idempotencyKey: 'idem_1' });
+    expect(result.dataOrigin).toBe('LIVE_QUERY');
+    expect(result.resultArtifact).toMatchObject({ resultRef: { id: 'result_123' }, content: { kind: 'SCALAR', value: { value: 0 } } });
+  });
 });

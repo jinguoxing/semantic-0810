@@ -531,12 +531,22 @@ export function buildAskRunCompletionSummary(plan: AskPlan, result: AskRunResult
   const artifact = result.resultArtifact;
   if (!result.success || !artifact) return '分析未成功完成，当前没有可展示的分析结论。';
   const paragraphs = ['分析已完成。'];
-  if (artifact.benchmarkValue) paragraphs.push(`${artifact.benchmarkLabel}为 ${artifact.benchmarkValue}。`);
-  else paragraphs.push(artifact.summary);
+  if (artifact.content?.kind === 'SCALAR') {
+    const value = artifact.content.value;
+    if (value.state === 'VALUE' && typeof value.value === 'number') {
+      const formatted = value.value.toLocaleString('zh-CN', {
+        minimumFractionDigits: value.precision,
+        maximumFractionDigits: value.precision
+      });
+      paragraphs.push(`${artifact.content.label}为 ${formatted}${value.unit ? ` ${value.unit}` : ''}。`);
+    }
+  }
+  if (artifact.benchmarkValue && artifact.benchmarkLabel) paragraphs.push(`${artifact.benchmarkLabel}为 ${artifact.benchmarkValue}。`);
+  else if (artifact.summary) paragraphs.push(artifact.summary);
   if (artifact.totalPopulation || artifact.totalBeds) {
     paragraphs.push(`本次返回的汇总中，60 岁以上常住人口约 ${artifact.totalPopulation ?? '未返回'}，${plan.calculationSpec.numerator.replace('（正式指标）', '')}共 ${artifact.totalBeds ?? '未返回'}。`);
   }
-  if (artifact.townResults.length > 0) {
+  if (artifact.townResults && artifact.townResults.length > 0) {
     paragraphs.push(`本次返回的街镇记录包括：${artifact.townResults.slice(0, 2).map((town) => `${town.townName} ${town.supplyRatio}（${town.comparisonNote}）`).join('；')}。`);
   }
   if (typeof artifact.belowBenchmarkCount === 'number') {
@@ -549,7 +559,7 @@ export function buildAskRunCompletionSummary(plan: AskPlan, result: AskRunResult
     ? `本次实际分析范围：${actualScope}。`
     : '本次结果尚未提供可确认的实际数据期间。');
   paragraphs.push(result.dataOrigin === 'MOCK_FIXTURE' ? '结果来源：演示数据。' : '结果来源：实时查询服务。');
-  paragraphs.push(`结论边界：${artifact.boundaryNotice}`);
+  if (artifact.boundaryNotice) paragraphs.push(`结论边界：${artifact.boundaryNotice}`);
   paragraphs.push('可以查看完整结果和计算依据。');
   return paragraphs.join('\n\n');
 }

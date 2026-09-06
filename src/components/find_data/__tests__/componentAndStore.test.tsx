@@ -6,6 +6,7 @@ import { RightWorkspaceAskPlan } from '../RightWorkspaceAskPlan';
 import { RightWorkspaceSolution } from '../RightWorkspaceSolution';
 import { RightWorkspaceCatalog } from '../RightWorkspaceCatalog';
 import { RightWorkspaceCompare } from '../RightWorkspaceCompare';
+import { AskResultContent } from '../blocks/AskResultContent';
 import { TaskContextDrawer } from '../TaskContextDrawer';
 import { MINHANG_RESOURCES } from '../fixtures/minhangBedSupplyFixture';
 import {
@@ -161,8 +162,58 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
     );
     expect(screen.getByText('权限发生变化')).toBeInTheDocument();
     expect(screen.getByText('查看权限变化')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '确认并开始计算' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '重新校验执行权限' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: '按此方案计算' })).not.toBeInTheDocument();
     expect(screen.getByText(/演示仅返回 2026-08 月度样例/)).toBeInTheDocument();
+  });
+
+  it('keeps a completed result in one workspace and switches chart/data without running again', () => {
+    const plan = createAskPlan({
+      status: 'COMPLETED',
+      permissionCheckState: 'ALLOWED',
+      lastRunResult: {
+        operationId: 'run_result_1', success: true, executedAt: '2026-09-06T00:00:00.000Z', dataOrigin: 'MOCK_FIXTURE', permissionSnapshot: {},
+        resultArtifact: {
+          resultRef: { kind: 'RUN_RESULT', id: 'run_result_1' },
+          content: {
+            kind: 'TABLE',
+            columns: [{ id: 'town', label: '街镇', kind: 'TEXT' }, { id: 'ratio', label: '每千名老人床位数', kind: 'NUMBER', unit: '张 / 千人' }],
+            rows: [
+              { id: 'pujin', cells: { town: { kind: 'TEXT', state: 'VALUE', value: '浦锦街道' }, ratio: { kind: 'NUMBER', state: 'VALUE', value: 0, unit: '张 / 千人', precision: 1 } } },
+              { id: 'qibao', cells: { town: { kind: 'TEXT', state: 'VALUE', value: '七宝镇' }, ratio: { kind: 'NUMBER', state: 'VALUE', value: 20, unit: '张 / 千人', precision: 1 } } }
+            ],
+            chart: { kind: 'BAR', categoryColumnId: 'town', valueColumnId: 'ratio' }
+          },
+          boundaryNotice: '仅比较本次返回的街镇结果。'
+        }
+      }
+    });
+    const onRunPlan = vi.fn(async () => {});
+    const onFocusSection = vi.fn();
+    render(<RightWorkspaceAskPlan task={createMinhangTask({ askPlan: plan })} onCheckPermission={async () => ({ decision: 'ALLOWED', updatedPermissions: {} })} onRunPlan={onRunPlan} onReturnToSolution={() => {}} focusSection="RESULT" resultView="CHART" onFocusSection={onFocusSection} onClose={() => {}} />);
+
+    expect(screen.getByTestId('ask-result-chart')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: '数据' }));
+    expect(onFocusSection).toHaveBeenCalledWith('RESULT', 'DATA');
+    expect(onRunPlan).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: '重新运行分析' })).not.toBeInTheDocument();
+  });
+
+  it('renders typed zero and non-computable values without coercing them to legacy strings', () => {
+    render(<AskResultContent mode="compact" snapshot={{
+      binding: { taskId: 'task', askPlanId: 'plan', requirementRevision: 1, searchRevision: 1 }, executedAt: '2026-09-06T00:00:00.000Z', metricName: '测试结果', numeratorLabel: '测试分子',
+      resultArtifact: {
+        content: {
+          kind: 'TABLE', columns: [{ id: 'value', label: '结果', kind: 'NUMBER', unit: '张 / 千人' }],
+          rows: [
+            { id: 'zero', cells: { value: { kind: 'NUMBER', state: 'VALUE', value: 0, unit: '张 / 千人', precision: 1 } } },
+            { id: 'not-computable', cells: { value: { kind: 'NUMBER', state: 'NOT_COMPUTABLE', reason: '分母为零' } } }
+          ]
+        }
+      }
+    }} />);
+    expect(screen.getByText('0.0 张 / 千人')).toBeInTheDocument();
+    expect(screen.getByText('不可计算：分母为零')).toBeInTheDocument();
   });
 
   it('renders relationship evidence with business names instead of internal resource ids', () => {

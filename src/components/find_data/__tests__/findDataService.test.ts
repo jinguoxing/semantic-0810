@@ -480,6 +480,12 @@ describe('Ask execution authorization', () => {
     expect(result.resultArtifact?.townResults).toHaveLength(2);
     expect(result.resultArtifact?.belowBenchmarkCount).toBe(2);
     expect(result.resultArtifact?.boundaryNotice).toBe(task.askPlan?.calculationSpec.strictConclusionBoundary);
+    const content = result.resultArtifact?.content;
+    expect(content?.kind).toBe('TABLE');
+    if (content?.kind !== 'TABLE') throw new Error('expected typed table content');
+    expect(content.columns).toMatchObject([{ id: 'townName' }, { id: 'supplyRatio', kind: 'NUMBER', unit: '张 / 千人' }]);
+    expect(content.rows[0]?.cells.supplyRatio).toMatchObject({ state: 'VALUE', value: 14.2, precision: 1 });
+    expect(content.columns.map((column) => column.id)).not.toContain('population');
   });
 
   it.each([

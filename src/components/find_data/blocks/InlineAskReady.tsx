@@ -48,6 +48,7 @@ export const InlineAskReady: React.FC<InlineAskReadyProps> = ({
   const historicalExecution = !current && hasAskPlanExecutionEvidence(task, binding);
   const isCompleted = currentPlanCompleted || historicalExecution;
   const failed = current && plan?.status === 'FAILED';
+  const workspaceOwnsExecution = current && task.activeSurface.type === 'ASK_PLAN';
 
   const status = !current
     ? historicalExecution
@@ -69,8 +70,8 @@ export const InlineAskReady: React.FC<InlineAskReadyProps> = ({
     ? (error ?? '当前无法执行，请检查权限或重新校验。')
     : '需要先校验执行权限。';
 
-  const canCheck = current && !taskBusy && !running && !isCompleted;
-  const canRun = current && !taskBusy && !checking && !running && !isCompleted && checkState === 'ALLOWED';
+  const canCheck = current && !workspaceOwnsExecution && !taskBusy && !running && !isCompleted;
+  const canRun = current && !workspaceOwnsExecution && !taskBusy && !checking && !running && !isCompleted && checkState === 'ALLOWED';
 
   if (isCompleted) {
     return (
@@ -173,6 +174,9 @@ export const InlineAskReady: React.FC<InlineAskReadyProps> = ({
         <span>{status}</span>
       </div>
 
+      {workspaceOwnsExecution ? (
+        <p className="rounded-md border border-[#BFDBFE] bg-[#EFF6FF]/60 px-2 py-1.5 text-[11px] leading-relaxed text-[#1D4ED8]">完整计算方案已在右侧打开；请在右侧继续校验或执行。</p>
+      ) : (
       <div className="flex flex-wrap items-center gap-2">
         {canRun ? (
           <button
@@ -205,6 +209,7 @@ export const InlineAskReady: React.FC<InlineAskReadyProps> = ({
           </button>
         )}
       </div>
+      )}
     </section>
   );
 };

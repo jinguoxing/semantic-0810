@@ -152,6 +152,13 @@ describe('conversation presenters derive answers from task state', () => {
       dataOrigin: 'MOCK_FIXTURE' as const,
       permissionSnapshot: {},
       resultArtifact: {
+        resultRef: { kind: 'RUN_RESULT' as const, id: 'run_1' },
+        citations: [{ kind: 'CALCULATION_PLAN' as const, id: 'result_plan', label: '本次计算方案' }],
+        content: {
+          kind: 'SCALAR' as const,
+          label: '结构化测试值',
+          value: { kind: 'NUMBER' as const, state: 'VALUE' as const, value: 0, unit: '户', precision: 0 }
+        },
         benchmarkLabel: '全区加权平均供给水平',
         benchmarkValue: '24.8 张 / 千人',
         summary: '测试摘要',
@@ -177,6 +184,12 @@ describe('conversation presenters derive answers from task state', () => {
       dataOrigin: 'MOCK_FIXTURE' as const,
       permissionSnapshot: {},
       resultArtifact: {
+        resultRef: { kind: 'RUN_RESULT' as const, id: 'run_1' },
+        content: {
+          kind: 'SCALAR' as const,
+          label: '结构化测试值',
+          value: { kind: 'NUMBER' as const, state: 'VALUE' as const, value: 0, unit: '户', precision: 0 }
+        },
         benchmarkLabel: '全区加权平均供给水平',
         benchmarkValue: '24.8 张 / 千人',
         summary: '本次返回摘要',
@@ -189,7 +202,7 @@ describe('conversation presenters derive answers from task state', () => {
       binding: { taskId: 'result_task', askPlanId: 'result_plan', requirementRevision: 3, searchRevision: 4 },
       operationId: 'run_1',
       metricName: plan.calculationSpec.metricName,
-      resultArtifact: { summary: '本次返回摘要' }
+      resultArtifact: { resultRef: { id: 'run_1' }, content: { kind: 'SCALAR', value: { value: 0 } }, summary: '本次返回摘要' }
     });
     expect(buildAskResultSnapshot(task, plan, { ...result, success: false })).toBeUndefined();
   });

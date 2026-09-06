@@ -345,7 +345,7 @@ describe('workspace tracked task pipeline', () => {
     expect(runAskPlan).toHaveBeenCalledOnce();
   });
 
-  it('accepts only one run while inline and right-side confirmations compete', async () => {
+  it('places the current plan run action only in the open right workspace', async () => {
     const store = new MemoryTaskStore();
     const plan = createAskPlan({ id: 'shared_run_plan', requirementRevision: 1, basedOnSearchRevision: 1, permissionCheckState: 'ALLOWED' });
     const base = createMinhangTask({ taskId: 'shared_run_task', askPlan: plan, activeSurface: { type: 'ASK_PLAN', mode: 'WORKBENCH' } });
@@ -369,10 +369,9 @@ describe('workspace tracked task pipeline', () => {
     const runAskPlan = vi.fn(() => new Promise<Awaited<ReturnType<FindDataService['runAskPlan']>>>((resolve) => { resolveRun = resolve; }));
     render(<DataAssistantFindDataWorkspace serviceOverride={createService({ runAskPlan })} taskStoreOverride={store} />);
 
-    const runButtons = await screen.findAllByRole('button', { name: '确认并开始计算' });
-    expect(runButtons).toHaveLength(2);
+    const runButtons = await screen.findAllByRole('button', { name: '按此方案计算' });
+    expect(runButtons).toHaveLength(1);
     fireEvent.click(runButtons[0]);
-    fireEvent.click(runButtons[1]);
     expect(runAskPlan).toHaveBeenCalledOnce();
     await act(async () => {
       resolveRun?.({

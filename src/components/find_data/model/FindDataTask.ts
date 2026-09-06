@@ -175,6 +175,9 @@ export type SurfaceType =
 /** A one-off display target within the existing Ask Plan workspace. */
 export type AskPlanFocusSection = 'PLAN' | 'RESULT' | 'CALCULATION';
 
+/** A presentation-only view choice for the current result in the shared workspace. */
+export type AskResultView = 'CHART' | 'DATA';
+
 export interface SurfaceState {
   type: SurfaceType;
   mode?: 'QUICK_PREVIEW' | 'WORKBENCH';
@@ -182,6 +185,8 @@ export interface SurfaceState {
   openedBy?: 'USER_EXPLICIT' | 'ACTION_CLICK' | 'TASK_REQUIRED';
   /** UI-only focus intent; it never changes an analysis plan or result. */
   focusSection?: AskPlanFocusSection;
+  /** UI-only result view choice; it never causes another execution. */
+  resultView?: AskResultView;
   focusRequestId?: string;
   focusTarget?: boolean;
 }
@@ -235,29 +240,107 @@ export interface ActualExecutionScope {
   grain?: string;
 }
 
+/** A stable result identity supplied by the execution service. */
+export interface AskResultReference {
+  kind: 'SERVICE_RESULT' | 'RUN_RESULT';
+  id: string;
+}
+
+/** A definition, calculation-plan or source reference that the service actually returned. */
+export interface AskResultCitation {
+  kind: 'METRIC_DEFINITION' | 'CALCULATION_PLAN' | 'DATA_SOURCE';
+  id: string;
+  label: string;
+  version?: string;
+}
+
+export type ResultValueState = 'VALUE' | 'NULL' | 'MISSING' | 'SUPPRESSED' | 'NOT_COMPUTABLE';
+
+export interface ResultTextCell {
+  kind: 'TEXT';
+  state: ResultValueState;
+  value?: string;
+  reason?: string;
+}
+
+export interface ResultNumberCell {
+  kind: 'NUMBER';
+  state: ResultValueState;
+  /** A numeric service value, never parsed from a formatted display string. */
+  value?: number;
+  unit?: string;
+  precision?: number;
+  reason?: string;
+}
+
+export type ResultCell = ResultTextCell | ResultNumberCell;
+
+export interface AskResultTableColumn {
+  id: string;
+  label: string;
+  kind: ResultCell['kind'];
+  unit?: string;
+}
+
+export interface AskResultTableRow {
+  id: string;
+  cells: Record<string, ResultCell>;
+}
+
+export interface AskResultTableContent {
+  kind: 'TABLE';
+  columns: AskResultTableColumn[];
+  rows: AskResultTableRow[];
+  chart?: {
+    kind: 'BAR';
+    categoryColumnId: string;
+    valueColumnId: string;
+    title?: string;
+  };
+}
+
+export interface AskResultScalarContent {
+  kind: 'SCALAR';
+  label: string;
+  value: ResultNumberCell;
+}
+
+/** The preferred typed value contract for result views. */
+export type StructuredAskResultContent = AskResultTableContent | AskResultScalarContent;
+
+export interface AskResultArtifact {
+  /** Present when the execution service supports a stable result lookup. */
+  resultRef?: AskResultReference;
+  /** Present only for definitions, plans or sources supplied by the service. */
+  citations?: AskResultCitation[];
+  /** Preferred value source for compact tables, full data and charts. */
+  content?: StructuredAskResultContent;
+
+  /** Legacy comparison fields remain readable for stored or older service results. */
+  benchmarkLabel?: string;
+  benchmarkValue?: string;
+  benchmarkReference?: string;
+  summary?: string;
+  totalPopulation?: string;
+  totalBeds?: string;
+  /** Actual data scope reported by the execution service, when available. */
+  actualScope?: ActualExecutionScope;
+  /** Count supplied by the execution service; the browser must not infer it from result rows. */
+  belowBenchmarkCount?: number;
+  townResults?: Array<{
+    townName: string;
+    supplyRatio: string;
+    comparisonNote: string;
+  }>;
+  boundaryNotice?: string;
+}
+
 export interface AskRunResult {
   operationId?: string;
   success: boolean;
   executedAt: string;
   dataOrigin?: 'MOCK_FIXTURE' | 'LIVE_QUERY';
-  resultArtifact?: {
-    benchmarkLabel: string;
-    benchmarkValue?: string;
-    benchmarkReference?: string;
-    summary: string;
-    totalPopulation?: string;
-    totalBeds?: string;
-    /** Actual data scope reported by the execution service, when available. */
-    actualScope?: ActualExecutionScope;
-    /** Count supplied by the execution service; the browser must not infer it from result rows. */
-    belowBenchmarkCount?: number;
-    townResults: Array<{
-      townName: string;
-      supplyRatio: string;
-      comparisonNote: string;
-    }>;
-    boundaryNotice: string;
-  };
+  resultArtifact?: AskResultArtifact;
   permissionSnapshot: Record<ResourceId, AvailabilityByAction>;
   error?: string;
   alignmentValidation?: {

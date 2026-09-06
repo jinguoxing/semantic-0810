@@ -42,9 +42,64 @@ export function requireDiscoverableTaskResource(
   return resource?.availabilityByAction.discover === 'ALLOWED' ? resource : undefined;
 }
 
-function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resultArtifact']> {
+interface MockTownResult {
+  townName: string;
+  supplyRatio: number;
+  comparisonNote: string;
+}
+
+function mockTownResultContent(towns: MockTownResult[]): NonNullable<AskRunResult['resultArtifact']>['content'] {
+  return {
+    kind: 'TABLE',
+    columns: [
+      { id: 'townName', label: '街镇', kind: 'TEXT' },
+      { id: 'supplyRatio', label: '每千名老人床位数', kind: 'NUMBER', unit: '张 / 千人' }
+    ],
+    rows: towns.map((town) => ({
+      id: town.townName,
+      cells: {
+        townName: { kind: 'TEXT', state: 'VALUE', value: town.townName },
+        supplyRatio: { kind: 'NUMBER', state: 'VALUE', value: town.supplyRatio, unit: '张 / 千人', precision: 1 }
+      }
+    })),
+    chart: {
+      kind: 'BAR',
+      categoryColumnId: 'townName',
+      valueColumnId: 'supplyRatio',
+      title: '各街镇每千名老人床位数对比'
+    }
+  };
+}
+
+function legacyTownResults(towns: MockTownResult[]) {
+  return towns.map((town) => ({
+    townName: town.townName,
+    supplyRatio: `${town.supplyRatio.toFixed(1)} 张 / 千人`,
+    comparisonNote: town.comparisonNote
+  }));
+}
+
+function buildMockAskArtifact(askPlan: AskPlan, operationId?: string): NonNullable<AskRunResult['resultArtifact']> {
   const boundaryNotice = askPlan.calculationSpec.strictConclusionBoundary;
   const bedDefinition = getMinhangBedDefinitionForCoreResources(askPlan.coreResourceIds);
+  const availableTowns: MockTownResult[] = [
+    { townName: '浦锦街道', supplyRatio: 14.2, comparisonNote: '低于全区 -42.7%' },
+    { townName: '七宝镇', supplyRatio: 16.5, comparisonNote: '低于全区 -33.5%' }
+  ];
+  const approvedTowns: MockTownResult[] = [
+    { townName: '浦锦街道', supplyRatio: 32.0, comparisonNote: '高于全区 +1.9%' },
+    { townName: '七宝镇', supplyRatio: 36.5, comparisonNote: '高于全区 +16.2%' }
+  ];
+  const towns = bedDefinition.key === 'APPROVED' ? approvedTowns : availableTowns;
+  const withSharedResultFields = (artifact: Omit<NonNullable<AskRunResult['resultArtifact']>, 'content' | 'townResults'>, resultTowns: MockTownResult[] = towns) => ({
+    ...artifact,
+    ...(operationId ? { resultRef: { kind: 'RUN_RESULT' as const, id: operationId } } : {}),
+    citations: [{ kind: 'CALCULATION_PLAN' as const, id: askPlan.id, label: askPlan.title }],
+    content: mockTownResultContent(resultTowns),
+    townResults: legacyTownResults(resultTowns),
+    actualScope: MINHANG_MOCK_RESULT_SCOPE,
+    boundaryNotice
+  });
   const fixture = bedDefinition.key === 'APPROVED'
     ? {
         benchmarkLabel: '全区加权平均核定床位容量',
@@ -53,10 +108,6 @@ function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resul
         totalPopulation: '41.2 万人',
         totalBeds: '12,936 张',
         belowBenchmarkCount: 0,
-        townResults: [
-          { townName: '浦锦街道', supplyRatio: '32.0 张 / 千人', comparisonNote: '高于全区 +1.9%' },
-          { townName: '七宝镇', supplyRatio: '36.5 张 / 千人', comparisonNote: '高于全区 +16.2%' }
-        ]
       }
     : {
         benchmarkLabel: '全区加权平均供给水平',
@@ -65,45 +116,36 @@ function buildMockAskArtifact(askPlan: AskPlan): NonNullable<AskRunResult['resul
         totalPopulation: '41.2 万人',
         totalBeds: '10,218 张',
         belowBenchmarkCount: 2,
-        townResults: [
-          { townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于全区 -42.7%' },
-          { townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '低于全区 -33.5%' }
-        ]
       };
   if (askPlan.calculationSpec.benchmarkRule === 'RANK_ONLY') {
-    return {
+    const ranked = [...towns]
+      .sort((first, second) => second.supplyRatio - first.supplyRatio)
+      .map((town, index) => ({ ...town, comparisonNote: `样例排名第 ${index + 1}` }));
+    return withSharedResultFields({
       benchmarkLabel: '街镇指标排名',
       summary: bedDefinition.key === 'APPROVED' ? '离线样例已按每千名老人核定床位数从高到低排序，当前返回 2 个街镇结果。' : '离线样例已按每千名老人床位数从高到低排序，当前返回 2 个街镇结果。',
-      townResults: bedDefinition.key === 'APPROVED'
-        ? [{ townName: '七宝镇', supplyRatio: '36.5 张 / 千人', comparisonNote: '样例排名第 1' }, { townName: '浦锦街道', supplyRatio: '32.0 张 / 千人', comparisonNote: '样例排名第 2' }]
-        : [{ townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '样例排名第 1' }, { townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '样例排名第 2' }],
-      actualScope: MINHANG_MOCK_RESULT_SCOPE,
-      boundaryNotice
-    };
+    }, ranked);
   }
   if (askPlan.calculationSpec.benchmarkRule === 'POLICY_TARGET') {
     const benchmarkValue = askPlan.calculationSpec.benchmarkValue;
-    return {
+    const comparison = benchmarkValue
+      ? towns.map((town) => ({
+          ...town,
+          comparisonNote: bedDefinition.key === 'APPROVED'
+            ? town.townName === '浦锦街道' ? '高于演示目标 +6.7%' : '高于演示目标 +21.7%'
+            : town.townName === '浦锦街道' ? '低于演示目标 -52.7%' : '低于演示目标 -45.0%'
+        }))
+      : [];
+    return withSharedResultFields({
       benchmarkLabel: '政策目标比较（离线演示）',
       benchmarkValue,
       benchmarkReference: askPlan.calculationSpec.benchmarkReference,
       summary: benchmarkValue
         ? `使用分析计划中登记的离线演示政策目标 ${benchmarkValue} 完成比较。`
-        : '分析计划未登记可用政策目标值，因此没有生成达标判断。',
-      townResults: benchmarkValue
-        ? bedDefinition.key === 'APPROVED'
-          ? [{ townName: '浦锦街道', supplyRatio: '32.0 张 / 千人', comparisonNote: '高于演示目标 +6.7%' }, { townName: '七宝镇', supplyRatio: '36.5 张 / 千人', comparisonNote: '高于演示目标 +21.7%' }]
-          : [{ townName: '浦锦街道', supplyRatio: '14.2 张 / 千人', comparisonNote: '低于演示目标 -52.7%' }, { townName: '七宝镇', supplyRatio: '16.5 张 / 千人', comparisonNote: '低于演示目标 -45.0%' }]
-        : [],
-      actualScope: MINHANG_MOCK_RESULT_SCOPE,
-      boundaryNotice
-    };
+        : '分析计划未登记可用政策目标值，因此没有生成达标判断。'
+    }, comparison);
   }
-  return {
-    ...fixture,
-    actualScope: MINHANG_MOCK_RESULT_SCOPE,
-    boundaryNotice
-  };
+  return withSharedResultFields(fixture);
 }
 
 export class MockFindDataService implements FindDataService {
@@ -430,7 +472,7 @@ export class MockFindDataService implements FindDataService {
       operationId,
       dataOrigin: 'MOCK_FIXTURE',
       permissionSnapshot: authoritativeCheck.updatedPermissions,
-      resultArtifact: buildMockAskArtifact(askPlan),
+      resultArtifact: buildMockAskArtifact(askPlan, operationId),
       alignmentValidation: { status: 'VALIDATED', scope: 'CURRENT_ANALYSIS_ONLY', details: alignment.details }
     };
   }

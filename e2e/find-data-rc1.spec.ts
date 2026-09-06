@@ -97,8 +97,11 @@ test.describe('Find Data inline mock smoke', () => {
     await expect(firstResult.getByText('分子口径：在营可用养老床位数（正式指标）')).toBeVisible();
 
     await firstResult.getByRole('button', { name: '查看完整结果' }).click();
-    await expect(page.getByRole('heading', { name: 'Ask Data 分析计划' })).toBeVisible();
-    await expect(page.getByRole('button', { name: '查看计算依据' }).last()).toBeVisible();
+    await expect(page.getByRole('heading', { name: '分析结果' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: '图表' })).toBeVisible();
+    await page.getByRole('tab', { name: '数据' }).click();
+    await expect(page.getByRole('tab', { name: '数据', selected: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '查看本次计算依据' }).last()).toBeVisible();
     await page.getByRole('button', { name: '关闭分析计划' }).click();
 
     await page.getByRole('button', { name: '查看口径上下文' }).click();

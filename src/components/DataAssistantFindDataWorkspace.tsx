@@ -310,6 +310,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           resourceIds: command.resourceIds,
           openedBy: command.openedBy,
           focusSection: command.focusSection,
+          resultView: command.resultView,
           focusRequestId: command.focusRequestId,
           focusTarget: command.focusTarget
         }
@@ -1498,9 +1499,10 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               onRegeneratePlan={() => void handleAction('REGENERATE_ASK_PLAN')}
               permissionCheckFailure={permissionCheckFailure}
               focusSection={task.activeSurface.focusSection}
+              resultView={task.activeSurface.resultView}
               focusRequestId={task.activeSurface.focusRequestId}
               focusTarget={task.activeSurface.focusTarget}
-              onFocusSection={(focusSection) => void handleAction('OPEN_ASK_PLAN', { focusSection })}
+              onFocusSection={(focusSection, resultView) => void handleAction('OPEN_ASK_PLAN', { focusSection, resultView })}
               onModifySpec={() => setIsContextDrawerOpen(true)}
               onClose={() => void handleAction('CLOSE_SURFACE')}
             />
