@@ -563,6 +563,22 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     }
     if (mentions.length === 1) return { target: mentions[0].target, ambiguous: false };
     if (mentions.length > 1) return { ambiguous: true };
+    const explicitCalculationAlias = text.match(/结果\s*([AB])(?:\s*(?:结果|那份))?(?=$|[\s，。！？?])/i)?.[1]?.toUpperCase();
+    if (explicitCalculationAlias) {
+      const knownCalculationResults = knownSelections.filter((selection) => !isDirectMetricResultBinding(selection.snapshot.binding));
+      const readableCalculationResults = selections.filter((selection) => !isDirectMetricResultBinding(selection.snapshot.binding));
+      if (knownCalculationResults.length !== 2) {
+        if (selections.length === 0) {
+          return { ambiguous: false, blockedReason: '这份历史结果当前不可读取，不能使用其他结果替代。' };
+        }
+        return { ambiguous: false, blockedReason: '当前无法安全定位结果 A/B：本任务的计算结果不是恰好两份。' };
+      }
+      const aliasTarget = knownCalculationResults[explicitCalculationAlias === 'A' ? 0 : 1];
+      if (!readableCalculationResults.some((selection) => getResultTargetKey(selection.target) === getResultTargetKey(aliasTarget.target))) {
+        return { ambiguous: false, blockedReason: '指定的计算结果当前不可读取，不能使用其他结果替代。' };
+      }
+      return { target: aliasTarget.target, ambiguous: false };
+    }
     const viewed = selectCurrentViewedResult(taskRef.current);
     if (viewed && isResultSnapshotReadable(viewed, requiresHistoricalResultReadAuthorization)) return { target: viewed.target, ambiguous: false };
     if (selections.length === 1) return { target: selections[0].target, ambiguous: false };

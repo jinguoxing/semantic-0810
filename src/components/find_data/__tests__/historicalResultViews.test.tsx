@@ -413,6 +413,100 @@ describe('historical result targets', () => {
     expect(target?.resultRef?.id).not.toBe('direct_available_bed_result');
   });
 
+  it('FG4C-01/02: resolves Result A and Result B aliases to the two calculation results', async () => {
+    const task = taskWithResults();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service();
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} taskStoreOverride={store} />);
+    const input = await screen.findByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+
+    fireEvent.change(input, { target: { value: '解释结果 A' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledOnce());
+    expect(vi.mocked(findData.submitTurn).mock.calls[0][3]?.resultTarget?.resultRef?.id).toBe('result_a');
+
+    fireEvent.change(input, { target: { value: '解释结果 B' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(findData.submitTurn).mock.calls[1][3]?.resultTarget?.resultRef?.id).toBe('result_b');
+  });
+
+  it('FG4C-03/04: excludes Direct Metric Results from Result A/B aliases', async () => {
+    const task = taskWithDirectAndComparisonResults();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service();
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} taskStoreOverride={store} />);
+    const input = await screen.findByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+
+    fireEvent.change(input, { target: { value: '解释结果 A' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledOnce());
+    expect(vi.mocked(findData.submitTurn).mock.calls[0][3]?.resultTarget?.resultRef?.id).toBe('result_a');
+
+    fireEvent.change(input, { target: { value: '解释结果 B' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(findData.submitTurn).mock.calls[1][3]?.resultTarget?.resultRef?.id).toBe('result_b');
+  });
+
+  it('FG4C-05: gives an explicit Result A alias precedence over the explicitly viewed Result B', async () => {
+    const task = taskWithResults();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service();
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} taskStoreOverride={store} />);
+    const cards = await screen.findAllByLabelText('分析结果');
+    fireEvent.click(within(cards[1]).getByRole('button', { name: '查看完整结果' }));
+    expect(await screen.findByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+    expect(screen.getAllByText(/养老床位核定数/).length).toBeGreaterThan(0);
+
+    const input = screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '解释结果 A' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledOnce());
+    expect(vi.mocked(findData.submitTurn).mock.calls[0][3]?.resultTarget?.resultRef?.id).toBe('result_a');
+  });
+
+  it('FG4C-06: blocks an unreadable Result A alias instead of substituting readable Result B in HTTP mode', async () => {
+    const task = taskWithResults();
+    const resultA = task.turns[0].blocks[0];
+    if (resultA.type === 'ASK_RESULT') resultA.snapshot.currentReadAccess = 'DENIED';
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service({ createTask: vi.fn(async () => task), getTask: vi.fn(async () => task) });
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} serviceModeOverride="http" taskStoreOverride={store} />);
+    const input = await screen.findByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+
+    fireEvent.change(input, { target: { value: '解释结果 A' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(findData.submitTurn).not.toHaveBeenCalled();
+    expect(await screen.findByText('指定的计算结果当前不可读取，不能使用其他结果替代。')).toBeInTheDocument();
+  });
+
+  it('FG4C-07: refuses Result A/B ordinal aliases unless there are exactly two calculation results', async () => {
+    const task = taskWithResults();
+    task.turns = [task.turns[0]];
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service();
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} taskStoreOverride={store} />);
+    const input = await screen.findByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+
+    fireEvent.change(input, { target: { value: '解释结果 A' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(findData.submitTurn).not.toHaveBeenCalled();
+    expect(await screen.findByText('当前无法安全定位结果 A/B：本任务的计算结果不是恰好两份。')).toBeInTheDocument();
+  });
+
   it('keeps resource and permission questions in the original Find Data turn path', async () => {
     const task = taskWithResults();
     const store = new MemoryTaskStore();
