@@ -6,6 +6,7 @@
 - Frozen plan: `docs/implementation/data-assistant-five-views/PR4_PLAN.md`
 - `PR4_PLAN_V1_1_SHA`: `9f1368b93fa127206834db4183c8afa374437175`
 - `PR4A_IMPLEMENTATION_SHA`: `ef0a4a7fce15e04c18b23dcc64748fdef7b48036`
+- `PR4A_FINAL_GUARD_SHA`: `d6e5b0e99767bf916b48356b60c0ee1f19996ab1`
 
 ## Scope completed
 
@@ -42,6 +43,18 @@ PR-4A implements only the continuity identity and freshness contract. It does no
 | A4-11 | `REQUIREMENT_UPDATED` and changed `SEARCH_STARTED` set mutable direct query to `STALE` and clear only `directMetricResult`; conversation `ASK_RESULT` blocks remain selectable immutable history. |
 | A4-12 | No `AskContext`、`ContinuityContext`、`HandoffContextStore`, or additional Task store was added; state remains derived from the existing task. |
 
+## Final Guard evidence｜FG4A-01～FG4A-07
+
+| ID | Evidence |
+| --- | --- |
+| FG4A-01 | A task with EntryContext Metric A rejects a `USER_EXPLICIT` Metric B query in both readiness and reducer preparation. |
+| FG4A-02 | A task with a non-Metric EntryContext rejects a `USER_EXPLICIT` direct metric query. |
+| FG4A-03 | `ENTRY_CONTEXT` source requires an exact `source.entryId === task.entryContext.entryId`. |
+| FG4A-04 | `TASK_HYDRATED` treats a serialized direct query without `source` as `STALE`, clears only its mutable current-result pointer, does not throw, and preserves `ASK_RESULT` history / ResultTarget derivation. |
+| FG4A-05 | A changed search revision stales only a `DATA_SOLUTION` query and rejects its delayed result. |
+| FG4A-06 | A changed search revision does not stale an `ENTRY_CONTEXT` query. |
+| FG4A-07 | A changed search revision does not stale a `USER_EXPLICIT` query. |
+
 ## Regression status
 
 - PR-2: existing entry-context direct query remains runnable; Design Demo now supplies the explicit `ENTRY_CONTEXT` source.
@@ -51,13 +64,14 @@ PR-4A implements only the continuity identity and freshness contract. It does no
 
 | Check | Result |
 | --- | --- |
-| PR-4A targeted tests | 6 files, 54 tests passed. |
-| Full test suite | 17 files, 219 tests passed. |
+| Final Guard targeted tests | 7 files, 71 tests passed. |
+| Full test suite | 17 files, 225 tests passed. |
 | Mock build | Passed. |
 | Disconnected build | Passed. |
 | HTTP build | Passed. |
 | Design-demo build | Passed. |
 | `git diff --check` | Passed for PR-4A changes. |
+| GitHub CI | `.github/workflows/ci.yml` exists. It runs on PRs and on pushes to `main` / `v2026.*`; no CI-green claim is made for this direct `codex/*` branch push. |
 
 All builds retain the pre-existing Vite chunk-size warning only; no build failed.
 
@@ -67,4 +81,4 @@ r04/r05 still have no server-authoritative production execution identity. This i
 
 ## PR-4B readiness
 
-PR-4A is complete and PR-4B may begin after review for the Level A client scope. This does not authorize a Production Ready claim or a fabricated r04/r05 execution identity. No PR-4B work was started in this change.
+PR-4A may take a **conditional Final Freeze** for the Level A client scope: all local Final Guard tests and builds pass, and the entry/hydration/search-freshness guards are fail-closed. This does not authorize a Production Ready claim or a fabricated r04/r05 execution identity. PR-4B may begin only after review; no PR-4B work was started in this change.
