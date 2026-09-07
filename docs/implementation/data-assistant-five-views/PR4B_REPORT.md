@@ -7,6 +7,7 @@
 - PR-4A implementation: `ef0a4a7fce15e04c18b23dcc64748fdef7b48036`
 - PR-4A Final Guard: `d6e5b0e99767bf916b48356b60c0ee1f19996ab1`
 - PR4B_IMPLEMENTATION_SHA: `c3b4e991e47456fd0fa7f813f37730bf9c49ca87`
+- PR4B_FINAL_GUARD_SHA: `c01084c2a6f8e42dde6cefdb37d6d21cef9ceb1a`
 - Frozen plan: `docs/implementation/data-assistant-five-views/PR4_PLAN.md`
 
 PR-4B implements only Find → Direct Metric Query and Find → Metric Definition Clarification continuity. It does not implement AskPlan/Calculation, result comparison, new historical-result logic, endpoints, a second context store, or formal bed metric registry entries.
@@ -61,6 +62,20 @@ Only `r01 + r04` are the current execution core. The full `bed_definition_altern
 | IB4-09 | The existing failed-query lifecycle remains intact: `DIRECT_METRIC_QUERY_FAILED` does not modify a resolved clarification and provides retry. |
 | IB4-10 | No flow calls `createTask`; same-task assertions cover Goal → Query → Clarification → Result. |
 
+## PR-4B Final Guard
+
+The Final Guard tightens only the existing PR-4B Design Demo clarification lifecycle. It does not add a Context/Continuity store, alter execution identity, add bed metrics or endpoints, or begin PR-4C.
+
+| ID | Evidence |
+| --- | --- |
+| FG4B-01 | `MetricQueryDesignDemoService` creates each Solution-derived bed clarification as `design_solution_bed_definition_<requirementRevision>_<sequence>`; the repeated-clarification test proves two instances in one Task have different IDs. |
+| FG4B-02 | The second resolution targets only its unique question; the test preserves the first historical resolution as `r04` while resolving the second as `r05`. The reducer additionally accepts `CLARIFICATION_RESOLVED` only when the existing lifecycle state is `OPEN`. |
+| FG4B-03 | Submission resolves the originating assistant clarification turn by `questionId`, then reads the nearest preceding USER turn, instead of reading the Task's latest USER turn. |
+| FG4B-04 | A later `浦锦` population query cannot change an earlier `七宝 / 2026-08` bed clarification: submitting the old clarification still prepares requestedConditions for `七宝镇 / 2026-08`. |
+| FG4B-05 | An explicit requirement update emits `CLARIFICATION_STALE` for only open Solution-bed definition instances. Resolved clarification history is not changed. |
+| FG4B-06 | A stale clarification returns a lightweight task-changed notice; it emits neither `CLARIFICATION_RESOLVED` nor direct-query prepare/start events. |
+| FG4B-07 | `RightWorkspaceSolution` now derives its header from the existing display state: complete, partial, evaluating, stale, empty, and gap-only states no longer falsely claim the Solution is ready. The display badge remains unchanged. |
+
 ## Regression and Isolation
 
 - PR-4A: strict effective-solution equality, canonical execution lookup, r04/r05 missing production execution identity, source freshness, entry authority, hydration fail-closed behavior, delayed-result rejection, and immutable result history are retained by the full suite.
@@ -72,8 +87,8 @@ Only `r01 + r04` are the current execution core. The full `bed_definition_altern
 
 ## Verification
 
-- PR-4B targeted tests: passed, including design-demo service, workspace lifecycle, Scenario/selector/composer, PR-4A contract, and final-freeze suites.
-- Full test suite: `17` files, `231` tests passed.
+- Final Guard targeted tests: `3` files, `39` tests passed (`metricQueryDesignDemoService`, `findDataReducer`, `componentAndStore`).
+- Full test suite: `17` files, `236` tests passed.
 - `VITE_FIND_DATA_MODE=mock npm run build`: passed.
 - `VITE_FIND_DATA_MODE=disconnected npm run build`: passed.
 - `VITE_FIND_DATA_MODE=http npm run build`: passed.
