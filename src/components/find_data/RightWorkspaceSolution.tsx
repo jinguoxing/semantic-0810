@@ -55,6 +55,9 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
 
   const totalItems = task.dataSolution.items.length;
   const isEmpty = totalItems === 0 && gaps.length === 0;
+  const currentCoreCount = task.dataSolution.items.filter(
+    (item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED'
+  ).length;
 
   return (
     <div className="w-full h-full flex flex-col bg-white border-l border-[#E2E8F0] shadow-sm animate-in fade-in duration-200">
@@ -67,7 +70,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
           <div className="truncate">
             <div className="flex items-center space-x-2">
               <h3 className="text-sm font-bold text-[#0F172A] tracking-tight truncate">
-                数据方案 · {task.title || '当前方案'}
+                数据方案已就绪
               </h3>
               <span className={`text-[10px] px-1.5 py-0.2 rounded border font-bold shrink-0 ${displayStateClass}`}>
                 {displayState.label}
@@ -79,8 +82,8 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
                 : isReevaluating
                 ? '正在按新条件重新评估，旧内容仅供过渡查看'
                 : isExecutableMode
-                ? '仅核验具备即时查询权限的直接可执行范围'
-                : '完整业务推荐方案与缺口声明'}
+                ? '仅核验具备即时查询权限的当前执行范围'
+                : `当前数据方案 · ${currentCoreCount} 个核心数据`}
             </p>
           </div>
         </div>
@@ -105,7 +108,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
                 : 'text-[#64748B] hover:text-[#0F172A]'
             }`}
           >
-            业务推荐方案
+            数据方案
           </button>
           <button
             onClick={() => onModeChange?.('executable')}
@@ -115,7 +118,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
                 : 'text-[#64748B] hover:text-[#0F172A]'
             }`}
           >
-            当前可执行范围
+            当前执行范围
           </button>
         </div>
 
@@ -142,7 +145,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
           <>
             {isReevaluating && (
               <div className="p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl text-xs text-[#92400E]">
-                正在按新条件重新评估。旧方案暂不作为推荐就绪方案，也不能进入 Ask Data。
+                正在按新条件重新评估。旧方案暂不作为当前可继续使用的数据方案。
               </div>
             )}
             {/* Coverage Scope Card */}
@@ -456,7 +459,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
             onClick={() => onAction?.('OPEN_ASK_PLAN')}
             className="px-4 py-1.5 text-xs font-bold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-lg transition-colors cursor-pointer flex items-center space-x-1.5 shadow-2xs"
           >
-            <span>转入分析计划</span>
+            <span>查看当前分析计划</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         )}

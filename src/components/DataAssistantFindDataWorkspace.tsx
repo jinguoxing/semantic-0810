@@ -660,7 +660,17 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     const submittedTaskId = taskRef.current.taskId;
     try {
       const engineResult = await service.submitTurn(taskRef.current, text, operationId);
-      applyEngineResult(engineResult);
+      const applied = applyEngineResult(engineResult);
+      // PR-4B direct queries prepared from a current Data Solution retain the
+      // observable prepare state, then reuse the existing guarded runner.
+      // Entry-context and user-explicit PR-2 flows remain service-driven.
+      if (
+        applied &&
+        taskRef.current.directMetricQuery?.status === 'READY' &&
+        taskRef.current.directMetricQuery.source.kind === 'DATA_SOLUTION'
+      ) {
+        await handleRunDirectMetricQuery();
+      }
     } catch (error: unknown) {
       applyServiceFailure(submittedTaskId, error, operationId);
     }
@@ -1395,7 +1405,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                     : 'text-[#64748B] hover:text-[#0F172A] cursor-pointer'
                 }`}
               >
-                {isReevaluating ? '正在重新评估' : `方案 · ${task.dataSolution.items.filter((item) => item.role === 'CORE').length} 项核心资源`}
+                {isReevaluating ? '正在重新评估' : `当前数据方案 · ${task.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED').length} 项核心资源`}
               </button>
               )}
               {task.activeResourceId && targetFieldResource && (

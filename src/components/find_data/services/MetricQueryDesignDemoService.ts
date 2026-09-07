@@ -4,12 +4,21 @@ import {
   ClarificationQuestion,
   DirectMetricQueryState,
   FindDataTaskState,
+  RequirementHypothesis,
+  ResourceId,
   TaskAction,
   TurnTargetContext
 } from '../model/FindDataTask';
 import { FindDataEvent } from '../model/findDataEvents';
 import { findDataReducer } from '../model/findDataReducer';
-import { selectResultTargetByRef } from '../model/findDataSelectors';
+import {
+  selectCanonicalMetricExecutionRef,
+  selectEffectiveDataSolution,
+  selectEffectiveDataSolutionItemsBySelectionGroup,
+  selectResultTargetByRef
+} from '../model/findDataSelectors';
+import { MINHANG_RESOURCES } from '../fixtures/minhangBedSupplyFixture';
+import { composeMinhangSolution } from '../scenarios/minhangSolutionComposer';
 import { createScenarioId } from '../scenarios/FindDataScenario';
 import {
   CreateFindDataTaskInput,
@@ -19,6 +28,15 @@ import {
   PermissionRecheckResult
 } from './FindDataService';
 import { MockFindDataService } from './MockFindDataService';
+
+const DESIGN_CONTINUITY_SCENARIO_KEY = 'design_demo_pujin_qibao_bed_supply';
+const DESIGN_CONTINUITY_TITLE = '浦锦、七宝养老服务供给比较';
+const BED_DEFINITION_SELECTION_GROUP = 'bed_definition_alternative';
+
+const DESIGN_BED_CLARIFICATION_DESCRIPTIONS: Record<ResourceId, string> = {
+  r04: '用于了解本口径下的在营可用容量。',
+  r05: '用于了解核定容量，不等于实际可用容量。'
+};
 
 /**
  * Isolated visual-contract adapter for figures 01 and 02. It is intentionally
@@ -59,6 +77,15 @@ export class MetricQueryDesignDemoService implements FindDataService {
       this.tasks.set(task.taskId, task);
       return this.persist(task, this.historyComparison(task, operationId));
     }
+    if (this.isContinuityGoal(task, text)) {
+      this.tasks.set(task.taskId, task);
+      return this.persist(task, this.beginContinuityGoal(task, text, operationId));
+    }
+    if (this.isContinuityTask(task)) {
+      this.tasks.set(task.taskId, task);
+      const continuityResult = this.handleContinuityTurn(task, text, operationId);
+      if (continuityResult) return this.persist(task, continuityResult);
+    }
     const designKind = this.resolveDesignKind(task, text);
     if (!designKind) return this.fallback.submitTurn(task, text, operationId, context);
     this.tasks.set(task.taskId, task);
@@ -95,8 +122,230 @@ export class MetricQueryDesignDemoService implements FindDataService {
   }
 
   private isDesignTask(task: FindDataTaskState): boolean {
-    return task.entryContext?.target.id === 'met_elderly_population' || task.directMetricQuery?.metricId.startsWith('design_') === true ||
+    return this.isContinuityTask(task) || task.entryContext?.target.id === 'met_elderly_population' || task.directMetricQuery?.metricId.startsWith('design_') === true ||
       task.turns.some((turn) => turn.blocks.some((block) => block.type === 'CLARIFICATION' && block.question.id.startsWith('design_')));
+  }
+
+  private isContinuityTask(task: FindDataTaskState): boolean {
+    return task.scenarioKey === DESIGN_CONTINUITY_SCENARIO_KEY;
+  }
+
+  private isContinuityGoal(task: FindDataTaskState, text: string): boolean {
+    return !task.scenarioKey &&
+      /浦锦/.test(text) && /七宝/.test(text) &&
+      /(养老服务供给|养老床位|养老服务)/.test(text) &&
+      /2026\s*年?\s*8\s*月/.test(text);
+  }
+
+  private beginContinuityGoal(task: FindDataTaskState, text: string, operationId: string): FindDataEngineResult {
+    const hypothesis: RequirementHypothesis = {
+      region: '浦锦街道、七宝镇',
+      timeRange: { start: '2026-08', end: '2026-08' },
+      populationDefinition: '60 岁及以上常住人口',
+      bedDefinition: '民政核定且在营可用养老床位数',
+      dimensions: ['时间（月度）', '空间（街镇）'],
+      analysisFocus: ['老年人口规模与分布', '养老床位供给'],
+      assumptions: [],
+      unresolvedQuestions: []
+    };
+    const composition = composeMinhangSolution(hypothesis, MINHANG_RESOURCES);
+    const requirementRevision = task.requirementRevision + 1;
+    const searchRevision = task.searchRevision + 1;
+    const resourceIds = composition.resourceIds;
+    const candidateSnapshot = resourceIds.map((resourceId) => ({
+      resourceId,
+      title: MINHANG_RESOURCES[resourceId]!.name,
+      reason: '当前数据方案的正式组成资源。',
+      matchType: 'DIRECT' as const,
+      proposedRole: 'CORE' as const,
+      sourceSearchRevision: searchRevision
+    }));
+    const blocks: FindDataTaskState['turns'][number]['blocks'] = [{
+      type: 'TEXT',
+      id: createScenarioId('solution_ready'),
+      content: '数据方案已就绪。当前数据方案已经能够支持浦锦街道、七宝镇 2026 年 8 月的人口规模与养老床位容量比较，可以继续查询具体数据。'
+    }];
+    return {
+      taskId: task.taskId,
+      operationId,
+      events: [
+        { type: 'SCENARIO_CLASSIFIED', payload: { scenarioKey: DESIGN_CONTINUITY_SCENARIO_KEY } },
+        { type: 'TASK_TITLE_UPDATED', payload: { title: DESIGN_CONTINUITY_TITLE, goal: text } },
+        { type: 'REQUIREMENT_UPDATED', payload: { hypothesis, bumpRevision: true } },
+        {
+          type: 'SEARCH_STARTED',
+          payload: {
+            searchRevision,
+            statusMessage: '正在形成当前数据方案…'
+          }
+        },
+        {
+          type: 'SEARCH_RESULTS_RECEIVED',
+          payload: {
+            taskId: task.taskId,
+            requirementRevision,
+            searchRevision,
+            query: text,
+            totalMatches: resourceIds.length,
+            candidateSnapshot,
+            resourceUpserts: resourceIds.map((resourceId) => MINHANG_RESOURCES[resourceId]!),
+            candidateDelta: {
+              retainedIds: [],
+              addedIds: resourceIds,
+              removedIds: [],
+              allCandidateIds: resourceIds
+            },
+            solutionPatch: {
+              mode: 'REPLACE',
+              upsertItems: composition.items,
+              gaps: composition.gaps,
+              relationshipEvidence: composition.relationshipEvidence,
+              coverageSummary: composition.coverageSummary,
+              limitationSummary: composition.limitationSummary
+            }
+          }
+        },
+        {
+          type: 'SURFACE_OPENED',
+          payload: { type: 'SOLUTION', mode: 'WORKBENCH', resourceIds, openedBy: 'TASK_REQUIRED' }
+        },
+        this.assistantEvent(blocks, 'READY', {
+          kind: 'SOLUTION', requirementRevision, searchRevision
+        })
+      ],
+      assistantBlocks: blocks
+    };
+  }
+
+  private handleContinuityTurn(task: FindDataTaskState, text: string, operationId: string): FindDataEngineResult | undefined {
+    const requirementChange = this.resolveContinuityRequirementChange(text);
+    if (requirementChange) return this.updateContinuityRequirement(task, requirementChange, operationId);
+    if (/(老年人口|60\s*岁及以上常住人口)/.test(text) || this.isSingleMetricSolutionFollowUp(task, text)) {
+      return this.prepareSolutionPopulationQuery(task, text, operationId);
+    }
+    if (/养老床位/.test(text)) return this.prepareSolutionBedClarification(task, operationId);
+    return undefined;
+  }
+
+  private isSingleMetricSolutionFollowUp(task: FindDataTaskState, text: string): boolean {
+    if (!/(浦锦|七宝).{0,12}\d{1,2}\s*月.*多少/.test(text)) return false;
+    const solution = selectEffectiveDataSolution(task);
+    const executableMetricItems = solution?.items.filter((item) =>
+      item.inclusionState !== 'NOT_INCLUDED' && Boolean(selectCanonicalMetricExecutionRef(task.resources[item.resourceId]))
+    ) ?? [];
+    return executableMetricItems.length === 1 && executableMetricItems[0].resourceId === 'r01';
+  }
+
+  private resolveContinuityRequirementChange(text: string): Partial<RequirementHypothesis> | undefined {
+    if (/(后续|以后|接下来).{0,8}核定床位|后面都按核定床位/.test(text)) {
+      return { bedDefinition: '养老床位核定数' };
+    }
+    if (/(把当前任务改成|后面都按|不要再看).{0,12}7\s*月/.test(text)) {
+      return { timeRange: { start: '2026-07', end: '2026-07' } };
+    }
+    return undefined;
+  }
+
+  private updateContinuityRequirement(
+    task: FindDataTaskState,
+    hypothesis: Partial<RequirementHypothesis>,
+    operationId: string
+  ): FindDataEngineResult {
+    const blocks: FindDataTaskState['turns'][number]['blocks'] = [{
+      type: 'TEXT',
+      id: createScenarioId('requirement_updated'),
+      content: '已更新当前任务条件。现有数据方案将不再作为当前执行依据；历史结果仍保留为只读记录。'
+    }];
+    return {
+      taskId: task.taskId,
+      operationId,
+      events: [
+        { type: 'REQUIREMENT_UPDATED', payload: { hypothesis, bumpRevision: true } },
+        this.assistantEvent(blocks, 'WAITING_USER', { kind: 'SOLUTION', requirementRevision: task.requirementRevision + 1 })
+      ],
+      assistantBlocks: blocks,
+      surfaceCommand: { action: 'NO_CHANGE' }
+    };
+  }
+
+  private prepareSolutionPopulationQuery(task: FindDataTaskState, text: string, operationId: string): FindDataEngineResult {
+    const solution = selectEffectiveDataSolution(task);
+    const item = solution?.items.find((candidate) => candidate.resourceId === 'r01' && candidate.inclusionState !== 'NOT_INCLUDED');
+    const resource = item ? task.resources[item.resourceId] : undefined;
+    const executionRef = selectCanonicalMetricExecutionRef(resource);
+    if (!solution || !item || !executionRef) {
+      return this.notice(task, operationId, '当前数据方案未提供可直接执行的正式老年人口指标，请先形成新的有效数据方案。', 'warning');
+    }
+    const requestedConditions = this.resolveContinuityRequestedConditions(task, text, 'POPULATION');
+    if (!requestedConditions) {
+      return this.notice(task, operationId, '请明确本次要查询的浦锦街道或七宝镇。', 'warning');
+    }
+    const query: DirectMetricQueryState = {
+      requestId: createScenarioId('metric_request'),
+      metricId: executionRef.id,
+      source: {
+        kind: 'DATA_SOLUTION',
+        resourceId: item.resourceId,
+        requirementRevision: task.requirementRevision,
+        searchRevision: task.searchRevision
+      },
+      requestedConditions,
+      definitionRef: { id: 'met_elderly_population', label: '老年人口数', version: executionRef.version },
+      status: 'READY',
+      preparedAt: new Date().toISOString()
+    };
+    const blocks: FindDataTaskState['turns'][number]['blocks'] = [{
+      type: 'TEXT',
+      id: createScenarioId('direct_metric_prepared'),
+      content: '已复用当前数据方案中的正式人口指标，正在查询本次指定范围。'
+    }];
+    return {
+      taskId: task.taskId,
+      operationId,
+      events: [
+        { type: 'DIRECT_METRIC_QUERY_PREPARED', payload: { query } },
+        this.assistantEvent(blocks, 'WAITING_USER', {
+          kind: 'SOLUTION', requirementRevision: task.requirementRevision, searchRevision: task.searchRevision
+        })
+      ],
+      assistantBlocks: blocks,
+      surfaceCommand: { action: 'CLOSE', surface: 'CLOSED' }
+    };
+  }
+
+  private prepareSolutionBedClarification(task: FindDataTaskState, operationId: string): FindDataEngineResult {
+    const alternatives = selectEffectiveDataSolutionItemsBySelectionGroup(task, BED_DEFINITION_SELECTION_GROUP)
+      .flatMap((item) => {
+        const resource = task.resources[item.resourceId];
+        return resource && DESIGN_BED_CLARIFICATION_DESCRIPTIONS[item.resourceId]
+          ? [{ item, resource }]
+          : [];
+      });
+    if (alternatives.length !== 2) {
+      return this.notice(task, operationId, '当前数据方案中没有可复用的完整床位口径组，请先形成新的有效数据方案。', 'warning');
+    }
+    const question: ClarificationQuestion = {
+      id: 'design_solution_bed_definition',
+      question: '当前数据方案中已有两个可用床位口径。你要看在营可用床位，还是核定床位？两种口径的数值和含义不同。',
+      type: 'SINGLE',
+      options: alternatives.map(({ item, resource }) => ({
+        id: item.resourceId,
+        label: resource.name,
+        description: DESIGN_BED_CLARIFICATION_DESCRIPTIONS[item.resourceId]
+      })),
+      submitLabel: '使用此口径继续查询',
+      resolution: { status: 'OPEN', selectedOptionIds: [] }
+    };
+    const block = this.clarification(question);
+    return {
+      taskId: task.taskId,
+      operationId,
+      events: [this.assistantEvent([block], 'NEEDS_CLARIFICATION', {
+        kind: 'SOLUTION', requirementRevision: task.requirementRevision, searchRevision: task.searchRevision
+      })],
+      assistantBlocks: [block],
+      surfaceCommand: { action: 'CLOSE', surface: 'CLOSED' }
+    };
   }
 
   private resolveDesignKind(task: FindDataTaskState, text: string): 'ELDERLY' | 'BED' | 'DEFINITION' | undefined {
@@ -196,15 +445,27 @@ export class MetricQueryDesignDemoService implements FindDataService {
   private submitClarification(task: FindDataTaskState, action: TaskAction, operationId: string): FindDataEngineResult {
     const questionId = action.payload?.questionId as string | undefined;
     const selected = Array.from(new Set((action.payload?.selectedOptionIds as string[] | undefined) ?? []));
-    const question = task.turns.flatMap((turn) => turn.blocks).find((block): block is { type: 'CLARIFICATION'; id: string; question: ClarificationQuestion } => block.type === 'CLARIFICATION' && block.question.id === questionId);
+    const question = task.turns.flatMap((turn) => turn.blocks).reverse().find((block): block is { type: 'CLARIFICATION'; id: string; question: ClarificationQuestion } => block.type === 'CLARIFICATION' && block.question.id === questionId);
     if (!question || question.question.resolution?.status === 'RESOLVED' || question.question.resolution?.status === 'STALE' || selected.length !== 1 || !question.question.options.some((option) => option.id === selected[0])) {
       return this.notice(task, operationId, '请选择一个有效口径后再继续。', 'warning');
     }
+    const isSolutionBedClarification = questionId === 'design_solution_bed_definition';
     const metricId = questionId === 'design_elderly_scope' ? 'met_elderly_population' : 'design_elderly_bed_capacity';
     const definition = metricId === 'met_elderly_population'
       ? this.elderlyDefinition()
-      : this.bedDefinition(selected[0]);
-    const query = this.queryState(task, metricId, definition);
+      : this.bedDefinition(selected[0] === 'r05' ? 'approved' : selected[0]);
+    const requestedConditions = isSolutionBedClarification
+      ? this.resolveContinuityRequestedConditions(task, this.latestUserTurnText(task), 'BED')
+      : undefined;
+    if (isSolutionBedClarification && !requestedConditions) {
+      return this.notice(task, operationId, '请先明确本次要查询的浦锦街道或七宝镇。', 'warning');
+    }
+    const query = this.queryState(task, metricId, definition, {
+      source: isSolutionBedClarification ? { kind: 'USER_EXPLICIT' } : undefined,
+      requestedConditions: isSolutionBedClarification && requestedConditions
+        ? { ...requestedConditions, bedDefinition: definition.label }
+        : requestedConditions
+    });
     const label = question.question.options.find((option) => option.id === selected[0])!.label;
     return {
       taskId: task.taskId,
@@ -234,11 +495,32 @@ export class MetricQueryDesignDemoService implements FindDataService {
       return this.notice(task, operationId, '当前指标请求已变化或尚未就绪，请以最新状态为准。', 'warning');
     }
     const definition = query.metricId === 'met_elderly_population' ? this.elderlyDefinition() : this.bedDefinition(query.definitionRef?.id === 'definition_design_bed_approved' ? 'approved' : 'available');
+    const requestedScope = this.scopeFromRequestedConditions(query, definition);
+    if (query.requestedConditions?.timeRange && !requestedScope) return this.uncoveredQuery(task, query, operationId);
     const scope = query.metricId === 'met_elderly_population'
-      ? this.scopeFromSelection(task) ?? { region: '浦锦街道', time: '2026-08', value: 20000 }
-      : { region: '七宝镇', time: '2026-08', value: definition.id === 'definition_design_bed_approved' ? 1000 : 800 };
+      ? requestedScope ?? this.scopeFromSelection(task) ?? { region: '浦锦街道', time: '2026-08', value: 20000 }
+      : requestedScope ?? { region: '七宝镇', time: '2026-08', value: definition.id === 'definition_design_bed_approved' ? 1000 : 800 };
     const snapshot = this.snapshotFor(task, query, scope, definition, operationId);
     return this.completedResult(task, query, snapshot, operationId);
+  }
+
+  private uncoveredQuery(task: FindDataTaskState, query: DirectMetricQueryState, operationId: string): FindDataEngineResult {
+    const message = '演示数据未覆盖该月份；未重新找数，也没有编造查询结果。';
+    const blocks: FindDataTaskState['turns'][number]['blocks'] = [
+      { type: 'SYSTEM_NOTICE', id: createScenarioId('notice'), level: 'warning', message },
+      { type: 'ACTION_GROUP', id: createScenarioId('retry'), actions: [{ id: createScenarioId('retry_query'), label: '重试查询', actionCode: 'RUN_METRIC_QUERY', variant: 'primary' }] }
+    ];
+    return {
+      taskId: task.taskId,
+      operationId,
+      events: [
+        { type: 'DIRECT_METRIC_QUERY_FAILED', payload: { requestId: query.requestId, error: message } },
+        this.assistantEvent(blocks, 'WAITING_USER', {
+          kind: 'DIRECT_METRIC_RESULT', requirementRevision: task.requirementRevision
+        })
+      ],
+      assistantBlocks: blocks
+    };
   }
 
   private completedResult(task: FindDataTaskState, query: DirectMetricQueryState, snapshot: AskResultSnapshot, operationId: string): FindDataEngineResult {
@@ -360,18 +642,75 @@ export class MetricQueryDesignDemoService implements FindDataService {
     };
   }
 
-  private queryState(task: FindDataTaskState, metricId: string, definition: AskResultCitation): DirectMetricQueryState {
+  private queryState(
+    task: FindDataTaskState,
+    metricId: string,
+    definition: AskResultCitation,
+    options?: {
+      source?: DirectMetricQueryState['source'];
+      requestedConditions?: DirectMetricQueryState['requestedConditions'];
+    }
+  ): DirectMetricQueryState {
     return {
       requestId: createScenarioId('metric_request'),
       metricId,
-      source: task.entryContext
+      source: options?.source ?? (task.entryContext
         ? { kind: 'ENTRY_CONTEXT', entryId: task.entryContext.entryId }
-        : { kind: 'USER_EXPLICIT' },
-      requestedConditions: task.entryContext?.knownConditions,
+        : { kind: 'USER_EXPLICIT' }),
+      requestedConditions: options?.requestedConditions ?? task.entryContext?.knownConditions,
       definitionRef: { id: definition.id, label: definition.label, version: definition.version },
       status: 'READY',
       preparedAt: new Date().toISOString()
     };
+  }
+
+  private latestUserTurnText(task: FindDataTaskState): string {
+    return [...task.turns].reverse().find((turn) => turn.sender === 'USER')?.blocks
+      .find((block) => block.type === 'TEXT')?.content ?? '';
+  }
+
+  /**
+   * Minimal, scenario-scoped condition resolver. It creates operation-local
+   * conditions only and never mutates the task requirement or solution.
+   */
+  private resolveContinuityRequestedConditions(
+    task: FindDataTaskState,
+    text: string,
+    kind: 'POPULATION' | 'BED'
+  ): DirectMetricQueryState['requestedConditions'] | undefined {
+    const region = text.includes('浦锦') ? '浦锦街道' : text.includes('七宝') ? '七宝镇' : undefined;
+    if (!region) return undefined;
+    const inheritedRange = task.requirementHypothesis.timeRange;
+    const explicitMonth = text.match(/(20\d{2})\s*年?\s*(\d{1,2})\s*月/);
+    const monthOnly = explicitMonth ? undefined : text.match(/(?:^|[^\d])(\d{1,2})\s*月/);
+    const inheritedYear = inheritedRange?.start.match(/^(20\d{2})-/)?.[1];
+    const timeRange = explicitMonth
+      ? { start: `${explicitMonth[1]}-${explicitMonth[2].padStart(2, '0')}`, end: `${explicitMonth[1]}-${explicitMonth[2].padStart(2, '0')}` }
+      : monthOnly && inheritedYear
+      ? { start: `${inheritedYear}-${monthOnly[1].padStart(2, '0')}`, end: `${inheritedYear}-${monthOnly[1].padStart(2, '0')}` }
+      : inheritedRange;
+    if (!timeRange) return undefined;
+    return kind === 'POPULATION'
+      ? { region, timeRange, populationDefinition: task.requirementHypothesis.populationDefinition ?? '60 岁及以上常住人口' }
+      : { region, timeRange, bedDefinition: task.requirementHypothesis.bedDefinition };
+  }
+
+  private scopeFromRequestedConditions(
+    query: DirectMetricQueryState,
+    definition?: AskResultCitation
+  ): { region: string; time: string; value: number } | undefined {
+    const region = query.requestedConditions?.region;
+    const time = query.requestedConditions?.timeRange?.start;
+    if (!region || time !== '2026-08') return undefined;
+    if (query.metricId === 'met_elderly_population') {
+      if (region === '浦锦街道') return { region, time, value: 20000 };
+      if (region === '七宝镇') return { region, time, value: 40000 };
+      return undefined;
+    }
+    const approved = definition?.id === 'definition_design_bed_approved';
+    if (region === '浦锦街道') return { region, time, value: approved ? 450 : 300 };
+    if (region === '七宝镇') return { region, time, value: approved ? 1000 : 800 };
+    return undefined;
   }
 
   private scopeFrom(text: string, task: FindDataTaskState): { region: string; time: string; value: number } | undefined {

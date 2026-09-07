@@ -212,7 +212,7 @@ describe('find-data selectors', () => {
     const gapOnly = createEmptyTask({
       dataSolution: { ...createEmptyTask().dataSolution, state: 'READY', gaps: [{ id: 'gap', title: '缺口', description: '缺口', impactLevel: 'HIGH', mitigation: '补充', status: 'OPEN' }] }
     });
-    expect(getDataSolutionDisplayState(complete).label).toBe('推荐就绪');
+    expect(getDataSolutionDisplayState(complete).label).toBe('数据方案已就绪');
     expect(getDataSolutionDisplayState(partial).label).toBe('部分覆盖');
     expect(getDataSolutionDisplayState(gapOnly).label).toBe('当前仅发现缺口');
   });

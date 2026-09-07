@@ -22,10 +22,13 @@ const openGap = (id: string, title: string, description: string): SolutionGap =>
   id, title, description, impactLevel: 'HIGH', mitigation: '补充正式资源或调整当前分析口径后重新评估。', status: 'OPEN'
 });
 
-const coreItem = (resourceId: ResourceId): DataSolutionItem => ({
+const coreItem = (
+  resourceId: ResourceId,
+  inclusionState: DataSolutionItem['inclusionState'] = 'SELECTED'
+): DataSolutionItem => ({
   resourceId,
   role: 'CORE',
-  inclusionState: 'SELECTED',
+  inclusionState,
   coverage: ['街镇与月度分析核心指标'],
   limitations: [],
   evidenceRefs: ['闵行养老供给确定性组合'],
@@ -69,8 +72,21 @@ export function composeMinhangSolution(
   if (!resources.r01 || !resources[bedResourceId]) {
     return { resourceIds: [], items: [], gaps: [openGap('gap_core_resource', '核心资源未登记', '当前方案尚未同时覆盖老年人口规模和养老床位口径。')], relationshipEvidence: [], coverageSummary: [], limitationSummary: [], readiness: 'GAP_ONLY' };
   }
+  // A bed-definition alternative is already part of the formal Data Solution,
+  // not a fresh search candidate. Exactly one member is selected as the
+  // current execution core; clarification may inspect the entire group.
+  const bedAlternativeResourceIds = (['r04', 'r05'] as ResourceId[])
+    .filter((resourceId) => Boolean(resources[resourceId]));
   const coreComposition: MinhangSolutionComposition = {
-    resourceIds: ['r01', bedResourceId], items: [coreItem('r01'), coreItem(bedResourceId)], gaps: [],
+    resourceIds: ['r01', ...bedAlternativeResourceIds],
+    items: [
+      coreItem('r01'),
+      ...bedAlternativeResourceIds.map((resourceId) => coreItem(
+        resourceId,
+        resourceId === bedResourceId ? 'SELECTED' : 'NOT_INCLUDED'
+      ))
+    ],
+    gaps: [],
     relationshipEvidence: [{
       sourceResourceId: bedResourceId, targetResourceId: 'r01', relationType: 'ANALYTICAL_COMPATIBILITY', verificationStatus: 'SEMANTIC_ONLY', evidenceLevel: 'MEDIUM',
       description: '两项指标均围绕街镇与月份组织分析，具体维度与时间对齐将在分析阶段验证。', joinKeys: ['street_town', 'month'], evidenceRefs: ['已登记资源粒度与指标口径']

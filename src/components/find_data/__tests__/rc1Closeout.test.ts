@@ -13,7 +13,11 @@ describe('RC1 deterministic composition and execution gates', () => {
   it('selects approved-bed r05 only when the confirmed bed definition requests that definition', () => {
     const task = createMinhangTask();
     const composition = composeMinhangSolution({ ...task.requirementHypothesis, bedDefinition: '民政核定养老床位数' }, MINHANG_RESOURCES);
-    expect(composition.items.map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+    expect(composition.items.map((item) => item.resourceId)).toEqual(['r01', 'r04', 'r05']);
+    expect(composition.items.filter((item) => item.inclusionState !== 'NOT_INCLUDED').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+    expect(composition.items.find((item) => item.resourceId === 'r04')).toMatchObject({
+      inclusionState: 'NOT_INCLUDED', selectionGroupId: 'bed_definition_alternative'
+    });
     expect(composition.readiness).toBe('COMPLETE');
   });
 

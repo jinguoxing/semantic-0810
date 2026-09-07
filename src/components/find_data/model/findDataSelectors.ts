@@ -49,6 +49,19 @@ export function selectEffectiveDataSolution(task: FindDataTaskState): DataSoluti
 }
 
 /**
+ * Returns formal alternatives from the current solution only. This is
+ * intentionally separate from search candidates: a clarification can reuse
+ * solution membership without triggering a new discovery step.
+ */
+export function selectEffectiveDataSolutionItemsBySelectionGroup(
+  task: FindDataTaskState,
+  selectionGroupId: string
+): DataSolutionItem[] {
+  const solution = selectEffectiveDataSolution(task);
+  return solution?.items.filter((item) => item.selectionGroupId === selectionGroupId) ?? [];
+}
+
+/**
  * Validates a resource-declared metric identity only through the canonical-id
  * registry lookup. This deliberately has no name or NLP fallback.
  */
@@ -268,7 +281,7 @@ export function getDataSolutionDisplayState(task: FindDataTaskState): { code: 'E
     return { code: 'READY_PARTIAL', label: '部分覆盖' };
   }
   const readiness = selectAskHandoffReadiness(task);
-  if (readiness.ready) return { code: 'READY_COMPLETE', label: '推荐就绪' };
+  if (readiness.ready) return { code: 'READY_COMPLETE', label: '数据方案已就绪' };
   return { code: 'READY_PARTIAL', label: '部分覆盖' };
 }
 

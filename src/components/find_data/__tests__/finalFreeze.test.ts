@@ -100,7 +100,8 @@ describe('final freeze scenario semantics', () => {
     const initial = createEmptyTask();
     const first = await service.submitTurn(initial, '分析 2024 年 1 月至 12 月闵行区各街镇 60 岁以上常住人口与养老床位核定数。');
     const searched = apply(initial, first.events);
-    expect(searched.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+    expect(searched.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04', 'r05']);
+    expect(searched.dataSolution.items.filter((item) => item.inclusionState !== 'NOT_INCLUDED').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
 
     const handoff = await service.submitTurn(searched, '按当前方案分析');
     const asking = apply(searched, handoff.events);
@@ -146,8 +147,8 @@ describe('final freeze scenario semantics', () => {
     const browsed = apply(base, (await service.submitTurn(base, '我先看看民政相关资源')).events);
     const result = await service.executeAction(browsed, { actionCode: 'EVALUATE_AND_ADD', payload: { resourceId: 'r05' } });
     const next = apply(browsed, result.events);
-    expect(next.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
-    expect(next.dataSolution.items.filter((item) => ['r04', 'r05'].includes(item.resourceId) && item.role === 'CORE')).toHaveLength(1);
+    expect(next.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+    expect(next.dataSolution.items.filter((item) => ['r04', 'r05'].includes(item.resourceId) && item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED')).toHaveLength(1);
     expect(next.dataSolution.items.find((item) => item.resourceId === 'r05')?.selectionGroupId).toBe('bed_definition_alternative');
     expect(next.askPlan).toBeUndefined();
   });

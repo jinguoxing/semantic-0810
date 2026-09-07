@@ -54,17 +54,21 @@ describe('scenario classification and turn handling', () => {
     expect(task.askPlan).toBeUndefined();
   });
 
-  it('sufficient goal creates only the minimal two-resource solution', async () => {
+  it('sufficient goal materializes two current core resources and one formal bed alternative', async () => {
     const text = '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。';
     const { result, task } = await submit(createEmptyTask(), text);
     expect(result.events.map((event) => event.type)).toEqual([
       'SCENARIO_CLASSIFIED', 'REQUIREMENT_UPDATED', 'SEARCH_STARTED', 'SEARCH_RESULTS_RECEIVED', 'ASSISTANT_TURN_RECEIVED'
     ]);
     expect(task.status).toBe('READY');
-    expect(Object.keys(task.resources)).toEqual(['r01', 'r04']);
-    expect(task.searchResult?.totalMatches).toBe(2);
-    expect(task.searchResult?.candidateIds).toEqual(['r01', 'r04']);
-    expect(task.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+    expect(Object.keys(task.resources)).toEqual(['r01', 'r04', 'r05']);
+    expect(task.searchResult?.totalMatches).toBe(3);
+    expect(task.searchResult?.candidateIds).toEqual(['r01', 'r04', 'r05']);
+    expect(task.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04', 'r05']);
+    expect(task.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED').map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+    expect(task.dataSolution.items.find((item) => item.resourceId === 'r05')).toMatchObject({
+      role: 'CORE', inclusionState: 'NOT_INCLUDED', selectionGroupId: 'bed_definition_alternative'
+    });
     expect(task.askPlan).toBeUndefined();
   });
 
@@ -122,7 +126,7 @@ describe('scenario classification and turn handling', () => {
   it('extends an approved-bed core solution when the user asks to also inspect service use', async () => {
     const initial = await submit(createEmptyTask(), '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与养老床位核定数。');
     const { task } = await submit(initial.task, '同时看看实际服务使用');
-    expect(task.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+    expect(task.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
     expect(task.dataSolution.items.find((item) => item.resourceId === 'r07')).toMatchObject({ role: 'PARTIAL_MATCH', inclusionState: 'NOT_INCLUDED' });
     expect(task.dataSolution.gaps.map((gap) => gap.id)).toContain('gap_homecare_partial');
   });
@@ -302,7 +306,7 @@ describe('scenario classification and turn handling', () => {
     expect(questions.filter((block) => block.type === 'CLARIFICATION' && block.question.resolution?.status === 'OPEN')).toHaveLength(1);
     const latestQuestion = questions.at(-1);
     expect(latestQuestion?.type === 'CLARIFICATION' ? latestQuestion.question.id : undefined).not.toBe('q_minhang_benchmark');
-    expect(revisedTask.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+    expect(revisedTask.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
   });
 
   it('uses the institution resource only for optional drilldown', async () => {
@@ -318,7 +322,7 @@ describe('scenario classification and turn handling', () => {
     const added = await service.executeAction(taskWithPlan, { actionCode: 'EVALUATE_AND_ADD', payload: { resourceId: 'r06' } });
     const next = apply(taskWithPlan, added.events);
     expect(next.dataSolution.items.find((item) => item.resourceId === 'r06')).toMatchObject({ role: 'OPTIONAL_DRILLDOWN', inclusionState: 'RECOMMENDED' });
-    expect(next.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+    expect(next.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED').map((item) => item.resourceId)).toEqual(['r01', 'r04']);
     expect(next.askPlan?.calculationSpec).toEqual(calculationSpec);
   });
 
@@ -349,7 +353,7 @@ describe('clarification decisions', () => {
     expect(next.requirementHypothesis.analysisFocus).not.toContain('opt_pop_bed');
     const clarification = next.turns.flatMap((turn) => turn.blocks).find((block) => block.type === 'CLARIFICATION');
     expect(clarification?.type === 'CLARIFICATION' && clarification.question.resolution?.status).toBe('RESOLVED');
-    expect(next.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+    expect(next.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04', 'r05']);
     expect(next.requirementHypothesis.timeRange).toEqual({ start: '2025-09', end: '2026-08' });
     expect(next.requirementHypothesis.dimensions).toEqual(['时间（月度）', '空间（街镇）']);
     expect(next.requirementHypothesis.populationDefinition).toBe('60 岁及以上常住人口');
@@ -377,7 +381,7 @@ describe('clarification decisions', () => {
       '养老床位供给',
       '养老服务实际使用'
     ]);
-    expect(next.dataSolution.items.filter((item) => item.role === 'CORE').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
+    expect(next.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED').map((item) => item.resourceId)).toEqual(['r01', 'r05']);
     expect(next.dataSolution.items.find((item) => item.resourceId === 'r07')).toMatchObject({ role: 'PARTIAL_MATCH' });
     expect(next.dataSolution.gaps.map((gap) => gap.id)).toContain('gap_homecare_partial');
   });
@@ -552,7 +556,7 @@ describe('fourth-round task recomposition and candidate pool', () => {
     });
     const { result, task } = await submit(generic, '闵行区过去 12 个月，按街镇看老年人口和在营可用养老床位');
     expect(result.events[0]).toMatchObject({ type: 'SCENARIO_RECLASSIFIED', payload: { fromScenarioKey: 'generic', toScenarioKey: 'minhang_bed_supply' } });
-    expect(task.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04']);
+    expect(task.dataSolution.items.map((item) => item.resourceId)).toEqual(['r01', 'r04', 'r05']);
   });
 
   it('does not reclassify a generic task that already has a formal solution', async () => {

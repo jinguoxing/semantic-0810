@@ -11,6 +11,7 @@ import {
 import { createAskPlan, createEmptyTask, createMinhangTask } from './testUtils/findDataFactories';
 import { MINHANG_RESOURCES } from '../fixtures/minhangBedSupplyFixture';
 import { MockFindDataService } from '../services/MockFindDataService';
+import { MetricQueryDesignDemoService } from '../services/MetricQueryDesignDemoService';
 
 Object.defineProperty(Element.prototype, 'scrollIntoView', {
   configurable: true,
@@ -68,6 +69,58 @@ function createService(overrides: Partial<FindDataService> = {}): FindDataServic
 }
 
 describe('workspace tracked task pipeline', () => {
+  it('closes the Solution surface and reuses the guarded runner for a current-solution direct query', async () => {
+    const service = new MetricQueryDesignDemoService();
+    render(
+      <DataAssistantFindDataWorkspace
+        initialQuery="我想比较浦锦街道和七宝镇 2026 年 8 月的养老服务供给情况，先帮我看看需要哪些数据。"
+        serviceOverride={service}
+        taskStoreOverride={new MemoryTaskStore()}
+      />
+    );
+
+    await screen.findByRole('heading', { name: '数据方案已就绪' });
+    expect(screen.getByRole('heading', { name: '浦锦、七宝养老服务供给比较' })).toBeInTheDocument();
+    const input = screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '先查询 2026 年 8 月浦锦街道的 60 岁及以上常住人口数。' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(await screen.findByText('20,000 人')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '数据方案已就绪' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查看完整结果' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '查看指标口径' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '解读这份结果' })).toBeInTheDocument();
+  });
+
+  it('keeps selection local until a Solution-derived bed definition is submitted', async () => {
+    const service = new MetricQueryDesignDemoService();
+    const executeAction = vi.spyOn(service, 'executeAction');
+    render(
+      <DataAssistantFindDataWorkspace
+        initialQuery="我想比较浦锦街道和七宝镇 2026 年 8 月的养老服务供给情况，先帮我看看需要哪些数据。"
+        serviceOverride={service}
+        taskStoreOverride={new MemoryTaskStore()}
+      />
+    );
+
+    await screen.findByRole('heading', { name: '数据方案已就绪' });
+    const input = screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '查询 2026 年 8 月七宝镇的养老床位数。' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    const available = await screen.findByRole('radio', { name: '在营可用养老床位数' });
+    const submitButton = screen.getByRole('button', { name: '使用此口径继续查询' });
+    expect(submitButton).toBeDisabled();
+    expect(executeAction).not.toHaveBeenCalled();
+    fireEvent.click(available);
+    expect(executeAction).not.toHaveBeenCalled();
+    fireEvent.click(submitButton);
+
+    expect(await screen.findByText('800 张')).toBeInTheDocument();
+    expect(executeAction.mock.calls.map((call) => call[1].actionCode)).toEqual(['SUBMIT_CLARIFICATION', 'RUN_METRIC_QUERY']);
+    expect(screen.queryByRole('heading', { name: '数据方案已就绪' })).not.toBeInTheDocument();
+  });
+
   it('submits the first turn with USER_TURN_SUBMITTED already applied', async () => {
     const service = createService();
     render(
@@ -183,7 +236,7 @@ describe('workspace tracked task pipeline', () => {
     store.currentTaskId = task.taskId;
     const service = createService({ executeAction: vi.fn(async () => { throw new Error('操作服务失败'); }) });
     render(<DataAssistantFindDataWorkspace serviceOverride={service} taskStoreOverride={store} />);
-    fireEvent.click(await screen.findByRole('button', { name: '方案 · 2 项核心资源' }));
+    fireEvent.click(await screen.findByRole('button', { name: '当前数据方案 · 2 项核心资源' }));
     expect(await screen.findByRole('heading', { name: /数据方案/ })).toBeInTheDocument();
     expect(service.executeAction).not.toHaveBeenCalled();
     expect(screen.queryByText('本次操作未完成，当前已形成的任务内容保持不变。请根据当前方案继续操作或稍后重试。')).not.toBeInTheDocument();
@@ -352,7 +405,7 @@ describe('workspace tracked task pipeline', () => {
     expect(runButtons).toHaveLength(1);
     fireEvent.click(runButtons[0]);
     expect(runAskPlan).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByRole('button', { name: '方案 · 2 项核心资源' }));
+    fireEvent.click(screen.getByRole('button', { name: '当前数据方案 · 2 项核心资源' }));
     expect(await screen.findByRole('heading', { name: /数据方案/ })).toBeInTheDocument();
     expect(runAskPlan).toHaveBeenCalledOnce();
     await act(async () => {

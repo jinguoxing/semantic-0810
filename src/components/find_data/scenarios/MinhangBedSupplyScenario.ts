@@ -471,7 +471,7 @@ function buildCompositionSearchEvents(task: FindDataTaskState, hypothesis: Requi
   const composition = composeMinhangSolution(hypothesis, MINHANG_RESOURCES);
   const rangeValidation = validateMonthRange(hypothesis.timeRange);
   const coreResources = composition.items
-    .filter((item) => item.role === 'CORE')
+    .filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED')
     .map((item) => MINHANG_RESOURCES[item.resourceId])
     .filter((resource): resource is FindDataResource => !!resource);
   const uncovered = hypothesis.timeRange ? coreResources.filter((resource) => !resourceCoversRange(resource, hypothesis.timeRange)) : [];

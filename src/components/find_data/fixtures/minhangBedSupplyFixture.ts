@@ -447,9 +447,19 @@ export const MINHANG_DATA_SOLUTION: DataSolution = {
       resourceId: 'r04',
       role: 'CORE',
       inclusionState: 'SELECTED',
+      selectionGroupId: 'bed_definition_alternative',
       coverage: ['闵行区各街镇在营可用床位', '2025.09 — 2026.08 月度数据'],
       limitations: ['不含筹建中或暂停营业的床位数'],
       evidenceRefs: ['市民政局核准在营指标']
+    },
+    {
+      resourceId: 'r05',
+      role: 'CORE',
+      inclusionState: 'NOT_INCLUDED',
+      selectionGroupId: 'bed_definition_alternative',
+      coverage: ['闵行区各街镇核定床位', '2025.09 — 2026.08 月度数据'],
+      limitations: ['核定容量不等于实际可用容量'],
+      evidenceRefs: ['市民政局核定床位指标']
     },
     {
       resourceId: 'r03',
