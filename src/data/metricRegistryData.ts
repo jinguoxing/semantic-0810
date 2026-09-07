@@ -760,16 +760,19 @@ export const metricRegistryService = {
     return CANONICAL_DOMAIN_METRICS;
   },
 
+  /** Lookup an authoritative metric only by its canonical registry ID. */
+  getMetricByCanonicalId(metricId?: string): Metric | undefined {
+    const cleanId = metricId?.trim();
+    return cleanId ? CANONICAL_DOMAIN_METRICS.find((metric) => metric.id === cleanId) : undefined;
+  },
+
   /**
    * Lookup metric by exact ID or common aliases/names
    */
   getMetricById(metricId?: string): Metric | undefined {
     if (!metricId) return undefined;
     const cleanId = metricId.trim();
-    if (cleanId === 'res-03') {
-      return CANONICAL_DOMAIN_METRICS.find(m => m.id === 'met_001');
-    }
-    const directMatch = CANONICAL_DOMAIN_METRICS.find(m => m.id === cleanId);
+    const directMatch = this.getMetricByCanonicalId(cleanId);
     if (directMatch) return directMatch;
 
     const nameMatch = CANONICAL_DOMAIN_METRICS.find(m => 

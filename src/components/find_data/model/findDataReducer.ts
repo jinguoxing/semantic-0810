@@ -1,4 +1,4 @@
-import { ClarificationQuestion, ConversationTurn, DataSolutionItem, FindDataTaskState, ResourceCandidate } from './FindDataTask';
+import { ClarificationQuestion, ConversationTurn, DataSolutionItem, FindDataTaskState, ResourceCandidate, isDirectMetricResultBinding } from './FindDataTask';
 import { createFindDataTask } from './createFindDataTask';
 import { FindDataEvent } from './findDataEvents';
 
@@ -419,9 +419,10 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
 
     case 'DIRECT_METRIC_RESULT_RECEIVED': {
       const binding = action.payload.snapshot.binding;
-      if (!('kind' in binding) || binding.kind !== 'DIRECT_METRIC' || binding.taskId !== state.taskId ||
+      if (!isDirectMetricResultBinding(binding) || binding.taskId !== state.taskId ||
         binding.requirementRevision !== state.requirementRevision ||
-        binding.requestId !== state.directMetricQuery?.requestId) return state;
+        binding.requestId !== state.directMetricQuery?.requestId ||
+        binding.metricId !== state.directMetricQuery?.metricId) return state;
       return {
         ...state,
         status: 'READY',

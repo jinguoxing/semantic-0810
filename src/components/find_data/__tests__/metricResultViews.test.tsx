@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { AskResultSnapshot } from '../model/FindDataTask';
 import { AskResultContent } from '../blocks/AskResultContent';
 import { RightWorkspaceMetricResult } from '../RightWorkspaceMetricResult';
+import { canOpenDirectMetricResult } from '../../DataAssistantFindDataWorkspace';
+import { createEmptyTask } from './testUtils/findDataFactories';
 
 const snapshot: AskResultSnapshot = {
   binding: { kind: 'DIRECT_METRIC', taskId: 'task_metric', requestId: 'request_metric', metricId: 'met_elderly_population', requirementRevision: 1 },
@@ -24,6 +26,16 @@ const snapshot: AskResultSnapshot = {
 };
 
 describe('direct metric result views', () => {
+  it('uses the same task, request, revision, and metric identity before opening a direct result', () => {
+    const task = createEmptyTask({ taskId: 'task_metric', directMetricResult: snapshot });
+    expect(canOpenDirectMetricResult(task, snapshot)).toBe(true);
+    const wrongMetric = {
+      ...snapshot,
+      binding: { ...snapshot.binding, metricId: 'met_resident_population' }
+    } as AskResultSnapshot;
+    expect(canOpenDirectMetricResult(task, wrongMetric)).toBe(false);
+  });
+
   it('opens the current direct result and its actual definition without an AskPlan action', () => {
     const onActionClick = vi.fn();
     render(<AskResultContent snapshot={snapshot} mode="compact" canOpenDetails onActionClick={onActionClick} />);

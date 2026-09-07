@@ -13,7 +13,7 @@ import {
   Trash2
 } from 'lucide-react';
 
-import { AskPlan, AskPlanBinding, AskResultSnapshot, AskRunResult, FindDataEntryContext, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode } from './find_data/model/FindDataTask';
+import { AskPlan, AskPlanBinding, AskResultSnapshot, AskRunResult, FindDataEntryContext, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode, isDirectMetricResultBinding, isSameDirectMetricResultBinding } from './find_data/model/FindDataTask';
 import { FindDataEvent } from './find_data/model/findDataEvents';
 import { findDataReducer, initialFindDataTaskState } from './find_data/model/findDataReducer';
 import {
@@ -169,13 +169,12 @@ function canOpenAskResultDetails(task: FindDataTaskState, snapshot: AskResultSna
     (!snapshot.operationId || !result.operationId || result.operationId === snapshot.operationId);
 }
 
-function canOpenDirectMetricResult(task: FindDataTaskState, snapshot: AskResultSnapshot): boolean {
+export function canOpenDirectMetricResult(task: FindDataTaskState, snapshot: AskResultSnapshot): boolean {
   const binding = snapshot.binding;
   const currentBinding = task.directMetricResult?.binding;
-  return 'kind' in binding && binding.kind === 'DIRECT_METRIC' &&
-    !!currentBinding && 'kind' in currentBinding && currentBinding.kind === 'DIRECT_METRIC' &&
-    currentBinding.taskId === binding.taskId &&
-    currentBinding.requestId === binding.requestId &&
+  return isDirectMetricResultBinding(binding) &&
+    isDirectMetricResultBinding(currentBinding) &&
+    isSameDirectMetricResultBinding(currentBinding, binding) &&
     task.directMetricResult?.executedAt === snapshot.executedAt;
 }
 
@@ -1046,7 +1045,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           <button className="w-full px-2.5 py-1.5 rounded-lg bg-[#EFF6FF] text-[#2563EB] font-bold flex items-center justify-between group transition-colors cursor-pointer">
             <div className="flex items-center space-x-2.5">
               <Bot className="w-4 h-4 text-[#2563EB]" />
-              {!isSidebarCollapsed && <span>数据助手 · 找数据</span>}
+              {!isSidebarCollapsed && <span>数据助手</span>}
             </div>
             {!isSidebarCollapsed && (
               <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
@@ -1142,7 +1141,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                   {task.title}
                 </h1>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#EFF6FF] text-[#2563EB] font-semibold border border-[#BFDBFE] shrink-0">
-                  数据助手 · 找数据
+                  数据助手
                 </span>
               </div>
 
@@ -1162,6 +1161,12 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                     {activeResource?.name ?? task.requirementHypothesis.analysisFocus[0] ?? '尚未形成'}
                   </span>
                 </span>
+                {task.entryContext?.target && <>
+                  <span className="text-[#CBD5E1]">·</span>
+                  <span>
+                    当前对象：<span className="font-semibold text-[#0F172A]">{task.entryContext.target.label ?? task.entryContext.target.id}</span>
+                  </span>
+                </>}
                 <span className="text-[#CBD5E1]">·</span>
                 <button
                   onClick={() => setIsContextDrawerOpen(true)}
@@ -1245,9 +1250,9 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             {task.turns.length === 0 ? (
               <div className="h-64 flex flex-col items-center justify-center text-center p-6 space-y-2 text-xs">
                 <Bot className="w-10 h-10 text-[#CBD5E1]" />
-                <p className="font-bold text-sm text-[#0F172A]">请输入找数据意图</p>
+                <p className="font-bold text-sm text-[#0F172A]">从这里开始</p>
                 <p className="text-[#64748B] max-w-sm">
-                  例如：“我想评估闵行区过去12个月养老服务供给情况，需要哪些数据？”
+                  可以查询正式指标、查找可用数据，或基于当前对象发起分析。
                 </p>
               </div>
             ) : (

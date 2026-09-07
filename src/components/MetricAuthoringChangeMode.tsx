@@ -43,7 +43,8 @@ import {
 } from 'lucide-react';
 import { DataBindingDrawer } from './DataBindingDrawer';
 import { BusinessRuleDetailDrawer } from './BusinessRuleDetailDrawer';
-import { metricRegistryService, CANONICAL_DOMAIN_METRICS } from '../data/metricRegistryData';
+import { metricRegistryService } from '../data/metricRegistryData';
+import { getCanonicalMetricIdForMarketplaceResource } from '../data/marketplaceMetricReferences';
 import { Metric } from '../types';
 
 export interface MetricAuthoringChangeModeProps {
@@ -101,19 +102,9 @@ export const MetricAuthoringChangeMode: React.FC<MetricAuthoringChangeModeProps>
   // Resolve base metric dynamically from registry or prop
   const targetMetric: Metric = useMemo(() => {
     if (propMetric) return propMetric;
-    if (metricId) {
-      const found = metricRegistryService.getMetricById(metricId);
-      if (found) return found;
-      if (metricId === 'res-03' || metricId === 'metric_001') {
-        const m1 = metricRegistryService.getMetricById('met_001');
-        if (m1) return m1;
-      }
-      const fuzzy = CANONICAL_DOMAIN_METRICS.find(
-        (m) => m.id === metricId || m.name === metricId || m.enName === metricId
-      );
-      if (fuzzy) return fuzzy;
-    }
-    return metricRegistryService.getMetricById('met_001') || CANONICAL_DOMAIN_METRICS[0];
+    const canonicalMetricId = getCanonicalMetricIdForMarketplaceResource(metricId) ?? metricId;
+    return metricRegistryService.getMetricByCanonicalId(canonicalMetricId) ??
+      metricRegistryService.getMetricByCanonicalId('met_001')!;
   }, [propMetric, metricId]);
 
   const baseVersion = targetMetric.version || 'v1.2.0';

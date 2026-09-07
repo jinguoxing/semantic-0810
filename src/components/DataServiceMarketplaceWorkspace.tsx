@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   ChevronRight
 } from 'lucide-react';
+import { MARKETPLACE_RESOURCE_METRIC_REFERENCES } from '../data/marketplaceMetricReferences';
 
 export interface SemanticFilter {
   type: 'domain' | 'object';
@@ -51,6 +52,7 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
   onNavigateToHome,
 }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const agingRatioMetricId = MARKETPLACE_RESOURCE_METRIC_REFERENCES['res-03'].canonicalMetricId;
 
   // 识别是否是业务目标查询（自然语言提问/业务方案诉求）
   const isExplicitGoalQuery = (query: string) => {
@@ -251,7 +253,7 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center flex-wrap gap-2">
                     <span 
-                      onClick={() => onNavigateToMetricDetail ? onNavigateToMetricDetail('res-03') : onNavigateToMetrics?.()}
+                      onClick={() => onNavigateToMetricDetail ? onNavigateToMetricDetail(agingRatioMetricId) : onNavigateToMetrics?.()}
                       className="text-sm font-bold text-[#0F172A] group-hover:text-[#7C3AED] transition-colors cursor-pointer"
                     >
                       老龄化率
@@ -282,7 +284,7 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
                   <span>可直接使用</span>
                 </span>
                 <button
-                  onClick={() => onNavigateToMetricDetail ? onNavigateToMetricDetail('res-03') : onNavigateToMetrics?.()}
+                  onClick={() => onNavigateToMetricDetail ? onNavigateToMetricDetail(agingRatioMetricId) : onNavigateToMetrics?.()}
                   className="px-3 py-1.5 rounded-md border border-[#CBD5E1] bg-white hover:bg-[#F8FAFC] text-xs font-semibold text-[#0F172A] hover:text-[#7C3AED] hover:border-[#7C3AED] flex items-center space-x-1 transition-all cursor-pointer shadow-2xs"
                 >
                   <span>查看指标</span>
@@ -619,7 +621,7 @@ export const DataServiceMarketplaceWorkspace: React.FC<DataServiceMarketplaceWor
 
                   {/* 老龄化率 */}
                   <div
-                    onClick={() => onNavigateToMetricDetail ? onNavigateToMetricDetail('res-03') : onNavigateToMetrics?.()}
+                    onClick={() => onNavigateToMetricDetail ? onNavigateToMetricDetail(agingRatioMetricId) : onNavigateToMetrics?.()}
                     className="p-2 rounded-md hover:bg-[#F8FAFC] border border-transparent hover:border-[#E2E8F0] flex items-center justify-between cursor-pointer transition-all group"
                   >
                     <div className="flex items-center space-x-2.5 min-w-0">

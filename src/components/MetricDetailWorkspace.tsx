@@ -102,11 +102,11 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
   onNavigateToModifyDraft,
   addToast
 }) => {
-  // Resolve current metric dynamically from registry as Single Source of Truth
-  const metric: Metric = 
-    metricRegistryService.getMetricById(metricId) || 
-    metricRegistryService.getMetricById('met_valid_order_amount') || 
-    metricRegistryService.getAllMetrics()[0];
+  const requestedMetricId = metricId?.trim();
+  const resolvedMetric = metricRegistryService.getMetricByCanonicalId(requestedMetricId || 'met_001');
+  // A placeholder keeps hook initialization stable; the missing-ID screen below
+  // is rendered instead of substituting a different registry metric.
+  const metric = (resolvedMetric ?? { id: requestedMetricId || 'unknown', name: '未找到指标' }) as Metric;
 
   // Main Tab State - default to Data Binding per user request
   const [activeTab, setActiveTab] = useState<'overview' | 'binding' | 'evidence_versions'>('binding');
@@ -165,6 +165,19 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
     if (bo === '客户') return 'bo_customer';
     return 'bo_order';
   };
+
+  if (!resolvedMetric) {
+    return (
+      <main className="flex flex-1 items-center justify-center bg-[#F7F9FC] p-8">
+        <section className="max-w-md rounded-xl border border-[#FECACA] bg-white p-6 text-center shadow-sm">
+          <AlertTriangle className="mx-auto h-8 w-8 text-[#DC2626]" />
+          <h1 className="mt-3 text-base font-bold text-[#0F172A]">未找到指标</h1>
+          <p className="mt-2 text-xs leading-relaxed text-[#64748B]">指标 ID「{requestedMetricId || '未提供'}」不是已登记的正式指标，未替换为其他指标。</p>
+          <button type="button" onClick={() => onBackToRegistry?.() || onBackToResources?.()} className="mt-4 rounded-lg border border-[#CBD5E1] px-3 py-2 text-xs font-semibold text-[#2563EB] hover:bg-[#EFF6FF]">返回指标列表</button>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <div className="flex-1 flex overflow-hidden bg-[#F7F9FC] text-[#172033] font-sans antialiased">

@@ -84,5 +84,8 @@ describe('surface policy and structured natural-language intent', () => {
     expect(evaluateSurfacePolicy(resolveInteractionIntent('', task), 'OPEN_METRIC_RESULT', { type: 'CLOSED' }, task, {
       directMetricBinding: { ...snapshot.binding, requestId: 'old_request' }, executedAt: snapshot.executedAt
     })).toMatchObject({ action: 'NO_CHANGE', blockedReason: expect.stringContaining('历史指标结果') });
+    expect(evaluateSurfacePolicy(resolveInteractionIntent('', task), 'OPEN_METRIC_RESULT', { type: 'CLOSED' }, task, {
+      directMetricBinding: { ...snapshot.binding, metricId: 'met_resident_population' }, executedAt: snapshot.executedAt
+    })).toMatchObject({ action: 'NO_CHANGE', blockedReason: expect.stringContaining('历史指标结果') });
   });
 });

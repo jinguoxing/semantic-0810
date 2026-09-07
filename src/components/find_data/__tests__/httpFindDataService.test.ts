@@ -48,8 +48,13 @@ describe('HTTP find-data task lifecycle', () => {
   });
 
   it('passes the exact detail reference to task creation and rejects a Mock direct-metric result', async () => {
+    const entryContext = {
+      entryId: 'metric:met_elderly_population:query-value', source: 'METRIC_DETAIL' as const,
+      target: { kind: 'METRIC' as const, id: 'met_elderly_population', version: 'v1.1.0' },
+      intent: 'QUERY_VALUE' as const, initialText: '查询指标「老年人口数」'
+    };
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === 'POST' && String(_input).endsWith('/tasks')) return new Response(JSON.stringify(createEmptyTask({ taskId: 'task_direct' })));
+      if (init?.method === 'POST' && String(_input).endsWith('/tasks')) return new Response(JSON.stringify(createEmptyTask({ taskId: 'task_direct', entryContext })));
       return new Response(JSON.stringify({
         taskId: 'task_direct', events: [{
           type: 'DIRECT_METRIC_RESULT_RECEIVED', payload: {
@@ -63,17 +68,35 @@ describe('HTTP find-data task lifecycle', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const service = new HttpFindDataService('/api/find-data');
-    await service.createTask({
-      entryContext: {
-        entryId: 'metric:met_elderly_population:query-value', source: 'METRIC_DETAIL',
-        target: { kind: 'METRIC', id: 'met_elderly_population', version: 'v1.1.0' },
-        intent: 'QUERY_VALUE', initialText: '查询指标「老年人口数」'
-      }
+    const created = await service.createTask({
+      entryContext
     });
+    expect(created.entryContext?.target).toEqual(entryContext.target);
     expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toMatchObject({
       entryContext: { target: { kind: 'METRIC', id: 'met_elderly_population', version: 'v1.1.0' } }
     });
     await expect(service.submitTurn(createEmptyTask({ taskId: 'task_direct' }), '查询指标「老年人口数」', 'operation_direct')).rejects.toThrow('不能使用演示数据来源');
+  });
+
+  it.each<[string, { kind: 'METRIC'; id: string; version: string } | undefined]>([
+    ['omits the target', undefined],
+    ['changes the metric ID', { kind: 'METRIC', id: 'met_resident_population', version: 'v1.1.0' }],
+    ['changes the metric version', { kind: 'METRIC', id: 'met_elderly_population', version: 'v1.2.0' }]
+  ])('stops automatic metric querying when HTTP task creation %s', async (_case, returnedTarget) => {
+    const entryContext = {
+      entryId: 'metric:met_elderly_population:query-value', source: 'METRIC_DETAIL' as const,
+      target: { kind: 'METRIC' as const, id: 'met_elderly_population', version: 'v1.1.0' },
+      intent: 'QUERY_VALUE' as const, initialText: '查询指标「老年人口数」'
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(createEmptyTask({
+      taskId: 'task_direct',
+      entryContext: returnedTarget ? { ...entryContext, target: returnedTarget } : undefined
+    })))));
+    const service = new HttpFindDataService('/api/find-data');
+
+    await expect(service.createTask({ entryContext })).rejects.toThrow(returnedTarget?.id === entryContext.target.id
+      ? '指标版本与入口引用不一致'
+      : '未保留入口对象身份');
   });
 
   it('sends only Ask plan identity, revisions, and idempotency data to the server', async () => {

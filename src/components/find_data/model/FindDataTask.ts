@@ -461,6 +461,23 @@ export interface DirectMetricResultBinding {
   requirementRevision: number;
 }
 
+export function isDirectMetricResultBinding(
+  binding: AskPlanBinding | DirectMetricResultBinding | undefined
+): binding is DirectMetricResultBinding {
+  return !!binding && 'kind' in binding && binding.kind === 'DIRECT_METRIC';
+}
+
+/** The immutable identity shared by compact, full, and right-side result views. */
+export function isSameDirectMetricResultBinding(
+  left: DirectMetricResultBinding,
+  right: DirectMetricResultBinding
+): boolean {
+  return left.taskId === right.taskId &&
+    left.requestId === right.requestId &&
+    left.requirementRevision === right.requirementRevision &&
+    left.metricId === right.metricId;
+}
+
 export interface DirectMetricQueryState {
   requestId: string;
   metricId: string;

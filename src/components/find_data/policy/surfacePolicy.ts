@@ -1,4 +1,4 @@
-import { AskPlanFocusSection, AskResultView, DirectMetricResultBinding, FindDataTaskState, MetricResultFocusSection, ResourceId, SurfaceState, SurfaceType, TaskActionCode } from '../model/FindDataTask';
+import { AskPlanFocusSection, AskResultView, DirectMetricResultBinding, FindDataTaskState, MetricResultFocusSection, ResourceId, SurfaceState, SurfaceType, TaskActionCode, isDirectMetricResultBinding, isSameDirectMetricResultBinding } from '../model/FindDataTask';
 import { selectAskHandoffReadiness } from '../model/findDataSelectors';
 
 export interface InteractionIntentResult {
@@ -148,10 +148,8 @@ function metricResultCommand(
 ): SurfaceCommand {
   const current = task?.directMetricResult;
   const currentBinding = current?.binding;
-  if (!binding || binding.kind !== 'DIRECT_METRIC' || !current || !currentBinding ||
-    !('kind' in currentBinding && currentBinding.kind === 'DIRECT_METRIC') ||
-    currentBinding.taskId !== binding.taskId || currentBinding.requestId !== binding.requestId ||
-    currentBinding.metricId !== binding.metricId || currentBinding.requirementRevision !== binding.requirementRevision ||
+  if (!binding || !current || !isDirectMetricResultBinding(currentBinding) ||
+    !isSameDirectMetricResultBinding(currentBinding, binding) ||
     (expectedExecutedAt && current.executedAt !== expectedExecutedAt)) {
     return { action: 'NO_CHANGE', blockedReason: '当前工作区无法恢复这次历史指标结果的详情。' };
   }

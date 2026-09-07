@@ -40,6 +40,7 @@ import { StandardCheckIssueDetailWorkspace } from './components/StandardCheckIss
 import { StandardDetailWorkspace } from './components/StandardDetailWorkspace';
 import { MetricRegistryWorkspace } from './components/MetricRegistryWorkspace';
 import { metricRegistryService } from './data/metricRegistryData';
+import { getCanonicalMetricIdForMarketplaceResource } from './data/marketplaceMetricReferences';
 import { MetricAuthoringWorkspace } from './components/MetricAuthoringWorkspace';
 import { MetricDetailWorkspace } from './components/MetricDetailWorkspace';
 import { BusinessObjectDetailWorkspace } from './components/BusinessObjectDetailWorkspace';
@@ -64,6 +65,11 @@ import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData, MetricDraftInitialData } from './types';
 import { FindDataEntryContext } from './components/find_data/model/FindDataTask';
 
+function resolveMetricDetailId(metricId?: string): string {
+  const requestedId = metricId?.trim();
+  return getCanonicalMetricIdForMarketplaceResource(requestedId) ?? requestedId ?? 'met_001';
+}
+
 export default function App() {
   const shouldRestoreFindDataTask = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('findTaskId');
   const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
@@ -74,7 +80,7 @@ export default function App() {
   const [authoringInitialDraft, setAuthoringInitialDraft] = useState<MetricDraftInitialData | undefined>(undefined);
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
   const [assetDetailContext, setAssetDetailContext] = useState<{ assetId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ assetId: 'res-02', fromGoalSearch: false, goalQuery: '' });
-  const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'res-03', fromGoalSearch: false, goalQuery: '' });
+  const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'met_001', fromGoalSearch: false, goalQuery: '' });
   const [selectedChangeMetricId, setSelectedChangeMetricId] = useState<string>('met_001');
   const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_person', fromGoalSearch: false, goalQuery: '' });
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
@@ -769,7 +775,7 @@ export default function App() {
             addToast('info', '数据资产详情', '已载入「人口基本信息视图」正式资产详情');
           }}
           onNavigateToMetricDetail={(metricId, fromGoalSearch, goalQuery) => {
-            setMetricDetailContext({ metricId, fromGoalSearch, goalQuery });
+            setMetricDetailContext({ metricId: resolveMetricDetailId(metricId), fromGoalSearch, goalQuery });
             setCurrentNav('metric_detail');
             setViewTab('metric_detail');
             addToast('info', '指标详情', '已载入「老龄化率」企业正式指标详情');
@@ -802,7 +808,7 @@ export default function App() {
             addToast('info', '数据资产详情', '已载入「人口基本信息视图」正式资产详情');
           }}
           onNavigateToMetricDetail={(metricId) => {
-            setMetricDetailContext({ metricId, fromGoalSearch: false, goalQuery: '' });
+            setMetricDetailContext({ metricId: resolveMetricDetailId(metricId), fromGoalSearch: false, goalQuery: '' });
             setCurrentNav('metric_detail');
             setViewTab('metric_detail');
             addToast('info', '指标详情', '已载入「老龄化率」企业正式指标详情');
@@ -910,10 +916,9 @@ export default function App() {
             addToast('info', '围绕此指标找数据', `已在资源超市中筛选与「${metricName}」相关的指标与数据集`);
           }}
           onNavigateToModifyDraft={(metricId) => {
-            const effId = metricId || metricDetailContext.metricId || 'met_001';
+            const effId = resolveMetricDetailId(metricId || metricDetailContext.metricId);
             setSelectedChangeMetricId(effId);
-            const foundMetric = metricRegistryService.getMetricById(effId) || 
-                                (effId === 'res-03' ? metricRegistryService.getMetricById('met_001') : null);
+            const foundMetric = metricRegistryService.getMetricByCanonicalId(effId);
             const metricName = foundMetric ? foundMetric.name : '指标';
             setCurrentNav('metric_change_draft');
             setViewTab('metric_change_draft');
@@ -927,7 +932,7 @@ export default function App() {
           targetMetricId={selectedChangeMetricId}
           addToast={addToast}
           onNavigateToMetricDetail={(metricId) => {
-            setMetricDetailContext({ metricId: metricId || selectedChangeMetricId, fromGoalSearch: false, goalQuery: '' });
+            setMetricDetailContext({ metricId: resolveMetricDetailId(metricId || selectedChangeMetricId), fromGoalSearch: false, goalQuery: '' });
             setCurrentNav('metric_detail');
             setViewTab('metric_detail');
           }}
@@ -991,7 +996,7 @@ export default function App() {
             addToast('info', '数据资产详情', '已载入数据资产详情');
           }}
           onNavigateToMetricDetail={(metricId) => {
-            setMetricDetailContext({ metricId: metricId || 'res-03', fromGoalSearch: false, goalQuery: '' });
+            setMetricDetailContext({ metricId: resolveMetricDetailId(metricId), fromGoalSearch: false, goalQuery: '' });
             setCurrentNav('metric_detail');
             setViewTab('metric_detail');
             addToast('info', '指标详情', '已载入企业正式指标详情');
@@ -1102,17 +1107,16 @@ export default function App() {
         <MetricRegistryWorkspace
           addToast={addToast}
           onNavigateToMetricDetail={(metricId) => {
-            setMetricDetailContext({ metricId: metricId || 'res-03', fromGoalSearch: false, goalQuery: '' });
+            setMetricDetailContext({ metricId: resolveMetricDetailId(metricId), fromGoalSearch: false, goalQuery: '' });
             setCurrentNav('metric_detail');
             setViewTab('metric_detail');
             addToast('info', '指标详情', '已载入「老年人口数」正式指标事实详情页');
           }}
           onNavigateToCreateMetric={(mode, draftData, targetMetricId) => {
             if (mode === 'change_draft') {
-              const effId = targetMetricId || 'met_001';
+              const effId = resolveMetricDetailId(targetMetricId);
               setSelectedChangeMetricId(effId);
-              const foundMetric = metricRegistryService.getMetricById(effId) || 
-                                  (effId === 'res-03' ? metricRegistryService.getMetricById('met_001') : null);
+              const foundMetric = metricRegistryService.getMetricByCanonicalId(effId);
               const metricName = foundMetric ? foundMetric.name : '指标';
               setCurrentNav('metric_change_draft');
               setViewTab('metric_change_draft');
@@ -1374,7 +1378,7 @@ export default function App() {
             addToast('info', '我的申请', '查看已申请的数据访问权限与 API 调用授权记录');
           }}
           onNavigateToMetricDetail={(metricId) => {
-            setMetricDetailContext({ metricId, fromGoalSearch: false, goalQuery: '' });
+            setMetricDetailContext({ metricId: resolveMetricDetailId(metricId), fromGoalSearch: false, goalQuery: '' });
             setCurrentNav('metric_detail');
             setViewTab('metric_detail');
             addToast('info', '指标详情', '已载入「老龄化率」企业正式指标详情');
@@ -1492,7 +1496,7 @@ export default function App() {
               setDataAssistantEntryContext(undefined);
               setDataAssistantInitialQuery(query || '');
               setViewTab('data_assistant');
-              addToast('success', '进入数据助手', '已进入「数据助手 · 找数据」多轮智能交互工作台');
+              addToast('success', '进入数据助手', '已进入「数据助手」多轮智能交互工作台');
             }}
             onOpenLauncher={() => setIsLauncherOpen(true)}
           />

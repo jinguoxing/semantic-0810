@@ -98,7 +98,7 @@ describe('MetricQueryDesignDemoService', () => {
     });
   });
 
-  it('drops a late direct-metric result when its request or requirement revision is no longer current', async () => {
+  it('drops a late direct-metric result when its request, requirement revision, or metric identity is no longer current', async () => {
     const service = new MetricQueryDesignDemoService();
     const created = await service.createTask({
       entryContext: {
@@ -123,5 +123,21 @@ describe('MetricQueryDesignDemoService', () => {
       }
     });
     expect(findDataReducer(current, lateResult).directMetricResult).toBeUndefined();
+
+    const matchingRevision = createEmptyTask({
+      taskId: created.taskId,
+      requirementRevision: binding.requirementRevision,
+      directMetricQuery: {
+        requestId: binding.requestId,
+        metricId: binding.metricId,
+        status: 'RUNNING',
+        preparedAt: '2026-09-07T00:00:00.000Z'
+      }
+    });
+    const wrongMetric = {
+      ...lateResult,
+      payload: { snapshot: { ...lateResult.payload.snapshot, binding: { ...binding, metricId: 'met_resident_population' } } }
+    };
+    expect(findDataReducer(matchingRevision, wrongMetric).directMetricResult).toBeUndefined();
   });
 });

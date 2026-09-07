@@ -54,6 +54,12 @@ export interface DataAssetDetailWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
+function resolveAssetIdentity(assetId?: string): { id: string; label: string } {
+  const id = assetId?.trim();
+  if (id === 'res-02') return { id, label: '人口基本信息视图' };
+  return { id: id || 'unknown', label: id || '当前数据资产' };
+}
+
 interface FullFieldItem {
   name: string;
   cnName: string;
@@ -210,6 +216,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
   onExploreRelatedData,
   addToast
 }) => {
+  const assetIdentity = resolveAssetIdentity(assetId);
   // Navigation inside Marketplace Sidebar
   const [activeSideNav, setActiveSideNav] = useState<'discovery' | 'resources' | 'my_requests'>('resources');
 
@@ -387,7 +394,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                 资源
               </span>
               <span>/</span>
-              <span className="text-[#172033] font-medium">人口基本信息视图</span>
+              <span className="text-[#172033] font-medium">{assetIdentity.label}</span>
               {isAllFieldsView && (
                 <>
                   <span>/</span>
@@ -443,7 +450,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               <div className="space-y-1.5 flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <h1 className="text-2xl font-bold text-[#172033] tracking-tight">
-                    人口基本信息视图
+                    {assetIdentity.label}
                   </h1>
                   <span className="px-2 py-0.5 bg-[#EFF6FF] text-[#2563EB] border border-[#DBEAFE] text-[11px] font-semibold rounded">
                     DATA ASSET · VIEW
@@ -1009,14 +1016,14 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                 onClick={() => {
                   if (onEnterAnalysis) {
                     onEnterAnalysis({
-                      entryId: `asset:${assetId ?? 'unknown'}:analyze`,
+                      entryId: `asset:${assetIdentity.id}:analyze`,
                       source: 'ASSET_DETAIL',
-                      target: { kind: 'ASSET', id: assetId ?? 'unknown', label: '人口基本信息视图' },
+                      target: { kind: 'ASSET', id: assetIdentity.id, label: assetIdentity.label },
                       intent: 'ANALYZE',
-                      initialText: '围绕资源「人口基本信息视图」继续分析'
+                      initialText: `围绕资源「${assetIdentity.label}」继续分析`
                     });
                   } else {
-                    addToast?.('success', '进入分析', '已将「人口基本信息视图」载入 AI 分析工作台');
+                    addToast?.('success', '进入分析', `已将「${assetIdentity.label}」载入数据助手`);
                   }
                 }}
                 className="w-full py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
@@ -1029,14 +1036,14 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                 onClick={() => {
                   if (onEnterChatQuery) {
                     onEnterChatQuery({
-                      entryId: `asset:${assetId ?? 'unknown'}:query-value`,
+                      entryId: `asset:${assetIdentity.id}:query-value`,
                       source: 'ASSET_DETAIL',
-                      target: { kind: 'ASSET', id: assetId ?? 'unknown', label: '人口基本信息视图' },
+                      target: { kind: 'ASSET', id: assetIdentity.id, label: assetIdentity.label },
                       intent: 'QUERY_VALUE',
-                      initialText: '基于资源「人口基本信息视图」提出查询需求'
+                      initialText: `基于资源「${assetIdentity.label}」提出查询需求`
                     });
                   } else {
-                    addToast?.('info', '用于问数', '已在 Xino 对话流中绑定当前资产上下文');
+                    addToast?.('info', '使用当前资产', `已将「${assetIdentity.label}」作为对象上下文带入数据助手`);
                   }
                 }}
                 className="w-full py-2.5 bg-white hover:bg-[#EFF6FF] border border-[#CBD5E1] text-[#2563EB] text-xs font-bold rounded-md transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
@@ -1050,7 +1057,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               <button
                 onClick={() => {
                   setIsAccessRequestDrawerOpen(true);
-                  addToast?.('info', '申请使用', '已打开「人口基本信息视图」访问需求确认抽屉');
+                  addToast?.('info', '申请使用', `已打开「${assetIdentity.label}」访问需求确认抽屉`);
                 }}
                 className="w-full py-2.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-md transition-colors flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs"
               >
@@ -1072,7 +1079,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
             <button
               onClick={() => {
                 if (onExploreRelatedData) {
-                  onExploreRelatedData('人口基本信息视图');
+                  onExploreRelatedData(assetIdentity.label);
                 } else if (onBackToResources) {
                   onBackToResources();
                 }
@@ -1252,7 +1259,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                   数据可用性与质量摘要
                 </div>
                 <div className="text-base font-bold text-[#172033]">
-                  人口基本信息视图 · 状态评估
+                  {assetIdentity.label} · 状态评估
                 </div>
               </div>
 
@@ -1359,7 +1366,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
       <SingleResourceAccessRequestDrawer
         isOpen={isAccessRequestDrawerOpen}
         onClose={() => setIsAccessRequestDrawerOpen(false)}
-        resourceName="人口基本信息视图"
+        resourceName={assetIdentity.label}
         resourceTypeLabel="DATA ASSET · VIEW"
         taskContextTitle={goalQuery || "街镇老龄化分析"}
         onSuccessSubmit={(resultType) => {

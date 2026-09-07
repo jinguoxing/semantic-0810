@@ -28,6 +28,19 @@ export class HttpFindDataService implements FindDataService {
     return result;
   }
 
+  private requireAuthoritativeEntryTarget(input: CreateFindDataTaskInput | undefined, task: FindDataTaskState): FindDataTaskState {
+    const requestedTarget = input?.entryContext?.target;
+    if (!requestedTarget) return task;
+    const returnedTarget = task.entryContext?.target;
+    if (!returnedTarget || returnedTarget.kind !== requestedTarget.kind || returnedTarget.id !== requestedTarget.id) {
+      throw new Error('找数据后端创建任务时未保留入口对象身份，已停止自动查询。');
+    }
+    if (requestedTarget.version !== undefined && returnedTarget.version !== requestedTarget.version) {
+      throw new Error('找数据后端返回的指标版本与入口引用不一致，已停止自动查询。');
+    }
+    return task;
+  }
+
   async createTask(input?: CreateFindDataTaskInput): Promise<FindDataTaskState> {
     try {
       const resp = await fetch(`${this.apiBase}/tasks`, {
@@ -38,7 +51,7 @@ export class HttpFindDataService implements FindDataService {
       if (!resp.ok) {
         throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
       }
-      return await resp.json();
+      return this.requireAuthoritativeEntryTarget(input, await resp.json());
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`无法连接找数据后端服务: ${message}`);
