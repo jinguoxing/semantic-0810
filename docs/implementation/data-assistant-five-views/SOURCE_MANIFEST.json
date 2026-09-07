@@ -1,0 +1,79 @@
+{
+  "description": "Original inputs copied without content changes; images are uncorrected design references.",
+  "files": [
+    {
+      "path": "docs/implementation/data-assistant-five-views/inputs/01_code-implementation.md",
+      "original": "Semovix_五图功能接入_基于31f9c6c的代码实施说明_V1.md",
+      "sha256": "99a3de83040727c6e50f34a0926e11b762165c207296e493dc523dda4396eddf",
+      "bytes": 29098
+    },
+    {
+      "path": "docs/implementation/data-assistant-five-views/inputs/02_five-view-checklist.md",
+      "original": "Semovix_数据助手_五图实施映射与验收清单_V1.md",
+      "sha256": "013159e44cbf805110b04fa7ff082fb82816f8d2e64d7d26fd44d4098b4a78de",
+      "bytes": 42352
+    },
+    {
+      "path": "docs/implementation/data-assistant-five-views/inputs/03_page-contract.md",
+      "original": "Semovix_Ask_Data_指标查询_交互与页面内容合同_V1.md",
+      "sha256": "b6038cde1a787b1718c1fd8cb74ba9afdc0138e2b53fc2faf3cdaa312897da54",
+      "bytes": 31841
+    },
+    {
+      "path": "docs/implementation/data-assistant-five-views/inputs/04_master-plan-v1.3.md",
+      "original": "Semovix_数据助手执行页_交互吸收与演进方案_V1.3.md",
+      "sha256": "d7b1b29f83fa49b23a8278a2581b4b65bc93fdaf69f4a723e7ff62e4a30bd954",
+      "bytes": 114941
+    },
+    {
+      "path": "docs/implementation/data-assistant-five-views/images/01_metric-answer.png",
+      "original": "semovix数据助手界面.png",
+      "sha256": "66c4234b2f8151d335cc71229c78012ad8b01f3051cf718ee7292a5b2bd2654c",
+      "bytes": 865026,
+      "pixels": [
+        1672,
+        941
+      ]
+    },
+    {
+      "path": "docs/implementation/data-assistant-five-views/images/02_metric-clarification.png",
+      "original": "数据助手_养老床位口径选择.png",
+      "sha256": "75e4ad57e72a82bfc0ae8c564b5f35e5fd46927ca1a7a7d69899053b96dc62a0",
+      "bytes": 839409,
+      "pixels": [
+        1672,
+        941
+      ]
+    },
+    {
+      "path": "docs/implementation/data-assistant-five-views/images/03_calculation-plan.png",
+      "original": "semovix养老床位比较助手界面.png",
+      "sha256": "e56ac86fe7fc4717e811176cb5a452135801038a6f41e374f390db3e7b820bf0",
+      "bytes": 994786,
+      "pixels": [
+        1672,
+        941
+      ]
+    },
+    {
+      "path": "docs/implementation/data-assistant-five-views/images/04_result-workspace.png",
+      "original": "街镇养老床位数据助手仪表盘.png",
+      "sha256": "ee43931adef41852e349bb7873d2ac98468b262349fd7571962bb50e14a1c720",
+      "bytes": 1026681,
+      "pixels": [
+        1672,
+        941
+      ]
+    },
+    {
+      "path": "docs/implementation/data-assistant-five-views/images/05_history-interpretation.png",
+      "original": "在营床位对比分析看板.png",
+      "sha256": "76f22c05c002a81fdb4ce5fa61acfa39ed4f4975a0178a301578e3358554a96e",
+      "bytes": 1085610,
+      "pixels": [
+        1672,
+        941
+      ]
+    }
+  ]
+}
