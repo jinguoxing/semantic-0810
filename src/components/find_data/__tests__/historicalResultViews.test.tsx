@@ -82,6 +82,21 @@ function taskWithResults(): FindDataTaskState {
   });
 }
 
+function taskWithUnreadableOnlyHistory(): FindDataTaskState {
+  const taskId = 'unreadable_history_task';
+  const snapshot = resultSnapshot(taskId, 'A');
+  snapshot.currentReadAccess = 'DENIED';
+  return createEmptyTask({
+    taskId,
+    turns: [{
+      turnId: 'unreadable_history_turn',
+      sender: 'ASSISTANT',
+      createdAt: '',
+      blocks: [{ type: 'ASK_RESULT', id: 'unreadable_history_block', snapshot }]
+    }]
+  });
+}
+
 function taskWithCurrentDirectMetricResult(): FindDataTaskState {
   const taskId = 'direct_metric_task';
   const snapshot: AskResultSnapshot = {
@@ -185,6 +200,59 @@ describe('historical result targets', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(findData.submitTurn).not.toHaveBeenCalled();
     expect(screen.getAllByText('这份历史结果当前不可读取').length).toBeGreaterThan(0);
+  });
+
+  it('blocks an explicit this-result interpretation when all known HTTP history is unreadable', async () => {
+    const task = taskWithUnreadableOnlyHistory();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service({ createTask: vi.fn(async () => task), getTask: vi.fn(async () => task) });
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} serviceModeOverride="http" taskStoreOverride={store} />);
+
+    const input = await screen.findByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '解释这份结果' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(findData.submitTurn).not.toHaveBeenCalled();
+    expect(findData.runAskPlan).not.toHaveBeenCalled();
+    expect(findData.executeAction).not.toHaveBeenCalled();
+    expect(await screen.findByText('这份历史结果当前不可读取，不能使用其他结果替代。')).toBeInTheDocument();
+  });
+
+  it('blocks an explicit Result A interpretation when all known HTTP history is unreadable', async () => {
+    const task = taskWithUnreadableOnlyHistory();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service({ createTask: vi.fn(async () => task), getTask: vi.fn(async () => task) });
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} serviceModeOverride="http" taskStoreOverride={store} />);
+
+    const input = await screen.findByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '解释结果 A' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(findData.submitTurn).not.toHaveBeenCalled();
+    expect(findData.runAskPlan).not.toHaveBeenCalled();
+    expect(findData.executeAction).not.toHaveBeenCalled();
+    expect(await screen.findByText('这份历史结果当前不可读取，不能使用其他结果替代。')).toBeInTheDocument();
+  });
+
+  it('keeps a normal Find Data why question context-free when all HTTP history is unreadable', async () => {
+    const task = taskWithUnreadableOnlyHistory();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service({ createTask: vi.fn(async () => task), getTask: vi.fn(async () => task) });
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} serviceModeOverride="http" taskStoreOverride={store} />);
+
+    const input = await screen.findByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '为什么推荐这个表？' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledOnce());
+    expect(vi.mocked(findData.submitTurn).mock.calls[0][3]).toBeUndefined();
+    expect(screen.queryByText('这份历史结果当前不可读取，不能使用其他结果替代。')).not.toBeInTheDocument();
   });
 
   it('redacts a cached unauthorized historical detail surface instead of rendering its snapshot', async () => {

@@ -185,6 +185,10 @@ export function canOpenDirectMetricResult(task: FindDataTaskState, snapshot: Ask
     task.directMetricResult?.executedAt === snapshot.executedAt;
 }
 
+function hasExplicitResultReference(text: string): boolean {
+  return /(?:这份|这个|此|那份)\s*结果|结果\s*[AB]|(?:在营可用|核定)[^，。！？?]*那份结果/.test(text);
+}
+
 export const askRunCompletionMessage = buildAskRunCompletionSummary;
 
 export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorkspaceProps> = ({
@@ -520,13 +524,13 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   };
 
   const isInterpretationRequest = (text: string): boolean => {
+    const knownSelections = selectResultSnapshots(taskRef.current);
+    if (knownSelections.length === 0) return false;
     const readableSelections = selectReadableResults();
-    if (readableSelections.length === 0) return false;
     // The word "why" belongs to Find Data by default. Treat it as a result
     // continuation only with an explicit result reference, or with a focused
     // result-object follow-up in the existing right workspace.
-    const hasExplicitResultReference = /(?:这份|这个|此|那份)\s*结果|结果\s*[AB]|(?:在营可用|核定)[^，。！？?]*那份结果/.test(text);
-    if (hasExplicitResultReference) return true;
+    if (hasExplicitResultReference(text)) return true;
     const viewed = selectCurrentViewedResult(taskRef.current);
     if (viewed && isResultSnapshotReadable(viewed, requiresHistoricalResultReadAuthorization) &&
       /^(?:这里|为什么(?:这里)?(?:更低|更高)|(?:这个|这份|此)?差异(?:为什么)?)[？?！!。]*$/.test(text.trim())) {
@@ -538,9 +542,9 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   };
 
   const resolveTextResultTarget = (text: string): { target?: ResultTargetRef; ambiguous: boolean; blockedReason?: string } => {
-    const selections = selectReadableResults();
-    if (selections.length === 0) return { ambiguous: false };
     const knownSelections = selectResultSnapshots(taskRef.current);
+    if (knownSelections.length === 0) return { ambiguous: false };
+    const selections = selectReadableResults();
     const normalized = text.replace(/[\s，。、“”‘’「」()（）·]/g, '').toLowerCase();
     const matchingSelections = (candidates: typeof selections) => candidates.filter((selection) => [selection.displayLabel, selection.snapshot.metricName, selection.snapshot.numeratorLabel]
       .flatMap((label) => label ? [label, label.replace(/养老/g, ''), label.replace(/数/g, ''), label.replace(/养老/g, '').replace(/数/g, '')] : [])
@@ -565,6 +569,9 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     const viewed = selectCurrentViewedResult(taskRef.current);
     if (viewed && isResultSnapshotReadable(viewed, requiresHistoricalResultReadAuthorization)) return { target: viewed.target, ambiguous: false };
     if (selections.length === 1) return { target: selections[0].target, ambiguous: false };
+    if (selections.length === 0 && hasExplicitResultReference(text)) {
+      return { ambiguous: false, blockedReason: '这份历史结果当前不可读取，不能使用其他结果替代。' };
+    }
     return { ambiguous: true };
   };
 
