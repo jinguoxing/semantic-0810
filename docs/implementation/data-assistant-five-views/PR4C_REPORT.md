@@ -4,6 +4,7 @@
 
 - `PR4C_START_SHA`: `28c50383f9a71a444d3df92c83ba8288d0a0f661`
 - `PR4C_IMPLEMENTATION_SHA`: `d10a585d1fce3fde573b7e3b962704ed5af19087`
+- `PR4C_FINAL_GUARD_SHA`: `70d5f11e03919a717651d3dc75cd631294150460`
 - Branch: `codex/data-assistant-object-views`
 - Scope: PR-4C only. No PR-4A/PR-4B behavioral rework, no new HTTP endpoint, no second context/store, and no Analysis V1 work.
 
@@ -18,6 +19,14 @@ Both plans are derived from the strict Current Effective Data Solution. Plan B t
 
 The Design Demo runner reads only its private raw fixture keyed by `resourceId + region + month`. It does not read conversation result values and does not affect Default Mock or HTTP execution.
 
+## Calculation and result state mapping
+
+- Conceptual transition: Calculation Plan → Result.
+- Internal transition: `ASK_PLAN / PLAN` → `ASK_PLAN / RESULT` in the same right-workspace host.
+- `ASK_PLAN / CALCULATION` is not the pre-run execution state. It is the post-result “本次计算依据” view.
+
+`prepareContinuityAskPlan` deliberately keeps `focusSection: 'PLAN'`; the Final Guard does not rename or repurpose that state.
+
 ## C4 acceptance evidence
 
 | ID | Evidence |
@@ -27,8 +36,8 @@ The Design Demo runner reads only its private raw fixture keyed by `resourceId +
 | C4-03 | Every plan uses `createScenarioId('plan')`; Plan A and B IDs are asserted different. |
 | C4-04 | Permission baseline, relationship pair, and alignment validation derive only from each plan's `coreResourceIds`. |
 | C4-05 | Plan preparation opens the existing `ASK_PLAN` workspace with `focusSection: 'PLAN'`. |
-| C4-06 | The existing right-workspace host stays `ASK_PLAN` while `ASK_RUN_STARTED` marks the plan running. |
-| C4-07 | On success the workspace is updated in place with `SURFACE_OPENED` and `focusSection: 'RESULT'`; no `SURFACE_CLOSED` event is emitted. |
+| C4-06 | The existing right-workspace host stays `ASK_PLAN / PLAN` while `ASK_RUN_STARTED` marks the plan running. |
+| C4-07 | Conceptually Calculation Plan → Result; internally `ASK_PLAN / PLAN` updates in place to `ASK_PLAN / RESULT`, with no `SURFACE_CLOSED` event. |
 | C4-08 | `DESIGN_CONTINUITY_RAW_FIXTURE` is private to `MetricQueryDesignDemoService`; a test corrupts all conversation results to `999999` and still receives the frozen ratios. |
 | C4-09 | Plan A result rows are 15.0 (浦锦), 20.0 (七宝), with 5.0 张 / 千人 difference. |
 | C4-10 | Existing Result Chart/Data controls update presentation state only; component regression asserts no rerun. |
@@ -49,8 +58,8 @@ The Design Demo runner reads only its private raw fixture keyed by `resourceId +
 | --- | --- |
 | IC4-01 | The conversation receives only the short “已沿用当前任务…” plan-ready summary. |
 | IC4-02 | `RightWorkspaceAskPlan` renders the complete calculation object and labels inputs as from the current data solution. |
-| IC4-03 | `ASK_RUN_STARTED` retains the existing `ASK_PLAN` surface. |
-| IC4-04 | Successful execution changes the existing host focus from `CALCULATION` to `RESULT`, without close/open churn. |
+| IC4-03 | `ASK_RUN_STARTED` retains the existing `ASK_PLAN / PLAN` surface. |
+| IC4-04 | Successful execution changes the existing host focus from `PLAN` to `RESULT`, without close/open churn. |
 | IC4-05 | Chart/Data tabs invoke presentation focus handling and do not call the runner. |
 | IC4-06 | Result A and B have separate askPlan IDs, operation/result refs, executedAt values, and immutable snapshots. |
 | IC4-07 | `RightWorkspaceResultDetail` renders `历史结果` for a non-current selected artifact. |
@@ -74,12 +83,29 @@ The Design Demo runner reads only its private raw fixture keyed by `resourceId +
 
 ## Verification
 
-- Targeted continuity/regression tests: 89 passed.
-- Full local suite: 18 files, 239 tests passed.
+- Original targeted continuity/regression tests: 89 passed.
+- Final Guard targeted tests: 35 passed.
+- Full local suite after Final Guard: 18 files, 244 tests passed.
 - Type check: `npm run lint` passed (`tsc --noEmit`).
 - Builds passed: `mock`, `disconnected`, `http`, and `design-demo`.
 - `git diff --check` passed before commit.
 - GitHub CI was not triggered for this direct `codex/*` branch: the repository workflow runs push jobs only for `main` and `v2026.*`; this report therefore records local PASS only, not CI green.
+
+## PR-4C Final Guard
+
+The Final Guard commit is `70d5f11e03919a717651d3dc75cd631294150460`.
+
+| ID | Evidence |
+| --- | --- |
+| FG4C-01 | With exactly Calculation Result A/B, `解释结果 A` resolves to Result A's exact ResultTarget. |
+| FG4C-02 | With exactly Calculation Result A/B, `解释结果 B` resolves to Result B's exact ResultTarget. |
+| FG4C-03 | With population/bed Direct Results ahead of two calculation results, `解释结果 A` still resolves to Calculation Result A. |
+| FG4C-04 | With the same mixed history, `解释结果 B` still resolves to Calculation Result B. |
+| FG4C-05 | An explicit Result A alias wins over an open `RESULT_DETAIL` displaying Result B. |
+| FG4C-06 | In HTTP mode, an unreadable Calculation Result A is blocked; readable Result B is never substituted and `submitTurn` remains zero. |
+| FG4C-07 | If there are not exactly two calculation results, Result A/B aliases are safely blocked rather than guessed by ordinal. |
+
+Alias precedence is now: explicit semantic/name match, explicit calculation Result A/B alias, explicitly viewed readable result, exactly one readable result, then clarification. Only `AskPlanBinding` results participate in A/B alias order; Direct Metric Results never do. Semantic matching for available-bed and approved-bed comparison results remains exact and continues to exclude Direct Metric Results.
 
 ## Suggested next state
 
