@@ -113,6 +113,85 @@ describe('PR-4A effective data solution and execution identity', () => {
 });
 
 describe('PR-4A data-solution direct-query freshness', () => {
+  it('FG4A-01 blocks USER_EXPLICIT Metric B when authoritative EntryContext names Metric A', () => {
+    const task = createEmptyTask({
+      entryContext: {
+        entryId: 'entry_metric_a', source: 'METRIC_DETAIL',
+        target: { kind: 'METRIC', id: 'metric_a' }, intent: 'QUERY_VALUE', initialText: '查询 A'
+      },
+      directMetricQuery: {
+        requestId: 'explicit_metric_b', metricId: 'metric_b', source: { kind: 'USER_EXPLICIT' },
+        status: 'READY', preparedAt: '2026-09-07T00:00:00.000Z'
+      }
+    });
+    expect(selectDirectMetricQueryReadiness(task)).toEqual(expect.objectContaining({ ready: false }));
+    expect(findDataReducer(task, {
+      type: 'DIRECT_METRIC_QUERY_PREPARED', payload: { query: task.directMetricQuery! }
+    })).toBe(task);
+  });
+
+  it('FG4A-02 blocks a direct metric when authoritative EntryContext targets a non-metric object', () => {
+    const task = createEmptyTask({
+      entryContext: {
+        entryId: 'entry_asset', source: 'ASSET_DETAIL',
+        target: { kind: 'ASSET', id: 'asset_a' }, intent: 'ANALYZE', initialText: '分析资产'
+      },
+      directMetricQuery: {
+        requestId: 'explicit_metric', metricId: 'met_elderly_population', source: { kind: 'USER_EXPLICIT' },
+        status: 'READY', preparedAt: '2026-09-07T00:00:00.000Z'
+      }
+    });
+    expect(selectDirectMetricQueryReadiness(task)).toEqual(expect.objectContaining({ ready: false }));
+    expect(findDataReducer(task, {
+      type: 'DIRECT_METRIC_QUERY_STARTED', payload: { requestId: 'explicit_metric' }
+    })).toBe(task);
+  });
+
+  it('FG4A-03 blocks an ENTRY_CONTEXT source whose entryId does not match the task', () => {
+    const query: DirectMetricQueryState = {
+      requestId: 'entry_mismatch', metricId: 'met_elderly_population',
+      source: { kind: 'ENTRY_CONTEXT', entryId: 'another_entry' },
+      status: 'READY', preparedAt: '2026-09-07T00:00:00.000Z'
+    };
+    const task = createEmptyTask({
+      entryContext: {
+        entryId: 'entry_expected', source: 'METRIC_DETAIL',
+        target: { kind: 'METRIC', id: 'met_elderly_population' }, intent: 'QUERY_VALUE', initialText: '查询指标'
+      },
+      directMetricQuery: query
+    });
+    expect(selectDirectMetricQueryReadiness(task)).toEqual(expect.objectContaining({ ready: false }));
+    expect(findDataReducer(task, {
+      type: 'DIRECT_METRIC_QUERY_PREPARED', payload: { query }
+    })).toBe(task);
+  });
+
+  it('FG4A-04 safely hydrates a legacy direct query without source and retains ASK_RESULT history', () => {
+    const query = dataSolutionQuery();
+    const legacyQuery = {
+      requestId: query.requestId,
+      metricId: query.metricId,
+      status: 'COMPLETED' as const,
+      preparedAt: query.preparedAt
+    } as unknown as DirectMetricQueryState;
+    const legacy = currentSolutionTask({
+      directMetricQuery: legacyQuery,
+      directMetricResult: directSnapshot(currentSolutionTask(), query),
+      turns: [{
+        turnId: 'legacy_direct_turn', sender: 'ASSISTANT', createdAt: '',
+        blocks: [{ type: 'ASK_RESULT', id: 'legacy_direct_result', snapshot: directSnapshot(currentSolutionTask(), query) }]
+      }]
+    });
+    let hydrated: FindDataTaskState | undefined;
+    expect(() => {
+      hydrated = findDataReducer(createEmptyTask(), { type: 'TASK_HYDRATED', payload: { task: legacy } });
+    }).not.toThrow();
+    expect(hydrated?.directMetricQuery?.status).toBe('STALE');
+    expect(hydrated?.directMetricResult).toBeUndefined();
+    expect(selectDirectMetricQueryReadiness(hydrated!)).toEqual(expect.objectContaining({ ready: false }));
+    expect(selectResultSnapshots(hydrated!)).toHaveLength(1);
+  });
+
   it('makes a current DATA_SOLUTION query runnable with bound conditions', () => {
     const task = currentSolutionTask({ directMetricQuery: dataSolutionQuery() });
     expect(selectDirectMetricQueryReadiness(task)).toEqual(expect.objectContaining({ ready: true }));
@@ -162,7 +241,7 @@ describe('PR-4A data-solution direct-query freshness', () => {
     })).toBe(stale);
   });
 
-  it('stales a mutable direct query on a search revision change and rejects its delayed result', () => {
+  it('FG4A-05 stales only a DATA_SOLUTION query on a search revision change and rejects its delayed result', () => {
     const query = dataSolutionQuery({ status: 'RUNNING' });
     const task = currentSolutionTask({ directMetricQuery: query });
     const stale = findDataReducer(task, {
@@ -174,6 +253,34 @@ describe('PR-4A data-solution direct-query freshness', () => {
     expect(findDataReducer(stale, {
       type: 'DIRECT_METRIC_RESULT_RECEIVED', payload: { snapshot: directSnapshot(task, query) }
     })).toBe(stale);
+  });
+
+  it('FG4A-06 leaves an ENTRY_CONTEXT query unchanged when an unrelated search revision changes', () => {
+    const query: DirectMetricQueryState = {
+      requestId: 'entry_search_query', metricId: 'met_elderly_population',
+      source: { kind: 'ENTRY_CONTEXT', entryId: 'entry_search' },
+      status: 'RUNNING', preparedAt: '2026-09-07T00:00:00.000Z'
+    };
+    const task = createEmptyTask({
+      searchRevision: 3,
+      entryContext: {
+        entryId: 'entry_search', source: 'METRIC_DETAIL',
+        target: { kind: 'METRIC', id: 'met_elderly_population' }, intent: 'QUERY_VALUE', initialText: '查询指标'
+      },
+      directMetricQuery: query
+    });
+    const next = findDataReducer(task, { type: 'SEARCH_STARTED', payload: { searchRevision: 4 } });
+    expect(next.directMetricQuery).toEqual(query);
+  });
+
+  it('FG4A-07 leaves a USER_EXPLICIT query unchanged when an unrelated search revision changes', () => {
+    const query: DirectMetricQueryState = {
+      requestId: 'explicit_search_query', metricId: 'met_elderly_population',
+      source: { kind: 'USER_EXPLICIT' }, status: 'RUNNING', preparedAt: '2026-09-07T00:00:00.000Z'
+    };
+    const task = createEmptyTask({ searchRevision: 3, directMetricQuery: query });
+    const next = findDataReducer(task, { type: 'SEARCH_STARTED', payload: { searchRevision: 4 } });
+    expect(next.directMetricQuery).toEqual(query);
   });
 
   it('keeps the existing entry-context direct-metric contract runnable', () => {

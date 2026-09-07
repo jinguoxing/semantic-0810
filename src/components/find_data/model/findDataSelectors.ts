@@ -19,7 +19,8 @@ import {
   ResultTargetRef,
   ResultBinding,
   isSameResultBinding,
-  isDirectMetricResultBinding
+  isDirectMetricResultBinding,
+  isDirectMetricQuerySource
 } from './FindDataTask';
 import { getResourceRangeIntersection, resourceCoversRange } from './timeRangeUtils';
 import { metricRegistryService } from '../../../data/metricRegistryData';
@@ -65,6 +66,7 @@ export function isDataSolutionDirectMetricQueryCurrent(
   task: FindDataTaskState,
   query: DirectMetricQueryState
 ): boolean {
+  if (!isDirectMetricQuerySource(query.source)) return false;
   if (query.source.kind !== 'DATA_SOLUTION') return true;
   const solution = selectEffectiveDataSolution(task);
   if (!solution ||
@@ -78,11 +80,11 @@ export function isDataSolutionDirectMetricQueryCurrent(
 }
 
 function isEntryContextDirectMetricQueryCurrent(task: FindDataTaskState, query: DirectMetricQueryState): boolean {
-  if (query.source.kind !== 'ENTRY_CONTEXT') return true;
+  if (!isDirectMetricQuerySource(query.source)) return false;
   const entryTarget = task.entryContext?.target;
-  return task.entryContext?.entryId === query.source.entryId &&
-    entryTarget?.kind === 'METRIC' &&
-    entryTarget.id === query.metricId;
+  if (!entryTarget) return true;
+  if (entryTarget.kind !== 'METRIC' || entryTarget.id !== query.metricId) return false;
+  return query.source.kind !== 'ENTRY_CONTEXT' || task.entryContext.entryId === query.source.entryId;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { ClarificationQuestion, ConversationTurn, DataSolutionItem, DirectMetricQueryState, FindDataTaskState, ResourceCandidate, isDirectMetricResultBinding } from './FindDataTask';
+import { ClarificationQuestion, ConversationTurn, DataSolutionItem, DirectMetricQueryState, FindDataTaskState, ResourceCandidate, isDirectMetricQuerySource, isDirectMetricResultBinding } from './FindDataTask';
 import { createFindDataTask } from './createFindDataTask';
 import { FindDataEvent } from './findDataEvents';
 import { isDataSolutionDirectMetricQueryCurrent } from './findDataSelectors';
@@ -48,11 +48,10 @@ function isDirectMetricQueryPreparationCurrent(
   state: FindDataTaskState,
   query: DirectMetricQueryState
 ): boolean {
-  if (query.source.kind === 'ENTRY_CONTEXT') {
-    const entryTarget = state.entryContext?.target;
-    return state.entryContext?.entryId === query.source.entryId &&
-      entryTarget?.kind === 'METRIC' && entryTarget.id === query.metricId;
-  }
+  if (!isDirectMetricQuerySource(query.source)) return false;
+  const entryTarget = state.entryContext?.target;
+  if (entryTarget && (entryTarget.kind !== 'METRIC' || entryTarget.id !== query.metricId)) return false;
+  if (query.source.kind === 'ENTRY_CONTEXT' && state.entryContext?.entryId !== query.source.entryId) return false;
   return isDataSolutionDirectMetricQueryCurrent(state, query);
 }
 
@@ -69,6 +68,27 @@ function staleDirectMetricState(state: FindDataTaskState, reason: string): Pick<
   };
 }
 
+function staleLegacyDirectMetricQuery(task: FindDataTaskState): FindDataTaskState {
+  const query = task.directMetricQuery;
+  if (!query || isDirectMetricQuerySource(query.source)) return task;
+  return {
+    ...task,
+    directMetricQuery: {
+      ...query,
+      status: 'STALE',
+      error: '历史正式指标请求缺少来源绑定，已安全停止。'
+    },
+    // Preserve immutable ASK_RESULT blocks and ResultTarget-derived history.
+    directMetricResult: undefined
+  };
+}
+
+function shouldStaleForSearchRevision(task: FindDataTaskState, nextSearchRevision: number): boolean {
+  const query = task.directMetricQuery;
+  return nextSearchRevision !== task.searchRevision &&
+    Boolean(query && isDirectMetricQuerySource(query.source) && query.source.kind === 'DATA_SOLUTION');
+}
+
 export function findDataReducer(state: FindDataTaskState, action: FindDataEvent): FindDataTaskState {
   const now = nowIso();
 
@@ -77,7 +97,7 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
       return { ...action.payload.task, updatedAt: now };
 
     case 'TASK_HYDRATED': {
-      const hydrated = action.payload.task;
+      const hydrated = staleLegacyDirectMetricQuery(action.payload.task);
       if (hydrated.metadata?.localRecoveryNotice !== true) return { ...hydrated, updatedAt: now };
       const metadata = { ...hydrated.metadata };
       delete metadata.localRecoveryNotice;
@@ -224,7 +244,7 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
           expandedDomains: action.payload.scope?.expandedDomains ?? state.searchScope.expandedDomains
         },
         dataSolution: { ...state.dataSolution, state: 'EVALUATING', updatedAt: now },
-        ...(action.payload.searchRevision === state.searchRevision
+        ...(!shouldStaleForSearchRevision(state, action.payload.searchRevision)
           ? {}
           : staleDirectMetricState(state, '数据检索版本已变化，请重新准备指标请求。')),
         runtimeStatus: { active: true, message: action.payload.statusMessage ?? '正在检索匹配的数据资产与指标…' },

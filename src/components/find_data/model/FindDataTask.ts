@@ -546,6 +546,17 @@ export type DirectMetricQuerySource =
     }
   | { kind: 'USER_EXPLICIT' };
 
+/** Runtime guard for tasks hydrated from a pre-PR-4A serialized shape. */
+export function isDirectMetricQuerySource(source: unknown): source is DirectMetricQuerySource {
+  if (!source || typeof source !== 'object' || !('kind' in source)) return false;
+  if (source.kind === 'USER_EXPLICIT') return true;
+  if (source.kind === 'ENTRY_CONTEXT') return typeof source.entryId === 'string';
+  return source.kind === 'DATA_SOLUTION' &&
+    typeof source.resourceId === 'string' &&
+    typeof source.requirementRevision === 'number' &&
+    typeof source.searchRevision === 'number';
+}
+
 export interface DirectMetricQueryState {
   requestId: string;
   metricId: string;
