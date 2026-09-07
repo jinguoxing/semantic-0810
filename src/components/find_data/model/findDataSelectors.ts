@@ -1,6 +1,9 @@
 import {
   FindDataTaskState,
   FindDataResource,
+  DataSolution,
+  DirectMetricQueryState,
+  ExecutionRef,
   ResourceId,
   DataSolutionItem,
   SolutionGap,
@@ -19,6 +22,7 @@ import {
   isDirectMetricResultBinding
 } from './FindDataTask';
 import { getResourceRangeIntersection, resourceCoversRange } from './timeRangeUtils';
+import { metricRegistryService } from '../../../data/metricRegistryData';
 
 export type AskHandoffReadinessCode = 'READY' | 'SOLUTION_NOT_READY' | 'MISSING_CORE_RESOURCES' | 'PARTIAL_MATCH_ONLY' | 'NO_EXECUTABLE_CORE' | 'RELATIONSHIP_CONFLICT';
 export interface AskHandoffReadiness {
@@ -31,21 +35,73 @@ export interface AskHandoffReadiness {
 }
 
 /**
+ * The only current-data-solution predicate. A prior READY solution is not
+ * effective after either task revision has moved.
+ */
+export function selectEffectiveDataSolution(task: FindDataTaskState): DataSolution | undefined {
+  const solution = task.dataSolution;
+  return solution.state === 'READY' &&
+    solution.basedOnRequirementRevision === task.requirementRevision &&
+    solution.basedOnSearchRevision === task.searchRevision
+    ? solution
+    : undefined;
+}
+
+/**
+ * Validates a resource-declared metric identity only through the canonical-id
+ * registry lookup. This deliberately has no name or NLP fallback.
+ */
+export function selectCanonicalMetricExecutionRef(resource: FindDataResource | undefined): ExecutionRef | undefined {
+  const executionRef = resource?.executionRef;
+  if (!executionRef || executionRef.kind !== 'METRIC') return undefined;
+  const metric = metricRegistryService.getMetricByCanonicalId(executionRef.id);
+  if (!metric || metric.id !== executionRef.id) return undefined;
+  if (executionRef.version && metric.version !== executionRef.version) return undefined;
+  return executionRef;
+}
+
+/** Checks whether a query's declared Data Solution provenance is still current. */
+export function isDataSolutionDirectMetricQueryCurrent(
+  task: FindDataTaskState,
+  query: DirectMetricQueryState
+): boolean {
+  if (query.source.kind !== 'DATA_SOLUTION') return true;
+  const solution = selectEffectiveDataSolution(task);
+  if (!solution ||
+    query.source.requirementRevision !== task.requirementRevision ||
+    query.source.searchRevision !== task.searchRevision ||
+    query.source.requirementRevision !== solution.basedOnRequirementRevision ||
+    query.source.searchRevision !== solution.basedOnSearchRevision ||
+    !solution.items.some((item) => item.resourceId === query.source.resourceId)) return false;
+  const executionRef = selectCanonicalMetricExecutionRef(task.resources[query.source.resourceId]);
+  return executionRef?.id === query.metricId;
+}
+
+function isEntryContextDirectMetricQueryCurrent(task: FindDataTaskState, query: DirectMetricQueryState): boolean {
+  if (query.source.kind !== 'ENTRY_CONTEXT') return true;
+  const entryTarget = task.entryContext?.target;
+  return task.entryContext?.entryId === query.source.entryId &&
+    entryTarget?.kind === 'METRIC' &&
+    entryTarget.id === query.metricId;
+}
+
+/**
  * Direct official-metric requests deliberately do not reuse composition
  * readiness: their dependencies and authorization are validated by the
  * metric-query service, not by fabricated Core resources.
  */
 export function selectDirectMetricQueryReadiness(task: FindDataTaskState): { ready: boolean; message: string } {
-  if (task.entryContext && task.entryContext.target.kind !== 'METRIC') {
-    return { ready: false, message: '当前对象不是可直接查询的正式指标。' };
-  }
-  if (!task.directMetricQuery) {
+  const query = task.directMetricQuery;
+  if (!query) {
     return { ready: false, message: '当前尚未形成可执行的正式指标请求。' };
   }
-  if (task.entryContext?.target.kind === 'METRIC' && task.directMetricQuery.metricId !== task.entryContext.target.id) {
+  if (!isEntryContextDirectMetricQueryCurrent(task, query)) {
     return { ready: false, message: '指标请求与当前对象不一致，无法执行。' };
   }
-  if (task.directMetricQuery.status !== 'READY') {
+  if (!isDataSolutionDirectMetricQueryCurrent(task, query)) {
+    return { ready: false, message: '当前数据方案或资源执行身份已变化，不能执行旧指标请求。' };
+  }
+  if (query.status !== 'READY') {
     return { ready: false, message: '当前指标请求不处于可执行状态。' };
   }
   return { ready: true, message: '正式指标请求已就绪，执行端仍将核验定义、条件和权限。' };
@@ -169,10 +225,11 @@ export function selectCurrentViewedResult(task: FindDataTaskState): ResultSnapsh
 }
 
 export function selectAskHandoffReadiness(task: FindDataTaskState): AskHandoffReadiness {
-  if (task.dataSolution.state !== 'READY') return { ready: false, code: 'SOLUTION_NOT_READY', message: '当前数据方案尚未完成评估。', coreResourceIds: [] };
-  const coreItems = task.dataSolution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED' && task.resources[item.resourceId]?.availabilityByAction.discover === 'ALLOWED');
+  const solution = selectEffectiveDataSolution(task);
+  if (!solution) return { ready: false, code: 'SOLUTION_NOT_READY', message: '当前数据方案尚未完成评估或已过期。', coreResourceIds: [] };
+  const coreItems = solution.items.filter((item) => item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED' && task.resources[item.resourceId]?.availabilityByAction.discover === 'ALLOWED');
   const coreResourceIds = coreItems.map((item) => item.resourceId);
-  if (coreItems.length === 0 && task.dataSolution.items.some((item) => item.role === 'PARTIAL_MATCH')) return { ready: false, code: 'PARTIAL_MATCH_ONLY', message: '当前只有部分匹配资源，尚未形成可执行的核心数据方案。', coreResourceIds: [] };
+  if (coreItems.length === 0 && solution.items.some((item) => item.role === 'PARTIAL_MATCH')) return { ready: false, code: 'PARTIAL_MATCH_ONLY', message: '当前只有部分匹配资源，尚未形成可执行的核心数据方案。', coreResourceIds: [] };
   if (task.scenarioKey === 'minhang_bed_supply') {
     const hasPopulation = coreResourceIds.includes('r01');
     const hasBeds = coreResourceIds.includes('r04') || coreResourceIds.includes('r05');

@@ -189,6 +189,11 @@ export const MINHANG_RESOURCES: Record<string, FindDataResource> = {
     id: 'r01',
     name: '60 岁以上常住人口数',
     type: '正式指标',
+    executionRef: {
+      kind: 'METRIC',
+      id: 'met_elderly_population',
+      version: 'v1.1.0'
+    },
     granularity: '街镇 × 月份',
     timeCoverage: '2023.01 — 2026.08',
     availabilityPeriod: { start: '2023-01', end: '2026-08' },

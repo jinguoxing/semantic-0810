@@ -9,6 +9,7 @@ describe('DisconnectedFindDataService', () => {
       directMetricQuery: {
         requestId: 'metric_request_1',
         metricId: 'met_elderly_population',
+        source: { kind: 'USER_EXPLICIT' },
         status: 'READY',
         preparedAt: '2026-09-07T00:00:00.000Z'
       }

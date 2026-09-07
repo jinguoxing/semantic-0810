@@ -115,7 +115,7 @@ function taskWithCurrentDirectMetricResult(): FindDataTaskState {
   return createEmptyTask({
     taskId,
     requirementRevision: 1,
-    directMetricQuery: { requestId: 'direct_request', metricId: 'met_elderly_population', status: 'COMPLETED', preparedAt: '2026-09-07T00:00:00.000Z' },
+    directMetricQuery: { requestId: 'direct_request', metricId: 'met_elderly_population', source: { kind: 'USER_EXPLICIT' }, status: 'COMPLETED', preparedAt: '2026-09-07T00:00:00.000Z' },
     directMetricResult: snapshot,
     turns: [{ turnId: 'direct_turn', sender: 'ASSISTANT', createdAt: '', blocks: [{ type: 'ASK_RESULT', id: 'direct_block', snapshot }] }]
   });

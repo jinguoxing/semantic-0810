@@ -364,6 +364,10 @@ export class MetricQueryDesignDemoService implements FindDataService {
     return {
       requestId: createScenarioId('metric_request'),
       metricId,
+      source: task.entryContext
+        ? { kind: 'ENTRY_CONTEXT', entryId: task.entryContext.entryId }
+        : { kind: 'USER_EXPLICIT' },
+      requestedConditions: task.entryContext?.knownConditions,
       definitionRef: { id: definition.id, label: definition.label, version: definition.version },
       status: 'READY',
       preparedAt: new Date().toISOString()

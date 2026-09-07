@@ -141,6 +141,7 @@ describe('MetricQueryDesignDemoService', () => {
       directMetricQuery: {
         requestId: binding.requestId,
         metricId: binding.metricId,
+        source: { kind: 'USER_EXPLICIT' },
         status: 'RUNNING',
         preparedAt: '2026-09-07T00:00:00.000Z'
       }
@@ -153,6 +154,7 @@ describe('MetricQueryDesignDemoService', () => {
       directMetricQuery: {
         requestId: binding.requestId,
         metricId: binding.metricId,
+        source: { kind: 'USER_EXPLICIT' },
         status: 'RUNNING',
         preparedAt: '2026-09-07T00:00:00.000Z'
       }

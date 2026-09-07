@@ -1,6 +1,7 @@
-import { ClarificationQuestion, ConversationTurn, DataSolutionItem, FindDataTaskState, ResourceCandidate, isDirectMetricResultBinding } from './FindDataTask';
+import { ClarificationQuestion, ConversationTurn, DataSolutionItem, DirectMetricQueryState, FindDataTaskState, ResourceCandidate, isDirectMetricResultBinding } from './FindDataTask';
 import { createFindDataTask } from './createFindDataTask';
 import { FindDataEvent } from './findDataEvents';
+import { isDataSolutionDirectMetricQueryCurrent } from './findDataSelectors';
 
 const nowIso = () => new Date().toISOString();
 
@@ -40,6 +41,31 @@ function mapClarificationQuestions(
       ...state.requirementHypothesis,
       unresolvedQuestions: state.requirementHypothesis.unresolvedQuestions.map(mapQuestion)
     }
+  };
+}
+
+function isDirectMetricQueryPreparationCurrent(
+  state: FindDataTaskState,
+  query: DirectMetricQueryState
+): boolean {
+  if (query.source.kind === 'ENTRY_CONTEXT') {
+    const entryTarget = state.entryContext?.target;
+    return state.entryContext?.entryId === query.source.entryId &&
+      entryTarget?.kind === 'METRIC' && entryTarget.id === query.metricId;
+  }
+  return isDataSolutionDirectMetricQueryCurrent(state, query);
+}
+
+function staleDirectMetricState(state: FindDataTaskState, reason: string): Pick<FindDataTaskState, 'directMetricQuery' | 'directMetricResult'> {
+  if (!state.directMetricQuery) return {};
+  return {
+    directMetricQuery: {
+      ...state.directMetricQuery,
+      status: 'STALE',
+      error: reason
+    },
+    // Conversation ASK_RESULT blocks are immutable history; only this mutable pointer is cleared.
+    directMetricResult: undefined
   };
 }
 
@@ -126,14 +152,16 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
       const requirementRevision = action.payload.bumpRevision === false
         ? state.requirementRevision
         : state.requirementRevision + 1;
+      const requirementChanged = action.payload.bumpRevision !== false;
       return {
         ...state,
         requirementHypothesis: { ...state.requirementHypothesis, ...action.payload.hypothesis },
         requirementRevision,
         status: 'UNDERSTANDING',
-        dataSolution: action.payload.bumpRevision === false || state.dataSolution.state === 'EMPTY'
+        dataSolution: !requirementChanged || state.dataSolution.state === 'EMPTY'
           ? state.dataSolution
           : { ...state.dataSolution, state: 'STALE', updatedAt: now },
+        ...(!requirementChanged ? {} : staleDirectMetricState(state, '任务需求版本已变化，请重新准备指标请求。')),
         updatedAt: now
       };
     }
@@ -196,6 +224,9 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
           expandedDomains: action.payload.scope?.expandedDomains ?? state.searchScope.expandedDomains
         },
         dataSolution: { ...state.dataSolution, state: 'EVALUATING', updatedAt: now },
+        ...(action.payload.searchRevision === state.searchRevision
+          ? {}
+          : staleDirectMetricState(state, '数据检索版本已变化，请重新准备指标请求。')),
         runtimeStatus: { active: true, message: action.payload.statusMessage ?? '正在检索匹配的数据资产与指标…' },
         updatedAt: now
       };
@@ -397,8 +428,7 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
 
     case 'DIRECT_METRIC_QUERY_PREPARED': {
       const query = action.payload.query;
-      const entryTarget = state.entryContext?.target;
-      if (entryTarget && (entryTarget.kind !== 'METRIC' || query.metricId !== entryTarget.id)) return state;
+      if (!isDirectMetricQueryPreparationCurrent(state, query)) return state;
       return {
         ...state,
         status: 'WAITING_USER',
@@ -409,7 +439,10 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
     }
 
     case 'DIRECT_METRIC_QUERY_STARTED':
-      return state.directMetricQuery?.requestId !== action.payload.requestId ? state : {
+      return state.directMetricQuery?.requestId !== action.payload.requestId ||
+        state.directMetricQuery.status !== 'READY' ||
+        !isDirectMetricQueryPreparationCurrent(state, state.directMetricQuery)
+        ? state : {
         ...state,
         status: 'SEARCHING',
         runtimeStatus: { active: true, message: '正在查询正式指标…' },
@@ -422,7 +455,9 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
       if (!isDirectMetricResultBinding(binding) || binding.taskId !== state.taskId ||
         binding.requirementRevision !== state.requirementRevision ||
         binding.requestId !== state.directMetricQuery?.requestId ||
-        binding.metricId !== state.directMetricQuery?.metricId) return state;
+        binding.metricId !== state.directMetricQuery?.metricId ||
+        !['READY', 'RUNNING'].includes(state.directMetricQuery.status) ||
+        !isDirectMetricQueryPreparationCurrent(state, state.directMetricQuery)) return state;
       return {
         ...state,
         status: 'READY',
@@ -434,7 +469,10 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
     }
 
     case 'DIRECT_METRIC_QUERY_FAILED':
-      return state.directMetricQuery?.requestId !== action.payload.requestId ? state : {
+      return state.directMetricQuery?.requestId !== action.payload.requestId ||
+        !['READY', 'RUNNING'].includes(state.directMetricQuery.status) ||
+        !isDirectMetricQueryPreparationCurrent(state, state.directMetricQuery)
+        ? state : {
         ...state,
         status: 'WAITING_USER',
         runtimeStatus: undefined,

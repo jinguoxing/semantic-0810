@@ -33,6 +33,16 @@ export interface FieldMetadata {
   isKey: boolean;
 }
 
+/**
+ * A production execution identity supplied by the resource catalog.
+ * It intentionally contains no mock, fixture, or demo authority concept.
+ */
+export interface ExecutionRef {
+  kind: 'METRIC' | 'ASSET' | 'API';
+  id: string;
+  version?: string;
+}
+
 export interface FindDataResource {
   id: ResourceId;
   name: string;
@@ -47,6 +57,8 @@ export interface FindDataResource {
   analysisDimensions?: string[];
   timeGrain?: 'DAY' | 'MONTH' | 'QUARTER' | 'YEAR' | 'CURRENT';
   fields?: FieldMetadata[];
+  /** Optional catalog-to-execution identity; never inferred from the resource name. */
+  executionRef?: ExecutionRef;
 }
 
 export interface ClarificationOption {
@@ -518,11 +530,30 @@ export function isSameResultBinding(left: ResultBinding, right: ResultBinding): 
     left.searchRevision === right.searchRevision;
 }
 
+export type DirectMetricRequestedConditions = Pick<
+  RequirementHypothesis,
+  'region' | 'timeRange' | 'populationDefinition' | 'bedDefinition'
+>;
+
+/** The evidence that prepared one direct-metric operation; it is not a context store. */
+export type DirectMetricQuerySource =
+  | { kind: 'ENTRY_CONTEXT'; entryId: string }
+  | {
+      kind: 'DATA_SOLUTION';
+      resourceId: ResourceId;
+      requirementRevision: number;
+      searchRevision: number;
+    }
+  | { kind: 'USER_EXPLICIT' };
+
 export interface DirectMetricQueryState {
   requestId: string;
   metricId: string;
+  source: DirectMetricQuerySource;
+  /** Resolved request conditions, separate from the task requirement and result values. */
+  requestedConditions?: DirectMetricRequestedConditions;
   definitionRef?: Pick<AskResultCitation, 'id' | 'label' | 'version'>;
-  status: 'READY' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  status: 'READY' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'STALE';
   preparedAt: string;
   error?: string;
 }
