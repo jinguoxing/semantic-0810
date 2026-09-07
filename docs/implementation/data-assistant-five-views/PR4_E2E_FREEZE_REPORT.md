@@ -1,109 +1,130 @@
 # PR-4 End-to-End Final Freeze Report
 
-## Baseline
+## Baseline and closeout
 
 - `PR4_E2E_START_SHA`: `2efcf2a03a774647c0dfc1eff237bd89f2f16dc3`
+- T08 Guard start: `6f8ac2ca5460a128bdb945317a04a91a6ac3297e`
+- `PR4_T08_SURFACE_GUARD_SHA`: `233d3ae6618ef673574a192d79591b508887a9fb`
 - Branch: `codex/data-assistant-object-views`
 - Mode: `VITE_FIND_DATA_MODE=design-demo`
 - E2E test: `e2e/find-data-pr4-continuity.spec.ts`
-- Status: **BLOCKED — Full Journey did not pass**
+- Status: **PR-4 E2E Final Freeze — PASS (local validation)**
 
-## Resolved validation blocker — visible task identity
+## Resolved blockers
 
-The initial browser run exposed a real F1 layout issue at Playwright's supported
-1280 × 720 desktop viewport: the fixed left rail plus an open fixed-width right
-workspace collapsed the central header, making the canonical task title invisible.
+### F1 — visible task identity
 
-The responsive layout now caps the right workspace by available viewport width,
-preserves a readable central header, and hides only non-essential header controls
-at this width. The rerun confirms that the user-visible title
-`浦锦、七宝养老服务供给比较` remains visible with the Data Solution workspace
-open. This is a product-layout fix, not an assertion relaxation.
+The original browser run at the supported 1280 × 720 viewport showed that the
+fixed left rail plus the open fixed-width right workspace could collapse the
+central header. The responsive layout now caps the right workspace by available
+viewport width, keeps the canonical title visible, and hides only non-essential
+header controls at that width.
 
-## Full Journey failure
+### T08 — Historical Result Surface Continuity
 
-### Step 07 — Historical Result A interpretation
+The original Step 07 browser run resolved and interpreted Calculation Result A
+correctly in conversation, but kept Result B in the right workspace. The cause
+was intentionally conservative delayed-response handling:
 
-Expected user-visible state after:
+- `submitTurnWithResultTarget` applies continuations with `suppressSurface: true`.
+- `MetricQueryDesignDemoService.interpretResult` returns `NO_CHANGE`.
 
-> 回到在营可用床位的比较结果，解释一下这个差异。
+The guard preserves both rules. It adds only a synchronous local transition for
+an explicit result-navigation request (`回到`, `打开`, `查看`, `切到`, or
+`切换到`) paired with an exact result reference. The client:
 
-- The right workspace replaces Result B with the read-only `历史结果` view for
-  Calculation Result A.
-- That surface presents the A values: `15.0` / `20.0` / `5.0 张 / 千人`.
-- The interpretation remains bound to A rather than the earlier `800 张` Direct
-  Metric Result or Result B.
+1. resolves the exact target;
+2. validates current readability and authorization;
+3. locally opens or replaces `RESULT_DETAIL` with that exact target; then
+4. submits the interpretation with the same `ResultTarget` while the delayed
+   service response remains conversation-only.
 
-Actual browser state:
+`解释结果 A` remains interpretation-only and does not force a surface change.
+The minimal recognizer also accepts `Result A` / `Result B` aliases without a
+generic intent router.
 
-- The conversation correctly resolves and interprets Calculation Result A. It
-  says: `七宝镇为 20.0 张 / 千人，浦锦街道为 15.0 张 / 千人，相差 5.0 张 / 千人。`
-- The causality guard also remains correct: the response says that it cannot
-  determine the reason for the difference or create a prediction or construction
-  recommendation.
-- The right workspace remains on Result B (`每千名老人核定养老床位数`,
-  `22.5` / `25.0` / `2.5 张 / 千人`) and does not show `历史结果`.
+## Full Journey evidence
 
-This fails the PR-4C historical-result surface contract. It is not a selector or
-fixture issue.
+The Playwright test starts at `/` and passes all eight steps in one task:
 
-## Root-cause candidate and classification
+1. Forms the ready Data Solution, shows the canonical task title
+   `浦锦、七宝养老服务供给比较`, and records one stable URL `findTaskId`.
+2. Reuses the solution for the population Direct Metric Result (`20,000 人`) with
+   the solution workspace closed and no Find candidate surface.
+3. Reuses Solution alternatives for bed-definition clarification; selection is
+   non-executing and confirmed available beds return `800 张`.
+4. Opens Plan A and runs the `r01 + r04` comparison without a sufficiency claim.
+5. Switches Chart/Data/Chart without a new run or result.
+6. Opens and runs Plan B from the approved-bed alternative while retaining
+   Result A in conversation.
+7. Explicitly returns from Result B to the read-only historical Result A:
+   `15.0` / `20.0` / `5.0 张 / 千人`. The test rejects the Direct Metric Result
+   workspace (`指标查询结果`) rather than treating the legitimate `800 张` input
+   cell inside Result A's table as a false failure.
+8. Verifies exact Result B and Result A aliases in the same task; explicit A
+   resolves A even after B is viewed.
 
-- `submitTurnWithResultTarget` in
-  `src/components/DataAssistantFindDataWorkspace.tsx` deliberately calls
-  `applyEngineResult` with `suppressSurface: true` for every result-targeted
-  continuation.
-- `MetricQueryDesignDemoService.interpretResult` returns
-  `surfaceCommand: { action: 'NO_CHANGE' }`.
-- Together these preserve the currently viewed Result B instead of opening the
-  explicitly targeted historical Result A. The target is accurate in the
-  conversation, but the T08 surface transition does not occur.
-- Classification: **PR-4C historical Result / T08 surface-continuity product
-  blocker**. It is not a PR-4A identity guard, PR-4B Find-to-Ask routing, or a
-  pure E2E selector problem.
+The stable URL `findTaskId` and canonical task title are asserted at every key
+transition. No Find candidate comparison, fixed Find→Ask→Analysis stepper,
+automatic bed-definition recommendation, sufficiency claim, or causal claim is
+rendered during the journey.
 
-## Evidence retained locally
+## Result and interpretation evidence
 
-- Command: `VITE_FIND_DATA_MODE=design-demo bunx playwright test e2e/find-data-pr4-continuity.spec.ts`
-- Failure: `07 · resolve and interpret historical Result A exactly`
-- Assertion: visible `历史结果` heading
-- Screenshot: `test-results/find-data-pr4-continuity-P-8aeb3-through-historical-Result-A/test-failed-1.png`
-- Trace: `test-results/find-data-pr4-continuity-P-8aeb3-through-historical-Result-A/trace.zip`
-- Error context: `test-results/find-data-pr4-continuity-P-8aeb3-through-historical-Result-A/error-context.md`
+- Result A: 浦锦街道 `15.0`、七宝镇 `20.0`、差异 `5.0 张 / 千人`.
+- Result B: 浦锦街道 `22.5`、七宝镇 `25.0`、差异 `2.5 张 / 千人`.
+- Historical interpretation is bound to Result A and states the two A values and
+  their `5.0` difference.
+- The interpretation explicitly says the result lacks cause evidence and cannot
+  determine the reason, predict, or make a construction recommendation. It does
+  not fabricate investment, construction, or policy conclusions.
 
-The existing Playwright failure mechanism retained these local artifacts. They
-are intentionally not committed.
+## T08 Guard evidence
 
-## Validation status
+`src/components/find_data/__tests__/historicalResultViews.test.tsx` adds:
 
-- E2E Steps 01–06: passed in the final browser run:
-  - same URL `findTaskId`, canonical title, and ready Data Solution;
-  - population Direct Metric Result (`20,000 人`) without reopening Find;
-  - Solution-derived bed clarification and confirmed `800 张` result;
-  - Calculation Plan A and Result A (`15.0` / `20.0` / `5.0`);
-  - Chart/Data presentation switching;
-  - Calculation Plan B and Result B (`22.5` / `25.0` / `2.5`) while retaining A
-    in conversation history.
-- E2E Step 07: **FAIL** as described above.
-- Steps 08 (explicit Result A/B aliases), Vitest, lint, and the four build modes
-  were not accepted as Final Freeze evidence after this product blocker, in line
-  with the stop rule.
-- GitHub CI was not evaluated. The repository workflow does not run this
-  `codex/*` branch as a pull-request CI signal; this report must not claim CI
-  green.
+- **T08-G1:** Result B → explicit available-bed Result A navigation replaces the
+  right workspace with historical A; the continuation carries A while current
+  Plan B remains current.
+- **T08-G2:** after the A request, a user can return to Result B; even a delayed
+  response carrying a hostile `REPLACE RESULT_DETAIL A` command cannot reclaim
+  the surface.
+- **T08-G3:** `解释结果 A` binds the conversation to A without changing the
+  currently viewed Result B surface.
+- **T08-G4:** `回到 Result A` opens exact historical A without running or
+  restoring Plan A.
+- **T08-G5:** in HTTP mode, unreadable A blocks before local navigation or
+  submission and never substitutes readable B.
+
+This retains PR-3 exact `ResultTarget`, authorization, no-latest-fallback, and
+no-unreadable-substitution behavior. The service remains unable to navigate the
+GUI, and `suppressSurface: true` remains in effect for all delayed
+interpretation responses.
+
+## Local validation
+
+- Targeted historical-result guard: **PASS** — 26 tests.
+- Playwright full journey: **PASS** —
+  `VITE_FIND_DATA_MODE=design-demo bunx playwright test e2e/find-data-pr4-continuity.spec.ts`
+  (1 test, Steps 01–08).
+- Vitest: **PASS** — 18 files, 249 tests.
+- TypeScript lint: **PASS** — `bun run lint`.
+- Production builds: **PASS** — `mock`, `disconnected`, `http`, and
+  `design-demo` modes. Vite emitted only its existing large-chunk advisory.
+- `git diff --check`: **PASS** before the T08 Guard commit.
+
+GitHub CI is not claimed green: this `codex/*` branch does not provide a
+GitHub-CI success signal for this validation. The results above are local.
 
 ## Production dependency
 
-This browser run remains Design Demo only. Production Level B still requires
+This freeze validates the Design Demo journey. Production Level B still needs
 server-authoritative execution identities for bed metrics, formal metric and
 AskPlan execution, server-owned task continuity, permission validation, and
-immutable result references. No production endpoint, fallback, or context store
-was added in this validation work.
+immutable result references. No endpoint, fallback, production identity, or
+second context store was added for this guard.
 
-## Stop condition
+## Final scope
 
-No change has been made to the historical-result product path. Review must decide
-whether to reopen the scoped PR-4C T08 behavior so an explicit historical target
-opens Result Detail A without restoring Plan A or weakening PR-3 exact-target and
-no-substitution guards. Until then, PR-4 End-to-End Final Freeze cannot be
-declared PASS.
+PR-4A, PR-4B, PR-4C, and the PR-4 end-to-end continuity journey are frozen at
+the client/interactions level. No Analysis V1 work has started.
