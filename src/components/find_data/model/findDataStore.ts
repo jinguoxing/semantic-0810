@@ -148,10 +148,10 @@ export class DisconnectedSessionTaskStore extends LocalStorageFindDataTaskStore 
   }
 }
 
-export type FindDataMode = 'mock' | 'http' | 'disconnected';
+export type FindDataMode = 'mock' | 'http' | 'disconnected' | 'design-demo';
 
 export function createFindDataTaskStore(mode: FindDataMode): FindDataTaskStore {
-  if (mode === 'mock') return new LocalStorageFindDataTaskStore();
+  if (mode === 'mock' || mode === 'design-demo') return new LocalStorageFindDataTaskStore();
   if (mode === 'disconnected') return new DisconnectedSessionTaskStore();
   return new NoopFindDataTaskStore();
 }

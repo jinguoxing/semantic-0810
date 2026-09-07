@@ -395,6 +395,52 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
         updatedAt: now
       };
 
+    case 'DIRECT_METRIC_QUERY_PREPARED': {
+      const query = action.payload.query;
+      const entryTarget = state.entryContext?.target;
+      if (entryTarget && (entryTarget.kind !== 'METRIC' || query.metricId !== entryTarget.id)) return state;
+      return {
+        ...state,
+        status: 'WAITING_USER',
+        directMetricQuery: query,
+        directMetricResult: undefined,
+        updatedAt: now
+      };
+    }
+
+    case 'DIRECT_METRIC_QUERY_STARTED':
+      return state.directMetricQuery?.requestId !== action.payload.requestId ? state : {
+        ...state,
+        status: 'SEARCHING',
+        runtimeStatus: { active: true, message: '正在查询正式指标…' },
+        directMetricQuery: { ...state.directMetricQuery, status: 'RUNNING' },
+        updatedAt: now
+      };
+
+    case 'DIRECT_METRIC_RESULT_RECEIVED': {
+      const binding = action.payload.snapshot.binding;
+      if (!('kind' in binding) || binding.kind !== 'DIRECT_METRIC' || binding.taskId !== state.taskId ||
+        binding.requirementRevision !== state.requirementRevision ||
+        binding.requestId !== state.directMetricQuery?.requestId) return state;
+      return {
+        ...state,
+        status: 'READY',
+        runtimeStatus: undefined,
+        directMetricQuery: { ...state.directMetricQuery, status: 'COMPLETED' },
+        directMetricResult: action.payload.snapshot,
+        updatedAt: now
+      };
+    }
+
+    case 'DIRECT_METRIC_QUERY_FAILED':
+      return state.directMetricQuery?.requestId !== action.payload.requestId ? state : {
+        ...state,
+        status: 'WAITING_USER',
+        runtimeStatus: undefined,
+        directMetricQuery: { ...state.directMetricQuery, status: 'FAILED', error: action.payload.error },
+        updatedAt: now
+      };
+
     case 'OPERATION_STARTED':
       if (state.pendingOperation) return state;
       return { ...state, pendingOperation: action.payload, updatedAt: now };

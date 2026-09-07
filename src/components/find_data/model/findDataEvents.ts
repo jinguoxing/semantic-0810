@@ -18,7 +18,9 @@ import {
   CandidateDelta,
   DataSolutionPatch,
   TaskStatus,
-  PendingOperation
+  PendingOperation,
+  DirectMetricQueryState,
+  AskResultSnapshot
 } from './FindDataTask';
 
 export type FindDataEvent =
@@ -198,6 +200,31 @@ export type FindDataEvent =
   | {
       type: 'ASK_RUN_FAILED';
       payload: {
+        error: string;
+      };
+    }
+  | {
+      type: 'DIRECT_METRIC_QUERY_PREPARED';
+      payload: {
+        query: DirectMetricQueryState;
+      };
+    }
+  | {
+      type: 'DIRECT_METRIC_QUERY_STARTED';
+      payload: {
+        requestId: string;
+      };
+    }
+  | {
+      type: 'DIRECT_METRIC_RESULT_RECEIVED';
+      payload: {
+        snapshot: AskResultSnapshot;
+      };
+    }
+  | {
+      type: 'DIRECT_METRIC_QUERY_FAILED';
+      payload: {
+        requestId: string;
         error: string;
       };
     }

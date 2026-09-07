@@ -71,6 +71,8 @@ export interface ClarificationQuestion {
   type: 'SINGLE' | 'MULTIPLE';
   options: ClarificationOption[];
   maxSelections?: number;
+  /** Optional action copy; old questions continue to use the shared default. */
+  submitLabel?: string;
   resolution?: ClarificationResolution;
 }
 
@@ -86,6 +88,21 @@ export interface RequirementHypothesis {
   analysisFocus: string[];
   assumptions: string[];
   unresolvedQuestions: ClarificationQuestion[];
+}
+
+/** A one-time detail-page hand-off into the existing Find Data task. */
+export interface FindDataEntryContext {
+  entryId: string;
+  source: 'METRIC_DETAIL' | 'ASSET_DETAIL' | 'HOME';
+  target: {
+    kind: 'METRIC' | 'ASSET';
+    id: string;
+    label?: string;
+    version?: string;
+  };
+  intent: 'QUERY_VALUE' | 'VIEW_DEFINITION' | 'ANALYZE';
+  initialText: string;
+  knownConditions?: Pick<RequirementHypothesis, 'region' | 'timeRange' | 'populationDefinition' | 'bedDefinition'>;
 }
 
 export interface SearchScope {
@@ -170,13 +187,16 @@ export type SurfaceType =
   | 'SOLUTION'
   | 'ACCESS'
   | 'RELATED_RESOURCES'
-  | 'ASK_PLAN';
+  | 'ASK_PLAN'
+  | 'METRIC_RESULT';
 
 /** A one-off display target within the existing Ask Plan workspace. */
 export type AskPlanFocusSection = 'PLAN' | 'RESULT' | 'CALCULATION';
 
 /** A presentation-only view choice for the current result in the shared workspace. */
 export type AskResultView = 'CHART' | 'DATA';
+
+export type MetricResultFocusSection = 'RESULT' | 'DEFINITION';
 
 export interface SurfaceState {
   type: SurfaceType;
@@ -185,6 +205,9 @@ export interface SurfaceState {
   openedBy?: 'USER_EXPLICIT' | 'ACTION_CLICK' | 'TASK_REQUIRED';
   /** UI-only focus intent; it never changes an analysis plan or result. */
   focusSection?: AskPlanFocusSection;
+  /** UI-only direct-metric result target; never changes a request. */
+  metricResultBinding?: DirectMetricResultBinding;
+  metricResultFocus?: MetricResultFocusSection;
   /** UI-only result view choice; it never causes another execution. */
   resultView?: AskResultView;
   focusRequestId?: string;
@@ -252,6 +275,14 @@ export interface AskResultCitation {
   id: string;
   label: string;
   version?: string;
+  /** Read-only material returned for this exact result, when available. */
+  definition?: {
+    meaning?: string;
+    unit?: string;
+    scope?: string;
+    timeSemantics?: string;
+    source?: string;
+  };
 }
 
 export type ResultValueState = 'VALUE' | 'NULL' | 'MISSING' | 'SUPPRESSED' | 'NOT_COMPUTABLE';
@@ -421,6 +452,24 @@ export interface AskPlanBinding {
   searchRevision: number;
 }
 
+/** A result identity for one official-metric request; it is never an AskPlan. */
+export interface DirectMetricResultBinding {
+  kind: 'DIRECT_METRIC';
+  taskId: string;
+  requestId: string;
+  metricId: string;
+  requirementRevision: number;
+}
+
+export interface DirectMetricQueryState {
+  requestId: string;
+  metricId: string;
+  definitionRef?: Pick<AskResultCitation, 'id' | 'label' | 'version'>;
+  status: 'READY' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  preparedAt: string;
+  error?: string;
+}
+
 /**
  * Candidate selection is a presentation contract only. Resource metadata,
  * access and solution inclusion stay in the task and are resolved at render
@@ -454,12 +503,15 @@ export type TaskActionCode =
   | 'OPEN_ACCESS'
   | 'OPEN_RELATED_RESOURCES'
   | 'OPEN_ASK_PLAN'
+  | 'OPEN_METRIC_RESULT'
+  | 'OPEN_METRIC_DEFINITION'
   | 'CLOSE_SURFACE'
   | 'SELECT_RESOURCE'
   | 'EVALUATE_AND_ADD'
   | 'CREATE_PERMISSION_REQUEST'
   | 'KEEP_AS_GAP'
   | 'SUBMIT_CLARIFICATION'
+  | 'RUN_METRIC_QUERY'
   | 'REGENERATE_ASK_PLAN'
   | 'REVISE_REQUIREMENT'
   | 'MODIFY_UNDERSTANDING'
@@ -503,7 +555,7 @@ export interface ResultBriefBlock {
  * It is not a task snapshot and is never an authorization source.
  */
 export interface AskResultSnapshot {
-  binding: AskPlanBinding;
+  binding: AskPlanBinding | DirectMetricResultBinding;
   operationId?: string;
   executedAt: string;
   metricName: string;
@@ -561,7 +613,7 @@ export type ConversationBlock =
  * It is a reference to the facts used at creation time, never a task snapshot.
  */
 export interface ConversationSource {
-  kind: 'SOLUTION' | 'CANDIDATES' | 'ASK_PLAN' | 'ASK_RESULT' | 'PERMISSION';
+  kind: 'SOLUTION' | 'CANDIDATES' | 'ASK_PLAN' | 'ASK_RESULT' | 'DIRECT_METRIC_RESULT' | 'PERMISSION';
   requirementRevision?: number;
   searchRevision?: number;
   askPlanId?: string;
@@ -631,7 +683,7 @@ export interface ExecutionAssessment {
 
 export interface PendingOperation {
   operationId: string;
-  operationType: 'TURN' | 'ACTION' | 'SEARCH' | 'PERMISSION_CHECK' | 'ASK_RUN';
+  operationType: 'TURN' | 'ACTION' | 'SEARCH' | 'PERMISSION_CHECK' | 'ASK_RUN' | 'METRIC_QUERY';
   startedAt: string;
 }
 
@@ -663,6 +715,10 @@ export interface FindDataTaskState {
   pendingOperation?: PendingOperation;
   lastCompletedOperationId?: string;
   askPlan?: AskPlan;
+  /** The latest direct official-metric result; this is not a history service. */
+  directMetricQuery?: DirectMetricQueryState;
+  directMetricResult?: AskResultSnapshot;
+  entryContext?: FindDataEntryContext;
   metadata?: Record<string, unknown>;
 
   createdAt: string;

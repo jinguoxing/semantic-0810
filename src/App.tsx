@@ -62,12 +62,14 @@ import {
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData, MetricDraftInitialData } from './types';
+import { FindDataEntryContext } from './components/find_data/model/FindDataTask';
 
 export default function App() {
   const shouldRestoreFindDataTask = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('findTaskId');
   const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
   const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>(shouldRestoreFindDataTask ? 'data_assistant' : 'home');
   const [dataAssistantInitialQuery, setDataAssistantInitialQuery] = useState<string>('');
+  const [dataAssistantEntryContext, setDataAssistantEntryContext] = useState<FindDataEntryContext>();
   const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
   const [authoringInitialDraft, setAuthoringInitialDraft] = useState<MetricDraftInitialData | undefined>(undefined);
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
@@ -888,10 +890,18 @@ export default function App() {
             addToast('info', 'API 资源', '已在资源超市中定位 API 服务');
           }}
           onEnterAnalysis={(metricName) => {
-            addToast('success', '进入分析', `已将「${metricName}」指标载入 AI 数据分析工作台`);
+            setDataAssistantEntryContext(metricName);
+            setDataAssistantInitialQuery(metricName.initialText);
+            setCurrentNav('home');
+            setViewTab('data_assistant');
+            addToast('success', '进入分析', `已将「${metricName.target.label ?? metricName.target.id}」载入数据助手`);
           }}
           onEnterChatQuery={(metricName) => {
-            addToast('info', '用于问数', `已在 Xino 智能问数中绑定「${metricName}」指标口径`);
+            setDataAssistantEntryContext(metricName);
+            setDataAssistantInitialQuery(metricName.initialText);
+            setCurrentNav('home');
+            setViewTab('data_assistant');
+            addToast('info', '用于问数', `已将「${metricName.target.label ?? metricName.target.id}」作为对象上下文带入数据助手`);
           }}
           onExploreRelatedData={(metricName) => {
             setResourceSearchQuery('人口');
@@ -1381,10 +1391,18 @@ export default function App() {
             addToast('info', 'API 资源', '已在资源超市中定位 API 服务');
           }}
           onEnterAnalysis={(assetName) => {
-            addToast('success', '进入分析', `已将「${assetName}」载入 AI 数据分析工作台`);
+            setDataAssistantEntryContext(assetName);
+            setDataAssistantInitialQuery(assetName.initialText);
+            setCurrentNav('home');
+            setViewTab('data_assistant');
+            addToast('success', '进入分析', `已将「${assetName.target.label ?? assetName.target.id}」作为资源上下文带入数据助手`);
           }}
           onEnterChatQuery={(assetName) => {
-            addToast('info', '用于问数', `已在 Xino 智能问数中绑定「${assetName}」上下文`);
+            setDataAssistantEntryContext(assetName);
+            setDataAssistantInitialQuery(assetName.initialText);
+            setCurrentNav('home');
+            setViewTab('data_assistant');
+            addToast('info', '用于问数', `已将「${assetName.target.label ?? assetName.target.id}」作为资源上下文带入数据助手`);
           }}
           onExploreRelatedData={(assetName) => {
             setResourceSearchQuery('人口');
@@ -1452,6 +1470,7 @@ export default function App() {
         viewTab === 'data_assistant' ? (
           <DataAssistantFindDataWorkspace
             initialQuery={dataAssistantInitialQuery}
+            entryContext={dataAssistantEntryContext}
             onBackToHome={() => {
               setViewTab('home');
               setCurrentNav('home');
@@ -1470,6 +1489,7 @@ export default function App() {
               addToast('info', '切换工作台', '已进入数据治理中心');
             }}
             onNavigateToDataAssistant={(query) => {
+              setDataAssistantEntryContext(undefined);
               setDataAssistantInitialQuery(query || '');
               setViewTab('data_assistant');
               addToast('success', '进入数据助手', '已进入「数据助手 · 找数据」多轮智能交互工作台');

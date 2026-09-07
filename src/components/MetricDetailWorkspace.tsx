@@ -59,6 +59,7 @@ import { MetricDataBindingTab } from './MetricDataBindingTab';
 import { MetricOverviewTab } from './MetricOverviewTab';
 import { metricRegistryService } from '../data/metricRegistryData';
 import { Metric } from '../types';
+import { FindDataEntryContext } from './find_data/model/FindDataTask';
 
 export interface MetricDetailWorkspaceProps {
   metricId?: string;
@@ -71,8 +72,8 @@ export interface MetricDetailWorkspaceProps {
   onNavigateToDataAssetDetail?: (assetId: string) => void;
   onNavigateToBusinessObject?: (objectId: string) => void;
   onNavigateToApiDetail?: (apiId: string) => void;
-  onEnterAnalysis?: (metricName: string) => void;
-  onEnterChatQuery?: (metricName: string) => void;
+  onEnterAnalysis?: (entry: FindDataEntryContext) => void;
+  onEnterChatQuery?: (entry: FindDataEntryContext) => void;
   onExploreRelatedData?: (metricName: string) => void;
   onNavigateToDataAssets?: () => void;
   onNavigateToDataStandards?: () => void;
@@ -145,7 +146,13 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
   const handleTriggerAnalysis = () => {
     setIsAnalysisModalOpen(false);
     if (onEnterAnalysis) {
-      onEnterAnalysis(metric.name);
+      onEnterAnalysis({
+        entryId: `metric:${metric.id}:analyze`,
+        source: 'METRIC_DETAIL',
+        target: { kind: 'METRIC', id: metric.id, label: metric.name, version: metric.version },
+        intent: 'ANALYZE',
+        initialText: `围绕指标「${metric.name}」继续分析`
+      });
     } else {
       addToast?.('success', '已载入 AI 分析工作台', `指标「${metric.name}」已绑定当前分析会话`);
     }
@@ -414,7 +421,13 @@ export const MetricDetailWorkspace: React.FC<MetricDetailWorkspaceProps> = ({
                 type="button"
                 onClick={() => {
                   if (onEnterChatQuery) {
-                    onEnterChatQuery(metric.name);
+                    onEnterChatQuery({
+                      entryId: `metric:${metric.id}:query-value`,
+                      source: 'METRIC_DETAIL',
+                      target: { kind: 'METRIC', id: metric.id, label: metric.name, version: metric.version },
+                      intent: 'QUERY_VALUE',
+                      initialText: `查询指标「${metric.name}」`
+                    });
                   } else {
                     addToast?.('info', '问这个指标', `已在智能问数中绑定「${metric.name}」指标口径`);
                   }

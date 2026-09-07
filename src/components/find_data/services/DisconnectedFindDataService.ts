@@ -2,7 +2,8 @@ import {
   FindDataService,
   FindDataEngineResult,
   FindDataTaskSummary,
-  PermissionRecheckResult
+  PermissionRecheckResult,
+  CreateFindDataTaskInput
 } from './FindDataService';
 import {
   FindDataTaskState,
@@ -14,10 +15,11 @@ import {
 import { createFindDataTask } from '../model/createFindDataTask';
 
 export class DisconnectedFindDataService implements FindDataService {
-  async createTask(input?: { initialQuery?: string }): Promise<FindDataTaskState> {
+  async createTask(input?: CreateFindDataTaskInput): Promise<FindDataTaskState> {
     return createFindDataTask({
       taskId: `task_${Date.now()}`,
       initialQuery: input?.initialQuery,
+      entryContext: input?.entryContext,
       scenarioKey: 'disconnected'
     });
   }
@@ -77,11 +79,27 @@ export class DisconnectedFindDataService implements FindDataService {
     _action: TaskAction,
     operationId?: string
   ): Promise<FindDataEngineResult> {
+    const id = operationId ?? `operation_${Date.now()}`;
+    const block = {
+      type: 'SYSTEM_NOTICE' as const,
+      id: `sn_${Date.now()}`,
+      level: 'error' as const,
+      title: '服务未连接',
+      message: '找数据服务尚未连接，无法确认口径或执行指标查询。'
+    };
     return {
       taskId: task.taskId,
-      operationId: operationId ?? `operation_${Date.now()}`,
-      events: [],
-      assistantBlocks: [],
+      operationId: id,
+      events: [
+        ...(_action.actionCode === 'RUN_METRIC_QUERY' && task.directMetricQuery
+          ? [{ type: 'DIRECT_METRIC_QUERY_FAILED' as const, payload: { requestId: task.directMetricQuery.requestId, error: '指标查询服务尚未连接。' } }]
+          : []),
+        {
+          type: 'ASSISTANT_TURN_RECEIVED',
+          payload: { turnId: `turn_${Date.now()}_assistant`, nextStatus: 'FAILED' as const, blocks: [block] }
+        }
+      ],
+      assistantBlocks: [block],
       surfaceCommand: { action: 'NO_CHANGE' }
     };
   }

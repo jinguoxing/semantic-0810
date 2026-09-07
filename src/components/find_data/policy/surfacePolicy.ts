@@ -1,4 +1,4 @@
-import { AskPlanFocusSection, AskResultView, FindDataTaskState, ResourceId, SurfaceState, SurfaceType, TaskActionCode } from '../model/FindDataTask';
+import { AskPlanFocusSection, AskResultView, DirectMetricResultBinding, FindDataTaskState, MetricResultFocusSection, ResourceId, SurfaceState, SurfaceType, TaskActionCode } from '../model/FindDataTask';
 import { selectAskHandoffReadiness } from '../model/findDataSelectors';
 
 export interface InteractionIntentResult {
@@ -21,6 +21,8 @@ export interface SurfaceCommand {
   resultView?: AskResultView;
   focusRequestId?: string;
   focusTarget?: boolean;
+  metricResultBinding?: DirectMetricResultBinding;
+  metricResultFocus?: MetricResultFocusSection;
   blockedReason?: string;
 }
 
@@ -28,7 +30,8 @@ let askPlanFocusSequence = 0;
 
 const surfaceActionCodes: ReadonlySet<TaskActionCode> = new Set([
   'OPEN_COMPARE', 'OPEN_FIELDS', 'OPEN_SOLUTION', 'OPEN_ACCESS',
-  'OPEN_RELATED_RESOURCES', 'OPEN_ASK_PLAN', 'CLOSE_SURFACE'
+  'OPEN_RELATED_RESOURCES', 'OPEN_ASK_PLAN', 'OPEN_METRIC_RESULT',
+  'OPEN_METRIC_DEFINITION', 'CLOSE_SURFACE'
 ]);
 
 export function isSurfaceActionCode(actionCode: TaskActionCode): boolean {
@@ -135,6 +138,32 @@ function askPlanCommand(
   };
 }
 
+function metricResultCommand(
+  task: FindDataTaskState | undefined,
+  currentSurface: SurfaceState | undefined,
+  openedBy: 'USER_EXPLICIT' | 'ACTION_CLICK',
+  binding: DirectMetricResultBinding | undefined,
+  focus: MetricResultFocusSection,
+  expectedExecutedAt?: string
+): SurfaceCommand {
+  const current = task?.directMetricResult;
+  const currentBinding = current?.binding;
+  if (!binding || binding.kind !== 'DIRECT_METRIC' || !current || !currentBinding ||
+    !('kind' in currentBinding && currentBinding.kind === 'DIRECT_METRIC') ||
+    currentBinding.taskId !== binding.taskId || currentBinding.requestId !== binding.requestId ||
+    currentBinding.metricId !== binding.metricId || currentBinding.requirementRevision !== binding.requirementRevision ||
+    (expectedExecutedAt && current.executedAt !== expectedExecutedAt)) {
+    return { action: 'NO_CHANGE', blockedReason: '当前工作区无法恢复这次历史指标结果的详情。' };
+  }
+  return {
+    ...openSurface(currentSurface, 'METRIC_RESULT', openedBy),
+    metricResultBinding: binding,
+    metricResultFocus: focus,
+    focusRequestId: `metric_result_${Date.now()}`,
+    focusTarget: true
+  };
+}
+
 export function evaluateSurfacePolicy(intent: InteractionIntentResult, actionCode?: TaskActionCode, currentSurface?: SurfaceState, task?: FindDataTaskState, actionPayload?: Record<string, unknown>): SurfaceCommand {
   if (actionCode) {
     switch (actionCode) {
@@ -147,6 +176,14 @@ export function evaluateSurfacePolicy(intent: InteractionIntentResult, actionCod
         'ACTION_CLICK',
         actionPayload?.focusSection as AskPlanFocusSection | undefined,
         actionPayload?.resultView as AskResultView | undefined
+      );
+      case 'OPEN_METRIC_RESULT': return metricResultCommand(
+        task, currentSurface, 'ACTION_CLICK', actionPayload?.directMetricBinding as DirectMetricResultBinding | undefined,
+        'RESULT', actionPayload?.executedAt as string | undefined
+      );
+      case 'OPEN_METRIC_DEFINITION': return metricResultCommand(
+        task, currentSurface, 'ACTION_CLICK', actionPayload?.directMetricBinding as DirectMetricResultBinding | undefined,
+        'DEFINITION', actionPayload?.executedAt as string | undefined
       );
       case 'OPEN_ACCESS': return openSurface(currentSurface, 'ACCESS', 'ACTION_CLICK');
       case 'OPEN_RELATED_RESOURCES': return openSurface(currentSurface, 'RELATED_RESOURCES', 'ACTION_CLICK');

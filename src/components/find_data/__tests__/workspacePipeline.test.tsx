@@ -84,6 +84,27 @@ describe('workspace tracked task pipeline', () => {
     expect(await screen.findByText('已处理')).toBeInTheDocument();
   });
 
+  it('consumes one detail entry only once when the same action is rendered again', async () => {
+    const service = createService();
+    const entry = {
+      entryId: 'metric:met_elderly_population:query-value',
+      source: 'METRIC_DETAIL' as const,
+      target: { kind: 'METRIC' as const, id: 'met_elderly_population', label: '老年人口数', version: 'v1.1.0' },
+      intent: 'QUERY_VALUE' as const,
+      initialText: '查询指标「老年人口数」'
+    };
+    const view = render(<DataAssistantFindDataWorkspace entryContext={entry} serviceOverride={service} taskStoreOverride={new MemoryTaskStore()} />);
+
+    await waitFor(() => expect(service.createTask).toHaveBeenCalledOnce());
+    expect(service.createTask).toHaveBeenCalledWith(expect.objectContaining({ entryContext: entry }));
+    await waitFor(() => expect(service.submitTurn).toHaveBeenCalledOnce());
+
+    view.rerender(<DataAssistantFindDataWorkspace entryContext={{ ...entry }} serviceOverride={service} taskStoreOverride={new MemoryTaskStore()} />);
+    await new Promise((resolve) => window.setTimeout(resolve, 20));
+    expect(service.createTask).toHaveBeenCalledOnce();
+    expect(service.submitTurn).toHaveBeenCalledOnce();
+  });
+
   it('drops an old request result after the user switches tasks', async () => {
     let resolveSubmit: ((value: Awaited<ReturnType<FindDataService['submitTurn']>>) => void) | undefined;
     const submitTurn = vi.fn((task: ReturnType<typeof createEmptyTask>) => new Promise<Awaited<ReturnType<FindDataService['submitTurn']>>>((resolve) => {

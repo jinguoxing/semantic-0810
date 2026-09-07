@@ -13,7 +13,7 @@ import {
   Trash2
 } from 'lucide-react';
 
-import { AskPlan, AskPlanBinding, AskResultSnapshot, AskRunResult, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode } from './find_data/model/FindDataTask';
+import { AskPlan, AskPlanBinding, AskResultSnapshot, AskRunResult, FindDataEntryContext, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode } from './find_data/model/FindDataTask';
 import { FindDataEvent } from './find_data/model/findDataEvents';
 import { findDataReducer, initialFindDataTaskState } from './find_data/model/findDataReducer';
 import {
@@ -37,7 +37,8 @@ import {
   selectRelatedResourceCandidates,
   resolveCandidateSelection,
   selectResourceById,
-  selectResourceFields
+  selectResourceFields,
+  selectDirectMetricQueryReadiness
 } from './find_data/model/findDataSelectors';
 import {
   buildAskPlanScopeDisclosure,
@@ -64,6 +65,7 @@ import { RightWorkspaceSolution } from './find_data/RightWorkspaceSolution';
 import { RightWorkspaceAccess } from './find_data/RightWorkspaceAccess';
 import { RightWorkspaceCatalog } from './find_data/RightWorkspaceCatalog';
 import { RightWorkspaceAskPlan } from './find_data/RightWorkspaceAskPlan';
+import { RightWorkspaceMetricResult } from './find_data/RightWorkspaceMetricResult';
 import { TaskContextDrawer } from './find_data/TaskContextDrawer';
 
 // Brand components
@@ -72,6 +74,7 @@ import { XinoAvatar } from './brand/XinoAvatar';
 
 interface DataAssistantFindDataWorkspaceProps {
   initialQuery?: string;
+  entryContext?: FindDataEntryContext;
   onNavigateToNav?: (navId: string) => void;
   onBackToHome?: () => void;
   serviceOverride?: FindDataService;
@@ -159,16 +162,28 @@ function isCurrentAskPlanBinding(task: FindDataTaskState, binding: AskPlanBindin
 }
 
 function canOpenAskResultDetails(task: FindDataTaskState, snapshot: AskResultSnapshot): boolean {
+  if (!('askPlanId' in snapshot.binding)) return false;
   const result = task.askPlan?.lastRunResult;
   return isCurrentAskPlanBinding(task, snapshot.binding) && result?.success === true &&
     result.executedAt === snapshot.executedAt &&
     (!snapshot.operationId || !result.operationId || result.operationId === snapshot.operationId);
 }
 
+function canOpenDirectMetricResult(task: FindDataTaskState, snapshot: AskResultSnapshot): boolean {
+  const binding = snapshot.binding;
+  const currentBinding = task.directMetricResult?.binding;
+  return 'kind' in binding && binding.kind === 'DIRECT_METRIC' &&
+    !!currentBinding && 'kind' in currentBinding && currentBinding.kind === 'DIRECT_METRIC' &&
+    currentBinding.taskId === binding.taskId &&
+    currentBinding.requestId === binding.requestId &&
+    task.directMetricResult?.executedAt === snapshot.executedAt;
+}
+
 export const askRunCompletionMessage = buildAskRunCompletionSummary;
 
 export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorkspaceProps> = ({
   initialQuery,
+  entryContext,
   onNavigateToNav,
   onBackToHome,
   serviceOverride,
@@ -207,6 +222,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   // flight. This sequence lets the completion callback distinguish the panel
   // it started from from a panel the user chose afterwards.
   const surfaceNavigationSequenceRef = useRef(0);
+  const consumedEntryIdRef = useRef<string>();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationScrollRef = useRef<HTMLDivElement>(null);
@@ -317,7 +333,9 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           focusSection: command.focusSection,
           resultView: command.resultView,
           focusRequestId: command.focusRequestId,
-          focusTarget: command.focusTarget
+          focusTarget: command.focusTarget,
+          metricResultBinding: command.metricResultBinding,
+          metricResultFocus: command.metricResultFocus
         }
       });
     } else if (command.action === 'CLOSE') {
@@ -387,7 +405,9 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     let cancelled = false;
 
     async function initTaskPipeline() {
-      if (!initialQuery?.trim()) {
+      const hasNewEntry = Boolean(entryContext && entryContext.entryId !== consumedEntryIdRef.current);
+      if (!hasNewEntry && consumedEntryIdRef.current === entryContext?.entryId && taskRef.current.taskId) return;
+      if (!hasNewEntry && !initialQuery?.trim()) {
         const requestedTaskId = getTaskIdFromUrl();
         if (requestedTaskId) {
           try {
@@ -417,7 +437,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
 
       let cleanTask: FindDataTaskState;
       try {
-        cleanTask = await service.createTask({ initialQuery: '' });
+        cleanTask = await service.createTask({ initialQuery: '', entryContext: hasNewEntry ? entryContext : undefined });
       } catch (error: unknown) {
         if (cancelled) return;
         const failedTask = createFindDataTask({ taskId: createUiId('failed_task') });
@@ -427,9 +447,11 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       }
       if (cancelled) return;
       dispatchTracked({ type: 'TASK_CREATED', payload: { task: cleanTask } });
+      if (hasNewEntry && entryContext) consumedEntryIdRef.current = entryContext.entryId;
       replaceTaskIdInUrl(cleanTask.taskId);
 
-      if (!initialQuery || !initialQuery.trim()) {
+      const text = (hasNewEntry ? entryContext?.initialText : initialQuery)?.trim();
+      if (!text) {
         if (serviceMode !== 'http') {
           taskStore.save(cleanTask);
           taskStore.setCurrentTaskId(cleanTask.taskId);
@@ -439,7 +461,6 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         return;
       }
 
-      const text = initialQuery.trim();
       const operationId = startOperation('TURN');
       if (!operationId) return;
       dispatchTracked({
@@ -460,7 +481,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     return () => {
       cancelled = true;
     };
-  }, [service, serviceMode, taskStore, initialQuery, dispatchTracked, applyEngineResult, applyServiceFailure, refreshTaskList, startOperation]);
+  }, [service, serviceMode, taskStore, initialQuery, entryContext, dispatchTracked, applyEngineResult, applyServiceFailure, refreshTaskList, startOperation]);
 
   // Scroll to bottom on new turns
   useEffect(() => {
@@ -525,9 +546,53 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     if (taskRef.current.taskId === taskId) void handleCreateNewTask(false);
   };
 
+  const handleRunDirectMetricQuery = async (): Promise<void> => {
+    const taskAtStart = taskRef.current;
+    const query = taskAtStart.directMetricQuery;
+    const readiness = selectDirectMetricQueryReadiness(taskAtStart);
+    if (!query || (!readiness.ready && query.status !== 'FAILED')) {
+      setSurfaceMessage(readiness.message);
+      return;
+    }
+    const operationId = startOperation('METRIC_QUERY');
+    if (!operationId) return;
+    const refreshedQuery = { ...query, status: 'READY' as const, error: undefined };
+    dispatchTracked({ type: 'DIRECT_METRIC_QUERY_PREPARED', payload: { query: refreshedQuery } });
+    dispatchTracked({ type: 'DIRECT_METRIC_QUERY_STARTED', payload: { requestId: query.requestId } });
+    try {
+      const engineResult = await service.executeAction(
+        taskRef.current,
+        { actionCode: 'RUN_METRIC_QUERY', payload: { requestId: query.requestId } },
+        operationId
+      );
+      if (!applyEngineResult(engineResult)) throw new Error('指标查询结果已过期，请以当前任务为准。');
+    } catch (error: unknown) {
+      if (taskRef.current.taskId !== taskAtStart.taskId || taskRef.current.pendingOperation?.operationId !== operationId) return;
+      const message = error instanceof Error ? error.message : '正式指标查询失败，请稍后重试。';
+      dispatchTracked({ type: 'DIRECT_METRIC_QUERY_FAILED', payload: { requestId: query.requestId, error: message } });
+      dispatchTracked({ type: 'OPERATION_FAILED', payload: { operationId } });
+      dispatchTracked({
+        type: 'ASSISTANT_TURN_RECEIVED',
+        payload: {
+          turnId: createUiId('metric_query_failed'),
+          nextStatus: 'WAITING_USER',
+          source: { kind: 'DIRECT_METRIC_RESULT', requirementRevision: taskAtStart.requirementRevision },
+          blocks: [
+            { type: 'SYSTEM_NOTICE', id: createUiId('notice'), level: 'error', message: '口径已确认，但本次指标查询未完成。可重试查询，不会重复提交口径。' },
+            { type: 'ACTION_GROUP', id: createUiId('retry'), actions: [{ id: createUiId('retry_query'), label: '重试查询', actionCode: 'RUN_METRIC_QUERY', variant: 'primary' }] }
+          ]
+        }
+      });
+    }
+  };
+
   const handleAction = async (actionCode: TaskActionCode, payload?: Record<string, unknown>) => {
     if (actionCode === 'MODIFY_UNDERSTANDING' || actionCode === 'MODIFY_SPEC') {
       setIsContextDrawerOpen(true);
+      return;
+    }
+    if (actionCode === 'RUN_METRIC_QUERY') {
+      await handleRunDirectMetricQuery();
       return;
     }
     const boundPlan = payload?.askPlanBinding as AskPlanBinding | undefined;
@@ -775,6 +840,9 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
         operationId
       );
       if (!applyEngineResult(engineResult)) throw new Error('澄清结果已过期，请重新确认后再提交。');
+      if (taskRef.current.directMetricQuery?.status === 'READY') {
+        await handleRunDirectMetricQuery();
+      }
     } catch (error: unknown) {
       if (taskRef.current.taskId === actionTaskId && taskRef.current.pendingOperation?.operationId === operationId) {
         dispatchTracked({ type: 'OPERATION_FAILED', payload: { operationId } });
@@ -1296,7 +1364,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                                 <AskResultContent
                                   snapshot={block.snapshot}
                                   mode="compact"
-                                  canOpenDetails={canOpenAskResultDetails(task, block.snapshot)}
+                                  canOpenDetails={canOpenAskResultDetails(task, block.snapshot) || canOpenDirectMetricResult(task, block.snapshot)}
                                   onActionClick={(code, payload) => handleAction(code, payload)}
                                 />
                               </div>
@@ -1523,6 +1591,18 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               focusTarget={task.activeSurface.focusTarget}
               onFocusSection={(focusSection, resultView) => void handleAction('OPEN_ASK_PLAN', { focusSection, resultView })}
               onModifySpec={() => setIsContextDrawerOpen(true)}
+              onClose={() => void handleAction('CLOSE_SURFACE')}
+            />
+          )}
+
+          {activeSurfaceType === 'METRIC_RESULT' && task.directMetricResult && (
+            <RightWorkspaceMetricResult
+              snapshot={task.directMetricResult}
+              focus={task.activeSurface.metricResultFocus}
+              onFocusChange={(metricResultFocus) => void handleAction(
+                metricResultFocus === 'DEFINITION' ? 'OPEN_METRIC_DEFINITION' : 'OPEN_METRIC_RESULT',
+                { directMetricBinding: task.directMetricResult?.binding, executedAt: task.directMetricResult?.executedAt }
+              )}
               onClose={() => void handleAction('CLOSE_SURFACE')}
             />
           )}

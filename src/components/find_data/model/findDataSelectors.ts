@@ -10,7 +10,8 @@ import {
   ExecutionAssessment,
   AskPlan,
   ConversationTurn,
-  AskPlanBinding
+  AskPlanBinding,
+  DirectMetricResultBinding
 } from './FindDataTask';
 import { getResourceRangeIntersection, resourceCoversRange } from './timeRangeUtils';
 
@@ -22,6 +23,27 @@ export interface AskHandoffReadiness {
   coreResourceIds: ResourceId[];
   missingRequirements?: string[];
   requiresRuntimeAlignmentValidation?: boolean;
+}
+
+/**
+ * Direct official-metric requests deliberately do not reuse composition
+ * readiness: their dependencies and authorization are validated by the
+ * metric-query service, not by fabricated Core resources.
+ */
+export function selectDirectMetricQueryReadiness(task: FindDataTaskState): { ready: boolean; message: string } {
+  if (task.entryContext && task.entryContext.target.kind !== 'METRIC') {
+    return { ready: false, message: '当前对象不是可直接查询的正式指标。' };
+  }
+  if (!task.directMetricQuery) {
+    return { ready: false, message: '当前尚未形成可执行的正式指标请求。' };
+  }
+  if (task.entryContext?.target.kind === 'METRIC' && task.directMetricQuery.metricId !== task.entryContext.target.id) {
+    return { ready: false, message: '指标请求与当前对象不一致，无法执行。' };
+  }
+  if (task.directMetricQuery.status !== 'READY') {
+    return { ready: false, message: '当前指标请求不处于可执行状态。' };
+  }
+  return { ready: true, message: '正式指标请求已就绪，执行端仍将核验定义、条件和权限。' };
 }
 
 export function selectAskHandoffReadiness(task: FindDataTaskState): AskHandoffReadiness {
@@ -230,10 +252,14 @@ function matchesAskPlanBinding(left: AskPlanBinding, right: AskPlanBinding): boo
     left.searchRevision === right.searchRevision;
 }
 
+function isAskPlanBinding(binding: AskPlanBinding | DirectMetricResultBinding): binding is AskPlanBinding {
+  return !('kind' in binding && binding.kind === 'DIRECT_METRIC');
+}
+
 /** Historical result blocks are the only evidence that an older confirmation actually executed. */
 export function hasAskPlanExecutionEvidence(task: FindDataTaskState, binding: AskPlanBinding): boolean {
   return task.turns.some((turn) => turn.blocks.some((block) =>
-    block.type === 'ASK_RESULT' && matchesAskPlanBinding(block.snapshot.binding, binding)
+    block.type === 'ASK_RESULT' && isAskPlanBinding(block.snapshot.binding) && matchesAskPlanBinding(block.snapshot.binding, binding)
   ));
 }
 
@@ -494,6 +520,8 @@ export function selectConversationTurnApplicability(
         return { historical: true, kind: source.kind, message: '历史分析计划，当前需求已更新。' };
       case 'ASK_RESULT':
         return { historical: true, kind: source.kind, message: '历史结果，尚未按新需求重新计算。' };
+      case 'DIRECT_METRIC_RESULT':
+        return { historical: true, kind: source.kind, message: '历史指标结果，当前条件已更新。' };
       default:
         return { historical: true, kind: source.kind, message: '历史权限信息，当前需求已更新，请以当前方案为准。' };
     }
@@ -507,6 +535,9 @@ export function selectConversationTurnApplicability(
   }
   if (source.kind === 'ASK_RESULT' && source.resultExecutedAt && source.resultExecutedAt !== task.askPlan?.lastRunResult?.executedAt) {
     return { historical: true, kind: source.kind, message: '上次分析结果，当前结果已更新。' };
+  }
+  if (source.kind === 'DIRECT_METRIC_RESULT' && source.resultExecutedAt && source.resultExecutedAt !== task.directMetricResult?.executedAt) {
+    return { historical: true, kind: source.kind, message: '上次指标结果，当前结果已更新。' };
   }
   return { historical: false, kind: source.kind };
 }

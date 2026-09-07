@@ -70,4 +70,19 @@ describe('surface policy and structured natural-language intent', () => {
     expect(evaluateSurfacePolicy(resolveInteractionIntent('', task), 'OPEN_RELATED_RESOURCES', { type: 'CLOSED' }, task)).toMatchObject({ action: 'OPEN', surface: 'RELATED_RESOURCES' });
     expect(evaluateSurfacePolicy(resolveInteractionIntent('', task), 'CLOSE_SURFACE', { type: 'FIELDS' }, task)).toEqual({ action: 'CLOSE', surface: 'CLOSED' });
   });
+
+  it('opens only the current direct result or its bound definition without an AskPlan', () => {
+    const snapshot = {
+      binding: { kind: 'DIRECT_METRIC' as const, taskId: 'direct_task', requestId: 'request_1', metricId: 'met_elderly_population', requirementRevision: 0 },
+      executedAt: '2026-09-07T00:00:00.000Z', metricName: '老年人口数', numeratorLabel: '60 岁及以上常住人口', resultArtifact: {}
+    };
+    const task = createEmptyTask({ taskId: 'direct_task', directMetricResult: snapshot });
+    const command = evaluateSurfacePolicy(resolveInteractionIntent('', task), 'OPEN_METRIC_DEFINITION', { type: 'CLOSED' }, task, {
+      directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt
+    });
+    expect(command).toMatchObject({ action: 'OPEN', surface: 'METRIC_RESULT', metricResultFocus: 'DEFINITION', metricResultBinding: snapshot.binding });
+    expect(evaluateSurfacePolicy(resolveInteractionIntent('', task), 'OPEN_METRIC_RESULT', { type: 'CLOSED' }, task, {
+      directMetricBinding: { ...snapshot.binding, requestId: 'old_request' }, executedAt: snapshot.executedAt
+    })).toMatchObject({ action: 'NO_CHANGE', blockedReason: expect.stringContaining('历史指标结果') });
+  });
 });

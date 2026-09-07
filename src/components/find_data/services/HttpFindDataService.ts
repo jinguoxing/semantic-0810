@@ -2,7 +2,8 @@ import {
   FindDataService,
   FindDataEngineResult,
   FindDataTaskSummary,
-  PermissionRecheckResult
+  PermissionRecheckResult,
+  CreateFindDataTaskInput
 } from './FindDataService';
 import {
   FindDataTaskState,
@@ -19,7 +20,15 @@ export class HttpFindDataService implements FindDataService {
     this.apiBase = apiBase.replace(/\/$/, '');
   }
 
-  async createTask(input?: { initialQuery?: string }): Promise<FindDataTaskState> {
+  private requireLiveDirectMetricResult(result: FindDataEngineResult): FindDataEngineResult {
+    const directResult = result.events.find((event) => event.type === 'DIRECT_METRIC_RESULT_RECEIVED');
+    if (directResult?.type === 'DIRECT_METRIC_RESULT_RECEIVED' && directResult.payload.snapshot.dataOrigin !== 'LIVE_QUERY') {
+      throw new Error('找数据后端必须为正式指标查询返回实时查询数据，不能使用演示数据来源。');
+    }
+    return result;
+  }
+
+  async createTask(input?: CreateFindDataTaskInput): Promise<FindDataTaskState> {
     try {
       const resp = await fetch(`${this.apiBase}/tasks`, {
         method: 'POST',
@@ -66,7 +75,7 @@ export class HttpFindDataService implements FindDataService {
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
     }
-    return { ...await resp.json(), operationId: operationId ?? `http_turn_${Date.now()}` };
+    return this.requireLiveDirectMetricResult({ ...await resp.json(), operationId: operationId ?? `http_turn_${Date.now()}` });
   }
 
   async executeAction(
@@ -82,7 +91,7 @@ export class HttpFindDataService implements FindDataService {
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
     }
-    return { ...await resp.json(), operationId: operationId ?? `http_action_${Date.now()}` };
+    return this.requireLiveDirectMetricResult({ ...await resp.json(), operationId: operationId ?? `http_action_${Date.now()}` });
   }
 
   async recheckPermissions(

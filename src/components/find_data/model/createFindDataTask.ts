@@ -1,15 +1,17 @@
-import { FindDataTaskState } from './FindDataTask';
+import { FindDataEntryContext, FindDataTaskState } from './FindDataTask';
 
 interface CreateFindDataTaskOptions {
   taskId: string;
   initialQuery?: string;
   scenarioKey?: string;
+  entryContext?: FindDataEntryContext;
 }
 
 export function createFindDataTask({
   taskId,
   initialQuery = '',
-  scenarioKey
+  scenarioKey,
+  entryContext
 }: CreateFindDataTaskOptions): FindDataTaskState {
   const now = new Date().toISOString();
   const normalizedQuery = initialQuery.trim();
@@ -41,6 +43,7 @@ export function createFindDataTask({
     searchRevision: 0,
     runtimeStatus: { active: false, message: '' },
     askPlan: undefined,
+    entryContext,
     metadata: {},
     createdAt: now,
     updatedAt: now

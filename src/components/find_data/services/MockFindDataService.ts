@@ -20,7 +20,7 @@ import { selectCandidateById } from '../model/findDataSelectors';
 import { selectAskHandoffReadiness, validateAnalyticalAlignment } from '../model/findDataSelectors';
 import { findDataReducer } from '../model/findDataReducer';
 import { getMinhangBedDefinitionForCoreResources, getMinhangBedDefinitionForResource } from '../scenarios/minhangBedDefinition';
-import { FindDataEngineResult, FindDataService, FindDataTaskSummary, PermissionRecheckResult } from './FindDataService';
+import { CreateFindDataTaskInput, FindDataEngineResult, FindDataService, FindDataTaskSummary, PermissionRecheckResult } from './FindDataService';
 import { getPermissionActionLabel } from '../model/permissionActionLabels';
 import { buildPermissionRequestSubmittedSummary, buildSelectionSuccessSummary } from '../presenters/conversationPresenters';
 import { MINHANG_MOCK_RESULT_SCOPE } from '../fixtures/minhangBedSupplyFixture';
@@ -156,8 +156,8 @@ export class MockFindDataService implements FindDataService {
     return result;
   }
 
-  async createTask(input?: { initialQuery?: string }): Promise<FindDataTaskState> {
-    const task = createFindDataTask({ taskId: createScenarioId('task'), initialQuery: input?.initialQuery });
+  async createTask(input?: CreateFindDataTaskInput): Promise<FindDataTaskState> {
+    const task = createFindDataTask({ taskId: createScenarioId('task'), initialQuery: input?.initialQuery, entryContext: input?.entryContext });
     this.tasks.set(task.taskId, task);
     return task;
   }

@@ -191,7 +191,7 @@ export const ClarificationBlock: React.FC<ClarificationBlockProps> = ({
               : 'cursor-pointer bg-[#2563EB] text-white hover:bg-[#1D4ED8] shadow-sm'
           }`}
         >
-          <span>{submitting ? '提交中' : '继续'}</span>
+          <span>{submitting ? '提交中' : question.submitLabel ?? '继续'}</span>
           {!isLocked && <ArrowRight className="h-3 w-3" />}
         </button>
       </div>

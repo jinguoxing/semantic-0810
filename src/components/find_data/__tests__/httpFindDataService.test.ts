@@ -47,6 +47,35 @@ describe('HTTP find-data task lifecycle', () => {
     expect(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)).toContain('operation_1');
   });
 
+  it('passes the exact detail reference to task creation and rejects a Mock direct-metric result', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST' && String(_input).endsWith('/tasks')) return new Response(JSON.stringify(createEmptyTask({ taskId: 'task_direct' })));
+      return new Response(JSON.stringify({
+        taskId: 'task_direct', events: [{
+          type: 'DIRECT_METRIC_RESULT_RECEIVED', payload: {
+            snapshot: {
+              binding: { kind: 'DIRECT_METRIC', taskId: 'task_direct', requestId: 'request_1', metricId: 'met_elderly_population', requirementRevision: 0 },
+              executedAt: '', metricName: '老年人口数', numeratorLabel: '60 岁及以上常住人口', dataOrigin: 'MOCK_FIXTURE', resultArtifact: {}
+            }
+          }
+        }], assistantBlocks: []
+      }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new HttpFindDataService('/api/find-data');
+    await service.createTask({
+      entryContext: {
+        entryId: 'metric:met_elderly_population:query-value', source: 'METRIC_DETAIL',
+        target: { kind: 'METRIC', id: 'met_elderly_population', version: 'v1.1.0' },
+        intent: 'QUERY_VALUE', initialText: '查询指标「老年人口数」'
+      }
+    });
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toMatchObject({
+      entryContext: { target: { kind: 'METRIC', id: 'met_elderly_population', version: 'v1.1.0' } }
+    });
+    await expect(service.submitTurn(createEmptyTask({ taskId: 'task_direct' }), '查询指标「老年人口数」', 'operation_direct')).rejects.toThrow('不能使用演示数据来源');
+  });
+
   it('sends only Ask plan identity, revisions, and idempotency data to the server', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true, executedAt: '', permissionSnapshot: {}, dataOrigin: 'LIVE_QUERY' })));
     vi.stubGlobal('fetch', fetchMock);

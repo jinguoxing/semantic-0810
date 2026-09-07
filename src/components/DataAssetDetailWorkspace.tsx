@@ -36,6 +36,7 @@ import {
   Table
 } from 'lucide-react';
 import { SingleResourceAccessRequestDrawer } from './SingleResourceAccessRequestDrawer';
+import { FindDataEntryContext } from './find_data/model/FindDataTask';
 
 export interface DataAssetDetailWorkspaceProps {
   assetId?: string;
@@ -47,8 +48,8 @@ export interface DataAssetDetailWorkspaceProps {
   onNavigateToMetricDetail?: (metricId: string) => void;
   onNavigateToBusinessObject?: (objectId: string) => void;
   onNavigateToApiDetail?: (apiId: string) => void;
-  onEnterAnalysis?: (assetName: string) => void;
-  onEnterChatQuery?: (assetName: string) => void;
+  onEnterAnalysis?: (entry: FindDataEntryContext) => void;
+  onEnterChatQuery?: (entry: FindDataEntryContext) => void;
   onExploreRelatedData?: (assetName: string) => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
@@ -195,6 +196,7 @@ const ALL_ASSET_FIELDS: FullFieldItem[] = [
 ];
 
 export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> = ({
+  assetId,
   fromGoalSearch = false,
   goalQuery = '分析各街镇老龄化情况',
   onBackToResources,
@@ -1006,7 +1008,13 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               <button
                 onClick={() => {
                   if (onEnterAnalysis) {
-                    onEnterAnalysis('人口基本信息视图');
+                    onEnterAnalysis({
+                      entryId: `asset:${assetId ?? 'unknown'}:analyze`,
+                      source: 'ASSET_DETAIL',
+                      target: { kind: 'ASSET', id: assetId ?? 'unknown', label: '人口基本信息视图' },
+                      intent: 'ANALYZE',
+                      initialText: '围绕资源「人口基本信息视图」继续分析'
+                    });
                   } else {
                     addToast?.('success', '进入分析', '已将「人口基本信息视图」载入 AI 分析工作台');
                   }
@@ -1020,7 +1028,13 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               <button
                 onClick={() => {
                   if (onEnterChatQuery) {
-                    onEnterChatQuery('人口基本信息视图');
+                    onEnterChatQuery({
+                      entryId: `asset:${assetId ?? 'unknown'}:query-value`,
+                      source: 'ASSET_DETAIL',
+                      target: { kind: 'ASSET', id: assetId ?? 'unknown', label: '人口基本信息视图' },
+                      intent: 'QUERY_VALUE',
+                      initialText: '基于资源「人口基本信息视图」提出查询需求'
+                    });
                   } else {
                     addToast?.('info', '用于问数', '已在 Xino 对话流中绑定当前资产上下文');
                   }
@@ -1359,4 +1373,3 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
     </div>
   );
 };
-

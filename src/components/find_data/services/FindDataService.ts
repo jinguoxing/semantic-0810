@@ -1,5 +1,6 @@
 import {
   FindDataTaskState,
+  FindDataEntryContext,
   ResourceId,
   ConversationBlock,
   TaskAction,
@@ -34,10 +35,13 @@ export interface FindDataTaskSummary {
   scenarioKey?: string;
 }
 
+export interface CreateFindDataTaskInput {
+  initialQuery?: string;
+  entryContext?: FindDataEntryContext;
+}
+
 export interface FindDataService {
-  createTask(input?: {
-    initialQuery?: string;
-  }): Promise<FindDataTaskState>;
+  createTask(input?: CreateFindDataTaskInput): Promise<FindDataTaskState>;
 
   listTasks(): Promise<FindDataTaskSummary[]>;
 

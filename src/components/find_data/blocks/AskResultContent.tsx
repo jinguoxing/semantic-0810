@@ -18,9 +18,11 @@ interface AskResultContentProps {
   onActionClick?: (actionCode: TaskActionCode, payload?: Record<string, unknown>) => void;
 }
 
-const dataOriginLabel = (origin: AskResultSnapshot['dataOrigin']) => {
-  if (origin === 'MOCK_FIXTURE') return '演示数据';
-  if (origin === 'LIVE_QUERY') return '实时查询服务';
+const dataOriginLabel = (snapshot: AskResultSnapshot) => {
+  if (snapshot.dataOrigin === 'MOCK_FIXTURE') {
+    return 'kind' in snapshot.binding && snapshot.binding.kind === 'DIRECT_METRIC' ? '设计演示数据' : '演示数据';
+  }
+  if (snapshot.dataOrigin === 'LIVE_QUERY') return '实时查询服务';
   return '来源尚未提供';
 };
 
@@ -160,6 +162,7 @@ export const AskResultContent: React.FC<AskResultContentProps> = ({
   const hasChart = structuredTable ? structuredChartRows(structuredTable).length > 0 : false;
   const selectedFullView: AskResultView = hasChart && fullView !== 'DATA' ? 'CHART' : 'DATA';
   const legacyRows = resultArtifact.townResults ?? [];
+  const isDirectMetricResult = 'kind' in snapshot.binding && snapshot.binding.kind === 'DIRECT_METRIC';
   const hasUnknownActualPeriod = !resultArtifact.actualScope?.timeRange;
   const actionPayload = {
     askPlanBinding: snapshot.binding,
@@ -172,7 +175,7 @@ export const AskResultContent: React.FC<AskResultContentProps> = ({
     <section className={`w-full space-y-3 ${mode === 'compact' ? 'rounded-xl border border-[#D9E5F5] bg-[#FAFCFF] p-3' : ''}`} aria-label="分析结果">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-[#E2E8F0] pb-2">
         <div className="flex min-w-0 items-start gap-2"><BarChart3 className="mt-0.5 h-4 w-4 shrink-0 text-[#2563EB]" /><div className="min-w-0"><h4 className="text-xs font-semibold text-[#0F172A]">{snapshot.metricName}</h4><p className="mt-0.5 text-[11px] text-[#64748B]">分子口径：{snapshot.numeratorLabel}</p></div></div>
-        <span className="rounded border border-[#E2E8F0] bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#64748B]">{dataOriginLabel(snapshot.dataOrigin)}</span>
+        <span className="rounded border border-[#E2E8F0] bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#64748B]">{dataOriginLabel(snapshot)}</span>
       </div>
 
       <div className="space-y-1 text-[11px] leading-relaxed text-[#475569]"><p><span className="font-medium text-[#64748B]">实际范围：</span>{buildActualScopeLabel(resultArtifact.actualScope)}</p>{hasUnknownActualPeriod && <p className="text-[#B45309]">实际数据期间尚未提供。</p>}</div>
@@ -207,8 +210,17 @@ export const AskResultContent: React.FC<AskResultContentProps> = ({
 
       {mode === 'compact' && onActionClick && (
         <div className="flex flex-wrap items-center gap-2 pt-0.5">
-          <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_ASK_PLAN', { ...actionPayload, focusSection: 'RESULT' })} title={canOpenDetails ? '查看本次完整结果' : '当前工作区无法恢复这次历史结果的详情'} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
-          <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_ASK_PLAN', { ...actionPayload, focusSection: 'CALCULATION' })} title={canOpenDetails ? '查看本次计算依据' : '当前工作区无法恢复这次历史结果的详情'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看本次计算依据</button>
+          {isDirectMetricResult ? (
+            <>
+              <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_RESULT', { directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt })} title={canOpenDetails ? '查看本次完整结果' : '当前工作区无法恢复这次历史结果的详情'} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
+              <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_DEFINITION', { directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt })} title={canOpenDetails ? '查看本次实际采用的指标口径' : '当前工作区无法恢复这次结果的定义'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看指标口径</button>
+            </>
+          ) : (
+            <>
+              <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_ASK_PLAN', { ...actionPayload, focusSection: 'RESULT' })} title={canOpenDetails ? '查看本次完整结果' : '当前工作区无法恢复这次历史结果的详情'} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
+              <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_ASK_PLAN', { ...actionPayload, focusSection: 'CALCULATION' })} title={canOpenDetails ? '查看本次计算依据' : '当前工作区无法恢复这次历史结果的详情'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看本次计算依据</button>
+            </>
+          )}
         </div>
       )}
 
