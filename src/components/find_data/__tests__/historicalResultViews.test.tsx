@@ -82,6 +82,64 @@ function taskWithResults(): FindDataTaskState {
   });
 }
 
+function directMetricHistorySnapshot(
+  taskId: string,
+  requestId: string,
+  metricId: string,
+  metricName: string,
+  label: string,
+  value: number,
+  unit: string,
+): AskResultSnapshot {
+  return {
+    binding: { kind: 'DIRECT_METRIC', taskId, requestId, metricId, requirementRevision: 2 },
+    operationId: `${requestId}_operation`,
+    executedAt: '2026-08-31T09:00:00.000Z',
+    metricName,
+    numeratorLabel: metricName,
+    resultArtifact: {
+      resultRef: { kind: 'SERVICE_RESULT', id: `${requestId}_result` },
+      citations: [],
+      content: {
+        kind: 'SCALAR',
+        label,
+        value: { kind: 'NUMBER', state: 'VALUE', value, unit, precision: 0 },
+      },
+      actualScope: { region: '七宝镇', timeRange: { start: '2026-08', end: '2026-08' }, grain: 'MONTH' },
+    },
+  };
+}
+
+function taskWithDirectAndComparisonResults(): FindDataTaskState {
+  const task = taskWithResults();
+  const population = directMetricHistorySnapshot(
+    task.taskId,
+    'direct_population',
+    'met_elderly_population',
+    '60 岁及以上常住人口数',
+    '浦锦街道 60 岁及以上常住人口数',
+    20_000,
+    '人',
+  );
+  const availableBeds = directMetricHistorySnapshot(
+    task.taskId,
+    'direct_available_bed',
+    'design_demo_available_bed',
+    '在营可用养老床位数',
+    '七宝镇在营可用养老床位数',
+    800,
+    '张',
+  );
+  return {
+    ...task,
+    turns: [
+      { turnId: 'direct_population_turn', sender: 'ASSISTANT', createdAt: '', blocks: [{ type: 'ASK_RESULT', id: 'direct_population_block', snapshot: population }] },
+      { turnId: 'direct_available_bed_turn', sender: 'ASSISTANT', createdAt: '', blocks: [{ type: 'ASK_RESULT', id: 'direct_available_bed_block', snapshot: availableBeds }] },
+      ...task.turns,
+    ],
+  };
+}
+
 function taskWithUnreadableOnlyHistory(): FindDataTaskState {
   const taskId = 'unreadable_history_task';
   const snapshot = resultSnapshot(taskId, 'A');
@@ -171,7 +229,7 @@ describe('historical result targets', () => {
 
     const cards = await screen.findAllByLabelText('分析结果');
     fireEvent.click(within(cards[0]).getByRole('button', { name: '查看完整结果' }));
-    expect(await screen.findByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '历史结果' })).toBeInTheDocument();
     expect(screen.getAllByText(/在营可用养老床位数/).length).toBeGreaterThan(0);
     expect(findData.runAskPlan).not.toHaveBeenCalled();
 
@@ -307,7 +365,7 @@ describe('historical result targets', () => {
     const cards = await screen.findAllByLabelText('分析结果');
     expect(cards).toHaveLength(2);
     fireEvent.click(within(cards[0]).getByRole('button', { name: '查看完整结果' }));
-    expect(await screen.findByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '历史结果' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '关闭结果详情' })).toHaveAttribute('title', '关闭结果详情');
   });
 
@@ -334,6 +392,25 @@ describe('historical result targets', () => {
     fireEvent.click(screen.getByRole('button', { name: '解读此结果' }));
     await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledTimes(2));
     expect(vi.mocked(findData.submitTurn).mock.calls[1][3]?.resultTarget?.resultRef?.id).toBe('result_a');
+  });
+
+  it('targets the requested available-bed comparison result instead of earlier direct metric results', async () => {
+    const task = taskWithDirectAndComparisonResults();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service();
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} taskStoreOverride={store} />);
+    const input = await screen.findByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+
+    fireEvent.change(input, { target: { value: '回到在营可用床位的比较结果，解释一下这个差异。' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledOnce());
+    const target = vi.mocked(findData.submitTurn).mock.calls[0][3]?.resultTarget;
+    expect(target?.resultRef?.id).toBe('result_a');
+    expect(target?.binding).toMatchObject({ askPlanId: 'plan_a' });
+    expect(target?.resultRef?.id).not.toBe('direct_available_bed_result');
   });
 
   it('keeps resource and permission questions in the original Find Data turn path', async () => {

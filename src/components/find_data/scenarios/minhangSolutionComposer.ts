@@ -87,10 +87,10 @@ export function composeMinhangSolution(
       ))
     ],
     gaps: [],
-    relationshipEvidence: [{
-      sourceResourceId: bedResourceId, targetResourceId: 'r01', relationType: 'ANALYTICAL_COMPATIBILITY', verificationStatus: 'SEMANTIC_ONLY', evidenceLevel: 'MEDIUM',
+    relationshipEvidence: bedAlternativeResourceIds.map((resourceId) => ({
+      sourceResourceId: resourceId, targetResourceId: 'r01', relationType: 'ANALYTICAL_COMPATIBILITY', verificationStatus: 'SEMANTIC_ONLY', evidenceLevel: 'MEDIUM',
       description: '两项指标均围绕街镇与月份组织分析，具体维度与时间对齐将在分析阶段验证。', joinKeys: ['street_town', 'month'], evidenceRefs: ['已登记资源粒度与指标口径']
-    }],
+    })),
     coverageSummary: [`核心资源：${resources.r01.name}、${resources[bedResourceId].name}`, '核心维度：街镇、统计月份'],
     limitationSummary: ['技术连接未被长期确认，将在本次分析执行前验证维度、粒度与时间对齐。'], readiness: 'COMPLETE'
   };

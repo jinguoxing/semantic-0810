@@ -1,4 +1,7 @@
 import {
+  AskPlan,
+  AskPlanRunRequest,
+  AskRunResult,
   AskResultCitation,
   AskResultSnapshot,
   ClarificationQuestion,
@@ -15,7 +18,8 @@ import {
   selectCanonicalMetricExecutionRef,
   selectEffectiveDataSolution,
   selectEffectiveDataSolutionItemsBySelectionGroup,
-  selectResultTargetByRef
+  selectResultTargetByRef,
+  validateAnalyticalAlignment
 } from '../model/findDataSelectors';
 import { MINHANG_RESOURCES } from '../fixtures/minhangBedSupplyFixture';
 import { composeMinhangSolution } from '../scenarios/minhangSolutionComposer';
@@ -33,6 +37,22 @@ const DESIGN_CONTINUITY_SCENARIO_KEY = 'design_demo_pujin_qibao_bed_supply';
 const DESIGN_CONTINUITY_TITLE = '浦锦、七宝养老服务供给比较';
 const BED_DEFINITION_SELECTION_GROUP = 'bed_definition_alternative';
 const DESIGN_SOLUTION_BED_DEFINITION_PREFIX = 'design_solution_bed_definition';
+
+/** Design-demo execution input only. It is never written to FindDataResource. */
+const DESIGN_CONTINUITY_RAW_FIXTURE: Partial<Record<ResourceId, Record<string, Record<string, number>>>> = {
+  r01: {
+    '浦锦街道': { '2026-08': 20000 },
+    '七宝镇': { '2026-08': 40000 }
+  },
+  r04: {
+    '浦锦街道': { '2026-08': 300 },
+    '七宝镇': { '2026-08': 800 }
+  },
+  r05: {
+    '浦锦街道': { '2026-08': 450 },
+    '七宝镇': { '2026-08': 1000 }
+  }
+};
 
 function isSolutionBedDefinitionQuestionId(questionId: string | undefined): boolean {
   return Boolean(questionId?.startsWith(DESIGN_SOLUTION_BED_DEFINITION_PREFIX));
@@ -117,7 +137,8 @@ export class MetricQueryDesignDemoService implements FindDataService {
     return this.fallback.recheckPermissions(task, resourceIds, action, operationId);
   }
 
-  async runAskPlan(task: FindDataTaskState, request: Parameters<FindDataService['runAskPlan']>[1], operationId?: string) {
+  async runAskPlan(task: FindDataTaskState, request: AskPlanRunRequest, operationId?: string): Promise<AskRunResult> {
+    if (this.isContinuityTask(task)) return this.runContinuityAskPlan(task, request, operationId);
     return this.fallback.runAskPlan(task, request, operationId);
   }
 
@@ -225,11 +246,100 @@ export class MetricQueryDesignDemoService implements FindDataService {
   private handleContinuityTurn(task: FindDataTaskState, text: string, operationId: string): FindDataEngineResult | undefined {
     const requirementChange = this.resolveContinuityRequirementChange(text);
     if (requirementChange) return this.updateContinuityRequirement(task, requirementChange, operationId);
+    if (this.isContinuityCalculationRequest(text)) return this.prepareContinuityAskPlan(task, text, operationId);
     if (/(老年人口|60\s*岁及以上常住人口)/.test(text) || this.isSingleMetricSolutionFollowUp(task, text)) {
       return this.prepareSolutionPopulationQuery(task, text, operationId);
     }
     if (/养老床位/.test(text)) return this.prepareSolutionBedClarification(task, operationId);
     return undefined;
+  }
+
+  private isContinuityCalculationRequest(text: string): boolean {
+    return /(?:每千名.*老人.*床位|每千名老人床位|按同样方式计算|床位.*比较.*计算|比较.*床位.*每千)/.test(text);
+  }
+
+  private prepareContinuityAskPlan(task: FindDataTaskState, text: string, operationId: string): FindDataEngineResult {
+    const solution = selectEffectiveDataSolution(task);
+    const bedResourceId: ResourceId = /核定床位/.test(text) ? 'r05' : 'r04';
+    const populationItem = solution?.items.find((item) => item.resourceId === 'r01' && item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED');
+    const bedItem = solution?.items.find((item) =>
+      item.resourceId === bedResourceId && item.role === 'CORE' && item.selectionGroupId === BED_DEFINITION_SELECTION_GROUP
+    );
+    if (!solution || !populationItem || !bedItem || !task.resources[bedResourceId]) {
+      return this.notice(task, operationId, '当前有效数据方案未提供本次计算所需的人口指标和床位口径，请先形成新的有效数据方案。', 'warning');
+    }
+    if (bedResourceId !== 'r04' && bedResourceId !== 'r05') {
+      return this.notice(task, operationId, '当前数据方案未提供可用于本次计算的床位口径。', 'warning');
+    }
+    const askPlan = this.buildContinuityAskPlan(task, bedResourceId);
+    const alignment = validateAnalyticalAlignment(task, askPlan);
+    if (!alignment.allowed) {
+      return this.notice(task, operationId, '当前数据方案缺少本次计算所需的分析关系或时间粒度证据，尚不能生成计算方案。', 'warning');
+    }
+    const blocks: FindDataTaskState['turns'][number]['blocks'] = [{
+      type: 'TEXT',
+      id: createScenarioId('calculation_plan_ready'),
+      content: `已沿用当前任务中的老年人口和${task.resources[bedResourceId].name}数据，准备了本次比较方案。`
+    }];
+    return {
+      taskId: task.taskId,
+      operationId,
+      events: [
+        { type: 'ASK_PLAN_PREPARED', payload: { askPlan } },
+        this.assistantEvent(blocks, 'WAITING_USER', {
+          kind: 'ASK_PLAN',
+          requirementRevision: task.requirementRevision,
+          searchRevision: task.searchRevision,
+          askPlanId: askPlan.id
+        })
+      ],
+      assistantBlocks: blocks,
+      surfaceCommand: {
+        action: task.activeSurface.type === 'CLOSED' ? 'OPEN' : 'REPLACE',
+        surface: 'ASK_PLAN',
+        mode: 'WORKBENCH',
+        openedBy: 'TASK_REQUIRED',
+        focusSection: 'PLAN'
+      }
+    };
+  }
+
+  private buildContinuityAskPlan(task: FindDataTaskState, bedResourceId: 'r04' | 'r05'): AskPlan {
+    const available = bedResourceId === 'r04';
+    const numerator = available ? '在营可用养老床位数' : '养老床位核定数';
+    const coreResourceIds: ResourceId[] = ['r01', bedResourceId];
+    return {
+      id: createScenarioId('plan'),
+      title: `浦锦、七宝${numerator}比较方案`,
+      status: 'READY_TO_RUN',
+      coreResourceIds,
+      conditionalResourceIds: [],
+      // The isolated runner rechecks this exact baseline before execution.
+      permissionCheckState: 'ALLOWED',
+      permissionBaseline: Object.fromEntries(coreResourceIds.map((resourceId) => [
+        resourceId,
+        task.resources[resourceId]?.availabilityByAction.query ?? 'UNKNOWN'
+      ])),
+      requirementRevision: task.requirementRevision,
+      basedOnSearchRevision: task.searchRevision,
+      timeRange: task.requirementHypothesis.timeRange,
+      alignmentRequirement: {
+        requiredDimensions: ['street_town', 'month'],
+        requiredTimeGrain: 'MONTH',
+        requiredRelationshipResourcePairs: [{ sourceResourceId: bedResourceId, targetResourceId: 'r01' }]
+      },
+      calculationSpec: {
+        metricName: available ? '每千名老人在营可用养老床位数' : '每千名老人核定养老床位数',
+        isOfficialMetric: false,
+        formula: `${numerator} ÷ 同期 60 岁及以上常住人口数 × 1000`,
+        formulaExplanation: `分子为街镇${numerator}，分母为同期 60 岁及以上常住人口数；乘以 1000 得到每千名老人的床位数。`,
+        numerator,
+        denominator: '60 岁及以上常住人口数',
+        multiplier: 1000,
+        benchmarkRule: 'RANK_ONLY',
+        strictConclusionBoundary: '仅比较当前口径下的相对水平，不判断是否充足、不代表真实需求，也不生成政策目标或建设建议。'
+      }
+    };
   }
 
   private isSingleMetricSolutionFollowUp(task: FindDataTaskState, text: string): boolean {
@@ -517,6 +627,104 @@ export class MetricQueryDesignDemoService implements FindDataService {
     return this.completedResult(task, query, snapshot, operationId);
   }
 
+  private async runContinuityAskPlan(task: FindDataTaskState, request: AskPlanRunRequest, operationId?: string): Promise<AskRunResult> {
+    const fail = (error: string): AskRunResult => ({
+      operationId,
+      success: false,
+      executedAt: new Date().toISOString(),
+      permissionSnapshot: {},
+      error
+    });
+    const askPlan = task.askPlan;
+    if (!askPlan || askPlan.id !== request.askPlanId) return fail('分析计划不存在或已变化。');
+    if (!['READY_TO_RUN', 'FAILED'].includes(askPlan.status)) return fail('分析计划当前状态不允许执行。');
+    if (askPlan.requirementRevision !== task.requirementRevision || request.expectedRequirementRevision !== task.requirementRevision ||
+      askPlan.basedOnSearchRevision !== task.searchRevision || request.expectedSearchRevision !== task.searchRevision) {
+      return fail('任务条件或数据方案版本已变化，请重新生成计算方案。');
+    }
+    if (!this.isCurrentContinuityPlan(task, askPlan)) return fail('计算方案输入与当前有效数据方案不一致。');
+    const permission = await this.recheckPermissions(task, askPlan.coreResourceIds, 'query', operationId);
+    if (permission.decision !== 'ALLOWED') {
+      return { ...fail('执行时权限重检未通过，未启动计算。'), permissionSnapshot: permission.updatedPermissions };
+    }
+    const alignment = validateAnalyticalAlignment(task, askPlan);
+    if (!alignment.allowed) {
+      return {
+        ...fail('分析维度、时间粒度或关系校验未通过。'),
+        permissionSnapshot: permission.updatedPermissions,
+        alignmentValidation: { status: alignment.status, details: alignment.details }
+      };
+    }
+    const month = askPlan.timeRange?.start;
+    if (month !== '2026-08' || askPlan.timeRange?.end !== '2026-08') return fail('设计演示数据未覆盖本次计划的时间范围。');
+    const bedResourceId = askPlan.coreResourceIds.find((resourceId) => resourceId !== 'r01');
+    if (bedResourceId !== 'r04' && bedResourceId !== 'r05') return fail('当前计算方案未绑定可执行的设计演示床位口径。');
+    const rows = ['浦锦街道', '七宝镇'].flatMap((region) => {
+      const population = this.continuityRawValue('r01', region, month);
+      const beds = this.continuityRawValue(bedResourceId, region, month);
+      return population !== undefined && beds !== undefined ? [{ region, population, beds, ratio: beds / population * 1000 }] : [];
+    });
+    if (rows.length !== 2) return fail('设计演示原始数据不完整，未生成结果。');
+    const difference = rows[1].ratio - rows[0].ratio;
+    const bedLabel = task.resources[bedResourceId]?.name ?? askPlan.calculationSpec.numerator;
+    const resultRefId = operationId ?? createScenarioId('result');
+    return {
+      operationId,
+      success: true,
+      executedAt: new Date().toISOString(),
+      dataOrigin: 'MOCK_FIXTURE',
+      permissionSnapshot: permission.updatedPermissions,
+      alignmentValidation: { status: 'VALIDATED', scope: 'CURRENT_ANALYSIS_ONLY', details: alignment.details },
+      resultArtifact: {
+        resultRef: { kind: 'RUN_RESULT', id: resultRefId },
+        citations: [
+          { kind: 'CALCULATION_PLAN', id: askPlan.id, label: askPlan.title },
+          { kind: 'DATA_SOURCE', id: 'r01', label: task.resources.r01?.name ?? '60 岁及以上常住人口数', version: 'v1.1.0' },
+          { kind: 'DATA_SOURCE', id: bedResourceId, label: bedLabel }
+        ],
+        content: {
+          kind: 'TABLE',
+          columns: [
+            { id: 'region', label: '街镇', kind: 'TEXT' },
+            { id: 'population', label: '60+ 常住人口', kind: 'NUMBER', unit: '人' },
+            { id: 'beds', label: bedLabel, kind: 'NUMBER', unit: '张' },
+            { id: 'ratio', label: '每千名老人床位数', kind: 'NUMBER', unit: '张 / 千人' }
+          ],
+          rows: rows.map((row) => ({
+            id: row.region,
+            cells: {
+              region: { kind: 'TEXT', state: 'VALUE', value: row.region },
+              population: { kind: 'NUMBER', state: 'VALUE', value: row.population, unit: '人', precision: 0 },
+              beds: { kind: 'NUMBER', state: 'VALUE', value: row.beds, unit: '张', precision: 0 },
+              ratio: { kind: 'NUMBER', state: 'VALUE', value: row.ratio, unit: '张 / 千人', precision: 1 }
+            }
+          })),
+          chart: { kind: 'BAR', categoryColumnId: 'region', valueColumnId: 'ratio', title: askPlan.calculationSpec.metricName }
+        },
+        actualScope: { region: '浦锦街道、七宝镇', timeRange: { start: month, end: month }, grain: 'MONTH' },
+        summary: `在当前口径下，七宝镇高于浦锦街道 ${difference.toFixed(1)} 张 / 千人。`,
+        boundaryNotice: '当前结果没有机构规模、投入、利用率、建设进度或需求侧等原因证据；不能据此判断差异原因、生成预测或建设建议。'
+      }
+    };
+  }
+
+  private isCurrentContinuityPlan(task: FindDataTaskState, askPlan: AskPlan): boolean {
+    const solution = selectEffectiveDataSolution(task);
+    const [populationResourceId, bedResourceId] = askPlan.coreResourceIds;
+    return Boolean(
+      solution &&
+      askPlan.coreResourceIds.length === 2 &&
+      populationResourceId === 'r01' &&
+      (bedResourceId === 'r04' || bedResourceId === 'r05') &&
+      solution.items.some((item) => item.resourceId === populationResourceId && item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED') &&
+      solution.items.some((item) => item.resourceId === bedResourceId && item.role === 'CORE' && item.selectionGroupId === BED_DEFINITION_SELECTION_GROUP)
+    );
+  }
+
+  private continuityRawValue(resourceId: ResourceId, region: string, month: string): number | undefined {
+    return DESIGN_CONTINUITY_RAW_FIXTURE[resourceId]?.[region]?.[month];
+  }
+
   private uncoveredQuery(task: FindDataTaskState, query: DirectMetricQueryState, operationId: string): FindDataEngineResult {
     const message = '演示数据未覆盖该月份；未重新找数，也没有编造查询结果。';
     const blocks: FindDataTaskState['turns'][number]['blocks'] = [
@@ -625,7 +833,9 @@ export class MetricQueryDesignDemoService implements FindDataService {
     const selected = selectResultTargetByRef(task, { taskId: task.taskId, ...context.resultTarget! });
     if (!selected) return this.notice(task, operationId, '这份结果已无法精确定位，未使用最新结果替代。', 'warning');
     const table = selected.snapshot.resultArtifact.content?.kind === 'TABLE' ? selected.snapshot.resultArtifact.content : undefined;
-    const numberColumn = table?.columns.find((column) => column.kind === 'NUMBER');
+    const numberColumn = table?.chart
+      ? table.columns.find((column) => column.id === table.chart?.valueColumnId && column.kind === 'NUMBER')
+      : table?.columns.find((column) => column.kind === 'NUMBER');
     const values = table && numberColumn ? table.rows.flatMap((row) => {
       const label = table.columns.find((column) => column.kind === 'TEXT');
       const text = label ? row.cells[label.id] : undefined;
@@ -635,7 +845,10 @@ export class MetricQueryDesignDemoService implements FindDataService {
         : [];
     }) : [];
     const comparison = values.length >= 2
-      ? `${values[0].label}为 ${values[0].value.toFixed(1)} ${values[0].unit ?? ''}，${values[1].label}为 ${values[1].value.toFixed(1)} ${values[1].unit ?? ''}，相差 ${Math.abs(values[0].value - values[1].value).toFixed(1)} ${values[0].unit ?? ''}。`
+      ? (() => {
+          const [higher, lower] = [...values].sort((left, right) => right.value - left.value);
+          return `${higher.label}为 ${higher.value.toFixed(1)} ${higher.unit ?? ''}，${lower.label}为 ${lower.value.toFixed(1)} ${lower.unit ?? ''}，相差 ${Math.abs(higher.value - lower.value).toFixed(1)} ${higher.unit ?? ''}。`;
+        })()
       : '这份结果未提供可用于比较的两项数值。';
     const block: FindDataTaskState['turns'][number]['blocks'][number] = {
       type: 'TEXT', id: createScenarioId('history_interpretation'),

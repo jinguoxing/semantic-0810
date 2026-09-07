@@ -186,7 +186,7 @@ export function canOpenDirectMetricResult(task: FindDataTaskState, snapshot: Ask
 }
 
 function hasExplicitResultReference(text: string): boolean {
-  return /(?:这份|这个|此|那份)\s*结果|结果\s*[AB]|(?:在营可用|核定)[^，。！？?]*那份结果/.test(text);
+  return /(?:这份|这个|此|那份)\s*结果|结果\s*[AB]|(?:在营可用|核定)[^，。！？?]*(?:那份结果|比较结果)/.test(text);
 }
 
 export const askRunCompletionMessage = buildAskRunCompletionSummary;
@@ -549,23 +549,20 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     const matchingSelections = (candidates: typeof selections) => candidates.filter((selection) => [selection.displayLabel, selection.snapshot.metricName, selection.snapshot.numeratorLabel]
       .flatMap((label) => label ? [label, label.replace(/养老/g, ''), label.replace(/数/g, ''), label.replace(/养老/g, '').replace(/数/g, '')] : [])
       .some((label) => normalized.includes(label.replace(/[\s，。、“”‘’「」()（）·]/g, '').toLowerCase())));
-    const mentions = matchingSelections(selections);
-    const knownMentions = matchingSelections(knownSelections);
+    const comparisonResultReference = /(?:比较结果|每千名|床位[^，。！？?]*比较)/.test(text);
+    const resultSelections = comparisonResultReference
+      ? selections.filter((selection) => !isDirectMetricResultBinding(selection.snapshot.binding))
+      : selections;
+    const knownResultSelections = comparisonResultReference
+      ? knownSelections.filter((selection) => !isDirectMetricResultBinding(selection.snapshot.binding))
+      : knownSelections;
+    const mentions = matchingSelections(resultSelections);
+    const knownMentions = matchingSelections(knownResultSelections);
     if (mentions.length === 0 && knownMentions.length > 0) {
       return { ambiguous: false, blockedReason: '这份历史结果当前不可读取，不能使用其他结果替代。' };
     }
     if (mentions.length === 1) return { target: mentions[0].target, ambiguous: false };
     if (mentions.length > 1) return { ambiguous: true };
-    const refersA = /(?:结果\s*)?A(?:\s*那份|\s*结果)?/i.test(text);
-    const refersB = /(?:结果\s*)?B(?:\s*那份|\s*结果)?/i.test(text);
-    if (refersA !== refersB) {
-      const ordinalTarget = knownSelections[refersA ? 0 : 1];
-      if (!ordinalTarget) return { ambiguous: false };
-      if (!isResultSnapshotReadable(ordinalTarget, requiresHistoricalResultReadAuthorization)) {
-        return { ambiguous: false, blockedReason: '这份历史结果当前不可读取，不能使用其他结果替代。' };
-      }
-      return { target: ordinalTarget.target, ambiguous: false };
-    }
     const viewed = selectCurrentViewedResult(taskRef.current);
     if (viewed && isResultSnapshotReadable(viewed, requiresHistoricalResultReadAuthorization)) return { target: viewed.target, ambiguous: false };
     if (selections.length === 1) return { target: selections[0].target, ambiguous: false };
@@ -1841,6 +1838,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
             <RightWorkspaceResultDetail
               snapshot={currentViewedResult.snapshot}
               displayLabel={currentViewedResult.displayLabel}
+              isHistorical={!currentViewedResult.isCurrent}
               focus={task.activeSurface.resultDetailFocus}
               resultView={task.activeSurface.resultView}
               onResultViewChange={(resultView) => void handleAction('OPEN_RESULT_DETAIL', {

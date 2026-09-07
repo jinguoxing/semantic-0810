@@ -79,16 +79,17 @@ export function isDataSolutionDirectMetricQueryCurrent(
   task: FindDataTaskState,
   query: DirectMetricQueryState
 ): boolean {
-  if (!isDirectMetricQuerySource(query.source)) return false;
-  if (query.source.kind !== 'DATA_SOLUTION') return true;
+  const source = query.source;
+  if (!isDirectMetricQuerySource(source)) return false;
+  if (source.kind !== 'DATA_SOLUTION') return true;
   const solution = selectEffectiveDataSolution(task);
   if (!solution ||
-    query.source.requirementRevision !== task.requirementRevision ||
-    query.source.searchRevision !== task.searchRevision ||
-    query.source.requirementRevision !== solution.basedOnRequirementRevision ||
-    query.source.searchRevision !== solution.basedOnSearchRevision ||
-    !solution.items.some((item) => item.resourceId === query.source.resourceId)) return false;
-  const executionRef = selectCanonicalMetricExecutionRef(task.resources[query.source.resourceId]);
+    source.requirementRevision !== task.requirementRevision ||
+    source.searchRevision !== task.searchRevision ||
+    source.requirementRevision !== solution.basedOnRequirementRevision ||
+    source.searchRevision !== solution.basedOnSearchRevision ||
+    !solution.items.some((item) => item.resourceId === source.resourceId)) return false;
+  const executionRef = selectCanonicalMetricExecutionRef(task.resources[source.resourceId]);
   return executionRef?.id === query.metricId;
 }
 

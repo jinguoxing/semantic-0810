@@ -351,6 +351,7 @@ function buildAskPlan(task: FindDataTaskState, benchmarkOptionId?: string): AskP
   const coreResourceIds = coreItems.map((item) => item.resourceId);
   return {
     ...MINHANG_ASK_PLAN,
+    id: createScenarioId('plan'),
     calculationSpec: buildMinhangCalculationSpec(coreResourceIds, benchmarkOptionId, task.askPlan),
     permissionCheckState: 'NOT_CHECKED',
     coreResourceIds,
@@ -365,7 +366,9 @@ function buildAskPlan(task: FindDataTaskState, benchmarkOptionId?: string): AskP
     timeRange: task.requirementHypothesis.timeRange,
     alignmentRequirement: {
       requiredDimensions: ['street_town', 'month'], requiredTimeGrain: 'MONTH',
-      requiredRelationshipResourcePairs: task.dataSolution.items.filter((item) => item.role === 'CORE' && item.resourceId !== 'r01').map((item) => ({ sourceResourceId: item.resourceId, targetResourceId: 'r01' }))
+      requiredRelationshipResourcePairs: coreResourceIds
+        .filter((resourceId) => resourceId !== 'r01')
+        .map((sourceResourceId) => ({ sourceResourceId, targetResourceId: 'r01' }))
     }
   };
 }

@@ -6,6 +6,7 @@ import { AskResultContent } from './blocks/AskResultContent';
 interface RightWorkspaceResultDetailProps {
   snapshot: AskResultSnapshot;
   displayLabel: string;
+  isHistorical?: boolean;
   focus?: ResultDetailFocusSection;
   resultView?: AskResultView;
   onResultViewChange: (view: AskResultView) => void;
@@ -20,6 +21,7 @@ interface RightWorkspaceResultDetailProps {
 export const RightWorkspaceResultDetail: React.FC<RightWorkspaceResultDetailProps> = ({
   snapshot,
   displayLabel,
+  isHistorical = false,
   focus = 'RESULT',
   resultView,
   onResultViewChange,
@@ -36,7 +38,7 @@ export const RightWorkspaceResultDetail: React.FC<RightWorkspaceResultDetailProp
             {focus === 'EVIDENCE' ? <BookOpenCheck className="h-4 w-4" /> : <Info className="h-4 w-4" />}
           </div>
           <div>
-            <h3 className="text-sm font-bold text-[#0F172A]">{focus === 'EVIDENCE' ? '本次结果依据' : '分析结果'}</h3>
+            <h3 className="text-sm font-bold text-[#0F172A]">{focus === 'EVIDENCE' ? '本次结果依据' : isHistorical ? '历史结果' : '分析结果'}</h3>
             <p className="truncate text-[11px] text-[#64748B]" title={displayLabel}>{focus === 'EVIDENCE' ? '只读展示这份结果实际携带的引用' : displayLabel}</p>
           </div>
         </div>

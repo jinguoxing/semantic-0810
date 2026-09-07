@@ -549,12 +549,13 @@ export type DirectMetricQuerySource =
 /** Runtime guard for tasks hydrated from a pre-PR-4A serialized shape. */
 export function isDirectMetricQuerySource(source: unknown): source is DirectMetricQuerySource {
   if (!source || typeof source !== 'object' || !('kind' in source)) return false;
-  if (source.kind === 'USER_EXPLICIT') return true;
-  if (source.kind === 'ENTRY_CONTEXT') return typeof source.entryId === 'string';
-  return source.kind === 'DATA_SOLUTION' &&
-    typeof source.resourceId === 'string' &&
-    typeof source.requirementRevision === 'number' &&
-    typeof source.searchRevision === 'number';
+  const candidate = source as Record<string, unknown>;
+  if (candidate.kind === 'USER_EXPLICIT') return true;
+  if (candidate.kind === 'ENTRY_CONTEXT') return typeof candidate.entryId === 'string';
+  return candidate.kind === 'DATA_SOLUTION' &&
+    typeof candidate.resourceId === 'string' &&
+    typeof candidate.requirementRevision === 'number' &&
+    typeof candidate.searchRevision === 'number';
 }
 
 export interface DirectMetricQueryState {

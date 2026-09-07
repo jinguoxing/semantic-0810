@@ -119,7 +119,7 @@ describe('scenario classification and turn handling', () => {
     expect(task.dataSolution.items.find((item) => item.resourceId === 'r07')).toMatchObject({ role: 'PARTIAL_MATCH' });
     expect(task.dataSolution.gaps.map((gap) => gap.id)).toContain('gap_homecare_partial');
     expect(task.dataSolution.items.filter((item) => ['r01', 'r04'].includes(item.resourceId))).toHaveLength(2);
-    expect(task.dataSolution.relationshipEvidence).toHaveLength(1);
+    expect(task.dataSolution.relationshipEvidence.map((evidence) => evidence.sourceResourceId)).toEqual(['r04', 'r05']);
     expect(getDataSolutionDisplayState(task).code).toBe('READY_PARTIAL');
   });
 
