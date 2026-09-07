@@ -8,7 +8,7 @@
 - `PR4_PLAN_BASE_SHA`（实际计划起点）：`5bdf8764b75717bd1af05be1e5586eb9fc1b983c`。
 - `PR4_PLAN_V1_SHA`：`92b53f23bb8fc4a4e769d9f987ff5f2deb6ea6ff`。
 - `PR3_FINAL_FREEZE_SHA`：`789cd68cfbff3048835832528e0e1f111d33470b`。它是 PR4 Plan Base 的祖先；`5bdf876` 仅在 `docs/implementation/data-assistant-five-views/PR3_REPORT.md` 记录 Final Freeze，不改变业务代码。
-- `PR4_PLAN_V1_1_SHA`：待本次 docs-only closeout commit 完成后回写。
+- `PR4_PLAN_V1_1_SHA`：`9f1368b93fa127206834db4183c8afa374437175`（docs-only closeout commit）。
 - 因而本计划从当前实际 HEAD 出发，不回退到 `789cd68`，也不从 `v2026.9.4` 重建。
 - Closeout 时已有未跟踪的 `.playwright-cli/`、`artifacts/`、`test-results/`；它们不是本 PR 的输入或输出，保持不覆盖。本轮唯一修改文件是本计划。
 - 未发现适用的 `AGENTS.md`。
