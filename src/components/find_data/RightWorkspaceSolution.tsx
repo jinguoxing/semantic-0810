@@ -52,6 +52,14 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
     GAP_ONLY: 'bg-[#F8FAFC] text-[#64748B] border-[#E2E8F0]',
     STALE: 'bg-[#FFF7ED] text-[#C2410C] border-[#FED7AA]'
   }[displayState.code];
+  const workspaceTitle = {
+    EMPTY: '数据方案',
+    EVALUATING: '数据方案正在重新评估',
+    READY_COMPLETE: '数据方案已就绪',
+    READY_PARTIAL: '当前数据方案',
+    GAP_ONLY: '数据方案',
+    STALE: '数据方案待更新'
+  }[displayState.code];
 
   const totalItems = task.dataSolution.items.length;
   const isEmpty = totalItems === 0 && gaps.length === 0;
@@ -70,7 +78,7 @@ export const RightWorkspaceSolution: React.FC<RightWorkspaceSolutionProps> = ({
           <div className="truncate">
             <div className="flex items-center space-x-2">
               <h3 className="text-sm font-bold text-[#0F172A] tracking-tight truncate">
-                数据方案已就绪
+                {workspaceTitle}
               </h3>
               <span className={`text-[10px] px-1.5 py-0.2 rounded border font-bold shrink-0 ${displayStateClass}`}>
                 {displayState.label}

@@ -45,6 +45,32 @@ describe('findDataReducer task lifecycle', () => {
       status: 'RESOLVED', selectedOptionIds: ['opt_pop'], resolvedAt: '2026-09-04T01:00:00.000Z', resolvedAtRequirementRevision: 2
     });
   });
+
+  it('does not rewrite resolved or stale clarification history', () => {
+    const task = createEmptyTask({
+      turns: [{
+        turnId: 'a1', sender: 'ASSISTANT', createdAt: '', blocks: [
+          {
+            type: 'CLARIFICATION', id: 'resolved', question: {
+              id: 'question_history', question: '已确认', type: 'SINGLE', options: [],
+              resolution: { status: 'RESOLVED', selectedOptionIds: ['r04'], resolvedAt: 'before' }
+            }
+          },
+          {
+            type: 'CLARIFICATION', id: 'stale', question: {
+              id: 'question_history', question: '已过期', type: 'SINGLE', options: [],
+              resolution: { status: 'STALE', selectedOptionIds: [], staleAt: 'before', staleReason: '条件变化' }
+            }
+          }
+        ]
+      }]
+    });
+    const next = findDataReducer(task, {
+      type: 'CLARIFICATION_RESOLVED',
+      payload: { questionId: 'question_history', selectedOptionIds: ['r05'], selectedOptionLabels: ['养老床位核定数'], requirementRevision: 2, resolvedAt: 'after' }
+    });
+    expect(next.turns[0].blocks).toEqual(task.turns[0].blocks);
+  });
 });
 
 describe('findDataReducer search result contract', () => {

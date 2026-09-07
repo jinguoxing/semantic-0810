@@ -259,6 +259,39 @@ describe('RightWorkspaceFields & Store (AC-07, AC-16)', () => {
     expect(screen.queryByText('r04 ↔ r01')).not.toBeInTheDocument();
   });
 
+  it('FG4B-07: makes the Solution workspace header reflect the actual display state', () => {
+    const complete = createMinhangTask();
+    const partial = createMinhangTask({
+      dataSolution: {
+        ...complete.dataSolution,
+        gaps: [{ id: 'gap', title: '缺口', description: '缺口', impactLevel: 'LOW', mitigation: '补充', status: 'OPEN' }]
+      }
+    });
+    const states = [
+      { task: complete, heading: '数据方案已就绪' },
+      { task: partial, heading: '当前数据方案' },
+      { task: createMinhangTask({ dataSolution: { ...complete.dataSolution, state: 'EVALUATING' } }), heading: '数据方案正在重新评估' },
+      { task: createMinhangTask({ dataSolution: { ...complete.dataSolution, state: 'STALE' } }), heading: '数据方案待更新' },
+      { task: createEmptyTask(), heading: '数据方案' },
+      {
+        task: createEmptyTask({
+          dataSolution: {
+            ...createEmptyTask().dataSolution,
+            state: 'READY',
+            gaps: [{ id: 'gap-only', title: '缺口', description: '缺口', impactLevel: 'LOW', mitigation: '补充', status: 'OPEN' }]
+          }
+        }),
+        heading: '数据方案'
+      }
+    ];
+
+    for (const { task, heading } of states) {
+      const view = render(<RightWorkspaceSolution task={task} onClose={() => {}} />);
+      expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
   it('labels a PARTIAL_MATCH catalog candidate as recorded, not included', () => {
     const base = createMinhangTask();
     const task = {

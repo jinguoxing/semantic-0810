@@ -196,7 +196,7 @@ export function findDataReducer(state: FindDataTaskState, action: FindDataEvent)
 
     case 'CLARIFICATION_RESOLVED': {
       const resolveQuestion = (question: ClarificationQuestion) =>
-        question.id !== action.payload.questionId ? question : {
+        question.id !== action.payload.questionId || (question.resolution?.status ?? 'OPEN') !== 'OPEN' ? question : {
           ...question,
           resolution: {
             status: 'RESOLVED' as const,

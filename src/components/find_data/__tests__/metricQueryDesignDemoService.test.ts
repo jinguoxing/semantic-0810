@@ -241,7 +241,7 @@ describe('MetricQueryDesignDemoService', () => {
     const withoutCandidates = { ...goal.task, searchResult: { ...goal.task.searchResult, candidateIds: [], candidateSnapshot: [], returnedCount: 0 } };
     const clarification = await submit(service, withoutCandidates, '查询 2026 年 8 月七宝镇的养老床位数。', 'bed_request');
     const question = clarification.task.turns.flatMap((turn) => turn.blocks)
-      .find((block) => block.type === 'CLARIFICATION' && block.question.id === 'design_solution_bed_definition');
+      .find((block) => block.type === 'CLARIFICATION' && block.question.id.startsWith('design_solution_bed_definition_'));
 
     expect(clarification.task.taskId).toBe(created.taskId);
     expect(clarification.result.events.some((event) => event.type === 'SEARCH_STARTED' || event.type === 'SEARCH_RESULTS_RECEIVED')).toBe(false);
@@ -284,7 +284,7 @@ describe('MetricQueryDesignDemoService', () => {
 
     const approvedClarification = await submit(service, settled, '查询 2026 年 8 月七宝镇的养老床位数。', 'bed_approved_request');
     const approvedQuestion = approvedClarification.task.turns.flatMap((turn) => turn.blocks).reverse()
-      .find((block) => block.type === 'CLARIFICATION' && block.question.id === 'design_solution_bed_definition');
+      .find((block) => block.type === 'CLARIFICATION' && block.question.id.startsWith('design_solution_bed_definition_'));
     if (!approvedQuestion || approvedQuestion.type !== 'CLARIFICATION') throw new Error('expected approved clarification');
     const approvedPrepared = apply(approvedClarification.task, (await service.executeAction(approvedClarification.task, {
       actionCode: 'SUBMIT_CLARIFICATION',
@@ -296,6 +296,98 @@ describe('MetricQueryDesignDemoService', () => {
     expect(apply(approvedPrepared, approvedResult.events).directMetricResult).toMatchObject({
       resultArtifact: { content: { kind: 'SCALAR', value: { value: 1000, unit: '张' } } }
     });
+  });
+
+  it('FG4B-01/02: creates immutable, unique solution-bed clarification instances', async () => {
+    const service = new MetricQueryDesignDemoService();
+    const created = await service.createTask();
+    const goal = await submit(service, created, '我想比较浦锦街道和七宝镇 2026 年 8 月的养老服务供给情况，先帮我看看需要哪些数据。', 'guard_goal');
+    const first = await submit(service, goal.task, '查询 2026 年 8 月七宝镇的养老床位数。', 'guard_bed_a');
+    const firstQuestion = first.task.turns.flatMap((turn) => turn.blocks).find((block) =>
+      block.type === 'CLARIFICATION' && block.question.id.startsWith('design_solution_bed_definition_')
+    );
+    if (!firstQuestion || firstQuestion.type !== 'CLARIFICATION') throw new Error('expected first solution clarification');
+
+    const firstResolved = apply(first.task, (await service.executeAction(first.task, {
+      actionCode: 'SUBMIT_CLARIFICATION',
+      payload: { questionId: firstQuestion.question.id, selectedOptionIds: ['r04'] }
+    }, 'guard_resolve_a')).events);
+    const second = await submit(service, firstResolved, '查询 2026 年 8 月七宝镇的养老床位数。', 'guard_bed_b');
+    const secondQuestion = second.task.turns.flatMap((turn) => turn.blocks).reverse().find((block) =>
+      block.type === 'CLARIFICATION' && block.question.id.startsWith('design_solution_bed_definition_')
+    );
+    if (!secondQuestion || secondQuestion.type !== 'CLARIFICATION') throw new Error('expected second solution clarification');
+
+    expect(secondQuestion.question.id).not.toBe(firstQuestion.question.id);
+    const secondResolved = apply(second.task, (await service.executeAction(second.task, {
+      actionCode: 'SUBMIT_CLARIFICATION',
+      payload: { questionId: secondQuestion.question.id, selectedOptionIds: ['r05'] }
+    }, 'guard_resolve_b')).events);
+    const resolvedQuestions = secondResolved.turns.flatMap((turn) => turn.blocks);
+    const firstHistory = resolvedQuestions.find((block) => block.type === 'CLARIFICATION' && block.question.id === firstQuestion.question.id);
+    const secondHistory = resolvedQuestions.find((block) => block.type === 'CLARIFICATION' && block.question.id === secondQuestion.question.id);
+    expect(firstHistory).toMatchObject({ question: { resolution: { status: 'RESOLVED', selectedOptionIds: ['r04'] } } });
+    expect(secondHistory).toMatchObject({ question: { resolution: { status: 'RESOLVED', selectedOptionIds: ['r05'] } } });
+  });
+
+  it('FG4B-03/04: submits a solution clarification with its origin user turn, not a later turn', async () => {
+    const service = new MetricQueryDesignDemoService();
+    const created = await service.createTask();
+    const goal = await submit(service, created, '我想比较浦锦街道和七宝镇 2026 年 8 月的养老服务供给情况，先帮我看看需要哪些数据。', 'origin_goal');
+    const clarification = await submit(service, goal.task, '查询 2026 年 8 月七宝镇的养老床位数。', 'origin_bed');
+    const question = clarification.task.turns.flatMap((turn) => turn.blocks).find((block) =>
+      block.type === 'CLARIFICATION' && block.question.id.startsWith('design_solution_bed_definition_')
+    );
+    if (!question || question.type !== 'CLARIFICATION') throw new Error('expected solution clarification');
+
+    const laterPopulationTurn = await submit(
+      service,
+      clarification.task,
+      '先查询 2026 年 8 月浦锦街道的 60 岁及以上常住人口数。',
+      'origin_later_population'
+    );
+    const confirmed = await service.executeAction(laterPopulationTurn.task, {
+      actionCode: 'SUBMIT_CLARIFICATION',
+      payload: { questionId: question.question.id, selectedOptionIds: ['r04'] }
+    }, 'origin_confirm');
+    const prepared = apply(laterPopulationTurn.task, confirmed.events);
+
+    expect(prepared.directMetricQuery).toMatchObject({
+      metricId: 'design_elderly_bed_capacity',
+      requestedConditions: {
+        region: '七宝镇',
+        timeRange: { start: '2026-08', end: '2026-08' },
+        bedDefinition: '在营可用养老床位数'
+      }
+    });
+  });
+
+  it('FG4B-05/06: stales only open solution-bed clarification and blocks its later submission', async () => {
+    const service = new MetricQueryDesignDemoService();
+    const created = await service.createTask();
+    const goal = await submit(service, created, '我想比较浦锦街道和七宝镇 2026 年 8 月的养老服务供给情况，先帮我看看需要哪些数据。', 'stale_goal');
+    const clarification = await submit(service, goal.task, '查询 2026 年 8 月七宝镇的养老床位数。', 'stale_bed');
+    const question = clarification.task.turns.flatMap((turn) => turn.blocks).find((block) =>
+      block.type === 'CLARIFICATION' && block.question.id.startsWith('design_solution_bed_definition_')
+    );
+    if (!question || question.type !== 'CLARIFICATION') throw new Error('expected solution clarification');
+    const changed = await submit(service, clarification.task, '后续都按核定床位。', 'stale_requirement_change');
+
+    expect(changed.result.events.some((event) => event.type === 'CLARIFICATION_STALE')).toBe(true);
+    expect(changed.task.turns.flatMap((turn) => turn.blocks).find((block) =>
+      block.type === 'CLARIFICATION' && block.question.id === question.question.id
+    )).toMatchObject({ question: { resolution: { status: 'STALE' } } });
+
+    const blocked = await service.executeAction(changed.task, {
+      actionCode: 'SUBMIT_CLARIFICATION',
+      payload: { questionId: question.question.id, selectedOptionIds: ['r04'] }
+    }, 'stale_submit');
+    expect(blocked.events.some((event) =>
+      event.type === 'CLARIFICATION_RESOLVED' ||
+      event.type === 'DIRECT_METRIC_QUERY_PREPARED' ||
+      event.type === 'DIRECT_METRIC_QUERY_STARTED'
+    )).toBe(false);
+    expect(JSON.stringify(blocked.assistantBlocks)).toContain('当前任务条件已变化');
   });
 
   it('keeps a one-off month override local and leaves unsupported demo data as a query failure', async () => {

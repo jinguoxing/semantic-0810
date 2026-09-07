@@ -32,6 +32,11 @@ import { MockFindDataService } from './MockFindDataService';
 const DESIGN_CONTINUITY_SCENARIO_KEY = 'design_demo_pujin_qibao_bed_supply';
 const DESIGN_CONTINUITY_TITLE = '浦锦、七宝养老服务供给比较';
 const BED_DEFINITION_SELECTION_GROUP = 'bed_definition_alternative';
+const DESIGN_SOLUTION_BED_DEFINITION_PREFIX = 'design_solution_bed_definition';
+
+function isSolutionBedDefinitionQuestionId(questionId: string | undefined): boolean {
+  return Boolean(questionId?.startsWith(DESIGN_SOLUTION_BED_DEFINITION_PREFIX));
+}
 
 const DESIGN_BED_CLARIFICATION_DESCRIPTIONS: Record<ResourceId, string> = {
   r04: '用于了解本口径下的在营可用容量。',
@@ -256,11 +261,13 @@ export class MetricQueryDesignDemoService implements FindDataService {
       id: createScenarioId('requirement_updated'),
       content: '已更新当前任务条件。现有数据方案将不再作为当前执行依据；历史结果仍保留为只读记录。'
     }];
+    const staleClarifications = this.staleOpenSolutionBedClarifications(task);
     return {
       taskId: task.taskId,
       operationId,
       events: [
         { type: 'REQUIREMENT_UPDATED', payload: { hypothesis, bumpRevision: true } },
+        ...staleClarifications,
         this.assistantEvent(blocks, 'WAITING_USER', { kind: 'SOLUTION', requirementRevision: task.requirementRevision + 1 })
       ],
       assistantBlocks: blocks,
@@ -325,7 +332,7 @@ export class MetricQueryDesignDemoService implements FindDataService {
       return this.notice(task, operationId, '当前数据方案中没有可复用的完整床位口径组，请先形成新的有效数据方案。', 'warning');
     }
     const question: ClarificationQuestion = {
-      id: 'design_solution_bed_definition',
+      id: this.createSolutionBedDefinitionQuestionId(task),
       question: '当前数据方案中已有两个可用床位口径。你要看在营可用床位，还是核定床位？两种口径的数值和含义不同。',
       type: 'SINGLE',
       options: alternatives.map(({ item, resource }) => ({
@@ -446,16 +453,22 @@ export class MetricQueryDesignDemoService implements FindDataService {
     const questionId = action.payload?.questionId as string | undefined;
     const selected = Array.from(new Set((action.payload?.selectedOptionIds as string[] | undefined) ?? []));
     const question = task.turns.flatMap((turn) => turn.blocks).reverse().find((block): block is { type: 'CLARIFICATION'; id: string; question: ClarificationQuestion } => block.type === 'CLARIFICATION' && block.question.id === questionId);
-    if (!question || question.question.resolution?.status === 'RESOLVED' || question.question.resolution?.status === 'STALE' || selected.length !== 1 || !question.question.options.some((option) => option.id === selected[0])) {
+    if (!question) {
       return this.notice(task, operationId, '请选择一个有效口径后再继续。', 'warning');
     }
-    const isSolutionBedClarification = questionId === 'design_solution_bed_definition';
+    if (question.question.resolution?.status === 'STALE') {
+      return this.notice(task, operationId, '当前任务条件已变化，请基于最新数据方案重新发起床位查询。', 'warning');
+    }
+    if (question.question.resolution?.status === 'RESOLVED' || selected.length !== 1 || !question.question.options.some((option) => option.id === selected[0])) {
+      return this.notice(task, operationId, '请选择一个有效口径后再继续。', 'warning');
+    }
+    const isSolutionBedClarification = isSolutionBedDefinitionQuestionId(question.question.id);
     const metricId = questionId === 'design_elderly_scope' ? 'met_elderly_population' : 'design_elderly_bed_capacity';
     const definition = metricId === 'met_elderly_population'
       ? this.elderlyDefinition()
       : this.bedDefinition(selected[0] === 'r05' ? 'approved' : selected[0]);
     const requestedConditions = isSolutionBedClarification
-      ? this.resolveContinuityRequestedConditions(task, this.latestUserTurnText(task), 'BED')
+      ? this.resolveContinuityRequestedConditions(task, this.originUserTurnTextForClarification(task, question.question.id), 'BED')
       : undefined;
     if (isSolutionBedClarification && !requestedConditions) {
       return this.notice(task, operationId, '请先明确本次要查询的浦锦街道或七宝镇。', 'warning');
@@ -664,9 +677,46 @@ export class MetricQueryDesignDemoService implements FindDataService {
     };
   }
 
-  private latestUserTurnText(task: FindDataTaskState): string {
-    return [...task.turns].reverse().find((turn) => turn.sender === 'USER')?.blocks
-      .find((block) => block.type === 'TEXT')?.content ?? '';
+  private createSolutionBedDefinitionQuestionId(task: FindDataTaskState): string {
+    const sequence = task.turns
+      .flatMap((turn) => turn.blocks)
+      .filter((block) => block.type === 'CLARIFICATION' && isSolutionBedDefinitionQuestionId(block.question.id))
+      .length + 1;
+    return `${DESIGN_SOLUTION_BED_DEFINITION_PREFIX}_${task.requirementRevision}_${sequence}`;
+  }
+
+  private staleOpenSolutionBedClarifications(task: FindDataTaskState): FindDataEvent[] {
+    const questionIds = task.turns
+      .flatMap((turn) => turn.blocks)
+      .filter((block): block is Extract<typeof block, { type: 'CLARIFICATION' }> =>
+        block.type === 'CLARIFICATION' &&
+        isSolutionBedDefinitionQuestionId(block.question.id) &&
+        (block.question.resolution?.status ?? 'OPEN') === 'OPEN'
+      )
+      .map((block) => block.question.id);
+    return questionIds.length === 0 ? [] : [{
+      type: 'CLARIFICATION_STALE',
+      payload: {
+        questionIds,
+        staleAt: new Date().toISOString(),
+        reason: '当前任务需求已变化，请基于最新数据方案重新确认床位口径。'
+      }
+    }];
+  }
+
+  private originUserTurnTextForClarification(task: FindDataTaskState, questionId: string): string {
+    const clarificationTurnIndex = task.turns.findIndex((turn) =>
+      turn.sender === 'ASSISTANT' && turn.blocks.some((block) =>
+        block.type === 'CLARIFICATION' && block.question.id === questionId
+      )
+    );
+    for (let index = clarificationTurnIndex - 1; index >= 0; index -= 1) {
+      const userText = task.turns[index].sender === 'USER'
+        ? task.turns[index].blocks.find((block) => block.type === 'TEXT')
+        : undefined;
+      if (userText?.type === 'TEXT') return userText.content;
+    }
+    return '';
   }
 
   /**
