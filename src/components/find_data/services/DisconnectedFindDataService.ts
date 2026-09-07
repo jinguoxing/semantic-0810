@@ -10,7 +10,8 @@ import {
   ResourceId,
   TaskAction,
   AskPlanRunRequest,
-  AskRunResult
+  AskRunResult,
+  TurnTargetContext
 } from '../model/FindDataTask';
 import { createFindDataTask } from '../model/createFindDataTask';
 
@@ -37,7 +38,8 @@ export class DisconnectedFindDataService implements FindDataService {
   async submitTurn(
     task: FindDataTaskState,
     _text: string,
-    operationId?: string
+    operationId?: string,
+    _context?: TurnTargetContext
   ): Promise<FindDataEngineResult> {
     const turnId = `turn_${Date.now()}_assistant`;
     return {

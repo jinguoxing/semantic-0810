@@ -47,6 +47,24 @@ describe('HTTP find-data task lifecycle', () => {
     expect(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body)).toContain('operation_1');
   });
 
+  it('sends only the exact result identity when continuing a historical result', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ taskId: 'task_1', events: [], assistantBlocks: [], surfaceCommand: { action: 'NO_CHANGE' } })));
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new HttpFindDataService('/api/find-data');
+    const binding = { taskId: 'task_1', askPlanId: 'plan_a', requirementRevision: 1, searchRevision: 1 };
+    await service.submitTurn(createEmptyTask({ taskId: 'task_1' }), '解释这份结果', 'operation_a', {
+      resultTarget: { resultRef: { kind: 'SERVICE_RESULT', id: 'result_a' }, binding, executedAt: '2026-08-31T10:00:00.000Z' }
+    });
+    const call = (fetchMock.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit]>)[0];
+    const body = JSON.parse(String(call[1].body));
+    expect(body).toEqual({
+      text: '解释这份结果', operationId: 'operation_a',
+      context: { resultTarget: { resultRef: { kind: 'SERVICE_RESULT', id: 'result_a' }, binding, executedAt: '2026-08-31T10:00:00.000Z' } }
+    });
+    expect(JSON.stringify(body)).not.toContain('resultArtifact');
+    expect(JSON.stringify(body)).not.toContain('calculationSpec');
+  });
+
   it('passes the exact detail reference to task creation and rejects a Mock direct-metric result', async () => {
     const entryContext = {
       entryId: 'metric:met_elderly_population:query-value', source: 'METRIC_DETAIL' as const,

@@ -13,7 +13,7 @@ import {
   Trash2
 } from 'lucide-react';
 
-import { AskPlan, AskPlanBinding, AskResultSnapshot, AskRunResult, FindDataEntryContext, FindDataTaskState, PendingOperation, ResourceId, TaskActionCode, isDirectMetricResultBinding, isSameDirectMetricResultBinding } from './find_data/model/FindDataTask';
+import { AskPlan, AskPlanBinding, AskResultSnapshot, AskRunResult, FindDataEntryContext, FindDataTaskState, PendingOperation, ResourceId, ResultTargetRef, TaskActionCode, TurnTargetContext, isDirectMetricResultBinding, isSameDirectMetricResultBinding } from './find_data/model/FindDataTask';
 import { FindDataEvent } from './find_data/model/findDataEvents';
 import { findDataReducer, initialFindDataTaskState } from './find_data/model/findDataReducer';
 import {
@@ -38,7 +38,11 @@ import {
   resolveCandidateSelection,
   selectResourceById,
   selectResourceFields,
-  selectDirectMetricQueryReadiness
+  selectDirectMetricQueryReadiness,
+  getResultTargetKey,
+  selectCurrentViewedResult,
+  selectResultSnapshots,
+  selectResultTargetByRef
 } from './find_data/model/findDataSelectors';
 import {
   buildAskPlanScopeDisclosure,
@@ -66,6 +70,7 @@ import { RightWorkspaceAccess } from './find_data/RightWorkspaceAccess';
 import { RightWorkspaceCatalog } from './find_data/RightWorkspaceCatalog';
 import { RightWorkspaceAskPlan } from './find_data/RightWorkspaceAskPlan';
 import { RightWorkspaceMetricResult } from './find_data/RightWorkspaceMetricResult';
+import { RightWorkspaceResultDetail } from './find_data/RightWorkspaceResultDetail';
 import { TaskContextDrawer } from './find_data/TaskContextDrawer';
 
 // Brand components
@@ -334,7 +339,9 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           focusRequestId: command.focusRequestId,
           focusTarget: command.focusTarget,
           metricResultBinding: command.metricResultBinding,
-          metricResultFocus: command.metricResultFocus
+          metricResultFocus: command.metricResultFocus,
+          resultTarget: command.resultTarget,
+          resultDetailFocus: command.resultDetailFocus
         }
       });
     } else if (command.action === 'CLOSE') {
@@ -344,11 +351,14 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     }
   }, [dispatchTracked, updateComparisonDraft, updateDetailReturnContext]);
 
-  const applyEngineResult = useCallback((result: FindDataEngineResult) => {
+  const applyEngineResult = useCallback((result: FindDataEngineResult, options?: { suppressSurface?: boolean; surfaceNavigationSequenceAtStart?: number }) => {
     if (result.taskId !== taskRef.current.taskId) return false;
     if (taskRef.current.pendingOperation && result.operationId !== taskRef.current.pendingOperation.operationId) return false;
     dispatchTrackedEvents(result.events);
-    applySurfaceCommand(result.surfaceCommand);
+    if (!options?.suppressSurface && (options?.surfaceNavigationSequenceAtStart === undefined ||
+      options.surfaceNavigationSequenceAtStart === surfaceNavigationSequenceRef.current)) {
+      applySurfaceCommand(result.surfaceCommand);
+    }
     if (taskRef.current.pendingOperation?.operationId === result.operationId) {
       dispatchTracked({ type: 'OPERATION_COMPLETED', payload: { operationId: result.operationId } });
     }
@@ -489,9 +499,109 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
 
   const isInputBlocked = task.status === 'UNDERSTANDING' || task.status === 'SEARCHING' || !!task.runtimeStatus?.active || !!task.pendingOperation;
 
+  const readResultTarget = (target: ResultTargetRef | undefined) => {
+    const selected = selectResultTargetByRef(taskRef.current, target);
+    if (!selected) return { selected: undefined, blockedReason: '未找到这份历史结果，无法继续操作。' };
+    // A loaded HTTP Task is not proof that a former result is still readable.
+    // Current result paths stay compatible; historical results require a fresh
+    // server authorization marker carried with that exact snapshot.
+    if (serviceMode === 'http' && !selected.isCurrent && selected.snapshot.currentReadAccess !== 'AUTHORIZED') {
+      return { selected: undefined, blockedReason: '这份历史结果当前不可读取；服务尚未确认当前访问授权。' };
+    }
+    return { selected };
+  };
+
+  const isInterpretationRequest = (text: string) => /(解读|解释|为什么|为何|原因|差异|更低|更高|这份结果|这个结果|此结果|那份结果|这里)/.test(text);
+
+  const resolveTextResultTarget = (text: string): { target?: ResultTargetRef; ambiguous: boolean } => {
+    const selections = selectResultSnapshots(taskRef.current);
+    if (selections.length === 0) return { ambiguous: false };
+    const normalized = text.replace(/[\s，。、“”‘’「」()（）·]/g, '').toLowerCase();
+    const mentions = selections.filter((selection) => [selection.displayLabel, selection.snapshot.metricName, selection.snapshot.numeratorLabel]
+      .flatMap((label) => label ? [label, label.replace(/养老/g, ''), label.replace(/数/g, ''), label.replace(/养老/g, '').replace(/数/g, '')] : [])
+      .some((label) => normalized.includes(label.replace(/[\s，。、“”‘’「」()（）·]/g, '').toLowerCase())));
+    if (mentions.length === 1) return { target: mentions[0].target, ambiguous: false };
+    if (mentions.length > 1) return { ambiguous: true };
+    const refersA = /(?:结果\s*)?A(?:\s*那份|\s*结果)?/i.test(text);
+    const refersB = /(?:结果\s*)?B(?:\s*那份|\s*结果)?/i.test(text);
+    if (refersA !== refersB && selections[refersA ? 0 : 1]) return { target: selections[refersA ? 0 : 1].target, ambiguous: false };
+    const viewed = selectCurrentViewedResult(taskRef.current);
+    if (viewed) return { target: viewed.target, ambiguous: false };
+    if (selections.length === 1) return { target: selections[0].target, ambiguous: false };
+    return { ambiguous: true };
+  };
+
+  const addResultTargetClarification = (text: string) => {
+    const selections = selectResultSnapshots(taskRef.current);
+    if (selections.length < 2) return false;
+    dispatchTracked({ type: 'USER_TURN_SUBMITTED', payload: { text, turnId: createUiId('user') } });
+    dispatchTracked({
+      type: 'ASSISTANT_TURN_RECEIVED',
+      payload: {
+        turnId: createUiId('result_target_clarification'),
+        nextStatus: 'NEEDS_CLARIFICATION',
+        blocks: [{
+          type: 'CLARIFICATION',
+          id: createUiId('result_target_block'),
+          question: {
+            id: createUiId('result_target_question'),
+            question: '你希望解读哪一份结果？',
+            type: 'SINGLE',
+            options: selections.map((selection) => ({
+              id: getResultTargetKey(selection.target),
+              label: selection.displayLabel,
+              description: `执行时间：${new Date(selection.snapshot.executedAt).toLocaleString('zh-CN')}`
+            })),
+            submitLabel: '解读此结果'
+          }
+        }]
+      }
+    });
+    return true;
+  };
+
+  const submitTurnWithResultTarget = async (text: string, target?: ResultTargetRef) => {
+    const resolved = readResultTarget(target);
+    if (!resolved.selected) {
+      setSurfaceMessage(resolved.blockedReason);
+      return;
+    }
+    const operationId = startOperation('TURN');
+    if (!operationId) return;
+    const taskAtStart = taskRef.current;
+    const surfaceNavigationSequenceAtStart = surfaceNavigationSequenceRef.current;
+    const context: TurnTargetContext = {
+      resultTarget: {
+        resultRef: resolved.selected.target.resultRef,
+        binding: resolved.selected.target.binding,
+        executedAt: resolved.selected.target.executedAt
+      }
+    };
+    dispatchTracked({ type: 'USER_TURN_SUBMITTED', payload: { text, turnId: createUiId('user') } });
+    try {
+      const engineResult = await service.submitTurn(taskRef.current, text, operationId, context);
+      // A continuation is conversation-only. Its delayed response must never
+      // re-open the result it explains or replace a surface the user chose later.
+      applyEngineResult(engineResult, { suppressSurface: true, surfaceNavigationSequenceAtStart });
+    } catch (error: unknown) {
+      applyServiceFailure(taskAtStart.taskId, error, operationId);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isInputBlocked) return;
     const text = inputMessage.trim();
+    if (isInterpretationRequest(text)) {
+      const targetResolution = resolveTextResultTarget(text);
+      setInputMessage('');
+      if (targetResolution.target) {
+        await submitTurnWithResultTarget(text, targetResolution.target);
+        return;
+      }
+      if (targetResolution.ambiguous && addResultTargetClarification(text)) return;
+      setInputMessage(text);
+      return;
+    }
     const operationId = startOperation('TURN');
     if (!operationId) return;
     setInputMessage('');
@@ -593,6 +703,21 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     if (actionCode === 'RUN_METRIC_QUERY') {
       await handleRunDirectMetricQuery();
       return;
+    }
+    const resultTarget = payload?.resultTarget as ResultTargetRef | undefined;
+    if (actionCode === 'INTERPRET_RESULT') {
+      await submitTurnWithResultTarget('解读这份结果', resultTarget);
+      return;
+    }
+    if (actionCode === 'OPEN_RESULT_DETAIL' || actionCode === 'OPEN_RESULT_EVIDENCE') {
+      const resolved = readResultTarget(resultTarget);
+      if (!resolved.selected) {
+        setSurfaceMessage(resolved.blockedReason);
+        return;
+      }
+      // Canonicalize the target from the current conversation before it reaches
+      // Surface Policy, so a stale or forged payload cannot choose another result.
+      payload = { ...payload, resultTarget: resolved.selected.target };
     }
     const boundPlan = payload?.askPlanBinding as AskPlanBinding | undefined;
     if (actionCode === 'OPEN_ASK_PLAN' && boundPlan && !isCurrentAskPlanBinding(taskRef.current, boundPlan)) {
@@ -827,6 +952,22 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   };
 
   const handleClarificationSubmit = async (questionId: string, selectedOptionIds: string[]): Promise<void> => {
+    if (questionId.startsWith('result_target_question_')) {
+      const target = selectResultSnapshots(taskRef.current).find((selection) => getResultTargetKey(selection.target) === selectedOptionIds[0])?.target;
+      if (!target) throw new Error('这份结果已无法精确定位，请重新选择。');
+      dispatchTracked({
+        type: 'CLARIFICATION_RESOLVED',
+        payload: {
+          questionId,
+          selectedOptionIds: [selectedOptionIds[0]],
+          selectedOptionLabels: [target.label ?? '已选择结果'],
+          requirementRevision: taskRef.current.requirementRevision,
+          resolvedAt: new Date().toISOString()
+        }
+      });
+      await submitTurnWithResultTarget('解读此结果', target);
+      return;
+    }
     const operationId = startOperation('ACTION');
     if (!operationId) throw new Error('当前任务正在处理，请稍后重试。');
     setClarificationSubmittingId(questionId);
@@ -964,6 +1105,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     task.activeSurface.mode === 'QUICK_PREVIEW' ? 'w-[560px]' : 'w-[780px]';
 
   const targetFieldResourceId = task.activeSurface.resourceIds?.[0] ?? task.activeResourceId;
+  const currentViewedResult = selectCurrentViewedResult(task);
   const targetFieldResource = selectResourceById(task, targetFieldResourceId);
   const targetFieldList = selectResourceFields(task, targetFieldResourceId);
   const fieldBackLabel = detailReturnContext?.source === 'COMPARE'
@@ -1363,17 +1505,24 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                             );
                           }
 
-                          case 'ASK_RESULT':
+                          case 'ASK_RESULT': {
+                            const resultSelection = selectResultSnapshots(task).find((selection) =>
+                              selection.turnId === turn.turnId && selection.blockId === block.id
+                            );
+                            const canOpenDetails = Boolean(resultSelection &&
+                              (serviceMode !== 'http' || resultSelection.isCurrent || resultSelection.snapshot.currentReadAccess === 'AUTHORIZED'));
                             return (
                               <div key={block.id} className="w-full">
                                 <AskResultContent
                                   snapshot={block.snapshot}
+                                  resultTarget={resultSelection?.target}
                                   mode="compact"
-                                  canOpenDetails={canOpenAskResultDetails(task, block.snapshot) || canOpenDirectMetricResult(task, block.snapshot)}
+                                  canOpenDetails={canOpenDetails}
                                   onActionClick={(code, payload) => handleAction(code, payload)}
                                 />
                               </div>
                             );
+                          }
 
                           case 'ACTION_GROUP':
                             return (
@@ -1607,6 +1756,24 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               onFocusChange={(metricResultFocus) => void handleAction(
                 metricResultFocus === 'DEFINITION' ? 'OPEN_METRIC_DEFINITION' : 'OPEN_METRIC_RESULT',
                 { directMetricBinding: task.directMetricResult?.binding, executedAt: task.directMetricResult?.executedAt }
+              )}
+              onClose={() => void handleAction('CLOSE_SURFACE')}
+            />
+          )}
+
+          {activeSurfaceType === 'RESULT_DETAIL' && currentViewedResult && (
+            <RightWorkspaceResultDetail
+              snapshot={currentViewedResult.snapshot}
+              displayLabel={currentViewedResult.displayLabel}
+              focus={task.activeSurface.resultDetailFocus}
+              resultView={task.activeSurface.resultView}
+              onResultViewChange={(resultView) => void handleAction('OPEN_RESULT_DETAIL', {
+                resultTarget: currentViewedResult.target,
+                resultView
+              })}
+              onFocusChange={(focus) => void handleAction(
+                focus === 'EVIDENCE' ? 'OPEN_RESULT_EVIDENCE' : 'OPEN_RESULT_DETAIL',
+                { resultTarget: currentViewedResult.target, resultView: task.activeSurface.resultView }
               )}
               onClose={() => void handleAction('CLOSE_SURFACE')}
             />

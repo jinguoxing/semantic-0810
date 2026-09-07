@@ -11,7 +11,12 @@ import {
   AskPlan,
   ConversationTurn,
   AskPlanBinding,
-  DirectMetricResultBinding
+  DirectMetricResultBinding,
+  AskResultSnapshot,
+  ResultTargetRef,
+  ResultBinding,
+  isSameResultBinding,
+  isDirectMetricResultBinding
 } from './FindDataTask';
 import { getResourceRangeIntersection, resourceCoversRange } from './timeRangeUtils';
 
@@ -44,6 +49,99 @@ export function selectDirectMetricQueryReadiness(task: FindDataTaskState): { rea
     return { ready: false, message: '当前指标请求不处于可执行状态。' };
   }
   return { ready: true, message: '正式指标请求已就绪，执行端仍将核验定义、条件和权限。' };
+}
+
+export interface ResultSnapshotSelection {
+  target: ResultTargetRef;
+  snapshot: AskResultSnapshot;
+  turnId: string;
+  blockId: string;
+  displayLabel: string;
+  /** Current is a presentation hint only; it never changes whether history exists. */
+  isCurrent: boolean;
+}
+
+function isAskResultBinding(binding: ResultBinding): binding is AskPlanBinding {
+  return !isDirectMetricResultBinding(binding);
+}
+
+function isCurrentResultSnapshot(task: FindDataTaskState, snapshot: AskResultSnapshot): boolean {
+  const binding = snapshot.binding;
+  if (isDirectMetricResultBinding(binding)) {
+    const current = task.directMetricResult;
+    return Boolean(current && isDirectMetricResultBinding(current.binding) &&
+      isSameResultBinding(current.binding, binding) && current.executedAt === snapshot.executedAt);
+  }
+  const result = task.askPlan?.lastRunResult;
+  return task.askPlan?.id === binding.askPlanId &&
+    task.askPlan.requirementRevision === binding.requirementRevision &&
+    task.askPlan.basedOnSearchRevision === binding.searchRevision &&
+    result?.success === true && result.executedAt === snapshot.executedAt;
+}
+
+export function buildResultDisplayLabel(snapshot: AskResultSnapshot): string {
+  const scope = snapshot.resultArtifact.actualScope;
+  const period = scope?.timeRange?.start && scope.timeRange.end
+    ? scope.timeRange.start === scope.timeRange.end ? scope.timeRange.start : `${scope.timeRange.start} 至 ${scope.timeRange.end}`
+    : undefined;
+  const label = [snapshot.metricName, snapshot.numeratorLabel, scope?.region, period].filter(Boolean).join(' · ');
+  return label || snapshot.numeratorLabel || '未命名结果';
+}
+
+export function getResultTargetKey(target: ResultTargetRef): string {
+  const binding = target.binding;
+  const bindingKey = isDirectMetricResultBinding(binding)
+    ? `direct:${binding.taskId}:${binding.requestId}:${binding.metricId}:${binding.requirementRevision}`
+    : `ask:${binding.taskId}:${binding.askPlanId}:${binding.requirementRevision}:${binding.searchRevision}`;
+  const serviceKey = target.resultRef ? `service:${target.resultRef.kind}:${target.resultRef.id}` : '';
+  return [target.taskId, target.turnId ?? '', target.blockId ?? '', serviceKey, bindingKey, target.executedAt].join('|');
+}
+
+function matchesResultTarget(selection: ResultSnapshotSelection, target: ResultTargetRef): boolean {
+  if (selection.target.taskId !== target.taskId || selection.target.executedAt !== target.executedAt ||
+    !isSameResultBinding(selection.target.binding, target.binding)) return false;
+  if (target.resultRef || selection.target.resultRef) {
+    return target.resultRef?.kind === selection.target.resultRef?.kind && target.resultRef?.id === selection.target.resultRef?.id;
+  }
+  return Boolean(target.turnId && target.blockId &&
+    target.turnId === selection.turnId && target.blockId === selection.blockId);
+}
+
+/** Derives every result object from the existing conversation; it never creates a history store. */
+export function selectResultSnapshots(task: FindDataTaskState): ResultSnapshotSelection[] {
+  return task.turns.flatMap((turn) => turn.blocks.flatMap((block) => {
+    if (block.type !== 'ASK_RESULT') return [];
+    const snapshot = block.snapshot;
+    const displayLabel = buildResultDisplayLabel(snapshot);
+    return [{
+      target: {
+        taskId: task.taskId,
+        turnId: turn.turnId,
+        blockId: block.id,
+        resultRef: snapshot.resultArtifact.resultRef,
+        binding: snapshot.binding,
+        executedAt: snapshot.executedAt,
+        label: displayLabel
+      },
+      snapshot,
+      turnId: turn.turnId,
+      blockId: block.id,
+      displayLabel,
+      isCurrent: isCurrentResultSnapshot(task, snapshot)
+    }];
+  }));
+}
+
+/** Finds only an exact target; it deliberately has no latest-result fallback. */
+export function selectResultTargetByRef(task: FindDataTaskState, target: ResultTargetRef | undefined): ResultSnapshotSelection | undefined {
+  if (!target || target.taskId !== task.taskId) return undefined;
+  return selectResultSnapshots(task).find((selection) => matchesResultTarget(selection, target));
+}
+
+export function selectCurrentViewedResult(task: FindDataTaskState): ResultSnapshotSelection | undefined {
+  return task.activeSurface.type === 'RESULT_DETAIL'
+    ? selectResultTargetByRef(task, task.activeSurface.resultTarget)
+    : undefined;
 }
 
 export function selectAskHandoffReadiness(task: FindDataTaskState): AskHandoffReadiness {

@@ -9,14 +9,15 @@ import {
   FindDataTaskState,
   PermissionRequestRef,
   ResourceId,
-  TaskAction
+  TaskAction,
+  TurnTargetContext
 } from '../model/FindDataTask';
 import { FindDataEvent } from '../model/findDataEvents';
 import { createFindDataTask } from '../model/createFindDataTask';
 import { evaluateSurfacePolicy, isSurfaceActionCode, resolveInteractionIntent } from '../policy/surfacePolicy';
 import { buildScenarioClassificationContext, canUpgradeGenericScenario, scenarioRegistry } from '../scenarios/scenarioRegistry';
 import { createScenarioId, emptyScenarioResult } from '../scenarios/FindDataScenario';
-import { selectCandidateById } from '../model/findDataSelectors';
+import { selectCandidateById, selectResultTargetByRef } from '../model/findDataSelectors';
 import { selectAskHandoffReadiness, validateAnalyticalAlignment } from '../model/findDataSelectors';
 import { findDataReducer } from '../model/findDataReducer';
 import { getMinhangBedDefinitionForCoreResources, getMinhangBedDefinitionForResource } from '../scenarios/minhangBedDefinition';
@@ -178,8 +179,36 @@ export class MockFindDataService implements FindDataService {
     this.tasks.delete(taskId);
   }
 
-  async submitTurn(task: FindDataTaskState, text: string, operationId = createScenarioId('operation')): Promise<FindDataEngineResult> {
+  async submitTurn(task: FindDataTaskState, text: string, operationId = createScenarioId('operation'), context?: TurnTargetContext): Promise<FindDataEngineResult> {
     this.tasks.set(task.taskId, task);
+    if (context?.resultTarget) {
+      const selected = selectResultTargetByRef(task, { taskId: task.taskId, ...context.resultTarget });
+      if (!selected) return this.persistResult(task, { ...assistantNotice(task, '这份结果已无法精确定位，未使用其他结果替代。', 'warning'), operationId });
+      const block: ConversationBlock = {
+        type: 'TEXT',
+        id: createScenarioId('result_interpretation'),
+        content: `我将只解读「${selected.displayLabel}」。当前结果没有返回差异原因、预测或建设规模的证据，因此只能说明本次结果的数值、范围和已有依据，不能据此判断原因。`
+      };
+      return this.persistResult(task, {
+        ...emptyScenarioResult(task.taskId),
+        operationId,
+        events: [{ type: 'ASSISTANT_TURN_RECEIVED', payload: {
+          turnId: createScenarioId('assistant'), blocks: [block], nextStatus: 'READY',
+          source: {
+            kind: 'ASK_RESULT',
+            resultTarget: selected.target,
+            resultExecutedAt: selected.snapshot.executedAt,
+            requirementRevision: selected.target.binding.requirementRevision,
+            ...(!('kind' in selected.target.binding) ? {
+              searchRevision: selected.target.binding.searchRevision,
+              askPlanId: selected.target.binding.askPlanId
+            } : {})
+          }
+        }}],
+        assistantBlocks: [block],
+        surfaceCommand: { action: 'NO_CHANGE' }
+      });
+    }
     const intent = resolveInteractionIntent(text, task);
     const surfaceCommand = evaluateSurfacePolicy(intent, undefined, task.activeSurface, task);
     const canUpgrade = canUpgradeGenericScenario(task);

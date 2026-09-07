@@ -4,10 +4,12 @@ import {
   ClarificationQuestion,
   DirectMetricQueryState,
   FindDataTaskState,
-  TaskAction
+  TaskAction,
+  TurnTargetContext
 } from '../model/FindDataTask';
 import { FindDataEvent } from '../model/findDataEvents';
 import { findDataReducer } from '../model/findDataReducer';
+import { selectResultTargetByRef } from '../model/findDataSelectors';
 import { createScenarioId } from '../scenarios/FindDataScenario';
 import {
   CreateFindDataTaskInput,
@@ -48,9 +50,17 @@ export class MetricQueryDesignDemoService implements FindDataService {
     await this.fallback.deleteTask(taskId);
   }
 
-  async submitTurn(task: FindDataTaskState, text: string, operationId = createScenarioId('operation')): Promise<FindDataEngineResult> {
+  async submitTurn(task: FindDataTaskState, text: string, operationId = createScenarioId('operation'), context?: TurnTargetContext): Promise<FindDataEngineResult> {
+    if (context?.resultTarget) {
+      this.tasks.set(task.taskId, task);
+      return this.persist(task, this.interpretResult(task, context, operationId));
+    }
+    if (/(生成.*床位.*比较|查看.*两份.*床位|在营可用.*核定.*比较)/.test(text)) {
+      this.tasks.set(task.taskId, task);
+      return this.persist(task, this.historyComparison(task, operationId));
+    }
     const designKind = this.resolveDesignKind(task, text);
-    if (!designKind) return this.fallback.submitTurn(task, text, operationId);
+    if (!designKind) return this.fallback.submitTurn(task, text, operationId, context);
     this.tasks.set(task.taskId, task);
     const result = designKind === 'ELDERLY'
       ? this.handleElderlyTurn(task, text, operationId)
@@ -250,6 +260,103 @@ export class MetricQueryDesignDemoService implements FindDataService {
         })
       ],
       assistantBlocks: blocks
+    };
+  }
+
+  /** Approved figure-05 fixture, isolated from the default Mock service. */
+  private historyComparison(task: FindDataTaskState, operationId: string): FindDataEngineResult {
+    const available = this.historyComparisonSnapshot(task, 'available', operationId);
+    const approved = this.historyComparisonSnapshot(task, 'approved', operationId);
+    const blocks: FindDataTaskState['turns'][number]['blocks'] = [
+      { type: 'TEXT', id: createScenarioId('history_text'), content: '设计演示中已保留两份独立结果。请选择其中一份查看或继续解读；这不会恢复或重新执行任何计划。' },
+      { type: 'ASK_RESULT', id: 'design_history_available', snapshot: available },
+      { type: 'ASK_RESULT', id: 'design_history_approved', snapshot: approved }
+    ];
+    return {
+      taskId: task.taskId,
+      operationId,
+      events: [this.assistantEvent(blocks, 'READY', { kind: 'ASK_RESULT', requirementRevision: task.requirementRevision })],
+      assistantBlocks: blocks,
+      surfaceCommand: { action: 'NO_CHANGE' }
+    };
+  }
+
+  private historyComparisonSnapshot(task: FindDataTaskState, kind: 'available' | 'approved', operationId: string): AskResultSnapshot {
+    const definition = this.bedDefinition(kind);
+    const rows = kind === 'available'
+      ? [{ name: '浦锦街道', value: 15.0 }, { name: '七宝镇', value: 20.0 }]
+      : [{ name: '浦锦街道', value: 22.5 }, { name: '七宝镇', value: 25.0 }];
+    const difference = Math.abs(rows[0].value - rows[1].value);
+    const label = kind === 'available' ? '在营可用床位比较' : '核定床位比较';
+    return {
+      binding: {
+        kind: 'DIRECT_METRIC', taskId: task.taskId,
+        requestId: `design_history_${kind}`,
+        metricId: kind === 'available' ? 'design_bed_supply_available_compare' : 'design_bed_supply_approved_compare',
+        requirementRevision: task.requirementRevision
+      },
+      operationId,
+      executedAt: '2026-08-31T23:59:59.000Z',
+      metricName: '养老床位供给比较',
+      numeratorLabel: definition.label,
+      formulaExplanation: '每千名老人对应床位数；仅展示这两份设计演示快照返回的比较值。',
+      dataOrigin: 'MOCK_FIXTURE',
+      resultArtifact: {
+        resultRef: { kind: 'SERVICE_RESULT', id: `design-history-${kind}` },
+        citations: [definition],
+        content: {
+          kind: 'TABLE',
+          columns: [
+            { id: 'town', label: '街镇', kind: 'TEXT' },
+            { id: 'ratio', label: '每千名老人床位数', kind: 'NUMBER', unit: '张 / 千人' }
+          ],
+          rows: rows.map((row) => ({
+            id: row.name,
+            cells: {
+              town: { kind: 'TEXT', state: 'VALUE', value: row.name },
+              ratio: { kind: 'NUMBER', state: 'VALUE', value: row.value, unit: '张 / 千人', precision: 1 }
+            }
+          })),
+          chart: { kind: 'BAR', categoryColumnId: 'town', valueColumnId: 'ratio', title: label }
+        },
+        actualScope: { region: '浦锦街道、七宝镇', timeRange: { start: '2026-08', end: '2026-08' }, grain: 'MONTH' },
+        summary: `${label}：浦锦街道与七宝镇相差 ${difference.toFixed(1)} 张 / 千人。`,
+        boundaryNotice: '设计演示数据，非真实业务统计。当前结果未提供机构规模、投入、床位利用或建设节奏等原因证据。'
+      }
+    };
+  }
+
+  private interpretResult(task: FindDataTaskState, context: TurnTargetContext, operationId: string): FindDataEngineResult {
+    const selected = selectResultTargetByRef(task, { taskId: task.taskId, ...context.resultTarget! });
+    if (!selected) return this.notice(task, operationId, '这份结果已无法精确定位，未使用最新结果替代。', 'warning');
+    const table = selected.snapshot.resultArtifact.content?.kind === 'TABLE' ? selected.snapshot.resultArtifact.content : undefined;
+    const numberColumn = table?.columns.find((column) => column.kind === 'NUMBER');
+    const values = table && numberColumn ? table.rows.flatMap((row) => {
+      const label = table.columns.find((column) => column.kind === 'TEXT');
+      const text = label ? row.cells[label.id] : undefined;
+      const value = row.cells[numberColumn.id];
+      return text?.kind === 'TEXT' && text.state === 'VALUE' && value?.kind === 'NUMBER' && value.state === 'VALUE' && typeof value.value === 'number'
+        ? [{ label: text.value ?? '未提供', value: value.value, unit: value.unit ?? numberColumn.unit }]
+        : [];
+    }) : [];
+    const comparison = values.length >= 2
+      ? `${values[0].label}为 ${values[0].value.toFixed(1)} ${values[0].unit ?? ''}，${values[1].label}为 ${values[1].value.toFixed(1)} ${values[1].unit ?? ''}，相差 ${Math.abs(values[0].value - values[1].value).toFixed(1)} ${values[0].unit ?? ''}。`
+      : '这份结果未提供可用于比较的两项数值。';
+    const block: FindDataTaskState['turns'][number]['blocks'][number] = {
+      type: 'TEXT', id: createScenarioId('history_interpretation'),
+      content: `我只解读「${selected.displayLabel}」。${comparison} 当前结果没有返回机构规模、投入、床位利用或建设节奏等原因证据，因此不能据此判断差异原因，也不能生成预测或建设建议。`
+    };
+    return {
+      taskId: task.taskId,
+      operationId,
+      events: [this.assistantEvent([block], 'READY', {
+        kind: 'ASK_RESULT',
+        requirementRevision: selected.target.binding.requirementRevision,
+        resultExecutedAt: selected.target.executedAt,
+        resultTarget: selected.target
+      })],
+      assistantBlocks: [block],
+      surfaceCommand: { action: 'NO_CHANGE' }
     };
   }
 

@@ -98,6 +98,29 @@ describe('MetricQueryDesignDemoService', () => {
     });
   });
 
+  it('keeps figure-05 A/B results isolated and interprets only the exact selected A', async () => {
+    const service = new MetricQueryDesignDemoService();
+    const created = await service.createTask();
+    const history = await service.submitTurn(created, '生成两份床位比较结果', 'history_1');
+    const settled = apply(created, history.events);
+    const snapshots = settled.turns.flatMap((turn) => turn.blocks)
+      .filter((block): block is Extract<typeof block, { type: 'ASK_RESULT' }> => block.type === 'ASK_RESULT')
+      .map((block) => block.snapshot);
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots.map((snapshot) => snapshot.resultArtifact.resultRef?.id)).toEqual(['design-history-available', 'design-history-approved']);
+    expect(history.events.some((event) => event.type === 'DIRECT_METRIC_QUERY_STARTED' || event.type === 'DIRECT_METRIC_RESULT_RECEIVED')).toBe(false);
+
+    const a = snapshots[0];
+    const response = await service.submitTurn(settled, '解释浦锦街道为什么比七宝镇低', 'interpret_a', {
+      resultTarget: { resultRef: a.resultArtifact.resultRef, binding: a.binding, executedAt: a.executedAt }
+    });
+    const text = JSON.stringify(response.assistantBlocks);
+    expect(text).toContain('相差 5.0');
+    expect(text).not.toContain('相差 2.5');
+    expect(text).toContain('不能据此判断差异原因');
+    expect(response.events.some((event) => event.type === 'DIRECT_METRIC_QUERY_STARTED' || event.type === 'DIRECT_METRIC_RESULT_RECEIVED')).toBe(false);
+  });
+
   it('drops a late direct-metric result when its request, requirement revision, or metric identity is no longer current', async () => {
     const service = new MetricQueryDesignDemoService();
     const created = await service.createTask({

@@ -10,7 +10,8 @@ import {
   ResourceId,
   TaskAction,
   AskPlanRunRequest,
-  AskRunResult
+  AskRunResult,
+  TurnTargetContext
 } from '../model/FindDataTask';
 
 export class HttpFindDataService implements FindDataService {
@@ -78,12 +79,23 @@ export class HttpFindDataService implements FindDataService {
   async submitTurn(
     task: FindDataTaskState,
     text: string,
-    operationId?: string
+    operationId?: string,
+    context?: TurnTargetContext
   ): Promise<FindDataEngineResult> {
     const resp = await fetch(`${this.apiBase}/tasks/${task.taskId}/turns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, operationId })
+      // Only a server-verifiable result identity crosses this boundary. The
+      // browser must not send cached values, citations, old plans, or access decisions.
+      body: JSON.stringify({ text, operationId, ...(context?.resultTarget ? {
+        context: {
+          resultTarget: {
+            resultRef: context.resultTarget.resultRef,
+            binding: context.resultTarget.binding,
+            executedAt: context.resultTarget.executedAt
+          }
+        }
+      } : {}) })
     });
     if (!resp.ok) {
       throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);

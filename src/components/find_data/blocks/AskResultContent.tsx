@@ -4,6 +4,7 @@ import {
   AskResultSnapshot,
   AskResultTableContent,
   AskResultView,
+  ResultTargetRef,
   ResultCell,
   TaskActionCode
 } from '../model/FindDataTask';
@@ -11,6 +12,8 @@ import { buildActualScopeLabel } from '../presenters/conversationPresenters';
 
 interface AskResultContentProps {
   snapshot: AskResultSnapshot;
+  /** The exact conversation location of this snapshot; absent only for legacy standalone use. */
+  resultTarget?: ResultTargetRef;
   mode: 'compact' | 'full';
   canOpenDetails?: boolean;
   fullView?: AskResultView;
@@ -150,6 +153,7 @@ const ResultBarChart: React.FC<{ content: AskResultTableContent }> = ({ content 
 /** Shared result body for the compact conversation block and the full workspace. */
 export const AskResultContent: React.FC<AskResultContentProps> = ({
   snapshot,
+  resultTarget,
   mode,
   canOpenDetails = false,
   fullView,
@@ -165,9 +169,7 @@ export const AskResultContent: React.FC<AskResultContentProps> = ({
   const isDirectMetricResult = 'kind' in snapshot.binding && snapshot.binding.kind === 'DIRECT_METRIC';
   const hasUnknownActualPeriod = !resultArtifact.actualScope?.timeRange;
   const actionPayload = {
-    askPlanBinding: snapshot.binding,
-    executedAt: snapshot.executedAt,
-    operationId: snapshot.operationId,
+    resultTarget,
     resultView: hasChart ? 'CHART' as const : 'DATA' as const
   };
 
@@ -210,17 +212,14 @@ export const AskResultContent: React.FC<AskResultContentProps> = ({
 
       {mode === 'compact' && onActionClick && (
         <div className="flex flex-wrap items-center gap-2 pt-0.5">
-          {isDirectMetricResult ? (
-            <>
-              <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_RESULT', { directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt })} title={canOpenDetails ? '查看本次完整结果' : '当前工作区无法恢复这次历史结果的详情'} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
-              <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_DEFINITION', { directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt })} title={canOpenDetails ? '查看本次实际采用的指标口径' : '当前工作区无法恢复这次结果的定义'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看指标口径</button>
-            </>
-          ) : (
-            <>
-              <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_ASK_PLAN', { ...actionPayload, focusSection: 'RESULT' })} title={canOpenDetails ? '查看本次完整结果' : '当前工作区无法恢复这次历史结果的详情'} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
-              <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_ASK_PLAN', { ...actionPayload, focusSection: 'CALCULATION' })} title={canOpenDetails ? '查看本次计算依据' : '当前工作区无法恢复这次历史结果的详情'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看本次计算依据</button>
-            </>
-          )}
+          {!resultTarget && isDirectMetricResult ? <>
+            <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_RESULT', { directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt })} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
+            <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_DEFINITION', { directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt })} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看指标口径</button>
+          </> : <>
+            <button type="button" disabled={!canOpenDetails || !resultTarget} onClick={() => onActionClick('OPEN_RESULT_DETAIL', actionPayload)} title={canOpenDetails && resultTarget ? '查看本次完整结果' : '当前工作区无法打开这份历史结果'} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails && resultTarget ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
+            <button type="button" disabled={!canOpenDetails || !resultTarget} onClick={() => onActionClick('OPEN_RESULT_EVIDENCE', actionPayload)} title={canOpenDetails && resultTarget ? '查看本次实际引用的依据' : '当前工作区无法打开这份历史结果的依据'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails && resultTarget ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看本次依据</button>
+            <button type="button" disabled={!canOpenDetails || !resultTarget} onClick={() => onActionClick('INTERPRET_RESULT', actionPayload)} title={canOpenDetails && resultTarget ? '继续解读这份结果' : '当前工作区无法引用这份历史结果'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails && resultTarget ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 解读这份结果</button>
+          </>}
         </div>
       )}
 

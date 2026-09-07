@@ -1,5 +1,5 @@
-import { AskPlanFocusSection, AskResultView, DirectMetricResultBinding, FindDataTaskState, MetricResultFocusSection, ResourceId, SurfaceState, SurfaceType, TaskActionCode, isDirectMetricResultBinding, isSameDirectMetricResultBinding } from '../model/FindDataTask';
-import { selectAskHandoffReadiness } from '../model/findDataSelectors';
+import { AskPlanFocusSection, AskResultView, DirectMetricResultBinding, FindDataTaskState, MetricResultFocusSection, ResourceId, ResultDetailFocusSection, ResultTargetRef, SurfaceState, SurfaceType, TaskActionCode, isDirectMetricResultBinding, isSameDirectMetricResultBinding } from '../model/FindDataTask';
+import { selectAskHandoffReadiness, selectResultTargetByRef } from '../model/findDataSelectors';
 
 export interface InteractionIntentResult {
   kind: 'QUESTION' | 'OPEN_SURFACE' | 'TASK_ACTION' | 'RESOURCE_BROWSE' | 'ANALYZE' | 'CLARIFICATION_RESPONSE';
@@ -23,6 +23,8 @@ export interface SurfaceCommand {
   focusTarget?: boolean;
   metricResultBinding?: DirectMetricResultBinding;
   metricResultFocus?: MetricResultFocusSection;
+  resultTarget?: ResultTargetRef;
+  resultDetailFocus?: ResultDetailFocusSection;
   blockedReason?: string;
 }
 
@@ -31,7 +33,7 @@ let askPlanFocusSequence = 0;
 const surfaceActionCodes: ReadonlySet<TaskActionCode> = new Set([
   'OPEN_COMPARE', 'OPEN_FIELDS', 'OPEN_SOLUTION', 'OPEN_ACCESS',
   'OPEN_RELATED_RESOURCES', 'OPEN_ASK_PLAN', 'OPEN_METRIC_RESULT',
-  'OPEN_METRIC_DEFINITION', 'CLOSE_SURFACE'
+  'OPEN_METRIC_DEFINITION', 'OPEN_RESULT_DETAIL', 'OPEN_RESULT_EVIDENCE', 'CLOSE_SURFACE'
 ]);
 
 export function isSurfaceActionCode(actionCode: TaskActionCode): boolean {
@@ -162,6 +164,26 @@ function metricResultCommand(
   };
 }
 
+function resultDetailCommand(
+  task: FindDataTaskState | undefined,
+  currentSurface: SurfaceState | undefined,
+  openedBy: 'USER_EXPLICIT' | 'ACTION_CLICK',
+  target: ResultTargetRef | undefined,
+  focus: ResultDetailFocusSection,
+  requestedResultView?: AskResultView
+): SurfaceCommand {
+  const selected = task ? selectResultTargetByRef(task, target) : undefined;
+  if (!selected) return { action: 'NO_CHANGE', blockedReason: '未找到这份历史结果，无法打开详情。' };
+  return {
+    ...openSurface(currentSurface, 'RESULT_DETAIL', openedBy),
+    resultTarget: selected.target,
+    resultDetailFocus: focus,
+    resultView: requestedResultView ?? (currentSurface?.type === 'RESULT_DETAIL' ? currentSurface.resultView : undefined),
+    focusRequestId: `result_detail_${Date.now()}`,
+    focusTarget: true
+  };
+}
+
 export function evaluateSurfacePolicy(intent: InteractionIntentResult, actionCode?: TaskActionCode, currentSurface?: SurfaceState, task?: FindDataTaskState, actionPayload?: Record<string, unknown>): SurfaceCommand {
   if (actionCode) {
     switch (actionCode) {
@@ -182,6 +204,12 @@ export function evaluateSurfacePolicy(intent: InteractionIntentResult, actionCod
       case 'OPEN_METRIC_DEFINITION': return metricResultCommand(
         task, currentSurface, 'ACTION_CLICK', actionPayload?.directMetricBinding as DirectMetricResultBinding | undefined,
         'DEFINITION', actionPayload?.executedAt as string | undefined
+      );
+      case 'OPEN_RESULT_DETAIL': return resultDetailCommand(
+        task, currentSurface, 'ACTION_CLICK', actionPayload?.resultTarget as ResultTargetRef | undefined, 'RESULT', actionPayload?.resultView as AskResultView | undefined
+      );
+      case 'OPEN_RESULT_EVIDENCE': return resultDetailCommand(
+        task, currentSurface, 'ACTION_CLICK', actionPayload?.resultTarget as ResultTargetRef | undefined, 'EVIDENCE', actionPayload?.resultView as AskResultView | undefined
       );
       case 'OPEN_ACCESS': return openSurface(currentSurface, 'ACCESS', 'ACTION_CLICK');
       case 'OPEN_RELATED_RESOURCES': return openSurface(currentSurface, 'RELATED_RESOURCES', 'ACTION_CLICK');

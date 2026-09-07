@@ -188,7 +188,9 @@ export type SurfaceType =
   | 'ACCESS'
   | 'RELATED_RESOURCES'
   | 'ASK_PLAN'
-  | 'METRIC_RESULT';
+  | 'METRIC_RESULT'
+  /** A read-only result object from the current task conversation. */
+  | 'RESULT_DETAIL';
 
 /** A one-off display target within the existing Ask Plan workspace. */
 export type AskPlanFocusSection = 'PLAN' | 'RESULT' | 'CALCULATION';
@@ -197,6 +199,9 @@ export type AskPlanFocusSection = 'PLAN' | 'RESULT' | 'CALCULATION';
 export type AskResultView = 'CHART' | 'DATA';
 
 export type MetricResultFocusSection = 'RESULT' | 'DEFINITION';
+
+/** Read-only sections of a result object; neither section is an execution plan. */
+export type ResultDetailFocusSection = 'RESULT' | 'EVIDENCE';
 
 export interface SurfaceState {
   type: SurfaceType;
@@ -208,6 +213,9 @@ export interface SurfaceState {
   /** UI-only direct-metric result target; never changes a request. */
   metricResultBinding?: DirectMetricResultBinding;
   metricResultFocus?: MetricResultFocusSection;
+  /** Exact conversation result currently being viewed; never an execution input. */
+  resultTarget?: ResultTargetRef;
+  resultDetailFocus?: ResultDetailFocusSection;
   /** UI-only result view choice; it never causes another execution. */
   resultView?: AskResultView;
   focusRequestId?: string;
@@ -461,6 +469,27 @@ export interface DirectMetricResultBinding {
   requirementRevision: number;
 }
 
+export type ResultBinding = AskPlanBinding | DirectMetricResultBinding;
+
+/**
+ * A display and follow-up reference to one immutable conversation result.
+ * It is intentionally not an AskPlanRunRequest and cannot restore old task state.
+ */
+export interface ResultTargetRef {
+  taskId: string;
+  turnId?: string;
+  blockId?: string;
+  resultRef?: AskResultReference;
+  binding: ResultBinding;
+  executedAt: string;
+  label?: string;
+}
+
+/** Server-verifiable context for a turn that continues a specific result. */
+export interface TurnTargetContext {
+  resultTarget?: Pick<ResultTargetRef, 'resultRef' | 'binding' | 'executedAt'>;
+}
+
 export function isDirectMetricResultBinding(
   binding: AskPlanBinding | DirectMetricResultBinding | undefined
 ): binding is DirectMetricResultBinding {
@@ -476,6 +505,17 @@ export function isSameDirectMetricResultBinding(
     left.requestId === right.requestId &&
     left.requirementRevision === right.requirementRevision &&
     left.metricId === right.metricId;
+}
+
+export function isSameResultBinding(left: ResultBinding, right: ResultBinding): boolean {
+  if (isDirectMetricResultBinding(left) || isDirectMetricResultBinding(right)) {
+    return isDirectMetricResultBinding(left) && isDirectMetricResultBinding(right) &&
+      isSameDirectMetricResultBinding(left, right);
+  }
+  return left.taskId === right.taskId &&
+    left.askPlanId === right.askPlanId &&
+    left.requirementRevision === right.requirementRevision &&
+    left.searchRevision === right.searchRevision;
 }
 
 export interface DirectMetricQueryState {
@@ -522,6 +562,9 @@ export type TaskActionCode =
   | 'OPEN_ASK_PLAN'
   | 'OPEN_METRIC_RESULT'
   | 'OPEN_METRIC_DEFINITION'
+  | 'OPEN_RESULT_DETAIL'
+  | 'OPEN_RESULT_EVIDENCE'
+  | 'INTERPRET_RESULT'
   | 'CLOSE_SURFACE'
   | 'SELECT_RESOURCE'
   | 'EVALUATE_AND_ADD'
@@ -579,6 +622,8 @@ export interface AskResultSnapshot {
   numeratorLabel: string;
   formulaExplanation?: string;
   dataOrigin?: AskRunResult['dataOrigin'];
+  /** Present only when a server has freshly authorized an older result read. */
+  currentReadAccess?: 'AUTHORIZED' | 'DENIED';
   resultArtifact: NonNullable<AskRunResult['resultArtifact']>;
 }
 
@@ -635,6 +680,8 @@ export interface ConversationSource {
   searchRevision?: number;
   askPlanId?: string;
   resultExecutedAt?: string;
+  /** The exact historical result used to answer this turn, when applicable. */
+  resultTarget?: ResultTargetRef;
 }
 
 export interface ConversationTurn {

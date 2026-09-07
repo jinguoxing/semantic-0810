@@ -7,7 +7,8 @@ import {
   AskPlanRunRequest,
   AskRunResult,
   AvailabilityByAction,
-  TaskStatus
+  TaskStatus,
+  TurnTargetContext
 } from '../model/FindDataTask';
 import { FindDataEvent } from '../model/findDataEvents';
 import { SurfaceCommand } from '../policy/surfacePolicy';
@@ -52,7 +53,8 @@ export interface FindDataService {
   submitTurn(
     task: FindDataTaskState,
     text: string,
-    operationId?: string
+    operationId?: string,
+    context?: TurnTargetContext
   ): Promise<FindDataEngineResult>;
 
   executeAction(
