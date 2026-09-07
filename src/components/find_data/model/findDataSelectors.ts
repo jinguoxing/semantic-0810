@@ -132,6 +132,30 @@ export function selectResultSnapshots(task: FindDataTaskState): ResultSnapshotSe
   }));
 }
 
+/**
+ * HTTP task payloads may retain prior conversation blocks, but an older block
+ * is only readable after the server has granted a fresh read for that exact
+ * snapshot. Current results remain readable through their active task state.
+ * Local Mock / Design Demo callers deliberately pass false: their fixtures do
+ * not represent a production authorization decision.
+ */
+export function isResultSnapshotReadable(
+  selection: ResultSnapshotSelection,
+  requireHistoricalReadAuthorization = false
+): boolean {
+  return !requireHistoricalReadAuthorization || selection.isCurrent || selection.snapshot.currentReadAccess === 'AUTHORIZED';
+}
+
+/** Returns only the result objects that may participate in a user interaction. */
+export function selectReadableResultSnapshots(
+  task: FindDataTaskState,
+  requireHistoricalReadAuthorization = false
+): ResultSnapshotSelection[] {
+  return selectResultSnapshots(task).filter((selection) =>
+    isResultSnapshotReadable(selection, requireHistoricalReadAuthorization)
+  );
+}
+
 /** Finds only an exact target; it deliberately has no latest-result fallback. */
 export function selectResultTargetByRef(task: FindDataTaskState, target: ResultTargetRef | undefined): ResultSnapshotSelection | undefined {
   if (!target || target.taskId !== task.taskId) return undefined;

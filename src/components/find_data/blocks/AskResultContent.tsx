@@ -14,6 +14,8 @@ interface AskResultContentProps {
   snapshot: AskResultSnapshot;
   /** The exact conversation location of this snapshot; absent only for legacy standalone use. */
   resultTarget?: ResultTargetRef;
+  /** Derived from the owning Task; never inferred from whether a target exists. */
+  isCurrentResult?: boolean;
   mode: 'compact' | 'full';
   canOpenDetails?: boolean;
   fullView?: AskResultView;
@@ -154,6 +156,7 @@ const ResultBarChart: React.FC<{ content: AskResultTableContent }> = ({ content 
 export const AskResultContent: React.FC<AskResultContentProps> = ({
   snapshot,
   resultTarget,
+  isCurrentResult = false,
   mode,
   canOpenDetails = false,
   fullView,
@@ -167,11 +170,13 @@ export const AskResultContent: React.FC<AskResultContentProps> = ({
   const selectedFullView: AskResultView = hasChart && fullView !== 'DATA' ? 'CHART' : 'DATA';
   const legacyRows = resultArtifact.townResults ?? [];
   const isDirectMetricResult = 'kind' in snapshot.binding && snapshot.binding.kind === 'DIRECT_METRIC';
+  const isCurrentDirectMetricResult = isDirectMetricResult && isCurrentResult;
   const hasUnknownActualPeriod = !resultArtifact.actualScope?.timeRange;
   const actionPayload = {
     resultTarget,
     resultView: hasChart ? 'CHART' as const : 'DATA' as const
   };
+  const directMetricPayload = { directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt };
 
   return (
     <section className={`w-full space-y-3 ${mode === 'compact' ? 'rounded-xl border border-[#D9E5F5] bg-[#FAFCFF] p-3' : ''}`} aria-label="分析结果">
@@ -212,9 +217,10 @@ export const AskResultContent: React.FC<AskResultContentProps> = ({
 
       {mode === 'compact' && onActionClick && (
         <div className="flex flex-wrap items-center gap-2 pt-0.5">
-          {!resultTarget && isDirectMetricResult ? <>
-            <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_RESULT', { directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt })} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
-            <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_DEFINITION', { directMetricBinding: snapshot.binding, executedAt: snapshot.executedAt })} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看指标口径</button>
+          {isCurrentDirectMetricResult ? <>
+            <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_RESULT', directMetricPayload)} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
+            <button type="button" disabled={!canOpenDetails} onClick={() => onActionClick('OPEN_METRIC_DEFINITION', directMetricPayload)} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看指标口径</button>
+            <button type="button" disabled={!canOpenDetails || !resultTarget} onClick={() => onActionClick('INTERPRET_RESULT', actionPayload)} title={canOpenDetails && resultTarget ? '继续解读这份结果' : '当前工作区无法引用这份结果'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails && resultTarget ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 解读这份结果</button>
           </> : <>
             <button type="button" disabled={!canOpenDetails || !resultTarget} onClick={() => onActionClick('OPEN_RESULT_DETAIL', actionPayload)} title={canOpenDetails && resultTarget ? '查看本次完整结果' : '当前工作区无法打开这份历史结果'} className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${canOpenDetails && resultTarget ? 'border-[#CBD5E1] text-[#475569] hover:bg-[#F1F5F9]' : 'cursor-not-allowed border-[#E2E8F0] text-[#94A3B8]'}`}><ExternalLink className="h-3.5 w-3.5" /> 查看完整结果</button>
             <button type="button" disabled={!canOpenDetails || !resultTarget} onClick={() => onActionClick('OPEN_RESULT_EVIDENCE', actionPayload)} title={canOpenDetails && resultTarget ? '查看本次实际引用的依据' : '当前工作区无法打开这份历史结果的依据'} className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium ${canOpenDetails && resultTarget ? 'text-[#2563EB] hover:bg-[#EFF6FF]' : 'cursor-not-allowed text-[#94A3B8]'}`}><FileText className="h-3.5 w-3.5" /> 查看本次依据</button>

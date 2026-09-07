@@ -102,7 +102,7 @@ test.describe('Find Data inline mock smoke', () => {
     await page.getByRole('tab', { name: '数据' }).click();
     await expect(page.getByRole('tab', { name: '数据', selected: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '查看本次计算依据' }).last()).toBeVisible();
-    await page.getByRole('button', { name: '关闭分析计划' }).click();
+    await page.getByRole('button', { name: '关闭结果详情' }).click();
 
     await page.getByRole('button', { name: '查看口径上下文' }).click();
     const bedDefinitionInput = page.locator('label:has-text("养老床位供给口径定义")').locator('..').locator('input');

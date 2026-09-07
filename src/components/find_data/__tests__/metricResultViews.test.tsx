@@ -38,7 +38,7 @@ describe('direct metric result views', () => {
 
   it('opens the current direct result and its actual definition without an AskPlan action', () => {
     const onActionClick = vi.fn();
-    render(<AskResultContent snapshot={snapshot} mode="compact" canOpenDetails onActionClick={onActionClick} />);
+    render(<AskResultContent snapshot={snapshot} mode="compact" isCurrentResult canOpenDetails onActionClick={onActionClick} />);
 
     expect(screen.getByText('设计演示数据')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '查看完整结果' }));

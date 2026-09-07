@@ -40,7 +40,9 @@ import {
   selectResourceFields,
   selectDirectMetricQueryReadiness,
   getResultTargetKey,
+  isResultSnapshotReadable,
   selectCurrentViewedResult,
+  selectReadableResultSnapshots,
   selectResultSnapshots,
   selectResultTargetByRef
 } from './find_data/model/findDataSelectors';
@@ -498,6 +500,12 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   }, [task.turns, task.runtimeStatus]);
 
   const isInputBlocked = task.status === 'UNDERSTANDING' || task.status === 'SEARCHING' || !!task.runtimeStatus?.active || !!task.pendingOperation;
+  const requiresHistoricalResultReadAuthorization = serviceMode === 'http';
+
+  const selectReadableResults = () => selectReadableResultSnapshots(
+    taskRef.current,
+    requiresHistoricalResultReadAuthorization
+  );
 
   const readResultTarget = (target: ResultTargetRef | undefined) => {
     const selected = selectResultTargetByRef(taskRef.current, target);
@@ -505,34 +513,63 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     // A loaded HTTP Task is not proof that a former result is still readable.
     // Current result paths stay compatible; historical results require a fresh
     // server authorization marker carried with that exact snapshot.
-    if (serviceMode === 'http' && !selected.isCurrent && selected.snapshot.currentReadAccess !== 'AUTHORIZED') {
+    if (!isResultSnapshotReadable(selected, requiresHistoricalResultReadAuthorization)) {
       return { selected: undefined, blockedReason: '这份历史结果当前不可读取；服务尚未确认当前访问授权。' };
     }
     return { selected };
   };
 
-  const isInterpretationRequest = (text: string) => /(解读|解释|为什么|为何|原因|差异|更低|更高|这份结果|这个结果|此结果|那份结果|这里)/.test(text);
+  const isInterpretationRequest = (text: string): boolean => {
+    const readableSelections = selectReadableResults();
+    if (readableSelections.length === 0) return false;
+    // The word "why" belongs to Find Data by default. Treat it as a result
+    // continuation only with an explicit result reference, or with a focused
+    // result-object follow-up in the existing right workspace.
+    const hasExplicitResultReference = /(?:这份|这个|此|那份)\s*结果|结果\s*[AB]|(?:在营可用|核定)[^，。！？?]*那份结果/.test(text);
+    if (hasExplicitResultReference) return true;
+    const viewed = selectCurrentViewedResult(taskRef.current);
+    if (viewed && isResultSnapshotReadable(viewed, requiresHistoricalResultReadAuthorization) &&
+      /^(?:这里|为什么(?:这里)?(?:更低|更高)|(?:这个|这份|此)?差异(?:为什么)?)[？?！!。]*$/.test(text.trim())) {
+      return true;
+    }
+    // With exactly one readable result, still require the user to name the
+    // result object. This keeps resource/permission questions in Find Data.
+    return readableSelections.length === 1 && /结果/.test(text);
+  };
 
-  const resolveTextResultTarget = (text: string): { target?: ResultTargetRef; ambiguous: boolean } => {
-    const selections = selectResultSnapshots(taskRef.current);
+  const resolveTextResultTarget = (text: string): { target?: ResultTargetRef; ambiguous: boolean; blockedReason?: string } => {
+    const selections = selectReadableResults();
     if (selections.length === 0) return { ambiguous: false };
+    const knownSelections = selectResultSnapshots(taskRef.current);
     const normalized = text.replace(/[\s，。、“”‘’「」()（）·]/g, '').toLowerCase();
-    const mentions = selections.filter((selection) => [selection.displayLabel, selection.snapshot.metricName, selection.snapshot.numeratorLabel]
+    const matchingSelections = (candidates: typeof selections) => candidates.filter((selection) => [selection.displayLabel, selection.snapshot.metricName, selection.snapshot.numeratorLabel]
       .flatMap((label) => label ? [label, label.replace(/养老/g, ''), label.replace(/数/g, ''), label.replace(/养老/g, '').replace(/数/g, '')] : [])
       .some((label) => normalized.includes(label.replace(/[\s，。、“”‘’「」()（）·]/g, '').toLowerCase())));
+    const mentions = matchingSelections(selections);
+    const knownMentions = matchingSelections(knownSelections);
+    if (mentions.length === 0 && knownMentions.length > 0) {
+      return { ambiguous: false, blockedReason: '这份历史结果当前不可读取，不能使用其他结果替代。' };
+    }
     if (mentions.length === 1) return { target: mentions[0].target, ambiguous: false };
     if (mentions.length > 1) return { ambiguous: true };
     const refersA = /(?:结果\s*)?A(?:\s*那份|\s*结果)?/i.test(text);
     const refersB = /(?:结果\s*)?B(?:\s*那份|\s*结果)?/i.test(text);
-    if (refersA !== refersB && selections[refersA ? 0 : 1]) return { target: selections[refersA ? 0 : 1].target, ambiguous: false };
+    if (refersA !== refersB) {
+      const ordinalTarget = knownSelections[refersA ? 0 : 1];
+      if (!ordinalTarget) return { ambiguous: false };
+      if (!isResultSnapshotReadable(ordinalTarget, requiresHistoricalResultReadAuthorization)) {
+        return { ambiguous: false, blockedReason: '这份历史结果当前不可读取，不能使用其他结果替代。' };
+      }
+      return { target: ordinalTarget.target, ambiguous: false };
+    }
     const viewed = selectCurrentViewedResult(taskRef.current);
-    if (viewed) return { target: viewed.target, ambiguous: false };
+    if (viewed && isResultSnapshotReadable(viewed, requiresHistoricalResultReadAuthorization)) return { target: viewed.target, ambiguous: false };
     if (selections.length === 1) return { target: selections[0].target, ambiguous: false };
     return { ambiguous: true };
   };
 
   const addResultTargetClarification = (text: string) => {
-    const selections = selectResultSnapshots(taskRef.current);
+    const selections = selectReadableResults();
     if (selections.length < 2) return false;
     dispatchTracked({ type: 'USER_TURN_SUBMITTED', payload: { text, turnId: createUiId('user') } });
     dispatchTracked({
@@ -596,6 +633,10 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       setInputMessage('');
       if (targetResolution.target) {
         await submitTurnWithResultTarget(text, targetResolution.target);
+        return;
+      }
+      if (targetResolution.blockedReason) {
+        setSurfaceMessage(targetResolution.blockedReason);
         return;
       }
       if (targetResolution.ambiguous && addResultTargetClarification(text)) return;
@@ -953,7 +994,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
 
   const handleClarificationSubmit = async (questionId: string, selectedOptionIds: string[]): Promise<void> => {
     if (questionId.startsWith('result_target_question_')) {
-      const target = selectResultSnapshots(taskRef.current).find((selection) => getResultTargetKey(selection.target) === selectedOptionIds[0])?.target;
+      const target = selectReadableResults().find((selection) => getResultTargetKey(selection.target) === selectedOptionIds[0])?.target;
       if (!target) throw new Error('这份结果已无法精确定位，请重新选择。');
       dispatchTracked({
         type: 'CLARIFICATION_RESOLVED',
@@ -1105,7 +1146,12 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     task.activeSurface.mode === 'QUICK_PREVIEW' ? 'w-[560px]' : 'w-[780px]';
 
   const targetFieldResourceId = task.activeSurface.resourceIds?.[0] ?? task.activeResourceId;
-  const currentViewedResult = selectCurrentViewedResult(task);
+  const viewedResultCandidate = selectCurrentViewedResult(task);
+  const currentViewedResult = viewedResultCandidate && isResultSnapshotReadable(
+    viewedResultCandidate,
+    requiresHistoricalResultReadAuthorization
+  ) ? viewedResultCandidate : undefined;
+  const viewedResultUnavailable = activeSurfaceType === 'RESULT_DETAIL' && !currentViewedResult;
   const targetFieldResource = selectResourceById(task, targetFieldResourceId);
   const targetFieldList = selectResourceFields(task, targetFieldResourceId);
   const fieldBackLabel = detailReturnContext?.source === 'COMPARE'
@@ -1509,13 +1555,26 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                             const resultSelection = selectResultSnapshots(task).find((selection) =>
                               selection.turnId === turn.turnId && selection.blockId === block.id
                             );
-                            const canOpenDetails = Boolean(resultSelection &&
-                              (serviceMode !== 'http' || resultSelection.isCurrent || resultSelection.snapshot.currentReadAccess === 'AUTHORIZED'));
+                            const canReadResult = Boolean(resultSelection &&
+                              isResultSnapshotReadable(resultSelection, requiresHistoricalResultReadAuthorization));
+                            const isCurrentDirectMetricResult = Boolean(resultSelection &&
+                              isDirectMetricResultBinding(resultSelection.snapshot.binding) && resultSelection.isCurrent);
+                            const canOpenDetails = Boolean(resultSelection && canReadResult &&
+                              (!isCurrentDirectMetricResult || canOpenDirectMetricResult(task, resultSelection.snapshot)));
+                            if (!canReadResult) {
+                              return (
+                                <section key={block.id} className="w-full rounded-xl border border-dashed border-[#CBD5E1] bg-[#FAFCFF] p-3 text-[11px] text-[#64748B]" aria-label="历史结果不可读取">
+                                  <p className="font-medium text-[#475569]">这份历史结果当前不可读取</p>
+                                  <p className="mt-1 leading-relaxed">服务尚未确认你当前仍有读取该结果的权限，因此不会显示缓存的数值、数据、图表或依据。</p>
+                                </section>
+                              );
+                            }
                             return (
                               <div key={block.id} className="w-full">
                                 <AskResultContent
                                   snapshot={block.snapshot}
                                   resultTarget={resultSelection?.target}
+                                  isCurrentResult={resultSelection?.isCurrent}
                                   mode="compact"
                                   canOpenDetails={canOpenDetails}
                                   onActionClick={(code, payload) => handleAction(code, payload)}
@@ -1777,6 +1836,16 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
               )}
               onClose={() => void handleAction('CLOSE_SURFACE')}
             />
+          )}
+
+          {viewedResultUnavailable && (
+            <div className="flex h-full w-full flex-col border-l border-[#E2E8F0] bg-white shadow-sm" aria-label="历史结果不可读取">
+              <div className="flex h-14 shrink-0 items-center justify-between border-b border-[#E2E8F0] bg-[#FAFAFA] px-5">
+                <div><h3 className="text-sm font-bold text-[#0F172A]">结果详情</h3><p className="text-[11px] text-[#64748B]">历史结果读取状态</p></div>
+                <button onClick={() => void handleAction('CLOSE_SURFACE')} aria-label="关闭结果详情" title="关闭结果详情" className="flex h-8 w-8 items-center justify-center rounded-lg text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#0F172A]">×</button>
+              </div>
+              <div className="p-5 text-xs"><p className="rounded-lg border border-dashed border-[#CBD5E1] bg-[#FAFCFF] p-3 leading-relaxed text-[#64748B]">这份历史结果当前不可读取。服务尚未确认当前访问授权，因此不会展示浏览器缓存的结果内容或依据。</p></div>
+            </div>
           )}
         </aside>
       )}

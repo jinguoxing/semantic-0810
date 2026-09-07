@@ -40,7 +40,7 @@ export const RightWorkspaceResultDetail: React.FC<RightWorkspaceResultDetailProp
             <p className="truncate text-[11px] text-[#64748B]" title={displayLabel}>{focus === 'EVIDENCE' ? '只读展示这份结果实际携带的引用' : displayLabel}</p>
           </div>
         </div>
-        <button onClick={onClose} aria-label="关闭分析计划" className="flex h-8 w-8 items-center justify-center rounded-lg text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#0F172A]" title="关闭工作区"><X className="h-4 w-4" /></button>
+        <button onClick={onClose} aria-label="关闭结果详情" className="flex h-8 w-8 items-center justify-center rounded-lg text-[#64748B] transition-colors hover:bg-[#F1F5F9] hover:text-[#0F172A]" title="关闭结果详情"><X className="h-4 w-4" /></button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 text-xs">
