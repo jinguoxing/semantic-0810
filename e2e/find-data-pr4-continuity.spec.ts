@@ -156,9 +156,10 @@ test.describe('PR-4 Find → Ask continuity final freeze', () => {
       await expectVisibleExactText(page, '15.0 张 / 千人');
       await expectVisibleExactText(page, '20.0 张 / 千人');
       await expectVisibleExactText(page, '5.0 张 / 千人');
-      await expect(page.getByText('800 张', { exact: true })).toHaveCount(1);
+      await expect(page.getByRole('heading', { name: '每千名老人在营可用养老床位数' }).last()).toBeVisible();
+      await expect(page.getByRole('heading', { name: '指标查询结果' })).toHaveCount(0);
       await expect(page.getByText('七宝镇为 20.0 张 / 千人，浦锦街道为 15.0 张 / 千人，相差 5.0 张 / 千人。')).toBeVisible();
-      await expect(page.getByText(/不能据此判断差异原因/)).toBeVisible();
+      await expect(page.getByText(/不能据此判断差异原因/).first()).toBeVisible();
       for (const prohibited of ['因为七宝投入更多', '浦锦建设不足', '建议增加']) {
         await expect(page.getByText(prohibited, { exact: false })).toHaveCount(0);
       }
@@ -167,13 +168,13 @@ test.describe('PR-4 Find → Ask continuity final freeze', () => {
 
     await test.step('08 · keep Result A/B aliases exact in the same task', async () => {
       await sendTurn(page, '解释结果 B');
-      await expect(page.getByText('七宝镇为 25.0 张 / 千人，浦锦街道为 22.5 张 / 千人，相差 2.5 张 / 千人。')).toBeVisible();
+      await expect(page.getByText('七宝镇为 25.0 张 / 千人，浦锦街道为 22.5 张 / 千人，相差 2.5 张 / 千人。').last()).toBeVisible();
 
       await page.getByRole('button', { name: '查看完整结果' }).last().click();
       await expect(page.getByRole('heading', { name: '分析结果' })).toBeVisible();
       await expectVisibleExactText(page, '25.0 张 / 千人');
       await sendTurn(page, '解释结果 A');
-      await expect(page.getByText('七宝镇为 20.0 张 / 千人，浦锦街道为 15.0 张 / 千人，相差 5.0 张 / 千人。')).toBeVisible();
+      await expect(page.getByText('七宝镇为 20.0 张 / 千人，浦锦街道为 15.0 张 / 千人，相差 5.0 张 / 千人。').last()).toBeVisible();
       await expectSameTask(page, taskId);
     });
   });

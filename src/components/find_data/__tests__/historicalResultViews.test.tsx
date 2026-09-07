@@ -369,7 +369,7 @@ describe('historical result targets', () => {
     expect(screen.getByRole('button', { name: '关闭结果详情' })).toHaveAttribute('title', '关闭结果详情');
   });
 
-  it('binds an explicit A text reference to A and asks only for a result object when A/B is ambiguous', async () => {
+  it('binds an explicit A text reference to A and continues that opened result for a this-result follow-up', async () => {
     const task = taskWithResults();
     const store = new MemoryTaskStore();
     store.save(task);
@@ -385,11 +385,6 @@ describe('historical result targets', () => {
 
     fireEvent.change(input, { target: { value: '解释这个结果' } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    expect(await screen.findByText('你希望解读哪一份结果？')).toBeInTheDocument();
-    expect(findData.submitTurn).toHaveBeenCalledOnce();
-    const option = screen.getAllByRole('radio')[0];
-    fireEvent.click(option);
-    fireEvent.click(screen.getByRole('button', { name: '解读此结果' }));
     await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledTimes(2));
     expect(vi.mocked(findData.submitTurn).mock.calls[1][3]?.resultTarget?.resultRef?.id).toBe('result_a');
   });
@@ -572,6 +567,134 @@ describe('historical result targets', () => {
       binding: { kind: 'DIRECT_METRIC', requestId: 'direct_request', metricId: 'met_elderly_population' }
     });
     expect(findData.runAskPlan).not.toHaveBeenCalled();
+  });
+
+  it('T08-G1: synchronously replaces Result B with exact historical Result A before continuing the A interpretation', async () => {
+    const task = taskWithDirectAndComparisonResults();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service();
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} taskStoreOverride={store} />);
+
+    const cards = await screen.findAllByLabelText('分析结果');
+    fireEvent.click(within(cards.at(-1)!).getByRole('button', { name: '查看完整结果' }));
+    expect(await screen.findByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '回到在营可用床位的比较结果，解释一下这个差异。' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(await screen.findByRole('heading', { name: '历史结果' })).toBeInTheDocument();
+    expect(screen.getAllByText(/在营可用养老床位数/).length).toBeGreaterThan(0);
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledOnce());
+    expect(vi.mocked(findData.submitTurn).mock.calls[0][0].askPlan?.id).toBe('plan_b');
+    expect(vi.mocked(findData.submitTurn).mock.calls[0][3]?.resultTarget?.resultRef?.id).toBe('result_a');
+    expect(findData.runAskPlan).not.toHaveBeenCalled();
+  });
+
+  it('T08-G2: never lets a delayed explicit-A interpretation reopen A after the user returns to Result B', async () => {
+    const task = taskWithResults();
+    const targets = selectResultSnapshots(task);
+    let resolveTurn: ((result: FindDataEngineResult) => void) | undefined;
+    const submitTurn = vi.fn(() => new Promise<FindDataEngineResult>((resolve) => { resolveTurn = resolve; }));
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service({ submitTurn });
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} taskStoreOverride={store} />);
+
+    const cards = await screen.findAllByLabelText('分析结果');
+    fireEvent.click(within(cards[1]).getByRole('button', { name: '查看完整结果' }));
+    expect(await screen.findByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '回到在营可用床位的比较结果，解释一下这个差异。' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(await screen.findByRole('heading', { name: '历史结果' })).toBeInTheDocument();
+    await waitFor(() => expect(submitTurn).toHaveBeenCalledOnce());
+
+    fireEvent.click(within(cards[1]).getByRole('button', { name: '查看完整结果' }));
+    expect(await screen.findByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveTurn?.({
+        taskId: task.taskId,
+        operationId: (submitTurn.mock.calls as unknown as Array<[FindDataTaskState, string, string]>)[0][2],
+        events: [{ type: 'ASSISTANT_TURN_RECEIVED', payload: { turnId: 'late_explicit_a', nextStatus: 'READY', blocks: [{ type: 'TEXT', id: 'late_explicit_a_text', content: 'A 的迟到解读' }] } }],
+        assistantBlocks: [],
+        surfaceCommand: { action: 'REPLACE', surface: 'RESULT_DETAIL', resultTarget: targets[0].target }
+      });
+    });
+
+    expect(await screen.findByText('A 的迟到解读')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '历史结果' })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/养老床位核定数/).length).toBeGreaterThan(0);
+  });
+
+  it('T08-G3: keeps Result A interpretation conversation-only without an explicit navigation verb', async () => {
+    const task = taskWithResults();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service();
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} taskStoreOverride={store} />);
+
+    const cards = await screen.findAllByLabelText('分析结果');
+    fireEvent.click(within(cards[1]).getByRole('button', { name: '查看完整结果' }));
+    expect(await screen.findByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '解释结果 A' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledOnce());
+    expect(vi.mocked(findData.submitTurn).mock.calls[0][3]?.resultTarget?.resultRef?.id).toBe('result_a');
+    expect(screen.getByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '历史结果' })).not.toBeInTheDocument();
+  });
+
+  it('T08-G4: opens exact historical Result A for an explicit Result A navigation without restoring Plan A', async () => {
+    const task = taskWithResults();
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service();
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} taskStoreOverride={store} />);
+
+    const input = await screen.findByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '回到 Result A' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(await screen.findByRole('heading', { name: '历史结果' })).toBeInTheDocument();
+    await waitFor(() => expect(findData.submitTurn).toHaveBeenCalledOnce());
+    expect(vi.mocked(findData.submitTurn).mock.calls[0][0].askPlan?.id).toBe('plan_b');
+    expect(vi.mocked(findData.submitTurn).mock.calls[0][3]?.resultTarget?.resultRef?.id).toBe('result_a');
+    expect(findData.runAskPlan).not.toHaveBeenCalled();
+  });
+
+  it('T08-G5: blocks an unreadable explicit Result A navigation without opening A or substituting Result B in HTTP mode', async () => {
+    const task = taskWithResults();
+    const a = task.turns[0].blocks[0];
+    if (a.type === 'ASK_RESULT') a.snapshot.currentReadAccess = 'DENIED';
+    const store = new MemoryTaskStore();
+    store.save(task);
+    store.currentTaskId = task.taskId;
+    const findData = service({ createTask: vi.fn(async () => task), getTask: vi.fn(async () => task) });
+    render(<DataAssistantFindDataWorkspace serviceOverride={findData} serviceModeOverride="http" taskStoreOverride={store} />);
+
+    const cards = await screen.findAllByLabelText('分析结果');
+    fireEvent.click(within(cards[0]).getByRole('button', { name: '查看完整结果' }));
+    expect(await screen.findByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText('发送找数据意图、提出追问或输入口径调整要求…');
+    fireEvent.change(input, { target: { value: '回到 Result A 并解释' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(findData.submitTurn).not.toHaveBeenCalled();
+    expect(screen.queryByRole('heading', { name: '历史结果' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '分析结果' })).toBeInTheDocument();
+    expect(await screen.findByText('指定的计算结果当前不可读取，不能使用其他结果替代。')).toBeInTheDocument();
   });
 
   it('does not let a late A interpretation replace a result detail the user changed to B', async () => {

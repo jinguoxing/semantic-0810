@@ -186,7 +186,11 @@ export function canOpenDirectMetricResult(task: FindDataTaskState, snapshot: Ask
 }
 
 function hasExplicitResultReference(text: string): boolean {
-  return /(?:这份|这个|此|那份)\s*结果|结果\s*[AB]|(?:在营可用|核定)[^，。！？?]*(?:那份结果|比较结果)/.test(text);
+  return /(?:这份|这个|此|那份)\s*结果|(?:结果|result)\s*[AB]|(?:在营可用|核定)[^，。！？?]*(?:那份结果|比较结果)/i.test(text);
+}
+
+function hasExplicitResultNavigation(text: string): boolean {
+  return hasExplicitResultReference(text) && /(?:回到|打开|查看|切到|切换到)/.test(text);
 }
 
 export const askRunCompletionMessage = buildAskRunCompletionSummary;
@@ -563,7 +567,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
     }
     if (mentions.length === 1) return { target: mentions[0].target, ambiguous: false };
     if (mentions.length > 1) return { ambiguous: true };
-    const explicitCalculationAlias = text.match(/结果\s*([AB])(?:\s*(?:结果|那份))?(?=$|[\s，。！？?])/i)?.[1]?.toUpperCase();
+    const explicitCalculationAlias = text.match(/(?:结果|result)\s*([AB])(?:\s*(?:结果|那份))?(?=$|[\s，。！？?])/i)?.[1]?.toUpperCase();
     if (explicitCalculationAlias) {
       const knownCalculationResults = knownSelections.filter((selection) => !isDirectMetricResultBinding(selection.snapshot.binding));
       const readableCalculationResults = selections.filter((selection) => !isDirectMetricResultBinding(selection.snapshot.binding));
@@ -652,7 +656,28 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       const targetResolution = resolveTextResultTarget(text);
       setInputMessage('');
       if (targetResolution.target) {
-        await submitTurnWithResultTarget(text, targetResolution.target);
+        const target = targetResolution.target;
+        if (hasExplicitResultNavigation(text)) {
+          // A user who explicitly asks to return to or open a named result is
+          // navigating locally. Validate the exact target before this display
+          // transition, then keep the delayed interpretation response
+          // conversation-only below.
+          const resolved = readResultTarget(target);
+          if (!resolved.selected) {
+            setSurfaceMessage(resolved.blockedReason);
+            return;
+          }
+          applySurfaceCommand(evaluateSurfacePolicy(
+            { kind: 'TASK_ACTION', explicit: true, confidence: 'HIGH', matchedRule: 'explicit-result-navigation' },
+            'OPEN_RESULT_DETAIL',
+            taskRef.current.activeSurface,
+            taskRef.current,
+            { resultTarget: resolved.selected.target }
+          ));
+          await submitTurnWithResultTarget(text, resolved.selected.target);
+          return;
+        }
+        await submitTurnWithResultTarget(text, target);
         return;
       }
       if (targetResolution.blockedReason) {
