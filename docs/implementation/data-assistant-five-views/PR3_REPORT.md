@@ -1,10 +1,11 @@
-# PR-3 实施报告：指定历史结果读取与继续解读
+# PR-3 实施与 Final Closeout 报告：指定历史结果读取与继续解读
 
 ## 起点与范围
 
 - 分支：`codex/data-assistant-object-views`
 - `PR3_START_SHA`：`4bb7b95a5c11a1ef544f10d7841602eb2364904c`（PR-2 Freeze）
-- 最终 Commit SHA：**未提交**（按本轮要求未 commit / push / merge）。
+- `PR3_IMPLEMENTATION_SHA`：`01b946f1ce3a6e39f1ca9cf9715ae2ee2d0bb28c`（已提交并已推送）。
+- `PR3_FREEZE_SHA`：`1bb9e861a3a3b58f221b3b43eb0411691ec85374`（PR-3 Final Closeout Patch）。
 - 仅实施同一数据助手内的历史结果只读打开与精确继续解读；未建设 Result Registry、版本中心、Replay、Dashboard、报告分享、通用分析或新执行页面。
 - 开始前已有的未跟踪材料均保留且未纳入本轮代码范围。
 
@@ -30,6 +31,16 @@
 - `src/components/find_data/__tests__/httpFindDataService.test.ts`
 - `src/components/find_data/__tests__/metricQueryDesignDemoService.test.ts`
 
+### Final Closeout Patch
+
+- `src/components/find_data/model/findDataSelectors.ts`
+- `src/components/DataAssistantFindDataWorkspace.tsx`
+- `src/components/find_data/blocks/AskResultContent.tsx`
+- `src/components/find_data/RightWorkspaceResultDetail.tsx`
+- `src/components/find_data/__tests__/historicalResultViews.test.tsx`
+- `src/components/find_data/__tests__/metricResultViews.test.tsx`
+- `e2e/find-data-rc1.spec.ts`
+
 ## PR-3 结果
 
 | 目标 | 实际结果 |
@@ -42,6 +53,16 @@
 | 依据与因果边界 | `RightWorkspaceResultDetail` 只展示原 snapshot 的引用和定义；缺失时明确未提供，不读 current registry。Mock / Design Demo 解读只陈述本次差异、范围和限制；无原因证据时明确不能判断原因，不给预测或建设建议。 |
 | 迟到保护 | target continuation 的服务响应只写回原 Task 对话，强制忽略 Surface command；用户打开 B、关闭右栏或切换任务后，A 的迟到回答不能重开/覆盖工作区。 |
 | 模式隔离 | A/B 床位样例只在显式 `design-demo`；默认 Mock 没有混入五图样例；Disconnected 保持明确失败；HTTP 拒绝 Mock direct result。 |
+
+## PR-3 Final Closeout Patch
+
+| 项目 | Freeze 前修复结果 |
+| --- | --- |
+| P0-1 历史读取授权 | HTTP 仅允许当前结果或该 snapshot 的 `currentReadAccess === 'AUTHORIZED'` 展示 `AskResultContent`。未授权历史块和遗留的右侧详情只显示“这份历史结果当前不可读取”，不会渲染数值、表格、图表、citation 或缓存内容；其 target 也从文本解析、澄清候选、查看、继续解读中排除。明确提及不可读 A 时明确拒绝，绝不替换为当前 B。 |
+| P0-2 解读意图 | 移除了“为什么 / 原因 / 差异”这一类宽泛入口。只有精确按钮 target、明确结果对象、已打开可读结果的限定追问，或单一可读结果且文字明确称“结果”时，才会送 `TurnTargetContext`。资源推荐、资源不可用和资源差异仍走原 Find Data turn。 |
+| P0-3 Direct Metric | 当前 Direct Metric 以 `isDirectMetricResultBinding + resultSelection.isCurrent` 决定动作，不再用 `resultTarget` 是否存在判断。它保留 `OPEN_METRIC_RESULT`、`OPEN_METRIC_DEFINITION` 和携带精确 `ResultTarget` 的解读动作；查看口径只切换本地 Surface，不执行 `RUN_METRIC_QUERY` 或 `runAskPlan`。 |
+| P1-1 无障碍文案 | `RightWorkspaceResultDetail` 的关闭按钮及 title 均为“关闭结果详情”；现有浏览器 smoke 同步更新。 |
+| P1-2 服务与模式边界 | 没有新增 HTTP URL、权限系统或历史服务。HTTP 继续拒绝 Mock direct metric result；Mock、Disconnected、Design Demo 的已有隔离不变。 |
 
 ## HTTP 生产依赖
 
@@ -62,18 +83,19 @@
 | 命令 | 结果 |
 | --- | --- |
 | `bun run lint` | 通过（`tsc --noEmit`）。 |
-| PR-3 / PR-1 / PR-2 定向 Vitest（7 文件） | 通过，74 项。 |
-| `bun run test` | 通过，16 文件、202 项。 |
+| Closeout 定向 Vitest（历史/Direct Metric/Surface/HTTP，4 文件） | 通过，40 项。 |
+| `bun run test` | 通过，16 文件、208 项。 |
 | `VITE_FIND_DATA_MODE=mock bun run build` | 通过。 |
 | `VITE_FIND_DATA_MODE=disconnected bun run build` | 通过。 |
 | `VITE_FIND_DATA_MODE=http VITE_FIND_DATA_API_BASE=/api/find-data bun run build` | 通过。 |
 | `VITE_FIND_DATA_MODE=design-demo bun run build` | 通过。 |
-| `bun run test:smoke` | 通过：Mock 2 项、HTTP 1 项。 |
-| `VITE_FIND_DATA_MODE=http VITE_FIND_DATA_API_BASE=/api/find-data bunx playwright test e2e/find-data-rc1-http.spec.ts` | 通过，1 项。 |
+| `bun run test:smoke`（Mock + HTTP Playwright） | 通过：Mock 2 项、HTTP 1 项。 |
 | `git diff --check` | 通过，无空白错误。 |
 
 四种构建均仅产生既有的单 chunk 大小警告，没有失败。烟雾测试在受限环境的首次尝试因本地端口绑定被阻止；提升本地测试端口权限后实际通过。没有以“应该通过”替代未运行测试。
 
 ## 停止条件
 
-本轮停止于 PR-3 实施与取证完成。未进入评审、Freeze、PR-4 或任何范围外功能；等待评审/后续指示。
+FC3-01 ～ FC3-22 已在现有客户端合同和明确的生产服务依赖边界内完成验证，PR-3 处于 Freeze candidate。正式历史 `resultRef` 当前读取授权与不可变引用的服务合同仍是外部生产依赖，未被客户端 Mock 或缓存替代。
+
+已形成 Freeze 提交；本轮不开始 PR-4。报告记录提交随后会与 Freeze patch 一并推送。
