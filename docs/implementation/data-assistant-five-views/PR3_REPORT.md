@@ -5,7 +5,9 @@
 - 分支：`codex/data-assistant-object-views`
 - `PR3_START_SHA`：`4bb7b95a5c11a1ef544f10d7841602eb2364904c`（PR-2 Freeze）
 - `PR3_IMPLEMENTATION_SHA`：`01b946f1ce3a6e39f1ca9cf9715ae2ee2d0bb28c`（已提交并已推送）。
-- `PR3_FREEZE_SHA`：`1bb9e861a3a3b58f221b3b43eb0411691ec85374`（PR-3 Final Closeout Patch）。
+- `PR3_CLOSEOUT_SHA`：`1bb9e861a3a3b58f221b3b43eb0411691ec85374`（Previous Freeze Candidate / PR-3 Final Closeout Patch）。
+- `GUARD_START_SHA`：`4c65904438dfc134b952da3c926b294c7cb5cc00`（Freeze Report Commit）。
+- `PR3_FINAL_FREEZE_SHA`：`789cd68cfbff3048835832528e0e1f111d33470b`（PR-3 Final Freeze Guard Patch）。
 - 仅实施同一数据助手内的历史结果只读打开与精确继续解读；未建设 Result Registry、版本中心、Replay、Dashboard、报告分享、通用分析或新执行页面。
 - 开始前已有的未跟踪材料均保留且未纳入本轮代码范围。
 
@@ -64,6 +66,17 @@
 | P1-1 无障碍文案 | `RightWorkspaceResultDetail` 的关闭按钮及 title 均为“关闭结果详情”；现有浏览器 smoke 同步更新。 |
 | P1-2 服务与模式边界 | 没有新增 HTTP URL、权限系统或历史服务。HTTP 继续拒绝 Mock direct metric result；Mock、Disconnected、Design Demo 的已有隔离不变。 |
 
+## PR-3 Final Freeze Guard Patch
+
+| 项目 | 最终 Guard 结果 |
+| --- | --- |
+| 已知结果与可读结果分离 | 继续复用 `selectResultSnapshots` 取得 Task 中的已知结果，并以 `selectReadableResultSnapshots` 判断当前可读集；零个可读结果不再被当成“没有结果对象”。 |
+| 显式不可读引用 | 对“解释这份结果”“解释结果 A”等已知结果的明确引用，即使所有历史结果都不可读，也先进入结果定位；定位后显示“这份历史结果当前不可读取，不能使用其他结果替代。”，不调用 `submitTurn`、`runAskPlan` 或 `RUN_METRIC_QUERY`。 |
+| 不替代与不泄露 | 明确 A 在 A 不可读、B 可读时仍拒绝 A，绝不改解读 B；澄清候选仍只取可读结果，不会暴露不可读结果。 |
+| Intent 收窄保持 | 仅在已有结果对象且出现既有的明确结果引用、可读的 viewed result 限定追问，或单一可读结果的“结果”表达时进入解释。没有结果对象时，以及“为什么推荐这个表？”这类资源问题，仍是原 Find Data turn，`context` 为 `undefined`。 |
+
+本 Patch 未修改 `ResultTargetRef`、`TurnTargetContext`、`RESULT_DETAIL`、Direct Metric、AskPlan、HTTP endpoint、Find Data Gate 或任何 Design Demo 数值；也未新增权限服务、Result Registry 或后续 PR 能力。
+
 ## HTTP 生产依赖
 
 客户端已传递服务可验证的历史结果 identity，并对 HTTP 历史快照要求 `currentReadAccess: 'AUTHORIZED'`；否则显示“这份历史结果当前不可读取”，不会用浏览器 snapshot、latest、Mock 或 Design Demo 兜底。
@@ -83,8 +96,8 @@
 | 命令 | 结果 |
 | --- | --- |
 | `bun run lint` | 通过（`tsc --noEmit`）。 |
-| Closeout 定向 Vitest（历史/Direct Metric/Surface/HTTP，4 文件） | 通过，40 项。 |
-| `bun run test` | 通过，16 文件、208 项。 |
+| Final Guard 定向 Vitest（历史/Direct Metric/Surface/HTTP，4 文件） | 通过，43 项。含：零个可读历史结果时的“解释这份结果”“解释结果 A”明确阻断，以及“为什么推荐这个表？”仍走无 context 的原 Find Data turn。 |
+| `bun run test` | 通过，16 文件、211 项。 |
 | `VITE_FIND_DATA_MODE=mock bun run build` | 通过。 |
 | `VITE_FIND_DATA_MODE=disconnected bun run build` | 通过。 |
 | `VITE_FIND_DATA_MODE=http VITE_FIND_DATA_API_BASE=/api/find-data bun run build` | 通过。 |
@@ -96,6 +109,6 @@
 
 ## 停止条件
 
-FC3-01 ～ FC3-22 已在现有客户端合同和明确的生产服务依赖边界内完成验证，PR-3 处于 Freeze candidate。正式历史 `resultRef` 当前读取授权与不可变引用的服务合同仍是外部生产依赖，未被客户端 Mock 或缓存替代。
+FC3-01 ～ FC3-22 及 Final Freeze Guard 的三种零可读历史结果场景均已在现有客户端合同和明确的生产服务依赖边界内完成验证，PR-3 已 Final Freeze。正式历史 `resultRef` 当前读取授权与不可变引用的服务合同仍是外部生产依赖，未被客户端 Mock 或缓存替代。
 
-已形成 Freeze 提交；本轮不开始 PR-4。报告记录提交随后会与 Freeze patch 一并推送。
+已形成 Final Freeze 提交；本轮不开始 PR-4。
