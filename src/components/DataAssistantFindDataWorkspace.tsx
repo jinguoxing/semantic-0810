@@ -1170,10 +1170,12 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
   const isReevaluating = task.dataSolution.state === 'EVALUATING' || task.dataSolution.state === 'STALE';
   const activeResource = selectActiveResource(task);
 
-  // Surface width governance (P1-03):
-  // QUICK_PREVIEW: 560px, WORKBENCH: 780px
+  // Surface width governance (P1-03): preserve a readable conversation/task
+  // header at the supported desktop width while retaining each surface's cap.
   const surfaceWidthClass =
-    task.activeSurface.mode === 'QUICK_PREVIEW' ? 'w-[560px]' : 'w-[780px]';
+    task.activeSurface.mode === 'QUICK_PREVIEW'
+      ? 'w-[min(560px,calc(100vw-624px))]'
+      : 'w-[min(780px,calc(100vw-624px))]';
 
   const targetFieldResourceId = task.activeSurface.resourceIds?.[0] ?? task.activeResourceId;
   const viewedResultCandidate = selectCurrentViewedResult(task);
@@ -1342,7 +1344,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
       <main className="flex-1 flex flex-col overflow-hidden bg-[#F7F9FC] relative">
         {/* Top Header & Context Bar (P1-02: Clean header, state-aware surface toggles) */}
         <header className="h-14 px-5 border-b border-[#E2E8F0] bg-white flex items-center justify-between shrink-0 z-10">
-          <div className="flex items-center space-x-3 truncate">
+          <div className="flex min-w-0 items-center space-x-3">
             {onBackToHome && (
               <button
                 onClick={onBackToHome}
@@ -1350,11 +1352,11 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
                 title="返回 AI 工作台首页"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span>返回工作台</span>
+                <span className="max-[1300px]:hidden">返回工作台</span>
               </button>
             )}
-            <div className="flex flex-col truncate">
-              <div className="flex items-center space-x-2 truncate">
+            <div className="flex min-w-0 flex-col">
+              <div className="flex min-w-0 items-center space-x-2">
                 <h1 className="text-sm font-bold text-[#0F172A] tracking-tight truncate">
                   {task.title}
                 </h1>
@@ -1398,7 +1400,7 @@ export const DataAssistantFindDataWorkspace: React.FC<DataAssistantFindDataWorks
           </div>
 
           {/* Quick Surface Toggles: Bound to task readiness (P1-02) */}
-          <div className="flex items-center space-x-2 shrink-0">
+          <div className="hidden min-[1301px]:flex items-center space-x-2 shrink-0">
             {isSurfaceOpen && (
               <button
                 onClick={() => activeSurfaceType === 'FIELDS' ? closeFields() : void handleAction('CLOSE_SURFACE')}
