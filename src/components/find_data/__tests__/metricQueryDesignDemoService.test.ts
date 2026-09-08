@@ -429,4 +429,102 @@ describe('MetricQueryDesignDemoService', () => {
     expect(changed.task.turns.flatMap((turn) => turn.blocks).some((block) => block.type === 'ASK_RESULT')).toBe(true);
     expect(changed.result.events.some((event) => event.type === 'SEARCH_STARTED' || event.type === 'SEARCH_RESULTS_RECEIVED')).toBe(false);
   });
+
+  it('routes a find-data goal on a fresh task to the find pipeline instead of figure queries', async () => {
+    const service = new MetricQueryDesignDemoService();
+    const created = await service.createTask();
+    const opening = await submit(service, created, '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。', 'find_open');
+
+    expect(opening.result.events.some((event) => event.type === 'SCENARIO_CLASSIFIED')).toBe(true);
+    expect(opening.task.scenarioKey).toBe('minhang_bed_supply');
+    expect(opening.task.turns.flatMap((turn) => turn.blocks)
+      .some((block) => block.type === 'CLARIFICATION' && block.question.id.startsWith('design_'))).toBe(false);
+    const solution = selectEffectiveDataSolution(opening.task);
+    expect(solution?.items.map((item) => item.resourceId).sort()).toEqual(['r01', 'r04', 'r05']);
+  });
+
+  it('keeps find-scenario analysis requests with the find pipeline, not the bridge', async () => {
+    const service = new MetricQueryDesignDemoService();
+    const created = await service.createTask();
+    const opening = await submit(service, created, '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。', 'find_open');
+    const analysis = await submit(service, opening.task, '按当前方案分析', 'find_analyze');
+
+    expect(analysis.task.scenarioKey).toBe('minhang_bed_supply');
+    expect(analysis.result.events.some((event) => event.type === 'SCENARIO_RECLASSIFIED')).toBe(false);
+    expect(analysis.task.turns.flatMap((turn) => turn.blocks)
+      .some((block) => block.type === 'CLARIFICATION' && block.question.id.startsWith('design_'))).toBe(false);
+  });
+
+  it('bridges a composed find solution into the ask-data continuity scenario', async () => {
+    const service = new MetricQueryDesignDemoService();
+    const created = await service.createTask();
+    const opening = await submit(service, created, '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。', 'find_open');
+    const bridged = await submit(service, opening.task, '就用当前数据方案继续问数', 'find_to_ask');
+
+    expect(bridged.result.events).toContainEqual({
+      type: 'SCENARIO_RECLASSIFIED',
+      payload: {
+        fromScenarioKey: 'minhang_bed_supply',
+        toScenarioKey: 'design_demo_pujin_qibao_bed_supply',
+        reason: '用户要求基于当前数据方案继续问数，任务转入问数承接。'
+      }
+    });
+    expect(bridged.task.scenarioKey).toBe('design_demo_pujin_qibao_bed_supply');
+    expect(bridged.task.requirementHypothesis).toMatchObject({
+      region: '浦锦街道、七宝镇',
+      timeRange: { start: '2026-08', end: '2026-08' }
+    });
+    expect(bridged.task.requirementRevision).toBe(opening.task.requirementRevision + 1);
+    expect(bridged.task.dataSolution.state).toBe('READY');
+    const solution = selectEffectiveDataSolution(bridged.task);
+    expect(solution?.items.some((item) => item.resourceId === 'r01' && item.inclusionState !== 'NOT_INCLUDED')).toBe(true);
+    expect(solution?.items.filter((item) => item.selectionGroupId === 'bed_definition_alternative').map((item) => item.resourceId).sort()).toEqual(['r04', 'r05']);
+    const text = JSON.stringify(bridged.result.assistantBlocks);
+    expect(text).toContain('浦锦街道、七宝镇 2026 年 8 月');
+    expect(text).toContain('只读历史');
+  });
+
+  it('continues a bridged task through a direct metric query and a runnable continuity plan', async () => {
+    const service = new MetricQueryDesignDemoService();
+    const created = await service.createTask();
+    const opening = await submit(service, created, '分析过去 12 个月闵行区各街镇 60 岁以上常住人口与在营养老床位供给。', 'find_open');
+    const bridged = await submit(service, opening.task, '就用当前数据方案继续问数', 'find_to_ask');
+
+    const population = await submit(service, bridged.task, '先查询 2026 年 8 月浦锦街道的 60 岁及以上常住人口数。', 'pop_query');
+    expect(population.task.directMetricQuery).toMatchObject({ status: 'READY' });
+    const populationRun = await service.executeAction(population.task, {
+      actionCode: 'RUN_METRIC_QUERY', payload: { requestId: population.task.directMetricQuery?.requestId }
+    }, 'pop_run');
+    const withPopulation = apply(population.task, populationRun.events);
+    expect(withPopulation.directMetricResult?.resultArtifact.content).toMatchObject({
+      kind: 'SCALAR', value: { value: 20000, unit: '人' }
+    });
+
+    const planTurn = await submit(
+      service,
+      withPopulation,
+      '用当前数据方案中的老年人口和在营可用床位数据，比较浦锦街道和七宝镇每千名老人床位数。先让我确认计算方案，不判断是否充足。',
+      'plan_a'
+    );
+    const askPlan = planTurn.task.askPlan;
+    expect(askPlan).toMatchObject({
+      status: 'READY_TO_RUN',
+      calculationSpec: { metricName: '每千名老人在营可用养老床位数' },
+      coreResourceIds: ['r01', 'r04']
+    });
+    const run = await service.runAskPlan(planTurn.task, {
+      askPlanId: askPlan!.id,
+      expectedRequirementRevision: planTurn.task.requirementRevision,
+      expectedSearchRevision: planTurn.task.searchRevision,
+      idempotencyKey: 'find_to_ask_plan_a'
+    });
+    expect(run.success).toBe(true);
+    const rows = run.resultArtifact?.content?.kind === 'TABLE'
+      ? run.resultArtifact.content.rows.map((row) => row.cells.ratio)
+      : [];
+    expect(rows).toEqual([
+      { kind: 'NUMBER', state: 'VALUE', value: 15, unit: '张 / 千人', precision: 1 },
+      { kind: 'NUMBER', state: 'VALUE', value: 20, unit: '张 / 千人', precision: 1 }
+    ]);
+  });
 });

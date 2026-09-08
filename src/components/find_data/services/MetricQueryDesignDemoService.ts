@@ -37,6 +37,11 @@ const DESIGN_CONTINUITY_SCENARIO_KEY = 'design_demo_pujin_qibao_bed_supply';
 const DESIGN_CONTINUITY_TITLE = '浦锦、七宝养老服务供给比较';
 const BED_DEFINITION_SELECTION_GROUP = 'bed_definition_alternative';
 const DESIGN_SOLUTION_BED_DEFINITION_PREFIX = 'design_solution_bed_definition';
+/** Find → Ask handoff: reference to the current solution plus an ask-data intent. */
+const FIND_TO_ASK_BRIDGE_SOLUTION_PATTERN = /(当前|现有).{0,6}方案|方案.{0,8}(继续|问数)/;
+const FIND_TO_ASK_BRIDGE_INTENT_PATTERN = /(问数|每千名|继续问|比较)/;
+/** Fresh-task figure branches require an explicit metric intent; find goals keep flowing to the find pipeline. */
+const METRIC_INTENT_PATTERN = /(查询|查一下|是多少|多少|定义|口径|解释|解读)/;
 
 /** Design-demo execution input only. It is never written to FindDataResource. */
 const DESIGN_CONTINUITY_RAW_FIXTURE: Partial<Record<ResourceId, Record<string, Record<string, number>>>> = {
@@ -106,6 +111,16 @@ export class MetricQueryDesignDemoService implements FindDataService {
       this.tasks.set(task.taskId, task);
       return this.persist(task, this.beginContinuityGoal(task, text, operationId));
     }
+    if (this.isFindToAskBridgeRequest(task, text)) {
+      this.tasks.set(task.taskId, task);
+      return this.persist(task, this.beginFindToAskContinuation(task, text, operationId));
+    }
+    // A task already owned by a find-data scenario keeps its whole conversation
+    // with the find pipeline; the bridge phrase above is the only handoff into
+    // the ask-data figures.
+    if (task.scenarioKey && task.scenarioKey !== DESIGN_CONTINUITY_SCENARIO_KEY && !this.isDesignTask(task)) {
+      return this.fallback.submitTurn(task, text, operationId, context);
+    }
     if (this.isContinuityTask(task)) {
       this.tasks.set(task.taskId, task);
       const continuityResult = this.handleContinuityTurn(task, text, operationId);
@@ -161,6 +176,110 @@ export class MetricQueryDesignDemoService implements FindDataService {
       /浦锦/.test(text) && /七宝/.test(text) &&
       /(养老服务供给|养老床位|养老服务)/.test(text) &&
       /2026\s*年?\s*8\s*月/.test(text);
+  }
+
+  /**
+   * Find → Ask handoff. The find pipeline must already have composed a usable
+   * core solution (population metric included); the user references that
+   * solution and states an ask-data intent. Plain analysis requests such as
+   * 「按当前方案分析」 stay with the find pipeline.
+   */
+  private isFindToAskBridgeRequest(task: FindDataTaskState, text: string): boolean {
+    if (task.scenarioKey !== 'minhang_bed_supply') return false;
+    if (!FIND_TO_ASK_BRIDGE_SOLUTION_PATTERN.test(text)) return false;
+    if (!FIND_TO_ASK_BRIDGE_INTENT_PATTERN.test(text)) return false;
+    const solution = selectEffectiveDataSolution(task);
+    return Boolean(solution?.items.some((item) =>
+      item.resourceId === 'r01' && item.role === 'CORE' && item.inclusionState !== 'NOT_INCLUDED'
+    ));
+  }
+
+  /**
+   * Reclassifies a find-data task into the ask-data continuity scenario. The
+   * solution is recomposed at the narrowed ask-data scope so it stays the
+   * effective execution basis; the previous find-data analysis plan stops
+   * being executable while its results remain read-only history in the
+   * conversation.
+   */
+  private beginFindToAskContinuation(task: FindDataTaskState, text: string, operationId: string): FindDataEngineResult {
+    const hypothesis: RequirementHypothesis = {
+      region: '浦锦街道、七宝镇',
+      timeRange: { start: '2026-08', end: '2026-08' },
+      populationDefinition: task.requirementHypothesis.populationDefinition ?? '60 岁及以上常住人口',
+      bedDefinition: task.requirementHypothesis.bedDefinition ?? '民政核定且在营可用养老床位数',
+      dimensions: ['时间（月度）', '空间（街镇）'],
+      analysisFocus: ['老年人口规模与分布', '养老床位供给'],
+      assumptions: [],
+      unresolvedQuestions: []
+    };
+    const composition = composeMinhangSolution(hypothesis, MINHANG_RESOURCES);
+    const requirementRevision = task.requirementRevision + 1;
+    const searchRevision = task.searchRevision + 1;
+    const resourceIds = composition.resourceIds;
+    const candidateSnapshot = resourceIds.map((resourceId) => ({
+      resourceId,
+      title: MINHANG_RESOURCES[resourceId]!.name,
+      reason: '承接当前数据方案中的正式组成资源。',
+      matchType: 'DIRECT' as const,
+      proposedRole: 'CORE' as const,
+      sourceSearchRevision: searchRevision
+    }));
+    const blocks: FindDataTaskState['turns'][number]['blocks'] = [{
+      type: 'TEXT',
+      id: createScenarioId('find_to_ask_continuation'),
+      content: '已承接当前数据方案继续问数。本次承接范围为浦锦街道、七宝镇 2026 年 8 月；方案中的正式指标与床位口径组保持可用。此前的找数分析计划已失效，其结果保留为只读历史，不会被新结果替代。现在可以继续查询人口或床位指标，或让我准备每千名老人床位数的比较方案。'
+    }];
+    return {
+      taskId: task.taskId,
+      operationId,
+      events: [
+        {
+          type: 'SCENARIO_RECLASSIFIED',
+          payload: {
+            fromScenarioKey: task.scenarioKey ?? '',
+            toScenarioKey: DESIGN_CONTINUITY_SCENARIO_KEY,
+            reason: '用户要求基于当前数据方案继续问数，任务转入问数承接。'
+          }
+        },
+        { type: 'ASK_PLAN_INVALIDATED', payload: { reason: '任务转入问数承接，原找数分析计划不再作为当前执行依据。' } },
+        { type: 'REQUIREMENT_UPDATED', payload: { hypothesis, bumpRevision: true } },
+        {
+          type: 'SEARCH_STARTED',
+          payload: { searchRevision, statusMessage: '正在按问数承接范围重组织当前数据方案…' }
+        },
+        {
+          type: 'SEARCH_RESULTS_RECEIVED',
+          payload: {
+            taskId: task.taskId,
+            requirementRevision,
+            searchRevision,
+            query: text,
+            totalMatches: resourceIds.length,
+            candidateSnapshot,
+            resourceUpserts: resourceIds.map((resourceId) => MINHANG_RESOURCES[resourceId]!),
+            candidateDelta: {
+              retainedIds: [],
+              addedIds: resourceIds,
+              removedIds: [],
+              allCandidateIds: resourceIds
+            },
+            solutionPatch: {
+              mode: 'REPLACE',
+              upsertItems: composition.items,
+              gaps: composition.gaps,
+              relationshipEvidence: composition.relationshipEvidence,
+              coverageSummary: composition.coverageSummary,
+              limitationSummary: composition.limitationSummary
+            }
+          }
+        },
+        { type: 'SURFACE_OPENED', payload: { type: 'SOLUTION', mode: 'WORKBENCH', resourceIds, openedBy: 'TASK_REQUIRED' } },
+        this.assistantEvent(blocks, 'READY', {
+          kind: 'SOLUTION', requirementRevision, searchRevision
+        })
+      ],
+      assistantBlocks: blocks
+    };
   }
 
   private beginContinuityGoal(task: FindDataTaskState, text: string, operationId: string): FindDataEngineResult {
@@ -470,10 +589,22 @@ export class MetricQueryDesignDemoService implements FindDataService {
     if (task.entryContext?.target.kind === 'METRIC' && task.entryContext.target.id === 'met_elderly_population' &&
       (task.entryContext.intent === 'VIEW_DEFINITION' || asksDefinition)) return 'DEFINITION';
     if (task.entryContext?.target.kind === 'METRIC' && task.entryContext.target.id === 'met_elderly_population') return 'ELDERLY';
+    if (!this.allowsPlainTextDesignKind(task, text)) return undefined;
     if (asksDefinition && /(老年人口|60\s*岁及以上常住人口)/.test(text)) return 'DEFINITION';
     if (/(老年人口|60\s*岁及以上常住人口)/.test(text)) return 'ELDERLY';
     if (/养老床位/.test(text)) return 'BED';
     return undefined;
+  }
+
+  /**
+   * Free-text figure branches stay open for tasks already inside the design
+   * demo. On a fresh task they require an explicit metric intent, so find-data
+   * goal statements (「我想分析闵行区养老床位供给情况…」) keep flowing to the
+   * find pipeline instead of being captured as figure-01/02 queries.
+   */
+  private allowsPlainTextDesignKind(task: FindDataTaskState, text: string): boolean {
+    if (this.isDesignTask(task)) return true;
+    return METRIC_INTENT_PATTERN.test(text);
   }
 
   private assistantEvent(blocks: FindDataTaskState['turns'][number]['blocks'], nextStatus: FindDataTaskState['status'], source?: FindDataTaskState['turns'][number]['source']): FindDataEvent {
