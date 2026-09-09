@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState, useSyncExternalStore } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,6 +21,7 @@ import {
   FolderTree,
   Network
 } from 'lucide-react';
+import { dataSupportService, getVersion, subscribe } from '../domain/business-object';
 
 export interface ResolveDataSupportWorkspaceProps {
   onBackToDetail?: () => void;
@@ -44,17 +45,45 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
   const [isVerifying, setIsVerifying] = useState(false);
   const [isScopeModalOpen, setIsScopeModalOpen] = useState(false);
 
+  // =========================================================
+  // Top-down 真闭环（PR-5）：候选确认状态来自领域绑定
+  // 确认写入 domain store（localStorage 持久化），刷新页面后状态仍保持
+  // =========================================================
+  const stateVersion = useSyncExternalStore(subscribe, getVersion);
+  const candidateBinding = useMemo(
+    () => dataSupportService.listBindings('bo_service_ticket').find((binding) => binding.status === 'CANDIDATE'),
+    [stateVersion]
+  );
+  const hotlineBinding = useMemo(
+    () => dataSupportService.listBindings('bo_service_ticket').find((binding) => binding.implementationId === 'impl_st_hotline'),
+    [stateVersion]
+  );
+  const isConfirmed = !candidateBinding && hotlineBinding?.status === 'EFFECTIVE';
+
   // Handle confirming the data support candidate
   const handleConfirm = () => {
     setIsVerifying(true);
     // Simulate instantaneous enterprise validation check (object version, semantic eligibility, non-conflict)
     setTimeout(() => {
       setIsVerifying(false);
-      addToast?.(
-        'success',
-        '数据实现已建立',
-        '「公共服务热线工单记录表」已正式确立为「服务工单」的数据实现，服务工单的数据支撑已更新。'
-      );
+      // Top-down 真闭环：CANDIDATE → EFFECTIVE，绑定 Revision +1，形成 PRIMARY/SECONDARY 正式角色结构
+      const result = dataSupportService.confirmCandidate('bo_service_ticket');
+      if (result) {
+        const primaryCount = result.bindings.filter((binding) => binding.role === 'PRIMARY').length;
+        const secondaryCount = result.bindings.filter((binding) => binding.role === 'SECONDARY').length;
+        const confirmedRevision = result.bindings.find((binding) => binding.implementationId === 'impl_st_hotline')?.revision ?? result.revisionLabel;
+        addToast?.(
+          'success',
+          '数据实现已建立',
+          `「公共服务热线工单记录表」已正式生效（绑定修订 ${confirmedRevision}），生效实现形成 ${primaryCount} 主 + ${secondaryCount} 辅角色结构，刷新页面后状态仍保持。`
+        );
+      } else {
+        addToast?.(
+          'info',
+          '数据支撑已是生效状态',
+          '「公共服务热线工单记录表」已作为「服务工单」的数据实现正式生效，无需重复确认。'
+        );
+      }
       if (onConfirmSuccess) {
         onConfirmSuccess();
       } else if (onBackToDetail) {
@@ -378,12 +407,14 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
               <div className="bg-white border border-[#E2E8F0] rounded-md p-6 shadow-2xs space-y-5">
                 
                 <div className="space-y-2 border-b border-[#F1F5F9] pb-4">
-                  <div className="text-[11px] font-bold text-[#2563EB] uppercase tracking-wider">
-                    需要你确认
+                  <div className={`text-[11px] font-bold uppercase tracking-wider ${isConfirmed ? 'text-[#059669]' : 'text-[#2563EB]'}`}>
+                    {isConfirmed ? '已确认生效' : '需要你确认'}
                   </div>
                   {/* The most prominent question in the middle column */}
                   <h3 className="text-base font-bold text-[#0F172A] leading-snug">
-                    是否将“公共服务热线工单记录表”作为“服务工单”在公共服务热线范围内的一套数据实现？
+                    {isConfirmed
+                      ? `“公共服务热线工单记录表”已作为“服务工单”在公共服务热线范围内的一套数据实现正式生效（绑定修订 ${hotlineBinding?.revision ?? 'R2'}）。`
+                      : '是否将“公共服务热线工单记录表”作为“服务工单”在公共服务热线范围内的一套数据实现？'}
                   </h3>
                 </div>
 
@@ -717,38 +748,59 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
 
                 {/* Action Buttons */}
                 <div className="pt-3 border-t border-[#F1F5F9] space-y-2.5">
-                  {/* Primary CTA: 确认数据支撑 */}
-                  <button
-                    id="btn-confirm-data-support"
-                    onClick={handleConfirm}
-                    disabled={isVerifying}
-                    className="w-full h-10 rounded bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer shadow-xs disabled:opacity-60"
-                  >
-                    {isVerifying ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>正在进行数据实现基准核验...</span>
-                      </>
-                    ) : (
-                      <span>确认数据支撑</span>
-                    )}
-                  </button>
+                  {isConfirmed ? (
+                    <>
+                      {/* Confirmed State：生效状态来自领域绑定，刷新页面后仍保持 */}
+                      <div
+                        id="confirm-state-effective"
+                        className="w-full h-10 rounded bg-[#ECFDF5] border border-[#A7F3D0] text-[#059669] text-xs font-medium flex items-center justify-center space-x-2"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>已确认生效 · {hotlineBinding?.revision ?? 'R2'} · 刷新页面状态仍保持</span>
+                      </div>
+                      <button
+                        onClick={onViewCurrentSupport}
+                        className="w-full h-10 rounded bg-white border border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#2563EB] text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer"
+                      >
+                        <span>查看当前数据支撑</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {/* Primary CTA: 确认数据支撑 */}
+                      <button
+                        id="btn-confirm-data-support"
+                        onClick={handleConfirm}
+                        disabled={isVerifying}
+                        className="w-full h-10 rounded bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer shadow-xs disabled:opacity-60"
+                      >
+                        {isVerifying ? (
+                          <>
+                            <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            <span>正在进行数据实现基准核验...</span>
+                          </>
+                        ) : (
+                          <span>确认数据支撑</span>
+                        )}
+                      </button>
 
-                  {/* Subtitle helper under primary button */}
-                  <p className="text-[11px] text-[#64748B] text-center leading-relaxed">
-                    将新增当前数据实现，并按本次范围建立已核验的属性、关系和扩展对应。
-                  </p>
+                      {/* Subtitle helper under primary button */}
+                      <p className="text-[11px] text-[#64748B] text-center leading-relaxed">
+                        将新增当前数据实现，并按本次范围建立已核验的属性、关系和扩展对应。
+                      </p>
 
-                  {/* Secondary Action */}
-                  <div className="text-center pt-1">
-                    <button
-                      id="btn-dismiss-candidate"
-                      onClick={handleDismiss}
-                      className="text-xs text-[#64748B] hover:text-[#0F172A] hover:underline cursor-pointer"
-                    >
-                      暂不采用此数据实现
-                    </button>
-                  </div>
+                      {/* Secondary Action */}
+                      <div className="text-center pt-1">
+                        <button
+                          id="btn-dismiss-candidate"
+                          onClick={handleDismiss}
+                          className="text-xs text-[#64748B] hover:text-[#0F172A] hover:underline cursor-pointer"
+                        >
+                          暂不采用此数据实现
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
 
               </div>

@@ -811,11 +811,16 @@ export const SEED_BINDINGS: DataSupportBinding[] = [
 ];
 
 export function buildSeedState(): BusinessObjectStoreState {
+  // 深拷贝种子：领域服务会原地修改状态对象，若与模块级种子常量共享引用，
+  // 写入会污染种子，导致 resetState 后无法恢复初始状态
+  const objects = structuredClone(SEED_OBJECTS);
+  const implementations = structuredClone(SEED_IMPLEMENTATIONS);
+  const bindings = structuredClone(SEED_BINDINGS);
   return {
     version: 1,
-    objects: Object.fromEntries(SEED_OBJECTS.map((object) => [object.id, object])),
-    implementations: Object.fromEntries(SEED_IMPLEMENTATIONS.map((implementation) => [implementation.id, implementation])),
-    bindings: Object.fromEntries(SEED_BINDINGS.map((bindingItem) => [bindingItem.id, bindingItem])),
+    objects: Object.fromEntries(objects.map((object) => [object.id, object])),
+    implementations: Object.fromEntries(implementations.map((implementation) => [implementation.id, implementation])),
+    bindings: Object.fromEntries(bindings.map((bindingItem) => [bindingItem.id, bindingItem])),
     groundingRevisions: {},
     revisions: {},
     taskContexts: {}
