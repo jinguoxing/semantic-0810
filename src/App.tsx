@@ -21,8 +21,6 @@ import { EnterpriseLauncher } from './components/EnterpriseLauncher';
 import { PersonalCenterPanel } from './components/PersonalCenterPanel';
 import { XinoHomeWorkspace } from './components/XinoHomeWorkspace';
 import { DataAssistantFindDataWorkspace } from './components/DataAssistantFindDataWorkspace';
-import { BusinessObjectDiscoveryWorkspace } from './components/BusinessObjectDiscoveryWorkspace';
-import { BusinessObjectModelingWorkspace } from './components/BusinessObjectModelingWorkspace';
 import { DataAssetsCatalogWorkspace } from './components/DataAssetsCatalogWorkspace';
 import { DataSemanticsQueueWorkspace } from './components/DataSemanticsQueueWorkspace';
 import { DataAssetDetailWorkspace } from './components/DataAssetDetailWorkspace';
@@ -77,8 +75,8 @@ function resolveMetricDetailId(metricId?: string): string {
 
 export default function App() {
   const shouldRestoreFindDataTask = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('findTaskId');
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
-  const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>(shouldRestoreFindDataTask ? 'data_assistant' : 'home');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'business_object_revalidation' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
+  const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'business_object_revalidation' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>(shouldRestoreFindDataTask ? 'data_assistant' : 'home');
   const [dataAssistantInitialQuery, setDataAssistantInitialQuery] = useState<string>('');
   const [dataAssistantEntryContext, setDataAssistantEntryContext] = useState<FindDataEntryContext>();
   const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
@@ -641,9 +639,9 @@ export default function App() {
             addToast('info', 'Xino 智能伙伴', '已进入 Xino AI 协同工作台');
           }}
           onNavigateToGovernance={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '数据治理', '已切换至业务对象发现与建模视图');
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已切换至企业业务对象目录');
           }}
           onNavigateToMetrics={() => {
             setCurrentNav('metrics');
@@ -758,9 +756,9 @@ export default function App() {
             addToast('info', '指标注册表', '已进入 Metric Registry 统一指标管理视图');
           }}
           onNavigateToBusinessObject={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '业务对象发现', '已切换至业务概念实体与建模视图');
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已切换至企业业务对象目录');
           }}
           onNavigateToDataAssets={() => {
             setCurrentNav('assets');
@@ -944,9 +942,9 @@ export default function App() {
             addToast('info', 'API 资源', '已在资源超市中定位 API 服务');
           }}
           onNavigateToKnowledgeNetwork={(objectId) => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '知识网络', '已跳转至企业知识网络查看完整的自然人关系图谱与拓扑');
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', `已返回业务对象目录查看${objectId ? '关联对象' : '完整对象网络'}`);
           }}
           onExploreResourcesForObject={(objectName, attrName) => {
             setResourceSearchQuery(attrName ? `${objectName} ${attrName}` : objectName);
@@ -1158,9 +1156,9 @@ export default function App() {
             addToast('info', '返回指标注册表', '已返回 Metric Registry 统一指标管理视图');
           }}
           onNavigateToBusinessObject={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '业务对象工作台', '已切换至业务对象发现与建模视图');
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已切换至企业业务对象目录');
           }}
           onNavigateToDataStandards={() => {
             setCurrentNav('data_standards');
@@ -1234,9 +1232,9 @@ export default function App() {
             addToast('info', '指标注册表', '已进入 Metric Registry 统一指标管理视图');
           }}
           onNavigateToBusinessObject={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '业务对象发现', '已切换至业务概念实体与建模视图');
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已切换至企业业务对象目录');
           }}
           onNavigateToDataAssets={() => {
             setCurrentNav('assets');
@@ -1254,30 +1252,6 @@ export default function App() {
             addToast('info', 'AI 工作台', '已进入 Xino AI 协同工作台');
           }}
         />
-      ) : currentNav === 'create_business_object' || currentNav === 'business_object_authoring' || viewTab === 'create_business_object' || viewTab === 'business_object_authoring' ? (
-        <BusinessObjectAuthoringWorkspace
-          onCancel={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '已取消新建', '已返回业务对象列表');
-          }}
-          onSaveDraft={() => {
-            addToast('success', '草稿保存成功', '已保存「热线坐席」业务对象草稿至企业语义资产库');
-          }}
-          onPublish={() => {
-            addToast('info', '发布业务对象', '已提交业务对象审核与发布流程');
-          }}
-          onNavigateToSemantics={() => {
-            setCurrentNav('create_business_object');
-            setViewTab('create_business_object');
-          }}
-          onNavigateToObjectsList={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '业务对象', '已返回业务对象列表');
-          }}
-          addToast={addToast}
-        />
       ) : currentNav === 'create_metric' || viewTab === 'create_metric' ? (
         <MetricAuthoringWorkspace
           initialMode={authoringMode}
@@ -1289,9 +1263,9 @@ export default function App() {
             addToast('info', '返回指标注册表', '已返回 Metric Registry 统一指标管理视图');
           }}
           onNavigateToBusinessObject={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '业务对象工作台', '已切换至业务对象发现与建模视图');
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已切换至企业业务对象目录');
           }}
           onNavigateToDataStandards={() => {
             setCurrentNav('data_standards');
@@ -1350,9 +1324,9 @@ export default function App() {
             }
           }}
           onNavigateToBusinessObject={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '业务对象工作台', '已切换至业务对象发现与建模视图');
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已切换至企业业务对象目录');
           }}
           onNavigateToDataStandards={() => {
             setCurrentNav('data_standards');
@@ -1679,9 +1653,9 @@ export default function App() {
             addToast('info', '切换工作台', '已跳转至 pop_service_hotline 表语义理解');
           }}
           onNavigateToDiscovery={() => {
-            setCurrentNav('governance');
-            setViewTab('discovery');
-            addToast('info', '切换工作台', '已跳转至业务对象发现');
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '切换工作台', '已跳转至业务对象目录');
           }}
           onViewLineage={() => setIsLineageModalOpen(true)}
           addToast={addToast}
@@ -1705,8 +1679,8 @@ export default function App() {
           <XinoHomeWorkspace
             onNavigateToGovernance={() => {
               setCurrentNav('governance');
-              setViewTab('discovery');
-              addToast('info', '切换工作台', '已进入数据治理中心');
+              setViewTab('table');
+              addToast('info', '切换工作台', '已进入数据治理中心（表语义理解）');
             }}
             onNavigateToDataAssistant={(query) => {
               setDataAssistantEntryContext(undefined);
@@ -1725,25 +1699,15 @@ export default function App() {
             activeTab={viewTab}
             setActiveTab={setViewTab}
             onBatchConfirm={() => setIsBatchModalOpen(true)}
+            onOpenBusinessObjects={() => {
+              setCurrentNav('business_objects');
+              setViewTab('business_objects');
+              addToast('info', '业务对象目录', '已跳转至企业业务对象目录');
+            }}
           />
 
           {/* Main Governance Content Area */}
-          {viewTab === 'modeling' ? (
-            <BusinessObjectModelingWorkspace
-              onBackToDiscovery={() => setViewTab('discovery')}
-              onProceedToAssets={() => {
-                addToast('success', '建模草稿已确认', '系统已为您自动推导语义资产并进入阶段 ④ 语义资产完善');
-                setViewTab('discovery');
-              }}
-            />
-          ) : viewTab === 'discovery' ? (
-            <BusinessObjectDiscoveryWorkspace
-              onBackToSemantic={() => setViewTab('table')}
-              onEnterModeling={() => setViewTab('modeling')}
-              onViewLineage={() => setIsLineageModalOpen(true)}
-              onReanalyze={handleReanalyzeTable}
-            />
-          ) : viewTab === 'table' ? (
+          {viewTab === 'table' ? (
             <>
               {/* Table Understanding Three Columns Workspace */}
               <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">

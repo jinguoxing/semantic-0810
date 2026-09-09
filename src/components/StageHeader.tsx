@@ -4,23 +4,25 @@ import { ChevronRight, RotateCw, FileText, ArrowLeft, Check } from 'lucide-react
 interface StageHeaderProps {
   tableName: string;
   onBatchConfirm?: () => void;
-  activeTab?: 'field' | 'table' | 'discovery' | 'modeling' | 'assets';
-  setActiveTab?: (tab: 'field' | 'table' | 'discovery' | 'modeling' | 'assets') => void;
+  activeTab?: 'field' | 'table' | 'assets';
+  setActiveTab?: (tab: 'field' | 'table' | 'assets') => void;
   onBackToSemantic?: () => void;
   onReanalyze?: () => void;
+  onOpenBusinessObjects?: () => void;
 }
 
-export const StageHeader: React.FC<StageHeaderProps> = ({ 
-  tableName, 
-  activeTab = 'discovery',
+export const StageHeader: React.FC<StageHeaderProps> = ({
+  tableName,
+  activeTab = 'table',
   setActiveTab,
   onBackToSemantic,
-  onReanalyze
+  onReanalyze,
+  onOpenBusinessObjects
 }) => {
-  const [internalTab, setInternalTab] = useState<'field' | 'table' | 'discovery' | 'modeling' | 'assets'>('discovery');
+  const [internalTab, setInternalTab] = useState<'field' | 'table' | 'assets'>('table');
   const currentTab = activeTab ?? internalTab;
 
-  const handleTabClick = (tab: 'field' | 'table' | 'discovery' | 'modeling' | 'assets') => {
+  const handleTabClick = (tab: 'field' | 'table' | 'assets') => {
     if (setActiveTab) {
       setActiveTab(tab);
     } else {
@@ -39,12 +41,10 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
           <span>语义工作台</span>
           <span className="text-[#CBD5E1]">/</span>
           <span className="font-semibold text-[#1E293B]">
-            {currentTab === 'discovery'
-              ? '业务对象发现'
-              : currentTab === 'modeling'
-              ? '业务对象建模'
-              : currentTab === 'table'
+            {currentTab === 'table'
               ? '表语义理解'
+              : currentTab === 'assets'
+              ? '语义资产'
               : '字段语义理解'}
           </span>
         </div>
@@ -124,8 +124,8 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
 
           {/* Step 2: 对象发现 (Current) */}
           <div
-            onClick={() => handleTabClick('discovery')}
-            className="flex items-center space-x-2 cursor-pointer"
+            onClick={onOpenBusinessObjects}
+            className={`flex items-center space-x-2 ${onOpenBusinessObjects ? 'cursor-pointer' : ''}`}
           >
             <div className="w-5 h-5 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold text-[10px] shadow-2xs">
               2
@@ -140,8 +140,8 @@ export const StageHeader: React.FC<StageHeaderProps> = ({
 
           {/* Step 3: 对象建模 (Waiting) */}
           <div
-            onClick={() => handleTabClick('modeling')}
-            className="flex items-center space-x-2 cursor-pointer group"
+            onClick={onOpenBusinessObjects}
+            className={`flex items-center space-x-2 ${onOpenBusinessObjects ? 'cursor-pointer group' : ''}`}
           >
             <div className="w-5 h-5 rounded-full border-2 border-[#CBD5E1] text-[#64748B] flex items-center justify-center font-bold text-[10px]">
               3
