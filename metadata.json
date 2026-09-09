@@ -1,6 +1,6 @@
 {
   "name": "Semovix 企业业务对象目录",
-  "description": "Semovix 业务语义 · 业务对象目录与发现数据支撑 (Resolve Data Support) - 企业业务主体统一认知、关键关系与真实数据实现决策工作台",
+  "description": "Semovix 业务语义 · 业务对象对齐 (Business Object Resolution) 与数据支撑 - 企业业务主体统一认知、关键关系与真实数据实现决策工作台",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

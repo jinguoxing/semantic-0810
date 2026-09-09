@@ -56,6 +56,7 @@ import { BusinessObjectAuthoringWorkspace } from './components/BusinessObjectAut
 import { BusinessObjectChangeWorkspace } from './components/BusinessObjectChangeWorkspace';
 import { BusinessObjectsListWorkspace } from './components/BusinessObjectsListWorkspace';
 import { ResolveDataSupportWorkspace } from './components/ResolveDataSupportWorkspace';
+import { BusinessObjectResolutionWorkspace } from './components/BusinessObjectResolutionWorkspace';
 import { INITIAL_BUSINESS_OBJECTS } from './data/businessObjectsData';
 import {
   AgentItem,
@@ -68,8 +69,8 @@ import { INITIAL_FIELDS_QUEUE, GOVERNANCE_DATA_MAP } from './data/mockData';
 import { FieldItem, CompleteFieldGovernanceData, MetricDraftInitialData } from './types';
 
 export default function App() {
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('resolve_data_support');
-  const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('resolve_data_support');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('business_object_resolution');
+  const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('business_object_resolution');
   const [dataAssistantInitialQuery, setDataAssistantInitialQuery] = useState<string>('');
   const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
   const [authoringInitialDraft, setAuthoringInitialDraft] = useState<MetricDraftInitialData | undefined>(undefined);
@@ -997,6 +998,40 @@ export default function App() {
             setCurrentNav('business_objects');
             setViewTab('business_objects');
             addToast('info', '业务对象列表', '已返回企业业务对象目录');
+          }}
+          addToast={addToast}
+        />
+      ) : currentNav === 'business_object_resolution' || viewTab === 'business_object_resolution' ? (
+        <BusinessObjectResolutionWorkspace
+          onBackToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '数据语义', '已返回数据语义工作台');
+          }}
+          onNavigateToObjectsList={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已返回企业业务对象目录');
+          }}
+          onCreateNewObject={() => {
+            setCurrentNav('create_business_object');
+            setViewTab('create_business_object');
+            addToast('info', '新建业务对象', '已进入业务对象构建向导');
+          }}
+          onPostpone={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '稍后处理', '业务对象对齐任务已保留');
+          }}
+          onConfirmResolution={(selectedObj) => {
+            setBusinessObjectDetailContext({
+              objectId: selectedObj === 'service_ticket' ? 'bo_service_ticket' : 'bo_customer_feedback',
+              initialTab: 'data_support',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
           }}
           addToast={addToast}
         />
