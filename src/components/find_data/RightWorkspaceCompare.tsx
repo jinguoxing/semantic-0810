@@ -75,11 +75,17 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
           },
           {
             dimension: '记录粒度',
-            values: { [resA.id]: resA.granularity, [resB.id]: resB.granularity }
+            values: {
+              [resA.id]: resA.granularity,
+              [resB.id]: resB.granularity
+            }
           },
           {
             dimension: '覆盖范围/时效',
-            values: { [resA.id]: resA.timeCoverage, [resB.id]: resB.timeCoverage }
+            values: {
+              [resA.id]: resA.timeCoverage,
+              [resB.id]: resB.timeCoverage
+            }
           },
           {
             dimension: '查询权限',
@@ -231,25 +237,32 @@ export const RightWorkspaceCompare: React.FC<RightWorkspaceCompareProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F1F5F9]">
-              {rows.map((row, idx) => (
-                <tr key={idx} className="hover:bg-[#F8FAFC]/50 transition-colors">
-                  <td className="py-2 px-3 font-medium text-[#475569]">{row.dimension}</td>
-                  <td
-                    className={`py-2 px-3 text-[11px] leading-relaxed ${
-                      row.highlightResourceId === resA.id ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
-                    }`}
-                  >
-                    {row.values[resA.id]}
-                  </td>
-                  <td
-                    className={`py-2 px-3 text-[11px] leading-relaxed ${
-                      row.highlightResourceId === resB.id ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
-                    }`}
-                  >
-                    {row.values[resB.id]}
-                  </td>
-                </tr>
-              ))}
+              {rows.map((row, idx) => {
+                const valA = row.values?.[resA.id] || '';
+                const valB = row.values?.[resB.id] || '';
+                const isHighlightA = row.highlightResourceId === resA.id;
+                const isHighlightB = row.highlightResourceId === resB.id;
+
+                return (
+                  <tr key={idx} className="hover:bg-[#F8FAFC]/50 transition-colors">
+                    <td className="py-2 px-3 font-medium text-[#475569]">{row.dimension}</td>
+                    <td
+                      className={`py-2 px-3 text-[11px] leading-relaxed ${
+                        isHighlightA ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
+                      }`}
+                    >
+                      {valA}
+                    </td>
+                    <td
+                      className={`py-2 px-3 text-[11px] leading-relaxed ${
+                        isHighlightB ? 'text-[#16A34A] font-semibold' : 'text-[#334155]'
+                      }`}
+                    >
+                      {valB}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

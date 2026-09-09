@@ -401,12 +401,7 @@ export interface AskRunResult {
   };
 }
 
-export type PermissionCheckState =
-  | 'NOT_CHECKED'
-  | 'CHECKING'
-  | 'ALLOWED'
-  | 'BLOCKED'
-  | 'CHANGED';
+export type PermissionCheckState = 'NOT_CHECKED' | 'CHECKING' | 'ALLOWED' | 'BLOCKED' | 'CHANGED';
 
 export interface AskPlan {
   id: string;

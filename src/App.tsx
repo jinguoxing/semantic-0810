@@ -54,6 +54,11 @@ import { AgentRegistryWorkspace } from './components/AgentRegistryWorkspace';
 import { AgentDefinitionWorkspace } from './components/AgentDefinitionWorkspace';
 import { AgentPublishWorkspace } from './components/AgentPublishWorkspace';
 import { BusinessObjectAuthoringWorkspace } from './components/BusinessObjectAuthoringWorkspace';
+import { BusinessObjectChangeWorkspace } from './components/BusinessObjectChangeWorkspace';
+import { BusinessObjectsListWorkspace } from './components/BusinessObjectsListWorkspace';
+import { ResolveDataSupportWorkspace } from './components/ResolveDataSupportWorkspace';
+import { BusinessObjectResolutionWorkspace } from './components/BusinessObjectResolutionWorkspace';
+import { INITIAL_BUSINESS_OBJECTS } from './data/businessObjectsData';
 import {
   AgentItem,
   AgentDefinitionDetail,
@@ -72,8 +77,8 @@ function resolveMetricDetailId(metricId?: string): string {
 
 export default function App() {
   const shouldRestoreFindDataTask = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('findTaskId');
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
-  const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>(shouldRestoreFindDataTask ? 'data_assistant' : 'home');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
+  const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'discovery' | 'modeling' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>(shouldRestoreFindDataTask ? 'data_assistant' : 'home');
   const [dataAssistantInitialQuery, setDataAssistantInitialQuery] = useState<string>('');
   const [dataAssistantEntryContext, setDataAssistantEntryContext] = useState<FindDataEntryContext>();
   const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
@@ -82,7 +87,7 @@ export default function App() {
   const [assetDetailContext, setAssetDetailContext] = useState<{ assetId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ assetId: 'res-02', fromGoalSearch: false, goalQuery: '' });
   const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'met_001', fromGoalSearch: false, goalQuery: '' });
   const [selectedChangeMetricId, setSelectedChangeMetricId] = useState<string>('met_001');
-  const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_person', fromGoalSearch: false, goalQuery: '' });
+  const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; initialTab?: 'business' | 'data_support'; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_service_ticket', initialTab: 'data_support', fromGoalSearch: false, goalQuery: '' });
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -781,11 +786,130 @@ export default function App() {
             addToast('info', '指标详情', '已载入「老龄化率」企业正式指标详情');
           }}
         />
+      ) : currentNav === 'change_business_object' || viewTab === 'change_business_object' ? (
+        <BusinessObjectChangeWorkspace
+          onCancel={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '已返回目录', '已取消修改「服务工单」并返回业务对象目录');
+          }}
+          onSaveDraft={() => {
+            addToast('success', '草稿保存成功', '已保存「服务工单」修改草稿至企业语义资产库');
+          }}
+          onPublish={() => {
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+            setBusinessObjectDetailContext({
+              objectId: 'bo_service_ticket',
+              initialTab: 'business',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            addToast('success', '业务对象已发布', '「服务工单」新版本已正式发布至企业业务语义目录');
+          }}
+          onNavigateToSemantics={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+          }}
+          onNavigateToObjectsList={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+          }}
+          onNavigateToObjectDetail={(objectId) => {
+            setBusinessObjectDetailContext({
+              objectId: objectId || 'bo_service_ticket',
+              initialTab: 'business',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+          }}
+          addToast={addToast}
+        />
+      ) : currentNav === 'create_business_object' || viewTab === 'create_business_object' || currentNav === 'business_object_authoring' || viewTab === 'business_object_authoring' ? (
+        <BusinessObjectAuthoringWorkspace
+          onCancel={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已取消新建并返回业务对象目录');
+          }}
+          onSaveDraft={() => {
+            addToast('success', '草稿保存成功', '已保存「热线坐席」业务对象定义草稿至企业语义资产库');
+          }}
+          onPublish={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('success', '业务对象已发布', '「热线坐席」已正式发布至企业业务语义目录');
+          }}
+          onNavigateToSemantics={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+          }}
+          onNavigateToObjectsList={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+          }}
+          addToast={addToast}
+        />
+      ) : currentNav === 'business_objects' || viewTab === 'business_objects' ? (
+        <BusinessObjectsListWorkspace
+          onNavigateToBusinessObjectDetail={(objectId, initialTab) => {
+            setBusinessObjectDetailContext({
+              objectId: objectId || 'bo_service_ticket',
+              initialTab: initialTab || 'business',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+            const found = INITIAL_BUSINESS_OBJECTS.find((o) => o.id === objectId);
+            addToast('info', '业务对象详情', `已载入「${found?.name || '业务对象'}」${initialTab === 'data_support' ? '数据支撑' : '业务'}视角详情`);
+          }}
+          onNavigateToCreateBusinessObject={() => {
+            setCurrentNav('create_business_object');
+            setViewTab('create_business_object');
+            addToast('info', '新建业务对象', '已进入业务对象定义与建模工作区');
+          }}
+          onNavigateToChangeBusinessObject={(objectId) => {
+            setBusinessObjectDetailContext({
+              objectId: objectId || 'bo_service_ticket',
+              initialTab: 'business',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('change_business_object');
+            setViewTab('change_business_object');
+            addToast('info', '修改业务对象', '已载入「服务工单」修改草稿工作区');
+          }}
+          addToast={addToast}
+        />
       ) : currentNav === 'business_object_detail' || viewTab === 'business_object_detail' ? (
         <BusinessObjectDetailWorkspace
           objectId={businessObjectDetailContext.objectId}
+          initialTab={businessObjectDetailContext.initialTab || 'business'}
           fromGoalSearch={businessObjectDetailContext.fromGoalSearch}
           goalQuery={businessObjectDetailContext.goalQuery}
+          onNavigateToChangeBusinessObject={(objectId) => {
+            setCurrentNav('change_business_object');
+            setViewTab('change_business_object');
+            addToast('info', '修改业务对象', '已进入「服务工单」业务对象修改工作区');
+          }}
+          onBackToObjectsList={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象列表', '已返回企业业务对象目录');
+          }}
+          onNavigateToBusinessObjectDetail={(objectId, initialTab) => {
+            setBusinessObjectDetailContext({
+              objectId: objectId || 'bo_person',
+              initialTab: initialTab || 'business',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            const found = INITIAL_BUSINESS_OBJECTS.find((o) => o.id === objectId);
+            addToast('info', '业务对象详情', `已切换至「${found?.name || '业务对象'}」`);
+          }}
           onBackToResources={() => {
             setCurrentNav('marketplace_resources');
             setViewTab('marketplace_resources');
@@ -831,10 +955,92 @@ export default function App() {
             addToast('info', '相关资源', `已在资源超市中筛选与「${objectName}${attrName ? ` · ${attrName}` : ''}」相关的资源`);
           }}
           onFindDataWithObjectGoal={(objectName) => {
-            setResourceSearchQuery(`围绕「${objectName}」业务对象进行老龄化与公共服务分析`);
-            setCurrentNav('marketplace_resources');
-            setViewTab('marketplace_resources');
-            addToast('success', '目标找数', `已载入以「${objectName}」为语义上下文的目标找数方案`);
+            setCurrentNav('resolve_data_support');
+            setViewTab('resolve_data_support');
+            addToast('info', '发现数据支撑', `已进入「${objectName || '服务工单'}」Top-down 数据支撑发现与确认工作区`);
+          }}
+          addToast={addToast}
+        />
+      ) : currentNav === 'resolve_data_support' || viewTab === 'resolve_data_support' ? (
+        <ResolveDataSupportWorkspace
+          onBackToDetail={() => {
+            setBusinessObjectDetailContext({
+              objectId: 'bo_service_ticket',
+              initialTab: 'data_support',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+          }}
+          onViewCurrentSupport={() => {
+            setBusinessObjectDetailContext({
+              objectId: 'bo_service_ticket',
+              initialTab: 'data_support',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+          }}
+          onConfirmSuccess={() => {
+            setBusinessObjectDetailContext({
+              objectId: 'bo_service_ticket',
+              initialTab: 'data_support',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+          }}
+          onDismissCandidate={() => {
+            setBusinessObjectDetailContext({
+              objectId: 'bo_service_ticket',
+              initialTab: 'data_support',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+          }}
+          onNavigateToObjectsList={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象列表', '已返回企业业务对象目录');
+          }}
+          addToast={addToast}
+        />
+      ) : currentNav === 'business_object_resolution' || viewTab === 'business_object_resolution' ? (
+        <BusinessObjectResolutionWorkspace
+          onBackToDataSemantics={() => {
+            setCurrentNav('semantics');
+            setViewTab('semantics');
+            addToast('info', '数据语义', '已返回数据语义工作台');
+          }}
+          onNavigateToObjectsList={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已返回企业业务对象目录');
+          }}
+          onCreateNewObject={() => {
+            setCurrentNav('create_business_object');
+            setViewTab('create_business_object');
+            addToast('info', '新建业务对象', '已进入业务对象构建向导');
+          }}
+          onPostpone={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '稍后处理', '业务对象对齐任务已保留');
+          }}
+          onConfirmResolution={(selectedObj) => {
+            setBusinessObjectDetailContext({
+              objectId: selectedObj === 'service_ticket' ? 'bo_service_ticket' : 'bo_customer_feedback',
+              initialTab: 'data_support',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
           }}
           addToast={addToast}
         />

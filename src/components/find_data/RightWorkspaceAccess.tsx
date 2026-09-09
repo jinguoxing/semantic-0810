@@ -28,7 +28,7 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
   const items = selectPermissionRelevantItems(task);
   const [selectedToApply, setSelectedToApply] = useState<ResourceId[]>([]);
 
-  const permissionRequests: PermissionRequestRef[] = Object.values(task.permissionRequests);
+  const permissionRequests: PermissionRequestRef[] = Object.values(task.permissionRequests || {});
   const coreItems = items.filter((item) => item.role === 'CORE');
   const hasCoreResources = coreItems.length > 0;
 
