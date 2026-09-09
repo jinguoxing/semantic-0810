@@ -19,11 +19,13 @@ import { BusinessEvidenceDrawer } from './business-object/BusinessEvidenceDrawer
 import { BusinessObjectPublishDialog } from './business-object/BusinessObjectPublishDialog';
 import {
   businessObjectRepository,
+  createDraft,
+  getWorkingDraft,
   listRevisions,
   nextRevisionLabel,
   publishDraft,
-  saveChangeDraft,
   subscribe,
+  updateDraft,
   getVersion,
   type BusinessObjectDefinitionSnapshot,
   type EvidenceReference
@@ -56,6 +58,13 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
     return businessObjectRepository.get(objectId);
   }, [stateVersion, objectId]);
 
+  // 同一对象 / 模式的 WORKING 草稿（§10 同一份草稿）：进入时恢复，后续保存复用
+  const workingDraft = useMemo(() => {
+    void stateVersion;
+    return getWorkingDraft('CHANGE', objectId);
+  }, [stateVersion, objectId]);
+  const [draftId, setDraftId] = useState<string | null>(workingDraft?.id ?? null);
+
   const objectName = businessObject?.name ?? objectId;
   const domain = businessObject?.domain ?? '—';
   const officialDefinition = businessObject?.definition ?? '（未找到正式定义）';
@@ -69,20 +78,32 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
     return listRevisions(objectId).length;
   }, [stateVersion, objectId]);
 
-  // Draft Form States
-  const [changeReason, setChangeReason] = useState(
-    '根据新版业务资料，进一步明确“服务工单”覆盖热线、线上和窗口等公共服务渠道，并增加“来源渠道”关键属性。'
-  );
+  // Draft Form States：默认值一律来自正式对象快照（§3 通用化，禁止预置服务工单演示内容）；
+  // 存在 WORKING 草稿（含种子演示草稿）时恢复草稿内容
+  const [changeReason, setChangeReason] = useState('');
   const [definition, setDefinition] = useState(
-    '表示公众通过热线、线上、窗口等公共服务渠道提出诉求，并经过受理、办理和办结的统一业务主体。'
+    workingDraft?.content.definition ?? businessObject?.definition ?? officialDefinition
   );
   const [showOfficialDefinition, setShowOfficialDefinition] = useState(false);
 
-  // Aliases State（正式别名来自领域 Store，新增别名标记 isNew）
-  const [aliases, setAliases] = useState<Array<{ text: string; isNew?: boolean }>>(() =>
-    (businessObject?.aliases ?? []).map((text) => ({ text })).concat([{ text: '群众诉求工单', isNew: true }])
-  );
+  // Aliases State（正式别名来自领域 Store，新增别名标记 isNew；不预置任何演示别名）
+  const [aliases, setAliases] = useState<Array<{ text: string; isNew?: boolean }>>(() => {
+    const formalAliases = new Set(businessObject?.aliases ?? []);
+    const initial = workingDraft?.content.aliases ?? businessObject?.aliases ?? [];
+    return initial.map((text) => ({ text, isNew: !formalAliases.has(text) }));
+  });
   const [newAliasInput, setNewAliasInput] = useState('');
+
+  // 本次草稿相对正式版本的实际差异（右侧「变更理解」与发布确认均按差异动态生成）
+  const definitionChanged = definition.trim() !== (businessObject?.definition ?? '').trim();
+  const newAliases = aliases.filter(
+    (alias) => alias.isNew || !(businessObject?.aliases ?? []).includes(alias.text)
+  );
+  const formalAttributeIds = new Set((businessObject?.attributes ?? []).map((attribute) => attribute.id));
+  const draftNewAttributes = (workingDraft?.content.attributes ?? businessObject?.attributes ?? []).filter(
+    (attribute) => !formalAttributeIds.has(attribute.id)
+  );
+  const hasDraftChanges = definitionChanged || newAliases.length > 0;
 
   // Drawers & Modals
   const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
@@ -91,48 +112,39 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
   const [isKeySemanticsDrawerOpen, setIsKeySemanticsDrawerOpen] = useState(false);
   const [isImpactDrawerOpen, setIsImpactDrawerOpen] = useState(false);
 
-  // 修改依据：用户修改说明 + 新版制度文件 + 领域 Store 中该对象的正式定义依据（禁止页面写死正式定义）
+  // 修改依据：用户修改说明（有输入才出现）+ 草稿携带的文档依据（种子演示场景）+ 领域 Store 正式依据
   const changeEvidence: EvidenceReference[] = [
-    {
-      id: 'ev-change-user-note',
-      kind: 'DECISION',
-      title: '用户修改说明',
-      source: '工作区输入',
-      adoptedDecision:
-        '用户指定需要进一步明确“服务工单”覆盖热线、线上和窗口等全域渠道，并增加“来源渠道”作为核心业务识别特征。'
-    },
-    {
-      id: 'ev-change-document',
-      kind: 'DOCUMENT',
-      title: '新版《公共服务热线运行管理办法》',
-      source: '制度文件',
-      location: '第 2 章 · 第 5 条',
-      adoptedDecision:
-        '“建立涵盖电话热线、政务服务网、移动客户端及线下办事窗口的一体化服务工单受理与协同督办机制。”'
-    },
+    ...(changeReason.trim()
+      ? [
+          {
+            id: 'ev-change-user-note',
+            kind: 'DECISION',
+            title: '用户修改说明',
+            source: '工作区输入',
+            adoptedDecision: changeReason.trim()
+          }
+        ]
+      : []),
+    ...(workingDraft?.content.evidence ?? []).filter((item) => item.kind === 'DOCUMENT'),
     ...(businessObject?.evidence ?? [])
   ];
 
-  /** 组装 CHANGE 草稿快照：以正式对象为基线，叠加本次草稿修改 */
+  /** 组装 CHANGE 草稿快照：以正式对象为基线叠加本次修改（不预置新增属性 / 别名 / 文档） */
   const buildSnapshot = (): BusinessObjectDefinitionSnapshot | undefined => {
     if (!businessObject) return undefined;
-    const newAttribute = {
-      id: 'attr-source-channel',
-      name: '来源渠道',
-      meaning: '表示当前服务工单由哪个公共服务渠道形成（热线、线上平台、政务窗口等）。'
-    };
-    const attributes = businessObject.attributes.some((attribute) => attribute.name === newAttribute.name)
-      ? businessObject.attributes
-      : [...businessObject.attributes, newAttribute];
+    const formalEvidenceIds = new Set(businessObject.evidence.map((item) => item.id));
     return {
       name: businessObject.name,
       aliases: aliases.map((alias) => alias.text),
       definition,
       domain: businessObject.domain,
       identity: businessObject.identity,
-      attributes,
+      attributes: businessObject.attributes,
       relationships: businessObject.relationships,
-      evidence: [...businessObject.evidence, ...changeEvidence.filter((item) => item.kind === 'DOCUMENT')]
+      evidence: [
+        ...businessObject.evidence,
+        ...(workingDraft?.content.evidence ?? []).filter((item) => !formalEvidenceIds.has(item.id))
+      ]
     };
   };
 
@@ -168,50 +180,57 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
     setIsOptimizingDef(true);
     setTimeout(() => {
       setIsOptimizingDef(false);
-      addToast?.('success', '业务定义已优化', '已校验全渠道诉求流转主体的语义严谨性');
+      addToast?.('success', '业务定义已优化', '已校验业务定义的语义严谨性');
     }, 600);
   };
 
-  /** 保存草稿：saveChangeDraft（基于当前正式修订号），正式对象发布前不受影响 */
-  const handleSaveDraftClick = () => {
+  /**
+   * 落盘同一份草稿（§10）：已有 WORKING 草稿则 updateDraft（复用 draftId），
+   * 首次保存 createDraft；保存与发布共享同一份草稿，不产生第二份 WORKING 草稿。
+   */
+  const persistDraft = (): string | undefined => {
     const snapshot = buildSnapshot();
     if (!snapshot) {
       addToast?.('error', '暂无法保存', '未在领域存储中找到该业务对象');
-      return;
+      return undefined;
     }
-    const draft = saveChangeDraft(objectId, baseRevision, snapshot);
-    if (!draft) {
-      addToast?.('error', '暂无法保存', '未在领域存储中找到该业务对象');
-      return;
+    if (draftId) {
+      const updated = updateDraft(draftId, snapshot);
+      if (updated.ok === true) return updated.draft.id;
+      if (updated.error === 'BASE_REVISION_CHANGED') {
+        addToast?.('error', '修改冲突', '正式对象已被其他人更新，请返回后基于最新正式版本重新修改');
+        return undefined;
+      }
+      // 草稿已被终结（发布 / 丢弃）→ 重新创建
     }
+    const draft = createDraft({ mode: 'CHANGE', objectId, baseRevision, content: snapshot });
+    setDraftId(draft.id);
+    return draft.id;
+  };
+
+  /** 保存草稿：同一份草稿原地更新，正式对象发布前不受影响 */
+  const handleSaveDraftClick = () => {
+    const savedId = persistDraft();
+    if (!savedId) return;
     addToast?.(
       'success',
       '草稿已保存',
-      `已保存「${objectName}」修改草稿（${draft.id}，基于 ${baseRevision}）；当前正式版本仍正常生效`
+      `已保存「${objectName}」修改草稿（${savedId}，基于 ${baseRevision}）；当前正式版本仍正常生效`
     );
   };
 
-  /** 发布确认：publishDraft（CHANGE：校验 baseRevision，落地新正式修订） */
+  /** 发布确认：publishDraft（CHANGE：校验 baseRevision，落地新正式修订；与保存共用同一份草稿） */
   const handleConfirmPublish = () => {
     setIsPublishModalOpen(false);
-    const snapshot = buildSnapshot();
-    if (!snapshot) {
-      addToast?.('error', '发布失败', '未在领域存储中找到该业务对象');
-      return;
-    }
-    const draft = saveChangeDraft(objectId, baseRevision, snapshot);
-    if (!draft) {
-      addToast?.('error', '发布失败', '未在领域存储中找到该业务对象');
-      return;
-    }
-    const result = publishDraft(draft.id, {
+    const savedId = persistDraft();
+    if (!savedId) return;
+    const result = publishDraft(savedId, {
       expectedBaseRevision: baseRevision,
       changedBy: '业务对象修改工作台',
       summary: changeReason.trim() || `更新「${objectName}」业务定义`,
       changes: [
-        definition !== officialDefinition ? '更新业务定义（明确渠道范围描述）' : '业务定义保持不变',
-        aliases.some((alias) => alias.isNew) ? `新增别名：${aliases.filter((alias) => alias.isNew).map((alias) => alias.text).join('、')}` : '',
-        '新增关键属性「来源渠道」（尚未形成数据落地）'
+        definitionChanged ? '更新业务定义' : '',
+        newAliases.length > 0 ? `新增别名：${newAliases.map((alias) => alias.text).join('、')}` : ''
       ].filter((change) => change !== '')
     });
     if (result.ok === false) {
@@ -380,18 +399,14 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                     </button>
                   </div>
 
-                  {/* Sources Footnote */}
+                  {/* Sources Footnote：修改来源按本次实际依据动态生成 */}
                   <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-[#64748B] pt-0.5">
                     <span className="text-[#94A3B8]">修改来源：</span>
-                    <span className="px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#475569] text-[11px]">
-                      用户修改说明
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#475569] text-[11px]">
-                      新版《公共服务热线运行管理办法》
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#475569] text-[11px]">
-                      当前正式定义
-                    </span>
+                    {changeEvidence.slice(0, 3).map((item) => (
+                      <span key={item.id} className="px-1.5 py-0.5 rounded bg-[#F1F5F9] text-[#475569] text-[11px]">
+                        {item.title}
+                      </span>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -556,23 +571,33 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                   </button>
                 </div>
 
-                {/* Main Content: 新增关键属性 (Summary State) */}
-                <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-[#0F172A]">
-                        新增关键属性：来源渠道
-                      </span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
-                        已纳入草稿
-                      </span>
-                    </div>
+                {/* Main Content: 草稿新增关键属性（按实际差异动态生成；无差异时如实说明） */}
+                {draftNewAttributes.length > 0 ? (
+                  <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-2">
+                    {draftNewAttributes.map((attribute) => (
+                      <div key={attribute.id} className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-bold text-[#0F172A]">
+                            新增关键属性：{attribute.name}
+                          </span>
+                          <span className="px-1.5 py-0.2 rounded text-[10px] bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
+                            已纳入草稿
+                          </span>
+                        </div>
+                        <p className="text-xs text-[#475569] leading-relaxed">
+                          属性定义：{attribute.meaning}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-
-                  <p className="text-xs text-[#475569] leading-relaxed">
-                    属性定义：表示当前服务工单由哪个公共服务渠道形成。
-                  </p>
-                </div>
+                ) : (
+                  <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1">
+                    <div className="text-xs font-bold text-[#0F172A]">本次未新增关键属性</div>
+                    <p className="text-xs text-[#475569] leading-relaxed">
+                      主体标识、关键属性与核心业务关系沿用当前正式版本（{baseRevision}）；如需调整，请通过业务对象修订流程提出。
+                    </p>
+                  </div>
+                )}
 
                 {/* Retained Content in Current Official Version */}
                 <div className="p-3.5 bg-[#FFFFFF] border border-[#E2E8F0] rounded-md space-y-2.5 text-xs text-[#334155]">
@@ -637,31 +662,46 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                 </div>
               </div>
 
-              {/* 1. 本次变化 (Natural Section Header) */}
+              {/* 1. 本次变化（按草稿与正式版本的实际差异动态生成） */}
               <div className="space-y-2.5">
                 <h3 className="text-xs font-bold text-[#0F172A]">本次变化</h3>
-                
+
                 <div className="space-y-2 text-xs">
-                  <div className="p-2.5 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-                    <div className="font-semibold text-[#0F172A]">明确渠道范围</div>
-                    <p className="text-[#475569] leading-relaxed text-[11px]">
-                      在原“公共服务渠道”定义中，进一步明确热线、线上和窗口等渠道，不改变“服务工单”的核心业务主体身份。
-                    </p>
-                  </div>
+                  {definitionChanged && (
+                    <div className="p-2.5 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
+                      <div className="font-semibold text-[#0F172A]">更新业务定义</div>
+                      <p className="text-[#475569] leading-relaxed text-[11px]">
+                        业务定义相对当前正式版本（{baseRevision}）有修改，发布后形成新的正式定义。
+                      </p>
+                    </div>
+                  )}
 
-                  <div className="p-2.5 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-                    <div className="font-semibold text-[#0F172A]">新增别名</div>
-                    <p className="text-[#475569] text-[11px]">
-                      群众诉求工单
-                    </p>
-                  </div>
+                  {newAliases.length > 0 && (
+                    <div className="p-2.5 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
+                      <div className="font-semibold text-[#0F172A]">新增别名</div>
+                      <p className="text-[#475569] text-[11px]">
+                        {newAliases.map((alias) => alias.text).join('、')}
+                      </p>
+                    </div>
+                  )}
 
-                  <div className="p-2.5 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
-                    <div className="font-semibold text-[#0F172A]">新增关键属性</div>
-                    <p className="text-[#475569] text-[11px]">
-                      来源渠道
-                    </p>
-                  </div>
+                  {draftNewAttributes.length > 0 && (
+                    <div className="p-2.5 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
+                      <div className="font-semibold text-[#0F172A]">新增关键属性</div>
+                      <p className="text-[#475569] text-[11px]">
+                        {draftNewAttributes.map((attribute) => attribute.name).join('、')}
+                      </p>
+                    </div>
+                  )}
+
+                  {!hasDraftChanges && draftNewAttributes.length === 0 && (
+                    <div className="p-2.5 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] space-y-1">
+                      <div className="font-semibold text-[#0F172A]">尚未产生内容修改</div>
+                      <p className="text-[#475569] text-[11px]">
+                        当前草稿与正式版本（{baseRevision}）一致；修改定义或别名后此处将展示差异。
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <p className="text-[11px] text-[#94A3B8] pt-0.5">
@@ -679,7 +719,7 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                     <span>未发现需要处理的新增对象边界冲突</span>
                   </div>
                   <p className="text-[11px] text-[#475569] leading-relaxed">
-                    修改后的定义仍表示跨公共服务渠道统一管理的“服务工单”。
+                    修改后的定义不改变「{objectName}」的业务主体身份与记录粒度判定。
                   </p>
                 </div>
 
@@ -706,18 +746,27 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                       现有数据实现和属性扩展继续有效
                     </div>
                     <p className="text-[11px] text-[#64748B] leading-relaxed">
-                      本次未改变服务工单的主体、记录粒度或实例身份规则。
+                      本次未改变「{objectName}」的主体、记录粒度或实例身份规则。
                     </p>
                   </div>
 
-                  <div className="space-y-0.5">
-                    <div className="font-medium text-[#1E293B]">
-                      新增“来源渠道”尚未形成正式数据落地
+                  {draftNewAttributes.length > 0 ? (
+                    <div className="space-y-0.5">
+                      <div className="font-medium text-[#1E293B]">
+                        {`新增“${draftNewAttributes.map((attribute) => attribute.name).join('、')}”尚未形成正式数据落地`}
+                      </div>
+                      <p className="text-[11px] text-[#64748B] leading-relaxed">
+                        发布后 Semovix 将继续识别可能的字段支撑；当前暂无映射不阻塞业务对象版本发布。
+                      </p>
                     </div>
-                    <p className="text-[11px] text-[#64748B] leading-relaxed">
-                      发布后 Semovix 将继续识别可能的字段支撑；当前暂无映射不阻塞业务对象版本发布。
-                    </p>
-                  </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      <div className="font-medium text-[#1E293B]">本次未新增业务属性</div>
+                      <p className="text-[11px] text-[#64748B] leading-relaxed">
+                        现有属性的字段支撑关系保持不变。
+                      </p>
+                    </div>
+                  )}
 
                   <div className="space-y-0.5">
                     <div className="font-medium text-[#1E293B]">
@@ -740,9 +789,15 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                 </div>
 
                 <div className="space-y-1 text-xs text-[#475569]">
-                  <div className="py-1 border-b border-[#F8FAFC]">用户修改说明</div>
-                  <div className="py-1 border-b border-[#F8FAFC]">新版《公共服务热线运行管理办法》</div>
-                  <div className="py-1">当前正式业务对象定义</div>
+                  {changeEvidence.length > 0 ? (
+                    changeEvidence.map((item, index) => (
+                      <div key={item.id} className={`py-1 ${index < changeEvidence.length - 1 ? 'border-b border-[#F8FAFC]' : ''}`}>
+                        {item.title}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="py-1">当前正式业务对象定义（{baseRevision}）</div>
+                  )}
                 </div>
               </div>
 
@@ -764,14 +819,20 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
         confirmLabel="发布修改"
         currentRevision={baseRevision}
         nextRevision={nextRevision}
-        changeSummary={[
-          '明确服务工单的渠道范围描述',
-          '新增别名“群众诉求工单”',
-          '新增关键属性“来源渠道”'
-        ]}
+        changeSummary={
+          hasDraftChanges || draftNewAttributes.length > 0
+            ? [
+                ...(definitionChanged ? [`更新「${objectName}」业务定义`] : []),
+                ...(newAliases.length > 0 ? [`新增别名：${newAliases.map((alias) => alias.text).join('、')}`] : []),
+                ...(draftNewAttributes.length > 0
+                  ? [`新增关键属性：${draftNewAttributes.map((attribute) => attribute.name).join('、')}`]
+                  : [])
+              ]
+            : ['本次草稿与正式版本一致，发布将形成内容相同的新正式修订']
+        }
         dataSupportNotes={[
           '现有数据实现继续有效',
-          '新增属性尚未形成数据落地',
+          draftNewAttributes.length > 0 ? '新增属性尚未形成数据落地' : '本次未新增业务属性',
           '发布后继续识别和校验可能的字段支撑'
         ]}
         impactSummary={[
@@ -863,20 +924,28 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
               </div>
 
               <div className="p-5 overflow-y-auto flex-1 space-y-5 text-xs">
-                {/* 新增属性 */}
+                {/* 新增属性（按草稿实际差异生成；无差异时如实说明） */}
                 <div className="space-y-2">
                   <h4 className="font-bold text-[#0F172A]">本次新增属性</h4>
-                  <div className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-[#1E40AF]">来源渠道</span>
-                      <span className="text-[10px] bg-[#DBEAFE] text-[#1E40AF] px-1.5 py-0.2 rounded font-medium">
-                        草稿待发布
-                      </span>
+                  {draftNewAttributes.length > 0 ? (
+                    draftNewAttributes.map((attribute) => (
+                      <div key={attribute.id} className="p-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-md space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-[#1E40AF]">{attribute.name}</span>
+                          <span className="text-[10px] bg-[#DBEAFE] text-[#1E40AF] px-1.5 py-0.2 rounded font-medium">
+                            草稿待发布
+                          </span>
+                        </div>
+                        <p className="text-[#334155] leading-relaxed text-[11px]">
+                          {attribute.meaning}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md text-[11px] text-[#64748B]">
+                      本次草稿未新增属性，关键语义沿用当前正式版本（{baseRevision}）。
                     </div>
-                    <p className="text-[#334155] leading-relaxed text-[11px]">
-                      表示当前服务工单由哪个公共服务渠道形成（热线、线上平台、政务窗口等）。
-                    </p>
-                  </div>
+                  )}
                 </div>
 
                 {/* 沿用属性 */}
@@ -946,21 +1015,23 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                 <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1.5">
                   <div className="font-semibold text-[#0F172A]">现有数据实现运行状态</div>
                   <p className="text-[#475569] leading-relaxed">
-                    现有主数据实现表与流水表继续正常支撑「服务工单」的实例查询与分析，由于本次修改不涉及主体粒度变化，现有数据流转完全不受破坏。
+                    现有数据实现继续正常支撑「{objectName}」的实例查询与分析，由于本次修改不涉及主体粒度变化，现有数据流转完全不受破坏。
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1.5">
                   <div className="font-semibold text-[#0F172A]">新增属性的数据落地策略</div>
                   <p className="text-[#475569] leading-relaxed">
-                    新增的关键属性“来源渠道”尚未绑定物理字段。发布业务对象定义后，Semovix 将在后台根据新版《公共服务热线运行管理办法》及全域数据资产目录自动推荐潜在的数据支撑候选，该过程异步进行，不影响业务对象的定义生效。
+                    {draftNewAttributes.length > 0
+                      ? `新增的关键属性（${draftNewAttributes.map((attribute) => attribute.name).join('、')}）尚未绑定物理字段。发布业务对象定义后，Semovix 将在后台根据全域数据资产目录自动推荐潜在的数据支撑候选，该过程异步进行，不影响业务对象的定义生效。`
+                      : '本次草稿未新增业务属性，现有属性的字段支撑关系保持不变。'}
                   </p>
                 </div>
 
                 <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1.5">
                   <div className="font-semibold text-[#0F172A]">下游服务与业务指标</div>
                   <p className="text-[#475569] leading-relaxed">
-                    依赖于「服务工单」的既有衍生指标（如工单办结率、准时办结率）与数据服务 API 保持正常运转。
+                    依赖于「{objectName}」的既有衍生指标与数据服务 API 保持正常运转。
                   </p>
                 </div>
               </div>

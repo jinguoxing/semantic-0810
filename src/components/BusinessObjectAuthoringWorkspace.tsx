@@ -27,12 +27,13 @@ import { BusinessEvidenceDrawer } from './business-object/BusinessEvidenceDrawer
 import { BusinessObjectPublishDialog } from './business-object/BusinessObjectPublishDialog';
 import {
   businessObjectRepository,
+  createDraft,
   dataSupportSummary,
   objectResolutionContexts,
   dataSupportService,
   publishDraft,
-  saveCreateDraft,
   subscribe,
+  updateDraft,
   getVersion,
   type BusinessObjectDefinitionSnapshot,
   type EvidenceReference
@@ -269,31 +270,65 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
   };
 
   /**
-   * 复用决策闭环：不创建「热线坐席」新对象，
-   * 把当前名称登记为「客服坐席」的业务别名（真实领域写入）后返回正式对象。
+   * 复用决策闭环（§6C，Inv09）：复用 ≠ 修改定义 ——
+   * 不创建新对象、不修改被复用对象的正式定义、不静默追加别名；
+   * Bottom-up 任务上下文存在时，把来源数据资产对齐到被复用对象并完成任务。
    */
   const completeReuse = () => {
     if (!existingObject) {
       addToast?.('error', '复用失败', '未在领域存储中找到正式对象「客服坐席」');
       return;
     }
-    if (!existingObject.aliases.includes(objectName.trim())) {
-      businessObjectRepository.updateDefinition(
-        existingObject.id,
-        { aliases: [...existingObject.aliases, objectName.trim()] },
-        {
-          summary: `复用决策：登记「${objectName.trim()}」为「客服坐席」的业务别名`,
-          changes: [
-            `登记「${objectName.trim()}」为「${existingObject.name}」的业务别名`,
-            '本次复用已有业务对象，未创建新的业务对象'
-          ],
-          changedBy: '业务对象创建工作台'
-        }
-      );
-    }
     setShowReuseConfirmModal(false);
     setReuseStatus('reused');
-    addToast?.('success', '已复用现有业务对象，本次未创建新的业务对象。');
+
+    // Bottom-up 任务：来源数据资产对齐到被复用对象（BOTTOM_UP_ALIGN 数据支撑修订，任务 COMPLETED）
+    if (resolutionTaskId) {
+      const context = objectResolutionContexts.get(resolutionTaskId);
+      if (context && (context.status === 'OPEN' || context.status === 'POSTPONED') && !context.migrationWarning) {
+        const { dataAsset, semanticSource } = context;
+        const result = dataSupportService.confirmBottomUpAlignment({
+          taskId: context.taskId,
+          businessObjectId: existingObject.id,
+          dataAsset,
+          ...(semanticSource ? { semanticSource } : {}),
+          implementation: {
+            name: dataAsset.name,
+            techName: dataAsset.techName ?? dataAsset.id,
+            warehouseTable: dataAsset.warehouseTable ?? dataAsset.techName ?? dataAsset.id,
+            assetId: dataAsset.id,
+            scope: dataAsset.name,
+            granularity: '一行一条业务记录（对齐后完善）',
+            identity: '（对齐后完善）',
+            scopeRelationText: '自下而上对齐（复用已有对象登记）',
+            scopeRelationNote: '由 Bottom-up Resolution 复用已有业务对象时登记的数据实现，字段级落地待后续完善。',
+            attributes: [],
+            relationships: []
+          }
+        });
+        if (result.ok === false) {
+          addToast?.(
+            'error',
+            '来源数据对齐未生效',
+            result.error === 'BINDING_CONFLICT'
+              ? `该数据当前已作为“${result.conflictObjectName ?? '其他业务对象'}”的数据实现。如需表达多个业务主体，请先明确独立记录粒度、身份和范围。`
+              : '未找到目标业务对象，来源数据支撑未登记'
+          );
+        } else {
+          addToast?.(
+            'success',
+            '来源数据已对齐',
+            `「${dataAsset.name}」已生效为「${existingObject.name}」的数据支撑（任务 ${context.taskId} 已完成）`
+          );
+        }
+      }
+    }
+
+    addToast?.(
+      'success',
+      '已复用现有业务对象',
+      `本次复用「${existingObject.name}」，未创建新对象，也未修改其正式定义（如需别名请走正式定义修订）。`
+    );
     onReuseExisting?.(existingObject.id);
   };
 
@@ -328,13 +363,26 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
     setIsPublishDialogOpen(true);
   };
 
-  /** 发布确认：保存草稿 → publishDraft（CREATE：新对象 + R1 正式修订） */
+  /** 落盘同一份 CREATE 草稿（§10）：已有 WORKING 草稿则 updateDraft（复用 draftId），首次 createDraft */
+  const persistCreateDraft = (): string | undefined => {
+    const snapshot = buildSnapshot();
+    if (draftId) {
+      const updated = updateDraft(draftId, snapshot);
+      if (updated.ok) return updated.draft.id;
+      // 草稿已被终结（发布 / 丢弃）→ 重新创建
+    }
+    const draft = createDraft({ mode: 'CREATE', content: snapshot });
+    setDraftId(draft.id);
+    return draft.id;
+  };
+
+  /** 发布确认：与保存共用同一份草稿 → publishDraft（CREATE：新对象 + R1 正式修订） */
   const handleFinalPublishConfirm = () => {
     setIsPublishDialogOpen(false);
     const snapshot = buildSnapshot();
-    const draft = saveCreateDraft(snapshot);
-    setDraftId(draft.id);
-    const result = publishDraft(draft.id, {
+    const draftToPublish = persistCreateDraft();
+    if (!draftToPublish) return;
+    const result = publishDraft(draftToPublish, {
       changedBy: '业务对象创建工作台',
       summary: `首次发布「${snapshot.name}」业务定义`,
       changes: [
@@ -363,23 +411,20 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
     onPublished?.(result.object.id);
   };
 
-  /** 保存草稿：真实写入领域 Store（发布前不触碰任何正式对象） */
+  /** 保存草稿：真实写入领域 Store（发布前不触碰任何正式对象），同一份草稿原地更新 */
   const handleSaveDraftAction = () => {
     if (!objectName.trim()) {
       addToast?.('error', '暂无法保存', '业务对象名称不能为空');
       return;
     }
-    const draft = saveCreateDraft(buildSnapshot());
-    setDraftId(draft.id);
+    const savedId = persistCreateDraft();
+    if (!savedId) return;
     addToast?.(
       'success',
       '草稿保存成功',
-      `「${objectName.trim()}」定义草稿已保存（${draft.id}），发布前不会改动正式对象`
+      `「${objectName.trim()}」定义草稿已保存（${savedId}），发布前不会改动正式对象`
     );
   };
-
-  /** 当前是否有未发布的草稿（供页面提示） */
-  void draftId;
 
   return (
     <div id="bo-authoring-container" className="flex-1 flex flex-col h-full bg-[#F8FAFC] overflow-y-auto text-[#0F172A]">

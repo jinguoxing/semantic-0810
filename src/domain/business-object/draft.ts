@@ -5,15 +5,24 @@
  * 发布时才产生 BusinessObject + BusinessObjectRevision（R1 / Rn）。
  * CHANGE 发布带乐观并发控制：expectedBaseRevision 不匹配 → STALE_REVISION，
  * 全程零写入（Inv01 / Inv04：currentRevision 只随正式发布前进）。
+ *
+ * 同一份草稿原则（§10）：同一对象 / 模式的 WORKING 草稿至多一份 ——
+ * 首次保存 createDraft，后续保存 updateDraft（复用同一 draftId），
+ * 未保存直接发布也先 createDraft 再 publish 同一份草稿；
+ * 发布后草稿置 PUBLISHED，不残留 WORKING 孤儿草稿。
  */
 import { getState } from './registry';
 import { mutate, nextId, nowIso } from './store';
 import { recordRevision } from './revision';
-import { BusinessObject, BusinessObjectDefinitionSnapshot, BusinessObjectDraft } from './types';
+import { BusinessObject, BusinessObjectDefinitionSnapshot, BusinessObjectDraft, BusinessObjectDraftMode } from './types';
 
 export type PublishDraftResult =
   | { ok: true; object: BusinessObject; revision: string; isNewObject: boolean }
   | { ok: false; error: 'NOT_FOUND' | 'ALREADY_PUBLISHED' | 'OBJECT_NOT_FOUND' | 'STALE_REVISION' };
+
+export type UpdateDraftResult =
+  | { ok: true; draft: BusinessObjectDraft }
+  | { ok: false; error: 'NOT_FOUND' | 'NOT_WORKING' | 'OBJECT_NOT_FOUND' | 'BASE_REVISION_CHANGED' };
 
 /** 将草稿快照应用到正式对象（名称 / 别名 / 定义 / 域 / 身份 / 属性 / 关系 / 证据） */
 function applySnapshot(object: BusinessObject, content: BusinessObjectDefinitionSnapshot): void {
@@ -27,20 +36,68 @@ function applySnapshot(object: BusinessObject, content: BusinessObjectDefinition
   object.evidence = content.evidence.map((item) => ({ ...item }));
 }
 
-export function saveCreateDraft(content: BusinessObjectDefinitionSnapshot): BusinessObjectDraft {
+/**
+ * 创建新草稿。同一对象 / 模式已存在 WORKING 草稿时，旧草稿置 DISCARDED
+ * （不产生第二份 WORKING，保证「保存一次草稿、发布同一份草稿」）。
+ */
+export function createDraft(
+  input:
+    | { mode: 'CREATE'; content: BusinessObjectDefinitionSnapshot }
+    | { mode: 'CHANGE'; objectId: string; baseRevision: string; content: BusinessObjectDefinitionSnapshot }
+): BusinessObjectDraft {
   const now = nowIso();
   const draft: BusinessObjectDraft = {
     id: nextId('bodraft'),
-    mode: 'CREATE',
-    content: { ...content, aliases: [...content.aliases] },
+    mode: input.mode,
+    ...(input.mode === 'CHANGE' ? { objectId: input.objectId, baseRevision: input.baseRevision } : {}),
+    content: { ...input.content, aliases: [...input.content.aliases] },
     status: 'WORKING',
     createdAt: now,
     updatedAt: now
   };
   return mutate(getState(), (state) => {
+    // 唯一 WORKING 草稿约束：同键旧 WORKING 草稿被本次创建取代
+    Object.values(state.drafts).forEach((existing) => {
+      if (existing.status === 'WORKING' && existing.mode === input.mode && existing.objectId === draft.objectId) {
+        existing.status = 'DISCARDED';
+        existing.updatedAt = nowIso();
+      }
+    });
     state.drafts[draft.id] = draft;
     return draft;
   });
+}
+
+/** 更新既有 WORKING 草稿内容（复用同一 draftId，不新建草稿） */
+export function updateDraft(
+  draftId: string,
+  content: BusinessObjectDefinitionSnapshot
+): UpdateDraftResult {
+  const draft = getState().drafts[draftId];
+  if (!draft) return { ok: false, error: 'NOT_FOUND' };
+  if (draft.status !== 'WORKING') return { ok: false, error: 'NOT_WORKING' };
+  if (draft.mode === 'CHANGE') {
+    const object = getState().objects[draft.objectId!];
+    if (!object) return { ok: false, error: 'OBJECT_NOT_FOUND' };
+    if (object.currentRevision !== draft.baseRevision) return { ok: false, error: 'BASE_REVISION_CHANGED' };
+  }
+  return mutate(getState(), (state) => {
+    const target = state.drafts[draftId];
+    target.content = { ...content, aliases: [...content.aliases] };
+    target.updatedAt = nowIso();
+    return { ok: true as const, draft: target };
+  });
+}
+
+/** 取同一对象 / 模式当前的 WORKING 草稿（至多一份；无则 undefined） */
+export function getWorkingDraft(mode: BusinessObjectDraftMode, objectId?: string): BusinessObjectDraft | undefined {
+  return Object.values(getState().drafts)
+    .filter((draft) => draft.status === 'WORKING' && draft.mode === mode && draft.objectId === objectId)
+    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0];
+}
+
+export function saveCreateDraft(content: BusinessObjectDefinitionSnapshot): BusinessObjectDraft {
+  return createDraft({ mode: 'CREATE', content });
 }
 
 export function saveChangeDraft(
@@ -50,21 +107,7 @@ export function saveChangeDraft(
 ): BusinessObjectDraft | undefined {
   const object = getState().objects[objectId];
   if (!object) return undefined;
-  const now = nowIso();
-  const draft: BusinessObjectDraft = {
-    id: nextId('bodraft'),
-    mode: 'CHANGE',
-    objectId,
-    baseRevision,
-    content: { ...content, aliases: [...content.aliases] },
-    status: 'WORKING',
-    createdAt: now,
-    updatedAt: now
-  };
-  return mutate(getState(), (state) => {
-    state.drafts[draft.id] = draft;
-    return draft;
-  });
+  return createDraft({ mode: 'CHANGE', objectId, baseRevision, content });
 }
 
 export function getDraft(draftId: string): BusinessObjectDraft | undefined {

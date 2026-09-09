@@ -12,6 +12,7 @@ import { snapshotOfObject } from './revision';
 import {
   BusinessObject,
   BusinessObjectDefinitionSnapshot,
+  BusinessObjectDraft,
   BusinessObjectRevision,
   DataImplementation,
   DataSupportBinding
@@ -947,6 +948,43 @@ export const SEED_REVISIONS: BusinessObjectRevision[] = [
   )
 ];
 
+/**
+ * 种子草稿（§3 Change 通用化）：演示场景（服务工单渠道口径修订）沉到领域层，
+ * 通用 Change Mode 页面不再写死任何「服务工单」专属内容。
+ */
+const SERVICE_TICKET_CHANGE_DEMO_CONTENT: BusinessObjectDefinitionSnapshot = (() => {
+  const snapshot = snapshotOfObject(SERVICE_TICKET);
+  return {
+    ...snapshot,
+    definition:
+      '表示公众通过热线电话、政务服务网、移动客户端、线下办事窗口等公共服务渠道提出诉求，并经过受理、办理和办结的统一业务主体。',
+    evidence: [
+      ...snapshot.evidence,
+      {
+        id: 'ev_st_change_doc',
+        kind: 'DOCUMENT',
+        title: '新版《公共服务热线运行管理办法》',
+        source: '制度文件',
+        location: '第 2 章 · 第 5 条',
+        adoptedDecision: '“建立涵盖电话热线、政务服务网、移动客户端及线下办事窗口的一体化服务工单受理与协同督办机制。”'
+      }
+    ]
+  };
+})();
+
+export const SEED_DRAFTS: BusinessObjectDraft[] = [
+  {
+    id: 'bodraft_st_change_demo',
+    mode: 'CHANGE',
+    objectId: 'bo_service_ticket',
+    baseRevision: 'R1',
+    content: SERVICE_TICKET_CHANGE_DEMO_CONTENT,
+    status: 'WORKING',
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP
+  }
+];
+
 export function buildSeedState(): BusinessObjectStoreState {
   // 深拷贝种子：领域服务会原地修改状态对象，若与模块级种子常量共享引用，
   // 写入会污染种子，导致 resetState 后无法恢复初始状态
@@ -954,6 +992,7 @@ export function buildSeedState(): BusinessObjectStoreState {
   const implementations = structuredClone(SEED_IMPLEMENTATIONS);
   const bindings = structuredClone(SEED_BINDINGS);
   const revisions = structuredClone(SEED_REVISIONS);
+  const drafts = structuredClone(SEED_DRAFTS);
   return {
     version: 3,
     objects: Object.fromEntries(objects.map((object) => [object.id, object])),
@@ -962,7 +1001,7 @@ export function buildSeedState(): BusinessObjectStoreState {
     groundingRevisions: {},
     revisions: Object.fromEntries(revisions.map((revision) => [revision.id, revision])),
     taskContexts: {},
-    drafts: {},
+    drafts: Object.fromEntries(drafts.map((draft) => [draft.id, draft])),
     dataSupportRevisions: {}
   };
 }

@@ -267,7 +267,12 @@ describe('business object domain', () => {
   it('builds a version 3 seed state with drafts and data support revisions collections', () => {
     const seed = buildSeedState();
     expect(seed.version).toBe(3);
-    expect(seed.drafts).toEqual({});
+    // 种子草稿：服务工单渠道口径修订的演示 CHANGE 草稿（§3：演示内容沉到领域层）
+    expect(Object.keys(seed.drafts)).toEqual(['bodraft_st_change_demo']);
+    expect(seed.drafts['bodraft_st_change_demo'].mode).toBe('CHANGE');
+    expect(seed.drafts['bodraft_st_change_demo'].objectId).toBe('bo_service_ticket');
+    expect(seed.drafts['bodraft_st_change_demo'].baseRevision).toBe('R1');
+    expect(seed.drafts['bodraft_st_change_demo'].status).toBe('WORKING');
     expect(seed.dataSupportRevisions).toEqual({});
     // 自然人 currentRevision 与待复核绑定的 sourceRevision 一致
     expect(seed.objects['bo_person'].currentRevision).toBe('R2');

@@ -8,6 +8,7 @@ import { BusinessObjectDetailWorkspace } from '../../BusinessObjectDetailWorkspa
 import { BusinessObjectChangeWorkspace } from '../../BusinessObjectChangeWorkspace';
 import {
   businessObjectRepository,
+  getState,
   groundingService,
   listDataSupportRevisions,
   listRevisions,
@@ -160,7 +161,12 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
     // 页头基线修订号来自领域 Store（bo_service_ticket 种子 currentRevision = R1）
     expect(screen.getByText(/当前正式版本 R1 仍在生效/)).toBeInTheDocument();
 
-    // 修改依据抽屉：用户修改说明 + 领域 Store 的正式定义依据（不串其他对象数据）
+    // 输入修改说明（用户输入才产生「用户修改说明」依据条目）
+    fireEvent.change(document.getElementById('input-change-reason')!, {
+      target: { value: '按新版管理办法统一全域渠道口径' }
+    });
+
+    // 修改依据抽屉：用户修改说明 + 种子 WORKING 草稿文档依据 + 领域 Store 正式依据（不串其他对象数据）
     fireEvent.click(screen.getAllByText('查看依据')[0]);
     expect(screen.getByText('修改依据明细')).toBeInTheDocument();
     expect(screen.getAllByText('用户修改说明').length).toBeGreaterThan(0);
@@ -170,12 +176,12 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
 
     fireEvent.click(screen.getByText('关闭'));
 
-    // 发布确认：共享弹窗；确认后走 saveChangeDraft → publishDraft 真实领域写入
+    // 发布确认：共享弹窗；确认后与保存共用同一份种子草稿 → publishDraft 真实领域写入
     fireEvent.click(document.getElementById('btn-publish-change')!);
     expect(screen.getByText('确认发布业务对象修改')).toBeInTheDocument();
     expect(screen.getByText('本次将正式更新：')).toBeInTheDocument();
-    expect(screen.getByText('新增关键属性“来源渠道”')).toBeInTheDocument();
-    expect(screen.getByText('新增属性尚未形成数据落地')).toBeInTheDocument();
+    expect(screen.getByText('更新「服务工单」业务定义')).toBeInTheDocument();
+    expect(screen.getAllByText('本次未新增业务属性').length).toBeGreaterThan(0);
     fireEvent.click(document.getElementById('btn-confirm-publish')!);
     expect(onPublished).toHaveBeenCalledTimes(1);
     expect(onPublished).toHaveBeenCalledWith('bo_service_ticket');
@@ -184,5 +190,12 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
     const object = businessObjectRepository.get('bo_service_ticket');
     expect(object?.currentRevision).toBe('R2');
     expect(listRevisions('bo_service_ticket').length).toBeGreaterThanOrEqual(2);
+
+    // §10 同一份草稿：发布的是进入页面时恢复的种子 WORKING 草稿本身，发布后置 PUBLISHED，无 WORKING 残留
+    const stateAfter = getState();
+    expect(stateAfter.drafts['bodraft_st_change_demo'].status).toBe('PUBLISHED');
+    expect(
+      Object.values(stateAfter.drafts).filter((draft) => draft.status === 'WORKING' && draft.objectId === 'bo_service_ticket')
+    ).toHaveLength(0);
   });
 });

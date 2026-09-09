@@ -185,24 +185,43 @@ export default function App() {
     addToast('info', '业务对象对齐', `已登记对齐任务 ${context.taskId}，完成后将返回原上下文`);
   };
 
-  /** 返回原上下文：只按 returnRoute 回跳，不改写任务状态（状态流转由领域服务负责） */
-  const returnFromResolution = () => {
-    const context = resolutionTaskId ? objectResolutionContexts.get(resolutionTaskId) : undefined;
+  /** 按 returnRoute 回跳对齐任务的原上下文（§6B/§6C/§7：Bottom-up 闭环后必须返回数据侧原上下文） */
+  const navigateByReturnRoute = (
+    context: ReturnType<typeof objectResolutionContexts.get>,
+    toast?: { type: 'success' | 'info'; title: string; message: string }
+  ) => {
     setResolutionTaskId(null);
-
     if (context?.returnRoute === 'asset_detail') {
       setAssetDetailContext({ assetId: context.dataAsset.id, fromGoalSearch: false, goalQuery: '' });
       setCurrentNav('asset_detail');
       setViewTab('asset_detail');
-      addToast('success', '已返回原上下文', `已按对齐任务 ${context.taskId} 返回「${context.dataAsset.name}」数据资产详情`);
     } else if (context?.returnRoute === 'semantics_detail') {
       setCurrentNav('semantics_detail');
       setViewTab('semantics_detail');
-      addToast('success', '已返回原上下文', `已按对齐任务 ${context.taskId} 返回「${context.dataAsset.name}」数据语义详情`);
     } else {
       setCurrentNav('semantics');
       setViewTab('semantics');
-      addToast('info', '数据语义', '已返回数据语义工作台');
+    }
+    if (toast) addToast(toast.type, toast.title, toast.message);
+  };
+
+  /** 返回原上下文：只按 returnRoute 回跳，不改写任务状态（状态流转由领域服务负责） */
+  const returnFromResolution = () => {
+    const context = resolutionTaskId ? objectResolutionContexts.get(resolutionTaskId) : undefined;
+    if (context?.returnRoute === 'asset_detail') {
+      navigateByReturnRoute(context, {
+        type: 'success',
+        title: '已返回原上下文',
+        message: `已按对齐任务 ${context.taskId} 返回「${context.dataAsset.name}」数据资产详情`
+      });
+    } else if (context?.returnRoute === 'semantics_detail') {
+      navigateByReturnRoute(context, {
+        type: 'success',
+        title: '已返回原上下文',
+        message: `已按对齐任务 ${context.taskId} 返回「${context.dataAsset.name}」数据语义详情`
+      });
+    } else {
+      navigateByReturnRoute(context, { type: 'info', title: '数据语义', message: '已返回数据语义工作台' });
     }
   };
 
@@ -891,12 +910,33 @@ export default function App() {
         <BusinessObjectAuthoringWorkspace
           resolutionTaskId={resolutionTaskId ?? undefined}
           onCancel={() => {
+            const taskContext = resolutionTaskId ? objectResolutionContexts.get(resolutionTaskId) : undefined;
+            if (taskContext && (taskContext.status === 'OPEN' || taskContext.status === 'POSTPONED')) {
+              // 中途退出：任务保持未完成，回来源上下文后可重新发起对齐
+              navigateByReturnRoute(taskContext, {
+                type: 'info',
+                title: '已返回原上下文',
+                message: `对齐任务 ${taskContext.taskId} 仍未完成，可从来源数据重新发起业务对象对齐`
+              });
+              return;
+            }
             setCurrentNav('business_objects');
             setViewTab('business_objects');
             addToast('info', '业务对象目录', '已取消新建并返回业务对象目录');
           }}
           onPublished={(newObjectId) => {
-            // 发布成功：进入新对象的业务视角（newObjectId 来自 publishDraft 的领域写入结果）
+            const taskContext = resolutionTaskId ? objectResolutionContexts.get(resolutionTaskId) : undefined;
+            if (taskContext) {
+              // §6B：Bottom-up 创建新对象后不得停留在对象详情 —— 按 returnRoute 返回数据侧原上下文
+              const newObjectName = businessObjectRepository.get(newObjectId)?.name ?? '新业务对象';
+              navigateByReturnRoute(taskContext, {
+                type: 'success',
+                title: `已对齐业务对象：${newObjectName}`,
+                message: `对齐任务 ${taskContext.taskId} 已完成，来源数据已生效为「${newObjectName}」的数据支撑；已按原路径返回`
+              });
+              return;
+            }
+            // 普通创建流程：进入新对象的业务视角（newObjectId 来自 publishDraft 的领域写入结果）
             setResolutionTaskId(null);
             setBusinessObjectDetailContext({
               objectId: newObjectId,
@@ -908,7 +948,18 @@ export default function App() {
             setViewTab('business_object_detail');
           }}
           onReuseExisting={(objectId) => {
-            // 复用决策：返回被复用正式对象（如「客服坐席」）的业务视角
+            const taskContext = resolutionTaskId ? objectResolutionContexts.get(resolutionTaskId) : undefined;
+            if (taskContext) {
+              // §6C：复用闭环后回到来源上下文，不去被复用对象的详情页
+              const reusedName = businessObjectRepository.get(objectId)?.name ?? objectId;
+              navigateByReturnRoute(taskContext, {
+                type: 'success',
+                title: `已对齐业务对象：${reusedName}`,
+                message: `对齐任务 ${taskContext.taskId} 已完成（本次复用，未创建新对象、未修改正式定义）；已按原路径返回`
+              });
+              return;
+            }
+            // 普通复用：返回被复用正式对象（如「客服坐席」）的业务视角
             setResolutionTaskId(null);
             setBusinessObjectDetailContext({
               objectId,
