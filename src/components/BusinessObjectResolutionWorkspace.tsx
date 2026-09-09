@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   Check,
   Table as TableIcon,
   Layers,
@@ -24,6 +25,7 @@ export interface BusinessObjectResolutionWorkspaceProps {
   onCreateNewObject?: () => void;
   onPostpone?: () => void;
   onConfirmResolution?: (selectedObject: 'service_ticket' | 'hotline_ticket') => void;
+  onSwitchToResolveDataSupport?: () => void;
   addToast?: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
 }
 
@@ -33,6 +35,7 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
   onCreateNewObject,
   onPostpone,
   onConfirmResolution,
+  onSwitchToResolveDataSupport,
   addToast
 }) => {
   // Candidate selection state: user has selected 'service_ticket' ("服务工单"), can toggle to 'hotline_ticket' ("热线工单")
@@ -224,8 +227,19 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
               </div>
             </div>
 
-            {/* Top Right Action: 稍后处理 ONLY */}
+            {/* Top Right Action: 切换工作台 & 稍后处理 */}
             <div className="flex items-center space-x-3 shrink-0 pt-1">
+              {onSwitchToResolveDataSupport && (
+                <button
+                  id="btn-switch-to-data-support"
+                  onClick={onSwitchToResolveDataSupport}
+                  className="px-3 py-1.5 rounded bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] border border-[#BFDBFE] text-xs font-medium transition-colors cursor-pointer flex items-center space-x-1.5"
+                  title="切换至自上而下的「发现数据支撑」工作台"
+                >
+                  <span>🔍 发现数据支撑工作台</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 onClick={handlePostponeClick}
                 className="px-3.5 py-1.5 text-xs font-medium text-[#475569] hover:text-[#0F172A] bg-white hover:bg-[#F1F5F9] border border-[#CBD5E1] rounded-md transition-colors cursor-pointer"

@@ -1008,6 +1008,11 @@ export default function App() {
             setViewTab('business_objects');
             addToast('info', '业务对象列表', '已返回企业业务对象目录');
           }}
+          onSwitchToResolution={() => {
+            setCurrentNav('business_object_resolution');
+            setViewTab('business_object_resolution');
+            addToast('info', '工作台切换', '已切换至「业务对象对齐」工作台（自下而上语义决策）');
+          }}
           addToast={addToast}
         />
       ) : currentNav === 'business_object_resolution' || viewTab === 'business_object_resolution' ? (
@@ -1031,6 +1036,11 @@ export default function App() {
             setCurrentNav('business_objects');
             setViewTab('business_objects');
             addToast('info', '稍后处理', '业务对象对齐任务已保留');
+          }}
+          onSwitchToResolveDataSupport={() => {
+            setCurrentNav('resolve_data_support');
+            setViewTab('resolve_data_support');
+            addToast('info', '工作台切换', '已切换至「发现数据支撑」工作台（自上而下数据实现确立）');
           }}
           onConfirmResolution={(selectedObj) => {
             setBusinessObjectDetailContext({
