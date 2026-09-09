@@ -28,6 +28,7 @@ describe('findDataSelectors (AC-06, AC-10, AC-11, AC-12)', () => {
     turns: [],
     resources: MINHANG_RESOURCES,
     dataSolution: MINHANG_DATA_SOLUTION,
+    permissionRequests: {},
     activeResourceId: 'r03',
     activeSurface: { type: 'CLOSED' },
     requirementRevision: 1,
@@ -68,7 +69,7 @@ describe('findDataSelectors (AC-06, AC-10, AC-11, AC-12)', () => {
 
     // Executable ONLY includes items where query === 'ALLOWED'
     for (const item of executable) {
-      expect(item.availabilityByAction.query).toBe('ALLOWED');
+      expect(mockTask.resources[item.resourceId]?.availabilityByAction.query).toBe('ALLOWED');
     }
 
     // Both views share same underlying solution items

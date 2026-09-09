@@ -62,29 +62,24 @@ describe('findDataReducer (AC-01, AC-02, AC-18)', () => {
     };
 
     // Stale result with older searchRevision 2
+    const staleSolutionItems = [
+      {
+        resourceId: 'r01',
+        role: 'CORE' as const,
+        inclusionState: 'SELECTED' as const,
+        coverage: [],
+        limitations: [],
+        evidenceRefs: []
+      }
+    ];
+
     const staleAction: FindDataEvent = {
       type: 'SEARCH_RESULTS_RECEIVED',
       payload: {
         requirementRevision: 2,
         searchRevision: 2, // Mismatch!
         discoveredResourceIds: ['r01'],
-        solutionItems: [
-          {
-            resourceId: 'r01',
-            role: 'CORE',
-            inclusionState: 'SELECTED',
-            coverage: [],
-            limitations: [],
-            evidenceRefs: [],
-            availabilityByAction: {
-              discover: 'ALLOWED',
-              viewMetadata: 'ALLOWED',
-              preview: 'ALLOWED',
-              query: 'ALLOWED',
-              export: 'ALLOWED'
-            }
-          }
-        ]
+        solutionItems: staleSolutionItems
       }
     };
 
@@ -100,7 +95,7 @@ describe('findDataReducer (AC-01, AC-02, AC-18)', () => {
         requirementRevision: 2,
         searchRevision: 3, // Matches!
         discoveredResourceIds: ['r01'],
-        solutionItems: staleAction.payload.solutionItems
+        solutionItems: staleSolutionItems
       }
     };
 

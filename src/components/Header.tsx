@@ -25,8 +25,8 @@ interface HeaderProps {
   onOpenLauncher?: () => void;
   onOpenProfile?: () => void;
   isProfileOpen?: boolean;
-  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_definition' | 'agent_detail' | 'agent_publish';
-  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'create_business_object' | 'business_object_authoring' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents') => void;
+  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'resolve_data_support' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'business_objects' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_definition' | 'agent_detail' | 'agent_publish';
+  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'resolve_data_support' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'business_objects' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents') => void;
   batchCount?: number;
 }
 
@@ -50,77 +50,85 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const isSemanticsActive =
+    currentNav === 'business_objects' ||
     currentNav === 'create_business_object' ||
     currentNav === 'business_object_authoring' ||
+    currentNav === 'change_business_object' ||
     currentNav === 'governance' ||
     currentNav === 'metrics' ||
     currentNav === 'create_metric' ||
     currentNav === 'business_object_detail' ||
+    currentNav === 'resolve_data_support' ||
     currentNav === 'semantics' ||
     currentNav === 'data_standards';
 
   return (
-    <header className="h-[64px] bg-white border-b border-[#E2E8F0] px-5 flex items-center justify-between sticky top-0 z-30 shrink-0 select-none">
-      {/* Left Area: Nine-dot Launcher + Semovix Logo + Primary Nav Menu */}
-      <div className="flex items-center space-x-6">
-        {/* 1. Nine-dot Launcher Icon */}
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={onOpenLauncher}
-            className="w-8 h-8 rounded-md bg-[#F8FAFC] hover:bg-[#EEF2FF] hover:text-[#2563EB] text-[#475569] border border-[#E2E8F0] flex items-center justify-center transition-all cursor-pointer"
-            title="Semovix Enterprise AI Launcher"
-          >
-            <Grid className="w-4 h-4 text-[#334155]" />
-          </button>
-
-          {/* 2. Semovix Logo */}
-          <div 
-            onClick={() => onSelectNav && onSelectNav('create_business_object')}
-            className="flex items-center space-x-2.5 cursor-pointer"
-          >
-            <div className="w-8 h-8 rounded-md bg-[#2563EB] flex items-center justify-center text-white font-bold shadow-2xs">
-              <span className="text-base font-mono tracking-tighter">S</span>
-            </div>
-            <span className="font-extrabold text-base text-[#0F172A] tracking-tight">
-              Semovix
-            </span>
+    <header className="h-[60px] bg-white border-b border-[#E2E8F0] px-6 flex items-center justify-between sticky top-0 z-30 shrink-0 select-none">
+      {/* Left Area: Semovix Logo + Primary Nav Menu */}
+      <div className="flex items-center space-x-8 h-full">
+        {/* Semovix Logo */}
+        <div 
+          onClick={() => onSelectNav && onSelectNav('business_objects')}
+          className="flex items-center space-x-2.5 cursor-pointer"
+        >
+          <div className="w-7 h-7 rounded-lg bg-[#2563EB] flex items-center justify-center text-white font-bold shadow-xs">
+            <span className="text-base font-mono tracking-tighter">S</span>
           </div>
+          <span className="font-extrabold text-base text-[#0F172A] tracking-tight">
+            Semovix
+          </span>
         </div>
 
-        {/* 3. Primary Top Navigation Menu */}
-        <nav className="hidden lg:flex items-center space-x-1 text-xs font-semibold text-[#475569]">
-          {/* 1. AI工作台 */}
+        {/* Primary Top Navigation Menu */}
+        <nav className="hidden lg:flex items-center space-x-6 text-xs font-semibold text-[#475569] h-full">
+          {/* 1. Xino智能伙伴 */}
           <button
             onClick={() => onSelectNav && onSelectNav('home')}
-            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+            className={`h-full flex items-center px-1 transition-colors cursor-pointer ${
               currentNav === 'home'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+                ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
+                : 'hover:text-[#0F172A]'
             }`}
           >
-            AI工作台
+            Xino智能伙伴
           </button>
 
           {/* 2. 任务中心 */}
           <button
-            onClick={() => onSelectNav && onSelectNav('home')}
-            className="px-3 py-1.5 rounded-md hover:bg-[#F8FAFC] hover:text-[#0F172A] transition-colors cursor-pointer text-[#475569]"
+            onClick={() => onSelectNav && onSelectNav('governance')}
+            className={`h-full flex items-center px-1 transition-colors cursor-pointer ${
+              currentNav === 'task_center' as any
+                ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
+                : 'hover:text-[#0F172A]'
+            }`}
           >
             任务中心
           </button>
+
+          {/* 3. 智能体中心 */}
+          <button
+            onClick={() => onSelectNav && onSelectNav('agents')}
+            className={`h-full flex items-center px-1 transition-colors cursor-pointer ${
+              currentNav === 'agents' || currentNav === 'agent_definition' || currentNav === 'agent_detail' || currentNav === 'agent_publish'
+                ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
+                : 'hover:text-[#0F172A]'
+            }`}
+          >
+            智能体中心
+          </button>
           
-          {/* 3. 业务语义 (带二级菜单下拉，当前高亮) */}
-          <div className="relative" ref={dropdownRef}>
+          {/* 4. 业务语义 (带二级菜单下拉，当前高亮) */}
+          <div className="relative h-full flex items-center" ref={dropdownRef}>
             <button
               onClick={() => {
-                if (onSelectNav) onSelectNav('create_business_object');
+                if (onSelectNav) onSelectNav('business_objects');
                 setIsSemanticsDropdownOpen(!isSemanticsDropdownOpen);
               }}
               onMouseEnter={() => setIsSemanticsDropdownOpen(true)}
-              className={`px-3 py-1.5 rounded-md transition-all cursor-pointer flex items-center space-x-1.5 ${
+              className={`h-full flex items-center space-x-1 px-1 transition-all cursor-pointer ${
                 isSemanticsActive
-                  ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                  : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+                  ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
+                  : 'hover:text-[#0F172A]'
               }`}
             >
               <span>业务语义</span>
@@ -143,32 +151,32 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  {/* 二级菜单 1: 业务对象 (新建业务对象) */}
+                  {/* 二级菜单 1: 业务对象 */}
                   <button
                     onClick={() => {
                       setIsSemanticsDropdownOpen(false);
-                      onSelectNav && onSelectNav('create_business_object');
+                      onSelectNav && onSelectNav('business_objects');
                     }}
                     className={`w-full p-2.5 rounded-lg flex items-center space-x-3 transition-all text-left group cursor-pointer ${
-                      currentNav === 'create_business_object' || currentNav === 'governance' || currentNav === 'business_object_detail'
-                        ? 'bg-[#FFFBEB] border border-[#FDE68A]'
-                        : 'hover:bg-[#FFFBEB]/60 hover:border-[#FDE68A]/60 border border-transparent'
+                      currentNav === 'business_objects' || currentNav === 'create_business_object' || currentNav === 'governance' || currentNav === 'business_object_detail'
+                        ? 'bg-[#EFF6FF] border border-[#BFDBFE]'
+                        : 'hover:bg-[#EFF6FF]/60 hover:border-[#BFDBFE]/60 border border-transparent'
                     }`}
                   >
-                    <div className="w-8 h-8 rounded-lg bg-[#FFFBEB] border border-[#FDE68A] flex items-center justify-center text-[#D97706] shrink-0 group-hover:scale-105 transition-transform">
+                    <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB] shrink-0 group-hover:scale-105 transition-transform">
                       <FolderTree className="w-4 h-4" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#0F172A] group-hover:text-[#D97706] transition-colors">
+                        <span className="text-xs font-bold text-[#0F172A] group-hover:text-[#2563EB] transition-colors">
                           业务对象
                         </span>
-                        <span className="text-[10px] font-bold text-[#D97706] bg-[#FFFBEB] px-1.5 py-0.2 rounded-full border border-[#FDE68A]">
-                          热线坐席 · 新建
+                        <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded-full border border-[#BFDBFE]">
+                          8 业务对象
                         </span>
                       </div>
                       <p className="text-[11px] text-[#64748B] truncate mt-0.5">
-                        企业业务主体定义、语义对齐与实体建模
+                        企业业务主体目录、关键关系与真实数据实现
                       </p>
                     </div>
                   </button>
@@ -267,37 +275,37 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* 4. 数据服务超市 */}
+          {/* 5. 数据服务超市 */}
           <button
             onClick={() => onSelectNav && onSelectNav('marketplace')}
-            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+            className={`h-full flex items-center px-1 transition-colors cursor-pointer ${
               currentNav === 'marketplace' || currentNav === 'marketplace_resources' || currentNav === 'asset_detail' || currentNav === 'multi_resource_request' || currentNav === 'my_requests'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+                ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
+                : 'hover:text-[#0F172A]'
             }`}
           >
             数据服务超市
           </button>
 
-          {/* 5. 数据治理 */}
+          {/* 6. 数据治理 */}
           <button
             onClick={() => onSelectNav && onSelectNav('governance')}
-            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+            className={`h-full flex items-center px-1 transition-colors cursor-pointer ${
               currentNav === 'governance' || currentNav === 'table_workspace' || currentNav === 'field_workspace'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+                ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
+                : 'hover:text-[#0F172A]'
             }`}
           >
             数据治理
           </button>
 
-          {/* 6. 管理中心 */}
+          {/* 7. 管理中心 */}
           <button
             onClick={() => onSelectNav && onSelectNav('access_review')}
-            className={`px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
+            className={`h-full flex items-center px-1 transition-colors cursor-pointer ${
               currentNav === 'access_review' || currentNav === 'access_review_detail'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold border border-[#BFDBFE]'
-                : 'hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+                ? 'text-[#2563EB] font-bold border-b-2 border-[#2563EB]'
+                : 'hover:text-[#0F172A]'
             }`}
           >
             管理中心
@@ -305,20 +313,17 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
       </div>
 
-      {/* Global Search Bar (Center) */}
-      <div className="relative hidden md:block w-64 lg:w-72">
+      {/* Global Search Bar */}
+      <div className="relative hidden md:block w-72 lg:w-80">
         <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-[#94A3B8]" />
         <input
           type="text"
-          placeholder="搜索全局内容"
-          className="w-full pl-8 pr-12 py-1.5 text-xs bg-[#F8FAFC] border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:bg-white text-[#0F172A] placeholder-[#94A3B8] transition-all"
+          placeholder="搜索业务对象、术语或文档..."
+          className="w-full pl-8 pr-4 py-1.5 text-xs bg-[#F8FAFC] border border-[#E2E8F0] rounded-md focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:bg-white text-[#0F172A] placeholder-[#94A3B8] transition-all"
         />
-        <kbd className="absolute right-2.5 top-1.5 px-1.5 py-0.2 text-[10px] font-mono text-[#64748B] bg-white border border-[#CBD5E1] rounded shadow-2xs">
-          ⌘ K
-        </kbd>
       </div>
 
-      {/* Right Area: Notifications, Help, Xino｜犀诺, User Avatar & Name */}
+      {/* Right Area: Notifications, Help, User Avatar & Name */}
       <div className="flex items-center space-x-3 text-xs font-medium text-[#475569]">
         {/* Notification Bell */}
         <button
@@ -327,42 +332,35 @@ export const Header: React.FC<HeaderProps> = ({
           title="通知消息"
         >
           <Bell className="w-4 h-4" />
-          <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] absolute top-1 right-1" />
         </button>
 
         {/* Help */}
         <button
-          onClick={() => alert('Semovix 帮助与开发文档')}
-          className="p-1.5 rounded-md hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] cursor-pointer transition-colors"
-          title="帮助与文档"
+          onClick={() => alert('帮助中心：可查阅业务语义与业务对象定义变更规范指引')}
+          className="p-1.5 rounded-md hover:bg-[#F8FAFC] text-[#64748B] hover:text-[#0F172A] cursor-pointer transition-colors relative"
+          title="帮助中心"
         >
           <HelpCircle className="w-4 h-4" />
         </button>
 
-        {/* Xino｜犀诺 */}
-        <button
-          onClick={onOpenLauncher}
-          className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-[#2563EB] font-bold text-xs cursor-pointer transition-all shadow-2xs"
-          title="Xino 智能伙伴协同"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
-          <span>Xino｜犀诺</span>
-        </button>
-
-        <div className="h-4 w-[1px] bg-[#E2E8F0] hidden sm:block" />
-
         {/* User Profile */}
         <button
           onClick={onOpenProfile}
-          className="flex items-center space-x-2 cursor-pointer hover:opacity-90 transition-all pl-1"
+          className="flex items-center space-x-2.5 cursor-pointer hover:opacity-90 transition-all pl-1 py-1"
           title="用户个人中心"
         >
-          <div className="w-7 h-7 rounded-full bg-[#2563EB] text-white font-bold text-xs flex items-center justify-center shadow-2xs border border-[#1D4ED8]">
-            <span>张</span>
+          <div className="w-7 h-7 rounded-full bg-[#2563EB] text-white font-bold text-xs flex items-center justify-center shadow-xs">
+            <span className="text-xs">张</span>
           </div>
-          <span className="text-xs font-bold text-[#172033] hidden sm:inline">
-            张明
-          </span>
+          <div className="text-left hidden sm:block">
+            <div className="text-xs font-bold text-[#0F172A] flex items-center space-x-1">
+              <span>张伟</span>
+              <ChevronDown className="w-3 h-3 text-[#94A3B8]" />
+            </div>
+            <div className="text-[10px] text-[#64748B] leading-none mt-0.5">
+              某市大数据中心
+            </div>
+          </div>
         </button>
       </div>
     </header>

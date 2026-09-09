@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, ShieldCheck, Check, AlertTriangle, Clock, FileCheck, ArrowRight } from 'lucide-react';
-import { FindDataTaskState, PermissionDecision, ResourceId } from './model/FindDataTask';
+import { FindDataTaskState, PermissionDecision, PermissionRequestRef, ResourceId } from './model/FindDataTask';
 import {
   selectPermissionRelevantItems,
   selectResourceById,
@@ -21,7 +21,7 @@ export const RightWorkspaceAccess: React.FC<RightWorkspaceAccessProps> = ({
   const items = selectPermissionRelevantItems(task);
   const [selectedToApply, setSelectedToApply] = useState<ResourceId[]>([]);
 
-  const permissionRequests = Object.values(task.permissionRequests || {});
+  const permissionRequests: PermissionRequestRef[] = Object.values(task.permissionRequests || {});
 
   const getDecisionBadge = (decision?: PermissionDecision) => {
     switch (decision) {

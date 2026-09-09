@@ -276,7 +276,8 @@ export class MockFindDataService implements FindDataService {
             { id: 'opt_minhang', label: '上海市闵行区老年人口与养老床位（已预置高保真方案）' },
             { id: 'opt_citywide', label: '上海市全市养老机构与综合服务数据' },
             { id: 'opt_homecare', label: '社区居家养老服务与长护险' }
-          ]
+          ],
+          selectedOptionIds: []
         }
       });
     } else if (norm === '人口' || (norm.includes('人口') && !norm.includes('闵行') && !norm.includes('养老'))) {
@@ -298,7 +299,8 @@ export class MockFindDataService implements FindDataService {
             { id: 'opt_resident_aging', label: '常住人口与老龄化分布（60岁以上）' },
             { id: 'opt_household', label: '户籍人口与家庭结构变动' },
             { id: 'opt_migrant', label: '流动人口与就业动态' }
-          ]
+          ],
+          selectedOptionIds: []
         }
       });
     } else if (norm.includes('字段') && intent === 'QUESTION') {

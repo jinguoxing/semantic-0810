@@ -2,8 +2,10 @@ import { FindDataTaskState } from './FindDataTask';
 
 export interface FindDataTaskStore {
   load(taskId: string): FindDataTaskState | null;
+  get?(taskId: string): FindDataTaskState | null;
   save(task: FindDataTaskState): void;
   remove(taskId: string): void;
+  delete?(taskId: string): void;
   list(): FindDataTaskState[];
   getCurrentTaskId(): string | null;
   setCurrentTaskId(taskId: string | null): void;
@@ -45,6 +47,10 @@ export class LocalStorageFindDataTaskStore implements FindDataTaskStore {
     }
   }
 
+  get(taskId: string): FindDataTaskState | null {
+    return this.load(taskId);
+  }
+
   save(task: FindDataTaskState): void {
     if (typeof window === 'undefined' || !task.taskId) return;
     try {
@@ -61,6 +67,10 @@ export class LocalStorageFindDataTaskStore implements FindDataTaskStore {
     } catch {
       // ignore
     }
+  }
+
+  delete(taskId: string): void {
+    this.remove(taskId);
   }
 
   list(): FindDataTaskState[] {

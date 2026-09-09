@@ -183,6 +183,8 @@ export interface AskRunResult {
   error?: string;
 }
 
+export type PermissionCheckState = 'NOT_CHECKED' | 'CHECKING' | 'ALLOWED' | 'BLOCKED' | 'CHANGED';
+
 export interface AskPlan {
   id: string;
   title: string;
@@ -190,7 +192,7 @@ export interface AskPlan {
   calculationSpec: AskPlanCalculationSpec;
   coreResourceIds: ResourceId[];
   conditionalResourceIds: ResourceId[];
-  permissionCheckState: 'NOT_CHECKED' | 'CHECKING' | 'ALLOWED' | 'BLOCKED' | 'CHANGED';
+  permissionCheckState: PermissionCheckState;
   lastRunResult?: AskRunResult;
 }
 

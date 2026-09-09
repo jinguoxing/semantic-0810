@@ -1,6 +1,6 @@
 {
-  "name": "Semovix 企业 AI 原生语义智能平台",
-  "description": "Semovix 数据助手 · 找数据 (Data Assistant · Find Data) - 企业 AI 原生语义智能平台数据工作对话与按需工作区协同",
+  "name": "Semovix 企业业务对象目录",
+  "description": "Semovix 业务语义 · 业务对象目录与发现数据支撑 (Resolve Data Support) - 企业业务主体统一认知、关键关系与真实数据实现决策工作台",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
