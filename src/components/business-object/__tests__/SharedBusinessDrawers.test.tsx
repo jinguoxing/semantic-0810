@@ -50,7 +50,7 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
     groundingService.applyCorrection({
       bindingId: 'bind_st_curr_view',
       type: 'ATTRIBUTE',
-      targetName: '办结时间',
+      targetId: 'attr_close_time',
       fromField: 'finished_time',
       toField: 'close_time',
       reason: '数据语义修订：finished_time 实际表示最后更新时间',
@@ -144,7 +144,8 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
 
     fireEvent.click(screen.getByText('关闭'));
     fireEvent.click(screen.getAllByText('查看完整历史')[0]);
-    expect(screen.getByText(/明确全域渠道范围/)).toBeInTheDocument();
+    // §13：最近更新侧栏与历史抽屉都呈现最新修订 summary（领域 Store 驱动，非写死文案）
+    expect(screen.getAllByText(/明确全域渠道范围/).length).toBeGreaterThan(0);
   });
 
   it('Change 集成：对象数据来自领域 Store，发布走真实草稿管线并回调 onPublished', () => {

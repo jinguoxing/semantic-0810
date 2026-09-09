@@ -416,14 +416,16 @@ const SERVICE_TICKET_CURR_VIEW: DataImplementation = {
   scope: '客服业务当前工单',
   granularity: '一行一张服务工单',
   identity: '工单编号 · ticket_id',
-  scopeRelationText: '基准主要数据实现',
-  scopeRelationNote: '承载客服业务当前工单全生命周期核心数据，作为服务工单最优先的数据查询与语义映射基准实现。',
+  // §13：主要数据实现仅是详情默认展示口径，不表示唯一权威表或查询优先级
+  scopeRelationText: '主要数据实现（默认展示）',
+  scopeRelationNote: '用于业务对象详情的默认展示和一般业务解释。具体任务使用哪套数据，由任务范围、权限、可用状态与执行计划决定。',
   attributes: [
-    { attributeName: '工单编号', sourceName: '客服工单当前视图', field: 'ticket_id', semantics: '服务工单主体标识', isSupported: true, isIdentifier: true },
-    { attributeName: '处理状态', sourceName: '客服工单当前视图', field: 'status', semantics: '服务工单处理状态', isSupported: true },
-    { attributeName: '创建时间', sourceName: '客服工单当前视图', field: 'created_time', semantics: '服务工单创建时间', isSupported: true },
-    { attributeName: '受理时间', sourceName: '客服工单当前视图', field: 'accept_time', semantics: '服务工单受理时间', isSupported: true },
+    { attributeId: 'attr_ticket_no', attributeName: '工单编号', sourceName: '客服工单当前视图', field: 'ticket_id', semantics: '服务工单主体标识', isSupported: true, isIdentifier: true },
+    { attributeId: 'attr_status', attributeName: '处理状态', sourceName: '客服工单当前视图', field: 'status', semantics: '服务工单处理状态', isSupported: true },
+    { attributeId: 'attr_created_time', attributeName: '创建时间', sourceName: '客服工单当前视图', field: 'created_time', semantics: '服务工单创建时间', isSupported: true },
+    { attributeId: 'attr_accept_time', attributeName: '受理时间', sourceName: '客服工单当前视图', field: 'accept_time', semantics: '服务工单受理时间', isSupported: true },
     {
+      attributeId: 'attr_close_time',
       attributeName: '办结时间',
       sourceName: '客服工单当前视图',
       field: 'finished_time',
@@ -432,13 +434,13 @@ const SERVICE_TICKET_CURR_VIEW: DataImplementation = {
       needsCorrection: true,
       correctionReason: '数据语义修订：finished_time 实际表示最后更新时间，需修正为服务工单实际办结时间'
     },
-    { attributeName: '诉求类型', sourceName: '客服工单当前视图', field: 'appeal_type', semantics: '服务工单诉求类型', isSupported: true },
-    { attributeName: '来源渠道', sourceName: '客服工单当前视图', field: 'source_channel', semantics: '服务工单来源渠道', isSupported: true }
+    { attributeId: 'attr_appeal_type', attributeName: '诉求类型', sourceName: '客服工单当前视图', field: 'appeal_type', semantics: '服务工单诉求类型', isSupported: true },
+    { attributeId: 'attr_source_channel', attributeName: '来源渠道', sourceName: '客服工单当前视图', field: 'source_channel', semantics: '服务工单来源渠道', isSupported: true }
   ],
   relationships: [
-    { relationName: '申请人', targetObjectId: 'bo_person', targetObjectName: '自然人', sourceField: '客服工单当前视图 · applicant_id', targetIdentity: '自然人 · 主体标识' },
-    { relationName: '承办部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '客服工单当前视图 · handle_dept_id', targetIdentity: '组织机构 · 机构标识' },
-    { relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '客服工单当前视图 · administrative_code', targetIdentity: '行政区域 · 区域标识' }
+    { relationshipId: 'rel_st_applicant', relationName: '申请人', targetObjectId: 'bo_person', targetObjectName: '自然人', sourceField: '客服工单当前视图 · applicant_id', targetIdentity: '自然人 · 主体标识' },
+    { relationshipId: 'rel_st_dept', relationName: '承办部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '客服工单当前视图 · handle_dept_id', targetIdentity: '组织机构 · 机构标识' },
+    { relationshipId: 'rel_st_region', relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '客服工单当前视图 · administrative_code', targetIdentity: '行政区域 · 区域标识' }
   ],
   // 关系落地候选字段白名单（Inv08）：只列与目标对象身份兼容的字段。
   // 「申请人 → 自然人」只允许 applicant_id / person_id，
@@ -467,18 +469,18 @@ const SERVICE_TICKET_HOTLINE: DataImplementation = {
   scopeRelationText: '与“客服工单当前视图”存在部分范围重叠',
   scopeRelationNote: '两套实现可能包含部分相同的服务工单。本页只展示已经确认的语义范围关系，不执行跨来源合并、去重或优先级配置。',
   attributes: [
-    { attributeName: '工单编号', sourceName: '公共服务热线工单记录表', field: 'ticket_id', semantics: '服务工单主体标识', isSupported: true, isIdentifier: true },
-    { attributeName: '处理状态', sourceName: '公共服务热线工单记录表', field: 'status', semantics: '服务工单处理状态', isSupported: true },
-    { attributeName: '创建时间', sourceName: '公共服务热线工单记录表', field: 'created_time', semantics: '服务工单创建时间', isSupported: true },
-    { attributeName: '受理时间', sourceName: '公共服务热线工单记录表', field: 'accept_time', semantics: '服务工单受理时间', isSupported: true },
-    { attributeName: '办结时间', sourceName: '公共服务热线工单记录表', field: 'close_time', semantics: '服务工单办结时间', isSupported: true },
-    { attributeName: '诉求类型', sourceName: '工单扩展信息表', isExtension: true, field: 'appeal_type', semantics: '服务工单诉求类型', isSupported: true },
-    { attributeName: '来源渠道', sourceName: '—', field: '—', semantics: '当前实现暂无正式支撑', isSupported: false }
+    { attributeId: 'attr_ticket_no', attributeName: '工单编号', sourceName: '公共服务热线工单记录表', field: 'ticket_id', semantics: '服务工单主体标识', isSupported: true, isIdentifier: true },
+    { attributeId: 'attr_status', attributeName: '处理状态', sourceName: '公共服务热线工单记录表', field: 'status', semantics: '服务工单处理状态', isSupported: true },
+    { attributeId: 'attr_created_time', attributeName: '创建时间', sourceName: '公共服务热线工单记录表', field: 'created_time', semantics: '服务工单创建时间', isSupported: true },
+    { attributeId: 'attr_accept_time', attributeName: '受理时间', sourceName: '公共服务热线工单记录表', field: 'accept_time', semantics: '服务工单受理时间', isSupported: true },
+    { attributeId: 'attr_close_time', attributeName: '办结时间', sourceName: '公共服务热线工单记录表', field: 'close_time', semantics: '服务工单办结时间', isSupported: true },
+    { attributeId: 'attr_appeal_type', attributeName: '诉求类型', sourceName: '工单扩展信息表', isExtension: true, field: 'appeal_type', semantics: '服务工单诉求类型', isSupported: true },
+    { attributeId: 'attr_source_channel', attributeName: '来源渠道', sourceName: '—', field: '—', semantics: '当前实现暂无正式支撑', isSupported: false }
   ],
   relationships: [
-    { relationName: '申请人', targetObjectId: 'bo_person', targetObjectName: '自然人', sourceField: '公共服务热线工单记录表 · person_id', targetIdentity: '自然人 · 主体标识' },
-    { relationName: '承办部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '公共服务热线工单记录表 · dept_id', targetIdentity: '组织机构 · 机构标识' },
-    { relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '公共服务热线工单记录表 · region_code', targetIdentity: '行政区域 · 区域标识' }
+    { relationshipId: 'rel_st_applicant', relationName: '申请人', targetObjectId: 'bo_person', targetObjectName: '自然人', sourceField: '公共服务热线工单记录表 · person_id', targetIdentity: '自然人 · 主体标识' },
+    { relationshipId: 'rel_st_dept', relationName: '承办部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '公共服务热线工单记录表 · dept_id', targetIdentity: '组织机构 · 机构标识' },
+    { relationshipId: 'rel_st_region', relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '公共服务热线工单记录表 · region_code', targetIdentity: '行政区域 · 区域标识' }
   ],
   relationshipCandidateFields: [
     { field: 'person_id', label: '自然人标识', sourceName: '公共服务热线工单记录表', semantics: '指向自然人主体标识的申请人字段', targetObjectId: 'bo_person', evidence: 'hotline_db.service.pop_service_hotline · person_id' },
@@ -540,16 +542,16 @@ const PERSON_IMPLS: DataImplementation[] = [
     '一行一个自然人',
     '身份标识 · person_id',
     [
-      { attributeName: '身份标识', sourceName: '人口基本信息表', field: 'person_id', semantics: '自然人主体标识', isSupported: true, isIdentifier: true },
-      { attributeName: '姓名', sourceName: '人口基本信息表', field: 'person_name', semantics: '自然人核准姓名', isSupported: true },
-      { attributeName: '出生日期', sourceName: '人口基本信息表', field: 'birth_date', semantics: '自然人出生日期', isSupported: true },
-      { attributeName: '性别', sourceName: '人口基本信息表', field: 'gender_code', semantics: '自然人性别', isSupported: true },
-      { attributeName: '户籍状态', sourceName: '人口基本信息表', field: 'household_status', semantics: '户籍登记状态', isSupported: true },
-      { attributeName: '所属行政区域', sourceName: '人口基本信息表', field: 'region_code', semantics: '统计归属行政区域', isSupported: true }
+      { attributeId: 'attr_person_id', attributeName: '身份标识', sourceName: '人口基本信息表', field: 'person_id', semantics: '自然人主体标识', isSupported: true, isIdentifier: true },
+      { attributeId: 'attr_person_name', attributeName: '姓名', sourceName: '人口基本信息表', field: 'person_name', semantics: '自然人核准姓名', isSupported: true },
+      { attributeId: 'attr_person_birth', attributeName: '出生日期', sourceName: '人口基本信息表', field: 'birth_date', semantics: '自然人出生日期', isSupported: true },
+      { attributeId: 'attr_person_gender', attributeName: '性别', sourceName: '人口基本信息表', field: 'gender_code', semantics: '自然人性别', isSupported: true },
+      { attributeId: 'attr_person_household', attributeName: '户籍状态', sourceName: '人口基本信息表', field: 'household_status', semantics: '户籍登记状态', isSupported: true },
+      { attributeId: 'attr_person_region', attributeName: '所属行政区域', sourceName: '人口基本信息表', field: 'region_code', semantics: '统计归属行政区域', isSupported: true }
     ],
     [
-      { relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '人口基本信息表 · region_code', targetIdentity: '行政区域 · 区域标识' },
-      { relationName: '关联工单', targetObjectId: 'bo_service_ticket', targetObjectName: '服务工单', sourceField: '人口基本信息表 · person_id', targetIdentity: '服务工单 · 申请人标识' }
+      { relationshipId: 'rel_person_region', relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '人口基本信息表 · region_code', targetIdentity: '行政区域 · 区域标识' },
+      { relationshipId: 'rel_person_ticket', relationName: '关联工单', targetObjectId: 'bo_service_ticket', targetObjectName: '服务工单', sourceField: '人口基本信息表 · person_id', targetIdentity: '服务工单 · 申请人标识' }
     ]
   ),
   impl(
@@ -563,12 +565,12 @@ const PERSON_IMPLS: DataImplementation[] = [
     '一行一个自然人',
     '身份标识 · person_id',
     [
-      { attributeName: '身份标识', sourceName: '人口扩展信息', field: 'person_id', semantics: '自然人主体标识', isSupported: true, isIdentifier: true },
-      { attributeName: '常住状态', sourceName: '人口扩展信息', field: 'resident_flag', semantics: '是否常住人口', isSupported: true },
-      { attributeName: '所属行政区域', sourceName: '人口扩展信息', field: 'resident_region_code', semantics: '常住归属行政区域', isSupported: true }
+      { attributeId: 'attr_person_id', attributeName: '身份标识', sourceName: '人口扩展信息', field: 'person_id', semantics: '自然人主体标识', isSupported: true, isIdentifier: true },
+      { attributeId: 'attr_person_resident', attributeName: '常住状态', sourceName: '人口扩展信息', field: 'resident_flag', semantics: '是否常住人口', isSupported: true },
+      { attributeId: 'attr_person_region', attributeName: '所属行政区域', sourceName: '人口扩展信息', field: 'resident_region_code', semantics: '常住归属行政区域', isSupported: true }
     ],
     [
-      { relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '人口扩展信息 · resident_region_code', targetIdentity: '行政区域 · 区域标识' }
+      { relationshipId: 'rel_person_region', relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '人口扩展信息 · resident_region_code', targetIdentity: '行政区域 · 区域标识' }
     ]
   ),
   impl(
@@ -582,7 +584,7 @@ const PERSON_IMPLS: DataImplementation[] = [
     '一行一个区域统计周期',
     '区域 · stat_region_code',
     [
-      { attributeName: '所属行政区域', sourceName: '常住人口统计表', field: 'stat_region_code', semantics: '统计行政区域', isSupported: true }
+      { attributeId: 'attr_person_region', attributeName: '所属行政区域', sourceName: '常住人口统计表', field: 'stat_region_code', semantics: '统计行政区域', isSupported: true }
     ],
     []
   )
@@ -600,14 +602,14 @@ const ORG_IMPLS: DataImplementation[] = [
     '一行一个组织机构',
     '统一社会信用代码 · uscc_code',
     [
-      { attributeName: '统一社会信用代码', sourceName: '组织机构主数据表', field: 'uscc_code', semantics: '组织机构法定标识', isSupported: true, isIdentifier: true },
-      { attributeName: '机构名称', sourceName: '组织机构主数据表', field: 'org_name', semantics: '组织机构法定名称', isSupported: true },
-      { attributeName: '机构级别', sourceName: '组织机构主数据表', field: 'org_level', semantics: '组织机构层级', isSupported: true },
-      { attributeName: '所在区域', sourceName: '组织机构主数据表', field: 'region_code', semantics: '注册或履职行政区域', isSupported: true }
+      { attributeId: 'attr_org_code', attributeName: '统一社会信用代码', sourceName: '组织机构主数据表', field: 'uscc_code', semantics: '组织机构法定标识', isSupported: true, isIdentifier: true },
+      { attributeId: 'attr_org_name', attributeName: '机构名称', sourceName: '组织机构主数据表', field: 'org_name', semantics: '组织机构法定名称', isSupported: true },
+      { attributeId: 'attr_org_level', attributeName: '机构级别', sourceName: '组织机构主数据表', field: 'org_level', semantics: '组织机构层级', isSupported: true },
+      { attributeId: 'attr_org_region', attributeName: '所在区域', sourceName: '组织机构主数据表', field: 'region_code', semantics: '注册或履职行政区域', isSupported: true }
     ],
     [
-      { relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '组织机构主数据表 · region_code', targetIdentity: '行政区域 · 区域标识' },
-      { relationName: '承办工单', targetObjectId: 'bo_service_ticket', targetObjectName: '服务工单', sourceField: '组织机构主数据表 · uscc_code', targetIdentity: '服务工单 · 承办部门标识' }
+      { relationshipId: 'rel_org_region', relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '组织机构主数据表 · region_code', targetIdentity: '行政区域 · 区域标识' },
+      { relationshipId: 'rel_org_ticket', relationName: '承办工单', targetObjectId: 'bo_service_ticket', targetObjectName: '服务工单', sourceField: '组织机构主数据表 · uscc_code', targetIdentity: '服务工单 · 承办部门标识' }
     ]
   ),
   impl(
@@ -621,7 +623,7 @@ const ORG_IMPLS: DataImplementation[] = [
     '一行一个机构事项职责',
     '职责编码 · duty_code',
     [
-      { attributeName: '机构名称', sourceName: '机构职责对照表', field: 'org_name', semantics: '承办机构名称', isSupported: true }
+      { attributeId: 'attr_org_name', attributeName: '机构名称', sourceName: '机构职责对照表', field: 'org_name', semantics: '承办机构名称', isSupported: true }
     ],
     []
   )
@@ -639,13 +641,13 @@ const REGION_IMPLS: DataImplementation[] = [
     '一行一个行政区域',
     '行政区划代码 · region_code',
     [
-      { attributeName: '行政区划代码', sourceName: '行政区划表', field: 'region_code', semantics: '行政区域法定标识', isSupported: true, isIdentifier: true },
-      { attributeName: '区域名称', sourceName: '行政区划表', field: 'region_name', semantics: '行政区域规范全称', isSupported: true },
-      { attributeName: '行政层级', sourceName: '行政区划表', field: 'region_level', semantics: '行政层级划分', isSupported: true }
+      { attributeId: 'attr_region_code', attributeName: '行政区划代码', sourceName: '行政区划表', field: 'region_code', semantics: '行政区域法定标识', isSupported: true, isIdentifier: true },
+      { attributeId: 'attr_region_name', attributeName: '区域名称', sourceName: '行政区划表', field: 'region_name', semantics: '行政区域规范全称', isSupported: true },
+      { attributeId: 'attr_region_level', attributeName: '行政层级', sourceName: '行政区划表', field: 'region_level', semantics: '行政层级划分', isSupported: true }
     ],
     [
-      { relationName: '覆盖人口', targetObjectId: 'bo_person', targetObjectName: '自然人', sourceField: '行政区划表 · region_code', targetIdentity: '自然人 · 所属区域' },
-      { relationName: '包含机构', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '行政区划表 · region_code', targetIdentity: '组织机构 · 所在区域' }
+      { relationshipId: 'rel_region_person', relationName: '覆盖人口', targetObjectId: 'bo_person', targetObjectName: '自然人', sourceField: '行政区划表 · region_code', targetIdentity: '自然人 · 所属区域' },
+      { relationshipId: 'rel_region_org', relationName: '包含机构', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '行政区划表 · region_code', targetIdentity: '组织机构 · 所在区域' }
     ]
   ),
   impl(
@@ -659,7 +661,7 @@ const REGION_IMPLS: DataImplementation[] = [
     '一行一个区域统计周期',
     '区域 · stat_region_code',
     [
-      { attributeName: '常住人口总数', sourceName: '区域人口统计表', field: 'resident_total', semantics: '常住人口总量', isSupported: true }
+      { attributeId: 'attr_region_population', attributeName: '常住人口总数', sourceName: '区域人口统计表', field: 'resident_total', semantics: '常住人口总量', isSupported: true }
     ],
     []
   )
@@ -677,14 +679,14 @@ const AGENT_IMPLS: DataImplementation[] = [
     '一行一名坐席',
     '坐席工号 · agent_no',
     [
-      { attributeName: '坐席工号', sourceName: '客服坐席信息表', field: 'agent_no', semantics: '坐席主体标识', isSupported: true, isIdentifier: true },
-      { attributeName: '坐席姓名', sourceName: '客服坐席信息表', field: 'agent_name', semantics: '坐席登记姓名', isSupported: true },
-      { attributeName: '所属部门', sourceName: '客服坐席信息表', field: 'dept_id', semantics: '坐席所属部门', isSupported: true },
-      { attributeName: '技能组', sourceName: '客服坐席信息表', field: 'skill_group', semantics: '坐席技能分组', isSupported: true }
+      { attributeId: 'attr_agent_no', attributeName: '坐席工号', sourceName: '客服坐席信息表', field: 'agent_no', semantics: '坐席主体标识', isSupported: true, isIdentifier: true },
+      { attributeId: 'attr_agent_name', attributeName: '坐席姓名', sourceName: '客服坐席信息表', field: 'agent_name', semantics: '坐席登记姓名', isSupported: true },
+      { attributeId: 'attr_agent_dept', attributeName: '所属部门', sourceName: '客服坐席信息表', field: 'dept_id', semantics: '坐席所属部门', isSupported: true },
+      { attributeId: 'attr_agent_skill', attributeName: '技能组', sourceName: '客服坐席信息表', field: 'skill_group', semantics: '坐席技能分组', isSupported: true }
     ],
     [
-      { relationName: '所属部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '客服坐席信息表 · dept_id', targetIdentity: '组织机构 · 机构标识' },
-      { relationName: '受理工单', targetObjectId: 'bo_service_ticket', targetObjectName: '服务工单', sourceField: '客服坐席信息表 · agent_no', targetIdentity: '服务工单 · 受理坐席' }
+      { relationshipId: 'rel_agent_dept', relationName: '所属部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '客服坐席信息表 · dept_id', targetIdentity: '组织机构 · 机构标识' },
+      { relationshipId: 'rel_agent_ticket', relationName: '受理工单', targetObjectId: 'bo_service_ticket', targetObjectName: '服务工单', sourceField: '客服坐席信息表 · agent_no', targetIdentity: '服务工单 · 受理坐席' }
     ]
   ),
   impl(
@@ -698,7 +700,7 @@ const AGENT_IMPLS: DataImplementation[] = [
     '一行一次排班',
     '排班编码 · schedule_id',
     [
-      { attributeName: '坐席工号', sourceName: '坐席排班记录表', field: 'agent_no', semantics: '坐席主体标识', isSupported: true }
+      { attributeId: 'attr_agent_no', attributeName: '坐席工号', sourceName: '坐席排班记录表', field: 'agent_no', semantics: '坐席主体标识', isSupported: true }
     ],
     []
   )
@@ -716,14 +718,14 @@ const ITEM_IMPLS: DataImplementation[] = [
     '一行一个服务事项',
     '事项编码 · item_code',
     [
-      { attributeName: '事项编码', sourceName: '服务事项主数据表', field: 'item_code', semantics: '服务事项标识', isSupported: true, isIdentifier: true },
-      { attributeName: '事项名称', sourceName: '服务事项主数据表', field: 'item_name', semantics: '服务事项法定名称', isSupported: true },
-      { attributeName: '事项类型', sourceName: '服务事项主数据表', field: 'item_type', semantics: '事项分类', isSupported: true },
-      { attributeName: '实施部门', sourceName: '服务事项主数据表', field: 'dept_id', semantics: '实施部门标识', isSupported: true }
+      { attributeId: 'attr_item_code', attributeName: '事项编码', sourceName: '服务事项主数据表', field: 'item_code', semantics: '服务事项标识', isSupported: true, isIdentifier: true },
+      { attributeId: 'attr_item_name', attributeName: '事项名称', sourceName: '服务事项主数据表', field: 'item_name', semantics: '服务事项法定名称', isSupported: true },
+      { attributeId: 'attr_item_type', attributeName: '事项类型', sourceName: '服务事项主数据表', field: 'item_type', semantics: '事项分类', isSupported: true },
+      { attributeId: 'attr_item_dept', attributeName: '实施部门', sourceName: '服务事项主数据表', field: 'dept_id', semantics: '实施部门标识', isSupported: true }
     ],
     [
-      { relationName: '承办部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '服务事项主数据表 · dept_id', targetIdentity: '组织机构 · 机构标识' },
-      { relationName: '形成工单', targetObjectId: 'bo_service_ticket', targetObjectName: '服务工单', sourceField: '服务事项主数据表 · item_code', targetIdentity: '服务工单 · 关联事项' }
+      { relationshipId: 'rel_item_dept', relationName: '承办部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '服务事项主数据表 · dept_id', targetIdentity: '组织机构 · 机构标识' },
+      { relationshipId: 'rel_item_ticket', relationName: '形成工单', targetObjectId: 'bo_service_ticket', targetObjectName: '服务工单', sourceField: '服务事项主数据表 · item_code', targetIdentity: '服务工单 · 关联事项' }
     ]
   ),
   impl(
@@ -737,7 +739,7 @@ const ITEM_IMPLS: DataImplementation[] = [
     '一行一个事项指南',
     '指南编码 · guide_id',
     [
-      { attributeName: '事项编码', sourceName: '事项办理指南表', field: 'item_code', semantics: '服务事项标识', isSupported: true }
+      { attributeId: 'attr_item_code', attributeName: '事项编码', sourceName: '事项办理指南表', field: 'item_code', semantics: '服务事项标识', isSupported: true }
     ],
     []
   ),
@@ -752,7 +754,7 @@ const ITEM_IMPLS: DataImplementation[] = [
     '一行一项材料',
     '材料编码 · material_id',
     [
-      { attributeName: '事项编码', sourceName: '事项材料清单表', field: 'item_code', semantics: '服务事项标识', isSupported: true }
+      { attributeId: 'attr_item_code', attributeName: '事项编码', sourceName: '事项材料清单表', field: 'item_code', semantics: '服务事项标识', isSupported: true }
     ],
     []
   )
@@ -770,9 +772,9 @@ const ORDER_IMPL: DataImplementation[] = [
     '一行一笔订单',
     '订单号 · order_no',
     [
-      { attributeName: '订单号', sourceName: '订单流水表', field: 'order_no', semantics: '订单标识', isSupported: true, isIdentifier: true },
-      { attributeName: '订单金额', sourceName: '订单流水表', field: 'order_amount', semantics: '成交金额', isSupported: true },
-      { attributeName: '下单时间', sourceName: '订单流水表', field: 'order_time', semantics: '订单形成时间', isSupported: true }
+      { attributeId: 'attr_order_no', attributeName: '订单号', sourceName: '订单流水表', field: 'order_no', semantics: '订单标识', isSupported: true, isIdentifier: true },
+      { attributeId: 'attr_order_amount', attributeName: '订单金额', sourceName: '订单流水表', field: 'order_amount', semantics: '成交金额', isSupported: true },
+      { attributeId: 'attr_order_time', attributeName: '下单时间', sourceName: '订单流水表', field: 'order_time', semantics: '订单形成时间', isSupported: true }
     ],
     []
   )
@@ -994,7 +996,7 @@ export function buildSeedState(): BusinessObjectStoreState {
   const revisions = structuredClone(SEED_REVISIONS);
   const drafts = structuredClone(SEED_DRAFTS);
   return {
-    version: 3,
+    version: 4,
     objects: Object.fromEntries(objects.map((object) => [object.id, object])),
     implementations: Object.fromEntries(implementations.map((implementation) => [implementation.id, implementation])),
     bindings: Object.fromEntries(bindings.map((bindingItem) => [bindingItem.id, bindingItem])),

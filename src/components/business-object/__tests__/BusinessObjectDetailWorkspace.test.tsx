@@ -74,7 +74,7 @@ describe('BusinessObjectDetailWorkspace（PR-3：Detail 由领域仓库驱动）
     groundingService.applyCorrection({
       bindingId: binding!.id,
       type: 'ATTRIBUTE',
-      targetName: '办结时间',
+      targetId: 'attr_close_time',
       fromField: 'finished_time',
       toField: 'close_time',
       reason: '数据语义修订：finished_time 实际表示最后更新时间',

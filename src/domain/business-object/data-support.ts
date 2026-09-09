@@ -15,8 +15,8 @@ import { getState } from './registry';
 import { mutate, nextId, nowIso } from './store';
 import { BindingRole, BindingStatus, DataAssetReference, DataImplementation, DataSupportBinding } from './types';
 import { dataAssetEvidence, decisionEvidence, semanticAssetEvidence } from './evidence';
-import { recordDataSupportRevision } from './data-support-revision';
-import { objectResolutionContexts } from './task-context';
+import { recordDataSupportRevisionInDraft } from './data-support-revision';
+import { completeTaskInDraft, objectResolutionContexts } from './task-context';
 
 /**
  * 当前绑定的唯一判定口径（Inv05）：EFFECTIVE 与 NEEDS_REVALIDATION 都是当前关系。
@@ -150,7 +150,7 @@ export const dataSupportService = {
         )
       ];
       bumpBindingRevision(target);
-      recordDataSupportRevision({
+      recordDataSupportRevisionInDraft(draft, {
         businessObjectId: objectId,
         bindingId,
         action: 'TOP_DOWN_CONFIRM',
@@ -174,7 +174,7 @@ export const dataSupportService = {
    * 4. 对象尚无当前实现 → PRIMARY，否则 SECONDARY；
    * 5. 新绑定直接 EFFECTIVE（不经过 CANDIDATE）；
    * 6. 记录 BOTTOM_UP_ALIGN 数据支撑修订（不产生业务对象修订；semanticSource 仅进证据）；
-   * 7. 任务上下文（若有）置为 COMPLETED。
+   * 7. 任务上下文（若有）在同一事务内置为 COMPLETED（§11：确认对齐与任务闭环一次写入）。
    */
   confirmBottomUpAlignment(input: {
     taskId?: string;
@@ -262,7 +262,7 @@ export const dataSupportService = {
             : [])
         ];
         bumpBindingRevision(promoted);
-        recordDataSupportRevision({
+        recordDataSupportRevisionInDraft(draft, {
           businessObjectId: input.businessObjectId,
           bindingId: promoted.id,
           action: 'BOTTOM_UP_ALIGN',
@@ -272,6 +272,8 @@ export const dataSupportService = {
           reason: `自下而上对齐：「${input.dataAsset.name}」由候选提升并生效为「${draft.objects[input.businessObjectId].name}」的数据支撑`,
           changedBy: input.changedBy ?? '业务对象对齐工作台'
         });
+        // 任务闭环折入同一事务（§11）：确认对齐与完成任务一次写入
+        if (input.taskId) completeTaskInDraft(draft, input.taskId);
         return { ok: true as const, outcome: 'ALIGNED' as const, binding: promoted, implementation, role };
       }
 
@@ -304,7 +306,7 @@ export const dataSupportService = {
         confirmedAt: nowIso()
       };
       draft.bindings[binding.id] = binding;
-      recordDataSupportRevision({
+      recordDataSupportRevisionInDraft(draft, {
         businessObjectId: input.businessObjectId,
         bindingId: binding.id,
         action: 'BOTTOM_UP_ALIGN',
@@ -313,10 +315,11 @@ export const dataSupportService = {
         reason: `自下而上对齐：「${input.dataAsset.name}」直接生效为「${draft.objects[input.businessObjectId].name}」的数据支撑`,
         changedBy: input.changedBy ?? '业务对象对齐工作台'
       });
+      // 任务闭环折入同一事务（§11）：确认对齐与完成任务一次写入
+      if (input.taskId) completeTaskInDraft(draft, input.taskId);
       return { ok: true as const, outcome: 'ALIGNED' as const, binding, implementation, role };
     });
 
-    if (input.taskId) objectResolutionContexts.complete(input.taskId);
     return result;
   },
 
@@ -337,7 +340,7 @@ export const dataSupportService = {
         affectedTargets: input.affectedTargets,
         raisedAt: nowIso()
       };
-      recordDataSupportRevision({
+      recordDataSupportRevisionInDraft(draft, {
         businessObjectId: target.businessObjectId,
         bindingId,
         action: 'MARK_REVALIDATION',
@@ -361,7 +364,7 @@ export const dataSupportService = {
       target.confirmedAt = nowIso();
       target.revalidation = undefined;
       bumpBindingRevision(target);
-      recordDataSupportRevision({
+      recordDataSupportRevisionInDraft(draft, {
         businessObjectId: target.businessObjectId,
         bindingId,
         action: 'REVALIDATION_KEEP',
@@ -398,7 +401,7 @@ export const dataSupportService = {
       target.confirmedAt = nowIso();
       target.revalidation = undefined;
       bumpBindingRevision(target);
-      recordDataSupportRevision({
+      recordDataSupportRevisionInDraft(draft, {
         businessObjectId: target.businessObjectId,
         bindingId,
         action: 'REBIND',
@@ -431,7 +434,7 @@ export const dataSupportService = {
       target.status = 'RETIRED';
       target.revalidation = undefined;
       bumpBindingRevision(target);
-      recordDataSupportRevision({
+      recordDataSupportRevisionInDraft(draft, {
         businessObjectId: target.businessObjectId,
         bindingId,
         action: 'RETIRE',
@@ -470,7 +473,7 @@ export const dataSupportService = {
       }
       target.role = 'PRIMARY';
       bumpBindingRevision(target);
-      recordDataSupportRevision({
+      recordDataSupportRevisionInDraft(draft, {
         businessObjectId: target.businessObjectId,
         bindingId,
         action: 'SET_PRIMARY',

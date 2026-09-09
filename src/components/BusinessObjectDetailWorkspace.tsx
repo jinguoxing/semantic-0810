@@ -89,6 +89,8 @@ interface RelatedMetricItem {
 export type DataImplementationId = string;
 
 export interface DataImplementationAttributeLanding {
+  /** 落地的业务属性 ID：Grounding 修正按此识别目标（§9），缺失时不可发起修正 */
+  attributeId?: string;
   name: string;
   source: string;
   isExtension?: boolean;
@@ -105,7 +107,10 @@ export interface DataImplementationRelationshipLanding {
   sourceObject: string;
   relationName: string;
   targetObject: string;
+  /** 关系目标对象 ID（身份兼容校验用，注意与落地业务关系 ID relationshipId 区分） */
   targetId: string;
+  /** 落地的业务关系 ID：Grounding 修正按此识别目标（§9），缺失时不可发起修正 */
+  relationshipId?: string;
   sourceField: string;
   targetIdentity: string;
 }
@@ -251,14 +256,16 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
       scopeRelationText: impl.scopeRelationText,
       scopeRelationNote: impl.scopeRelationNote,
       attributes: impl.attributes.map((attribute) => {
+        // 修正记录按业务属性 ID 匹配（§9：禁止中文名称识别）
         const correctionRevisions = groundingRevisions.filter(
           (revision) =>
             revision.type === 'ATTRIBUTE' &&
-            revision.targetName === attribute.attributeName &&
+            revision.targetId === attribute.attributeId &&
             revision.bindingId === binding?.id
         );
         const activeCorrection = correctionRevisions.find((revision) => revision.status === 'ACTIVE');
         return {
+          ...(attribute.attributeId ? { attributeId: attribute.attributeId } : {}),
           name: attribute.attributeName,
           source: attribute.sourceName,
           ...(attribute.isExtension ? { isExtension: true } : {}),
@@ -283,6 +290,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
         relationName: relationship.relationName,
         targetObject: relationship.targetObjectName,
         targetId: relationship.targetObjectId,
+        ...(relationship.relationshipId ? { relationshipId: relationship.relationshipId } : {}),
         sourceField: relationship.sourceField,
         targetIdentity: relationship.targetIdentity
       })),
@@ -358,15 +366,20 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
     const binding = bindings.find((item) => item.implementationId === currentImpl.id);
     if (!binding) return;
 
-    // 关系落地修正：type 显式声明 RELATIONSHIP，targetObjectId 参与身份兼容校验（Inv08）
+    // 关系落地修正：type 显式声明 RELATIONSHIP，目标按业务关系 ID 识别（§9），
+    // targetObjectId 参与身份兼容校验（Inv08）
     if (selectedCorrectionRel) {
+      if (!selectedCorrectionRel.relationshipId) {
+        addToast?.('error', '修正未生效', GROUNDING_ERROR_LABELS.TARGET_NOT_FOUND);
+        return;
+      }
       const fromField =
         selectedCorrectionRel.sourceField.split('·').pop()?.trim() ?? selectedCorrectionRel.sourceField;
 
       const result = groundingService.applyCorrection({
         bindingId: binding.id,
         type: 'RELATIONSHIP',
-        targetName: selectedCorrectionRel.relationName,
+        targetId: selectedCorrectionRel.relationshipId,
         targetObjectId: selectedCorrectionRel.targetId,
         fromField,
         toField: selectedField.field,
@@ -390,11 +403,15 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
     }
 
     if (!selectedCorrectionAttr) return;
+    if (!selectedCorrectionAttr.attributeId) {
+      addToast?.('error', '修正未生效', GROUNDING_ERROR_LABELS.TARGET_NOT_FOUND);
+      return;
+    }
 
     const result = groundingService.applyCorrection({
       bindingId: binding.id,
       type: 'ATTRIBUTE',
-      targetName: selectedCorrectionAttr.name,
+      targetId: selectedCorrectionAttr.attributeId,
       fromField: selectedCorrectionAttr.field,
       toField: selectedField.field,
       reason: selectedCorrectionAttr.correctionReason ?? `本地落地修正：${selectedCorrectionAttr.name}`,
@@ -958,7 +975,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                 </h3>
 
                 <p className="text-xs text-[#475569] leading-relaxed">
-                  明确热线、线上、窗口等公共服务渠道，并加入别名“群众诉求工单”和关键属性“来源渠道”。
+                  {objectRevisions[0]?.summary ?? '当前定义来自初始登记。'}
                 </p>
 
                 <div className="pt-1 border-t border-[#F1F5F9]">

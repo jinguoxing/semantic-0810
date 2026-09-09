@@ -87,7 +87,7 @@ describe('business object lifecycle invariants (V2.2)', () => {
     const attribute = groundingService.applyCorrection({
       bindingId: 'bind_st_curr_view',
       type: 'ATTRIBUTE',
-      targetName: '办结时间',
+      targetId: 'attr_close_time',
       fromField: 'finished_time',
       toField: 'close_time',
       reason: '语义修订：finished_time 表示最后更新时间',
@@ -98,7 +98,7 @@ describe('business object lifecycle invariants (V2.2)', () => {
     const relationship = groundingService.applyCorrection({
       bindingId: 'bind_st_curr_view',
       type: 'RELATIONSHIP',
-      targetName: '申请人',
+      targetId: 'rel_st_applicant',
       targetObjectId: 'bo_person',
       fromField: 'applicant_id',
       toField: 'person_id',
@@ -109,6 +109,11 @@ describe('business object lifecycle invariants (V2.2)', () => {
 
     const groundingRevisions = groundingService.listByObject('bo_service_ticket');
     expect(groundingRevisions.map((revision) => revision.type).sort()).toEqual(['ATTRIBUTE', 'RELATIONSHIP']);
+    // 修正目标一律以 targetKey 识别（§9），中文名只作展示
+    expect(groundingRevisions.map((revision) => revision.targetKey).sort()).toEqual([
+      'ATTRIBUTE:attr_close_time',
+      'RELATIONSHIP:rel_st_applicant'
+    ]);
     // Grounding 修正不产生业务对象修订，也不产生数据支撑修订
     expect(businessObjectRepository.get('bo_service_ticket')?.currentRevision).toBe('R1');
     expect(listRevisions('bo_service_ticket').map((revision) => revision.revision)).toEqual(['R1']);
@@ -321,7 +326,7 @@ describe('business object lifecycle invariants (V2.2)', () => {
     const correctionBase = {
       bindingId: 'bind_st_curr_view',
       type: 'RELATIONSHIP' as const,
-      targetName: '申请人',
+      targetId: 'rel_st_applicant',
       fromField: 'applicant_id',
       reason: '主身份字段口径不一致',
       evidence: []
@@ -341,7 +346,7 @@ describe('business object lifecycle invariants (V2.2)', () => {
       expect(selfField.error).toBe('CANDIDATE_NOT_ALLOWED');
     }
 
-    // 缺失 targetObjectId（禁止用 targetName 字符串判断类型/目标）
+    // 缺失 targetObjectId（禁止用中文名称判断类型/目标）
     const noTarget = groundingService.applyCorrection({ ...correctionBase, toField: 'person_id' });
     expect(noTarget.ok).toBe(false);
     if (noTarget.ok === false) {

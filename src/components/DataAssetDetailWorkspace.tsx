@@ -40,6 +40,10 @@ import { FindDataEntryContext } from './find_data/model/FindDataTask';
 
 export interface DataAssetDetailWorkspaceProps {
   assetId?: string;
+  /** 页面所属操作面（§12）：MARKETPLACE = 消费面（默认），GOVERNANCE = 治理面 */
+  surface?: 'MARKETPLACE' | 'GOVERNANCE';
+  /** 资产名称（治理面从统一目录带入，禁止用 ID 冒充名称或反向硬编码） */
+  assetName?: string;
   fromGoalSearch?: boolean;
   goalQuery?: string;
   onBackToResources?: () => void;
@@ -47,7 +51,7 @@ export interface DataAssetDetailWorkspaceProps {
   onNavigateToMyRequests?: () => void;
   onNavigateToMetricDetail?: (metricId: string) => void;
   onNavigateToBusinessObject?: (objectId: string) => void;
-  /** Bottom-up 对齐入口：将该数据资产对齐到正式业务对象 */
+  /** Bottom-up 对齐入口：将该数据资产对齐到正式业务对象（仅 GOVERNANCE 治理面展示） */
   onAlignToBusinessObject?: (asset: { id: string; name: string }) => void;
   onNavigateToApiDetail?: (apiId: string) => void;
   onEnterAnalysis?: (entry: FindDataEntryContext) => void;
@@ -56,10 +60,10 @@ export interface DataAssetDetailWorkspaceProps {
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
-function resolveAssetIdentity(assetId?: string): { id: string; label: string } {
+function resolveAssetIdentity(assetId?: string, assetName?: string): { id: string; label: string } {
   const id = assetId?.trim();
-  if (id === 'res-02') return { id, label: '人口基本信息视图' };
-  return { id: id || 'unknown', label: id || '当前数据资产' };
+  // 名称只从入参（统一目录 / 调用方）传入；禁止在页面内按 ID 硬编码展示名称（§12）
+  return { id: id || 'unknown', label: assetName?.trim() || id || '当前数据资产' };
 }
 
 interface FullFieldItem {
@@ -205,6 +209,8 @@ const ALL_ASSET_FIELDS: FullFieldItem[] = [
 
 export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> = ({
   assetId,
+  surface = 'MARKETPLACE',
+  assetName,
   fromGoalSearch = false,
   goalQuery = '分析各街镇老龄化情况',
   onBackToResources,
@@ -219,7 +225,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
   onExploreRelatedData,
   addToast
 }) => {
-  const assetIdentity = resolveAssetIdentity(assetId);
+  const assetIdentity = resolveAssetIdentity(assetId, assetName);
   // Navigation inside Marketplace Sidebar
   const [activeSideNav, setActiveSideNav] = useState<'discovery' | 'resources' | 'my_requests'>('resources');
 
@@ -317,25 +323,27 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
             <span>资源</span>
           </button>
 
-          {/* 3. 我的申请 */}
-          <button
-            onClick={() => {
-              if (onNavigateToMyRequests) {
-                onNavigateToMyRequests();
-              } else {
-                setActiveSideNav('my_requests');
-                addToast?.('info', '我的申请', '查看已申请的数据访问权限与 API 调用授权记录');
-              }
-            }}
-            className={`w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
-              activeSideNav === 'my_requests'
-                ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
-                : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
-            }`}
-          >
-            <FileCheck className="w-4 h-4 text-[#64748B]" />
-            <span>我的申请</span>
-          </button>
+          {/* 3. 我的申请（仅消费面 MARKETPLACE，§12：治理面不显示我的申请） */}
+          {surface === 'MARKETPLACE' && (
+            <button
+              onClick={() => {
+                if (onNavigateToMyRequests) {
+                  onNavigateToMyRequests();
+                } else {
+                  setActiveSideNav('my_requests');
+                  addToast?.('info', '我的申请', '查看已申请的数据访问权限与 API 调用授权记录');
+                }
+              }}
+              className={`w-full px-3 py-2 rounded-md flex items-center space-x-2.5 transition-all text-left cursor-pointer ${
+                activeSideNav === 'my_requests'
+                  ? 'bg-[#EFF6FF] text-[#2563EB] font-bold'
+                  : 'text-[#475569] hover:bg-[#F8FAFC] hover:text-[#0F172A]'
+              }`}
+            >
+              <FileCheck className="w-4 h-4 text-[#64748B]" />
+              <span>我的申请</span>
+            </button>
+          )}
         </nav>
 
         {/* Bottom Fixed Lightweight AI Partner Card */}
@@ -490,24 +498,27 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
                 <span className="ml-1">人口结构分析 · 老龄化分析 · 区域人口统计</span>
               </div>
 
-              {/* Bottom-up 对齐入口：登记 Resolution 上下文后进入业务对象对齐工作台 */}
-              <div className="pt-1.5">
-                <button
-                  id="btn-align-business-object"
-                  onClick={() => {
-                    if (onAlignToBusinessObject) {
-                      onAlignToBusinessObject({ id: assetIdentity.id, name: assetIdentity.label });
-                    } else {
-                      addToast?.('info', '对齐业务对象', `已发起「${assetIdentity.label}」的业务对象对齐`);
-                    }
-                  }}
-                  className="px-3.5 py-1.5 rounded bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] border border-[#BFDBFE] text-xs font-medium transition-colors cursor-pointer inline-flex items-center space-x-1.5"
-                  title="将该数据资产对齐到企业正式业务对象，形成数据支撑"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>对齐业务对象</span>
-                </button>
-              </div>
+              {/* Bottom-up 对齐入口（仅治理面 GOVERNANCE，§12：消费面不显示治理操作）：
+                  登记 Resolution 上下文后进入业务对象对齐工作台 */}
+              {surface === 'GOVERNANCE' && (
+                <div className="pt-1.5">
+                  <button
+                    id="btn-align-business-object"
+                    onClick={() => {
+                      if (onAlignToBusinessObject) {
+                        onAlignToBusinessObject({ id: assetIdentity.id, name: assetIdentity.label });
+                      } else {
+                        addToast?.('info', '对齐业务对象', `已发起「${assetIdentity.label}」的业务对象对齐`);
+                      }
+                    }}
+                    className="px-3.5 py-1.5 rounded bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] border border-[#BFDBFE] text-xs font-medium transition-colors cursor-pointer inline-flex items-center space-x-1.5"
+                    title="将该数据资产对齐到企业正式业务对象，形成数据支撑"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>对齐业务对象</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* ======================================================= */}
@@ -1029,9 +1040,9 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
 
         </div>
 
-        {/* 4. 主操作按钮区 */}
+        {/* 4. 主操作按钮区（进入分析 / 用于问数 仅消费面 MARKETPLACE，§12） */}
         <div className="space-y-3 border-t border-[#EEF2F6] pt-5">
-          {accessState === 'granted' ? (
+          {surface === 'MARKETPLACE' && accessState === 'granted' ? (
             <>
               {/* Primary: 进入分析 */}
               <button

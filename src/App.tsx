@@ -84,7 +84,7 @@ export default function App() {
   const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
   const [authoringInitialDraft, setAuthoringInitialDraft] = useState<MetricDraftInitialData | undefined>(undefined);
   const [resourceSearchQuery, setResourceSearchQuery] = useState<string>('');
-  const [assetDetailContext, setAssetDetailContext] = useState<{ assetId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ assetId: 'res-02', fromGoalSearch: false, goalQuery: '' });
+  const [assetDetailContext, setAssetDetailContext] = useState<{ assetId?: string; surface?: 'MARKETPLACE' | 'GOVERNANCE'; assetName?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ assetId: 'res-02', surface: 'MARKETPLACE', fromGoalSearch: false, goalQuery: '' });
   const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'met_001', fromGoalSearch: false, goalQuery: '' });
   const [selectedChangeMetricId, setSelectedChangeMetricId] = useState<string>('met_001');
   const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; initialTab?: 'business' | 'data_support'; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_service_ticket', initialTab: 'data_support', fromGoalSearch: false, goalQuery: '' });
@@ -152,6 +152,20 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  /** 治理面打开数据资产详情（§12）：资产身份与名称经统一目录解析，禁止在页面按 ID 硬编码名称 */
+  const openGovernanceAssetDetail = (rawAssetId?: string, fallbackName?: string) => {
+    const { reference } = resolveCanonicalDataAsset({ id: rawAssetId?.trim() || 'res-02', name: fallbackName });
+    setAssetDetailContext({
+      assetId: reference.id,
+      surface: 'GOVERNANCE',
+      assetName: reference.name,
+      fromGoalSearch: false,
+      goalQuery: ''
+    });
+    setCurrentNav('asset_detail');
+    setViewTab('asset_detail');
+  };
+
   // =========================================================
   // Bottom-up Resolution 闭环（PR-4）
   // 入口登记 ObjectResolutionContext，完成后按 returnRoute + dataAsset.id + taskId 返回原上下文。
@@ -192,7 +206,14 @@ export default function App() {
   ) => {
     setResolutionTaskId(null);
     if (context?.returnRoute === 'asset_detail') {
-      setAssetDetailContext({ assetId: context.dataAsset.id, fromGoalSearch: false, goalQuery: '' });
+      // 对齐入口只从治理面发起（§12）：返回时保持治理面操作上下文与目录名称
+      setAssetDetailContext({
+        assetId: context.dataAsset.id,
+        surface: 'GOVERNANCE',
+        assetName: context.dataAsset.name,
+        fromGoalSearch: false,
+        goalQuery: ''
+      });
       setCurrentNav('asset_detail');
       setViewTab('asset_detail');
     } else if (context?.returnRoute === 'semantics_detail') {
@@ -854,10 +875,17 @@ export default function App() {
             addToast('info', '业务对象详情', '已载入「自然人」正式业务对象详情');
           }}
           onNavigateToDataAssetDetail={(assetId, fromGoalSearch, goalQuery) => {
-            setAssetDetailContext({ assetId, fromGoalSearch, goalQuery });
+            const { reference } = resolveCanonicalDataAsset({ id: assetId?.trim() || 'res-02' });
+            setAssetDetailContext({
+              assetId: reference.id,
+              surface: 'GOVERNANCE',
+              assetName: reference.name,
+              fromGoalSearch,
+              goalQuery
+            });
             setCurrentNav('asset_detail');
             setViewTab('asset_detail');
-            addToast('info', '数据资产详情', '已载入「人口基本信息视图」正式资产详情');
+            addToast('info', '数据资产详情', `已载入「${reference.name}」正式资产详情（治理面）`);
           }}
           onNavigateToMetricDetail={(metricId, fromGoalSearch, goalQuery) => {
             setMetricDetailContext({ metricId: resolveMetricDetailId(metricId), fromGoalSearch, goalQuery });
@@ -1061,7 +1089,7 @@ export default function App() {
             addToast('info', '我的申请', '查看已申请的数据访问需求与任务就绪状态');
           }}
           onNavigateToDataAssetDetail={(assetId) => {
-            setAssetDetailContext({ assetId, fromGoalSearch: false, goalQuery: '' });
+            setAssetDetailContext({ assetId, surface: 'MARKETPLACE', fromGoalSearch: false, goalQuery: '' });
             setCurrentNav('asset_detail');
             setViewTab('asset_detail');
             addToast('info', '数据资产详情', '已载入「人口基本信息视图」正式资产详情');
@@ -1195,7 +1223,7 @@ export default function App() {
             addToast('info', '我的申请', '查看已申请的数据访问需求与任务就绪状态');
           }}
           onNavigateToDataAssetDetail={(assetId) => {
-            setAssetDetailContext({ assetId, fromGoalSearch: false, goalQuery: '' });
+            setAssetDetailContext({ assetId, surface: 'MARKETPLACE', fromGoalSearch: false, goalQuery: '' });
             setCurrentNav('asset_detail');
             setViewTab('asset_detail');
             addToast('info', '数据资产详情', '已载入底层数据资产详情');
@@ -1321,7 +1349,7 @@ export default function App() {
             }
           }}
           onNavigateToDataAssetDetail={(assetId) => {
-            setAssetDetailContext({ assetId: assetId || 'res-02', fromGoalSearch: false, goalQuery: '' });
+            setAssetDetailContext({ assetId: assetId || 'res-02', surface: 'MARKETPLACE', fromGoalSearch: false, goalQuery: '' });
             setCurrentNav('asset_detail');
             setViewTab('asset_detail');
             addToast('info', '数据资产详情', '已载入数据资产详情');
@@ -1669,6 +1697,8 @@ export default function App() {
       ) : currentNav === 'asset_detail' || viewTab === 'asset_detail' ? (
         <DataAssetDetailWorkspace
           assetId={assetDetailContext.assetId}
+          surface={assetDetailContext.surface ?? 'MARKETPLACE'}
+          assetName={assetDetailContext.assetName}
           fromGoalSearch={assetDetailContext.fromGoalSearch}
           goalQuery={assetDetailContext.goalQuery}
           onBackToResources={() => {
@@ -1757,8 +1787,7 @@ export default function App() {
             addToast('info', '切换工作台', `已载入 ${tableName} 表语义理解与决策工作空间`);
           }}
           onNavigateToAssetDetail={() => {
-            setCurrentNav('asset_detail');
-            setViewTab('asset_detail');
+            openGovernanceAssetDetail();
             addToast('info', '查看 资产详情', '已载入数据资产元数据与依赖视图');
           }}
           onNavigateToSemanticDetail={() => {
@@ -1776,8 +1805,7 @@ export default function App() {
             addToast('info', '切换至 表语义', '已载入表语义理解与关系架构视图');
           }}
           onNavigateToAssetDetail={() => {
-            setCurrentNav('asset_detail');
-            setViewTab('asset_detail');
+            openGovernanceAssetDetail();
             addToast('info', '查看 资产详情', '已载入数据资产元数据与依赖视图');
           }}
         />
@@ -1789,8 +1817,7 @@ export default function App() {
             addToast('info', '切换至 字段语义', '已载入字段语义理解与实体映射视图');
           }}
           onNavigateToAssetDetail={() => {
-            setCurrentNav('asset_detail');
-            setViewTab('asset_detail');
+            openGovernanceAssetDetail();
             addToast('info', '返回 资产详情', '已载入公共服务热线工单记录表元数据与依赖视图');
           }}
         />
@@ -1805,6 +1832,11 @@ export default function App() {
             setCurrentNav('business_objects');
             setViewTab('business_objects');
             addToast('info', '切换工作台', '已跳转至业务对象目录');
+          }}
+          /** 治理面数据资产详情入口（§12）：从目录进入的资产详情展示对齐业务对象等治理操作 */
+          onOpenAssetDetail={(asset) => {
+            openGovernanceAssetDetail(asset.id, asset.name);
+            addToast('info', '数据资产详情', `已载入「${asset.name}」资产详情（治理面）`);
           }}
           onViewLineage={() => setIsLineageModalOpen(true)}
           addToast={addToast}

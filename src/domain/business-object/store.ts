@@ -13,7 +13,12 @@
  * - taskContexts.sourceId/sourceName/sourceRevision → dataAsset（规范引用）+ semanticSource（仅语义来源）
  * - implementations.assetId 经统一目录解析（如 res-02 → asset-1）
  * - 无法解析的旧来源保留为兼容引用并标记 migrationWarning（只读，不再产生正式绑定）
- * 读取到 V1 / V2 状态时执行结构化迁移链并回写为 V3，绝不因 Schema 升级清空用户状态。
+ *
+ * Schema V4（Grounding 修正目标 ID 化，§9）：
+ * - AttributeGrounding / RelationshipGrounding 增加 attributeId / relationshipId
+ * - GroundingRevision 增加 targetId / targetKey（同键至多一条 ACTIVE）
+ * - 旧修订迁移时补 legacy 目标键并归档为 HISTORY，绝不丢弃
+ * 读取到 V1 / V2 / V3 状态时执行结构化迁移链并回写为 V4，绝不因 Schema 升级清空用户状态。
  */
 import {
   BusinessObject,
@@ -30,10 +35,10 @@ import { resolveCanonicalDataAsset, resolveCanonicalDataAssetId } from './asset-
 
 const STORAGE_KEY = 'semovix_business_object_state_v1';
 
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 export interface BusinessObjectStoreState {
-  version: 3;
+  version: 4;
   objects: Record<string, BusinessObject>;
   implementations: Record<string, DataImplementation>;
   bindings: Record<string, DataSupportBinding>;
@@ -95,6 +100,19 @@ interface LegacyV2State {
   dataSupportRevisions: Record<string, DataSupportRevision>;
 }
 
+/** V3 持久化状态的结构（groundingRevisions 尚无 targetId / targetKey） */
+interface LegacyV3State {
+  version: 3;
+  objects: Record<string, BusinessObject>;
+  implementations: Record<string, DataImplementation>;
+  bindings: Record<string, DataSupportBinding>;
+  groundingRevisions: Record<string, Omit<GroundingRevision, 'targetId' | 'targetKey'>>;
+  revisions: Record<string, BusinessObjectRevision>;
+  taskContexts: Record<string, ObjectResolutionContext>;
+  drafts: Record<string, BusinessObjectDraft>;
+  dataSupportRevisions: Record<string, DataSupportRevision>;
+}
+
 /** V1 → V2 结构化迁移：补齐新集合，回填任务上下文状态字段 */
 function migrateV1ToV2(legacy: LegacyV1State): LegacyV2State {
   const taskContexts: Record<string, LegacyTaskContext> = {};
@@ -142,7 +160,7 @@ function migrateLegacyTaskContext(context: LegacyTaskContext): ObjectResolutionC
 }
 
 /** V2 → V3 结构化迁移：规范资产身份（dataAsset / semanticSource / assetId） */
-function migrateV2ToV3(legacy: LegacyV2State): BusinessObjectStoreState {
+function migrateV2ToV3(legacy: LegacyV2State): LegacyV3State {
   const taskContexts: Record<string, ObjectResolutionContext> = {};
   Object.entries(legacy.taskContexts ?? {}).forEach(([taskId, context]) => {
     taskContexts[taskId] = migrateLegacyTaskContext(context);
@@ -157,13 +175,45 @@ function migrateV2ToV3(legacy: LegacyV2State): BusinessObjectStoreState {
   });
 
   return {
-    version: CURRENT_VERSION,
+    version: 3,
     objects: legacy.objects ?? {},
     implementations,
     bindings: legacy.bindings ?? {},
     groundingRevisions: legacy.groundingRevisions ?? {},
     revisions: legacy.revisions ?? {},
     taskContexts,
+    drafts: legacy.drafts ?? {},
+    dataSupportRevisions: legacy.dataSupportRevisions ?? {}
+  };
+}
+
+/**
+ * V3 → V4 结构化迁移：Grounding 修正目标 ID 化（§9）。
+ * 旧修订没有 targetId / targetKey，统一补 legacy 目标键（legacy:{targetName}）并归档为
+ * HISTORY —— 迁移后「同一 targetKey 至多一条 ACTIVE」对旧数据自然成立，且旧键与
+ * 新业务属性 / 关系 ID 键不冲突。旧实现落地行如缺 attributeId / relationshipId，
+ * 其后续修正将以 TARGET_NOT_FOUND 拒绝（零写入）；新种子与新生成的实现均带 ID。
+ */
+function migrateV3ToV4(legacy: LegacyV3State): BusinessObjectStoreState {
+  const groundingRevisions: Record<string, GroundingRevision> = {};
+  Object.values(legacy.groundingRevisions ?? {}).forEach((revision) => {
+    const targetId = `legacy:${revision.targetName}`;
+    groundingRevisions[revision.id] = {
+      ...revision,
+      targetId,
+      targetKey: `${revision.type}:${targetId}`,
+      status: revision.status === 'ACTIVE' ? 'HISTORY' : revision.status
+    };
+  });
+
+  return {
+    version: CURRENT_VERSION,
+    objects: legacy.objects ?? {},
+    implementations: legacy.implementations ?? {},
+    bindings: legacy.bindings ?? {},
+    groundingRevisions,
+    revisions: legacy.revisions ?? {},
+    taskContexts: legacy.taskContexts ?? {},
     drafts: legacy.drafts ?? {},
     dataSupportRevisions: legacy.dataSupportRevisions ?? {}
   };
@@ -177,10 +227,15 @@ export function loadState(): BusinessObjectStoreState | null {
     const parsed = JSON.parse(raw) as Partial<BusinessObjectStoreState> & { version?: number };
     if (!parsed || typeof parsed !== 'object') return null;
     if (parsed.version === CURRENT_VERSION) return parsed as BusinessObjectStoreState;
-    // 迁移链 V1 → V2 → V3：逐级结构化迁移并回写，绝不因升级清空用户状态
+    // 迁移链 V1 → V2 → V3 → V4：逐级结构化迁移并回写，绝不因升级清空用户状态
     if (parsed.version === 1 || parsed.version === 2) {
       const asV2 = parsed.version === 1 ? migrateV1ToV2(parsed as unknown as LegacyV1State) : (parsed as unknown as LegacyV2State);
-      const migrated = migrateV2ToV3(asV2);
+      const migrated = migrateV3ToV4(migrateV2ToV3(asV2));
+      persistState(migrated);
+      return migrated;
+    }
+    if (parsed.version === 3) {
+      const migrated = migrateV3ToV4(parsed as unknown as LegacyV3State);
       persistState(migrated);
       return migrated;
     }

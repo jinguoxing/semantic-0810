@@ -18,13 +18,13 @@ export type {
   SetPrimaryResult
 } from './data-support';
 export { resolveCanonicalDataAsset, resolveCanonicalDataAssetId } from './asset-identity';
-export { groundingService } from './grounding';
+export { groundingService, groundingTargetKey } from './grounding';
 export type { GroundingCorrectionResult } from './grounding';
 export { listRevisions, nextRevisionLabel, snapshotOfObject } from './revision';
-export { recordDataSupportRevision, listDataSupportRevisions } from './data-support-revision';
+export { recordDataSupportRevision, recordDataSupportRevisionInDraft, listDataSupportRevisions } from './data-support-revision';
 export { saveCreateDraft, saveChangeDraft, createDraft, updateDraft, getDraft, getWorkingDraft, discardDraft, publishDraft } from './draft';
 export type { PublishDraftResult, UpdateDraftResult } from './draft';
-export { objectResolutionContexts } from './task-context';
+export { objectResolutionContexts, completeTaskInDraft } from './task-context';
 export { EVIDENCE_KIND_LABELS, tableEvidence, decisionEvidence, dataAssetEvidence, semanticAssetEvidence } from './evidence';
 export { subscribe, getVersion, clearPersistedState, resetState, loadState as loadStateForTesting } from './store';
 export type { BusinessObjectStoreState } from './store';

@@ -146,6 +146,8 @@ export interface BusinessObject {
 
 /** 属性落地：业务属性在某个数据实现中的字段级映射 */
 export interface AttributeGrounding {
+  /** 落地的业务属性 ID（如 attr_close_time）：Grounding 修正按此识别目标，禁止用中文名 */
+  attributeId?: string;
   attributeName: string;
   /** 落地来源名称（实现本身或扩展表） */
   sourceName: string;
@@ -161,6 +163,8 @@ export interface AttributeGrounding {
 
 /** 关系落地：业务关系在某个数据实现中的字段级映射 */
 export interface RelationshipGrounding {
+  /** 落地的业务关系 ID（如 rel_st_applicant）：Grounding 修正按此识别目标，禁止用关系名 */
+  relationshipId?: string;
   relationName: string;
   targetObjectId: string;
   targetObjectName: string;
@@ -250,7 +254,11 @@ export interface GroundingRevision {
   businessObjectId: string;
   bindingId: string;
   type: 'ATTRIBUTE' | 'RELATIONSHIP';
-  /** 被修正的属性名或关系名 */
+  /** 被修正的业务属性 / 关系 ID（§9：修正目标按 ID 识别，禁止中文名称） */
+  targetId: string;
+  /** 修正目标键：`ATTRIBUTE:{businessAttributeId}` / `RELATIONSHIP:{businessRelationshipId}`；同键至多一条 ACTIVE */
+  targetKey: string;
+  /** 展示用目标名（属性名或「关系名 → 目标对象名」），仅用于呈现，不参与识别 */
   targetName: string;
   before: { field: string; semantics?: string };
   after: { field: string; semantics?: string };
@@ -305,13 +313,14 @@ export interface DataSupportRevision {
 
 /**
  * Grounding 修正输入。type 必须显式声明（Inv08 配套约束）：
- * 禁止通过 targetName 是否包含「→」等字符串规则推断类型。
+ * 禁止通过目标名称是否包含「→」等字符串规则推断类型；
+ * 修正目标一律按业务属性 / 关系 ID（targetId）识别，禁止中文名称匹配。
  */
 export interface GroundingCorrectionInput {
   bindingId: string;
   type: 'ATTRIBUTE' | 'RELATIONSHIP';
-  /** 属性名（ATTRIBUTE）或关系名（RELATIONSHIP） */
-  targetName: string;
+  /** 业务属性 ID（ATTRIBUTE）或业务关系 ID（RELATIONSHIP） */
+  targetId: string;
   /** RELATIONSHIP 必填：目标业务对象，用于校验候选字段身份兼容 */
   targetObjectId?: string;
   fromField: string;

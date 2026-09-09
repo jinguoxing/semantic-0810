@@ -24,6 +24,20 @@ function transition(taskId: string, status: ObjectResolutionStatus): ObjectResol
   });
 }
 
+/**
+ * 纯写入：在调用方命令的同一事务（draft）内把任务置为 COMPLETED（§11）。
+ * 任务不存在时不产生任何写入；持久化与通知由外层命令的唯一 mutate 负责。
+ */
+export function completeTaskInDraft(
+  draft: { taskContexts: Record<string, ObjectResolutionContext> },
+  taskId: string
+): void {
+  const target = draft.taskContexts[taskId];
+  if (!target) return;
+  target.status = 'COMPLETED';
+  target.updatedAt = nowIso();
+}
+
 export const objectResolutionContexts = {
   open(context: Omit<ObjectResolutionContext, 'createdAt' | 'status' | 'updatedAt'>): ObjectResolutionContext {
     const now = nowIso();

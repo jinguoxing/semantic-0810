@@ -60,9 +60,9 @@ describe('business object domain', () => {
     expect(primary?.role).toBe('PRIMARY');
     expect(primary?.revision).toBe('R1');
 
-    // 刷新后状态仍保持：从 localStorage 恢复（V3 schema）
+    // 刷新后状态仍保持：从 localStorage 恢复（V4 schema）
     const reloaded = loadStateForTesting();
-    expect(reloaded?.version).toBe(3);
+    expect(reloaded?.version).toBe(4);
     expect(reloaded?.bindings['bind_st_hotline'].status).toBe('EFFECTIVE');
     expect(reloaded?.bindings['bind_st_curr_view'].role).toBe('PRIMARY');
 
@@ -98,7 +98,7 @@ describe('business object domain', () => {
     const result = groundingService.applyCorrection({
       bindingId: binding!.id,
       type: 'ATTRIBUTE',
-      targetName: '办结时间',
+      targetId: 'attr_close_time',
       fromField: 'finished_time',
       toField: 'close_time',
       reason: '语义修订：finished_time 表示最后更新时间',
@@ -127,7 +127,7 @@ describe('business object domain', () => {
     const result = groundingService.applyCorrection({
       bindingId: binding!.id,
       type: 'RELATIONSHIP',
-      targetName: '申请人',
+      targetId: 'rel_st_applicant',
       targetObjectId: 'bo_person',
       fromField: 'applicant_id',
       toField: 'person_id',
@@ -196,7 +196,7 @@ describe('business object domain', () => {
     expect(Object.keys(getState().taskContexts).sort()).toEqual(['task_1', 'task_2']);
   });
 
-  it('migrates a persisted V2 state to V3 with canonical asset identity and read-only warnings', () => {
+  it('migrates a persisted V2 state to V4 with canonical asset identity and read-only warnings', () => {
     // 旧版 V2：taskContexts 扁平来源字段 + 旧实现 assetId
     const legacyV2 = {
       ...buildSeedState(),
@@ -243,7 +243,7 @@ describe('business object domain', () => {
     window.localStorage.setItem('semovix_business_object_state_v1', JSON.stringify(legacyV2));
 
     const migrated = loadStateForTesting();
-    expect(migrated?.version).toBe(3);
+    expect(migrated?.version).toBe(4);
     // 旧 res-02 实现归一到统一目录 asset-1
     expect(migrated?.implementations['impl_st_hotline'].assetId).toBe('asset-1');
     // DATA_ASSET 旧上下文：dataAsset 规范化，无 semanticSource
@@ -259,14 +259,14 @@ describe('business object domain', () => {
     // 无法解析的旧来源：兼容引用 + migrationWarning（只读，不再产生正式绑定）
     expect(migrated?.taskContexts['task_legacy_unknown'].dataAsset.id).toBe('res-99');
     expect(migrated?.taskContexts['task_legacy_unknown'].migrationWarning).toBeTruthy();
-    // 迁移后状态已回写为 V3
+    // 迁移后状态已回写为 V4
     const repersisted = JSON.parse(window.localStorage.getItem('semovix_business_object_state_v1') ?? '{}');
-    expect(repersisted.version).toBe(3);
+    expect(repersisted.version).toBe(4);
   });
 
-  it('builds a version 3 seed state with drafts and data support revisions collections', () => {
+  it('builds a version 4 seed state with drafts and data support revisions collections', () => {
     const seed = buildSeedState();
-    expect(seed.version).toBe(3);
+    expect(seed.version).toBe(4);
     // 种子草稿：服务工单渠道口径修订的演示 CHANGE 草稿（§3：演示内容沉到领域层）
     expect(Object.keys(seed.drafts)).toEqual(['bodraft_st_change_demo']);
     expect(seed.drafts['bodraft_st_change_demo'].mode).toBe('CHANGE');
