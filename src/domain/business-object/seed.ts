@@ -8,8 +8,11 @@
  * 保证 Detail 页对任何对象都不串数据。
  */
 import { BusinessObjectStoreState } from './store';
+import { snapshotOfObject } from './revision';
 import {
   BusinessObject,
+  BusinessObjectDefinitionSnapshot,
+  BusinessObjectRevision,
   DataImplementation,
   DataSupportBinding
 } from './types';
@@ -100,7 +103,9 @@ const PERSON: BusinessObject = {
   definition: '表示企业或政务业务中被稳定识别和关联的自然人主体。',
   domain: '人口服务',
   status: 'PUBLISHED',
-  currentRevision: 'R1',
+  // 与 bind_person_ext 的 revalidation.sourceRevision = 'R2' 保持一致：
+  // R2 修订（常住状态口径调整）已发布，人口扩展信息绑定因此待复核
+  currentRevision: 'R2',
   identity: { name: '身份标识', meaning: '用于在约定的业务身份范围内稳定识别一个自然人。' },
   attributes: [
     attr('attr_person_id', '身份标识', '用于在约定的业务身份范围内稳定识别一个自然人。', true),
@@ -434,6 +439,15 @@ const SERVICE_TICKET_CURR_VIEW: DataImplementation = {
     { relationName: '承办部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '客服工单当前视图 · handle_dept_id', targetIdentity: '组织机构 · 机构标识' },
     { relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '客服工单当前视图 · administrative_code', targetIdentity: '行政区域 · 区域标识' }
   ],
+  // 关系落地候选字段白名单（Inv08）：只列与目标对象身份兼容的字段。
+  // 「申请人 → 自然人」只允许 applicant_id / person_id，
+  // 禁止 ticket_id / status / close_time 等工单自身字段。
+  relationshipCandidateFields: [
+    { field: 'applicant_id', label: '申请人标识', sourceName: '客服工单当前视图', semantics: '指向自然人主体标识的工单申请人字段', targetObjectId: 'bo_person', evidence: 'hotline_db.service.ticket_curr_view · applicant_id' },
+    { field: 'person_id', label: '自然人标识', sourceName: '客服工单当前视图', semantics: '自然人在工单记录中的主体标识字段', targetObjectId: 'bo_person', evidence: 'hotline_db.service.ticket_curr_view · person_id' },
+    { field: 'handle_dept_id', label: '承办部门标识', sourceName: '客服工单当前视图', semantics: '指向组织机构标识的承办部门字段', targetObjectId: 'bo_org', evidence: 'hotline_db.service.ticket_curr_view · handle_dept_id' },
+    { field: 'region_code', label: '所属区域标识', sourceName: '客服工单当前视图', semantics: '指向行政区域标识的所属区域字段', targetObjectId: 'bo_region', evidence: 'hotline_db.service.ticket_curr_view · region_code' }
+  ],
   extension: null
 };
 
@@ -462,6 +476,11 @@ const SERVICE_TICKET_HOTLINE: DataImplementation = {
     { relationName: '申请人', targetObjectId: 'bo_person', targetObjectName: '自然人', sourceField: '公共服务热线工单记录表 · person_id', targetIdentity: '自然人 · 主体标识' },
     { relationName: '承办部门', targetObjectId: 'bo_org', targetObjectName: '组织机构', sourceField: '公共服务热线工单记录表 · dept_id', targetIdentity: '组织机构 · 机构标识' },
     { relationName: '所属区域', targetObjectId: 'bo_region', targetObjectName: '行政区域', sourceField: '公共服务热线工单记录表 · region_code', targetIdentity: '行政区域 · 区域标识' }
+  ],
+  relationshipCandidateFields: [
+    { field: 'person_id', label: '自然人标识', sourceName: '公共服务热线工单记录表', semantics: '指向自然人主体标识的申请人字段', targetObjectId: 'bo_person', evidence: 'hotline_db.service.pop_service_hotline · person_id' },
+    { field: 'dept_id', label: '承办部门标识', sourceName: '公共服务热线工单记录表', semantics: '指向组织机构标识的承办部门字段', targetObjectId: 'bo_org', evidence: 'hotline_db.service.pop_service_hotline · dept_id' },
+    { field: 'region_code', label: '所属区域标识', sourceName: '公共服务热线工单记录表', semantics: '指向行政区域标识的所属区域字段', targetObjectId: 'bo_region', evidence: 'hotline_db.service.pop_service_hotline · region_code' }
   ],
   extension: {
     name: '工单扩展信息表',
@@ -819,19 +838,129 @@ export const SEED_BINDINGS: DataSupportBinding[] = [
   binding('bind_order_flow', 'bo_order', 'impl_order_flow', 'RETIRED', 'SECONDARY', '历史交易订单')
 ];
 
+function seedRevision(
+  id: string,
+  businessObjectId: string,
+  revision: string,
+  summary: string,
+  changes: string[],
+  snapshot: BusinessObjectDefinitionSnapshot,
+  status: BusinessObjectRevision['status'],
+  createdAt: string
+): BusinessObjectRevision {
+  return { id, businessObjectId, revision, summary, changes, changedBy: '业务语义中心', createdAt, status, snapshot };
+}
+
+/**
+ * 种子修订记录：让 currentRevision 与修订历史一致。
+ * 自然人已发布 R2（常住状态口径调整，触发人口扩展信息绑定待复核），
+ * 其余已发布对象处于 R1；订单已停用但保留最后正式定义修订 R1。
+ */
+const PERSON_R1_SNAPSHOT = snapshotOfObject(PERSON);
+const personResidentAttribute = PERSON_R1_SNAPSHOT.attributes.find((attribute) => attribute.name === '常住状态');
+if (personResidentAttribute) {
+  personResidentAttribute.meaning = '表示当前是否登记为常住人口。';
+}
+
+export const SEED_REVISIONS: BusinessObjectRevision[] = [
+  seedRevision(
+    'rev_person_r1',
+    'bo_person',
+    'R1',
+    '首次发布「自然人」',
+    ['正式发布至企业业务语义目录'],
+    PERSON_R1_SNAPSHOT,
+    'HISTORY',
+    '2026-08-26T10:12:00.000Z'
+  ),
+  seedRevision(
+    'rev_person_r2',
+    'bo_person',
+    'R2',
+    '调整「常住状态」业务口径',
+    ['「常住状态」口径调整为常住人口统计范围', '同步修订「户籍类型」相关口径说明'],
+    snapshotOfObject(PERSON),
+    'ACTIVE',
+    '2026-09-08T08:00:00.000Z'
+  ),
+  seedRevision(
+    'rev_service_ticket_r1',
+    'bo_service_ticket',
+    'R1',
+    '首次发布「服务工单」',
+    ['正式发布至企业业务语义目录'],
+    snapshotOfObject(SERVICE_TICKET),
+    'ACTIVE',
+    SEED_TIMESTAMP
+  ),
+  seedRevision(
+    'rev_customer_agent_r1',
+    'bo_customer_agent',
+    'R1',
+    '首次发布「客服坐席」',
+    ['正式发布至企业业务语义目录'],
+    snapshotOfObject(CUSTOMER_AGENT),
+    'ACTIVE',
+    '2026-08-28T11:14:00.000Z'
+  ),
+  seedRevision(
+    'rev_org_r1',
+    'bo_org',
+    'R1',
+    '首次发布「组织机构」',
+    ['正式发布至企业业务语义目录'],
+    snapshotOfObject(ORG),
+    'ACTIVE',
+    '2026-08-25T18:06:00.000Z'
+  ),
+  seedRevision(
+    'rev_region_r1',
+    'bo_region',
+    'R1',
+    '首次发布「行政区域」',
+    ['正式发布至企业业务语义目录'],
+    snapshotOfObject(REGION),
+    'ACTIVE',
+    '2026-08-24T09:45:00.000Z'
+  ),
+  seedRevision(
+    'rev_service_item_r1',
+    'bo_service_item',
+    'R1',
+    '首次发布「服务事项」',
+    ['正式发布至企业业务语义目录'],
+    snapshotOfObject(SERVICE_ITEM),
+    'ACTIVE',
+    '2026-08-27T11:22:00.000Z'
+  ),
+  seedRevision(
+    'rev_order_r1',
+    'bo_order',
+    'R1',
+    '首次发布「订单」',
+    ['正式发布至企业业务语义目录'],
+    snapshotOfObject(ORDER),
+    'ACTIVE',
+    '2026-07-30T17:08:00.000Z'
+  )
+];
+
 export function buildSeedState(): BusinessObjectStoreState {
   // 深拷贝种子：领域服务会原地修改状态对象，若与模块级种子常量共享引用，
   // 写入会污染种子，导致 resetState 后无法恢复初始状态
   const objects = structuredClone(SEED_OBJECTS);
   const implementations = structuredClone(SEED_IMPLEMENTATIONS);
   const bindings = structuredClone(SEED_BINDINGS);
+  const revisions = structuredClone(SEED_REVISIONS);
   return {
-    version: 1,
+    version: 2,
     objects: Object.fromEntries(objects.map((object) => [object.id, object])),
     implementations: Object.fromEntries(implementations.map((implementation) => [implementation.id, implementation])),
     bindings: Object.fromEntries(bindings.map((bindingItem) => [bindingItem.id, bindingItem])),
     groundingRevisions: {},
-    revisions: {},
-    taskContexts: {}
+    revisions: Object.fromEntries(revisions.map((revision) => [revision.id, revision])),
+    taskContexts: {},
+    drafts: {},
+    dataSupportRevisions: {}
   };
 }

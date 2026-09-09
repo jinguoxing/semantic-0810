@@ -109,44 +109,23 @@ export const businessObjectRepository = {
       draft.objects[objectId].updatedAt = nowIso();
       return draft.objects[objectId];
     });
-  },
-
-  /** 新建草稿对象 */
-  createDraft(input: { name: string; definition: string; domain: string; aliases?: string[] }): BusinessObject {
-    const objectId = `bo_${Date.now().toString(36)}`;
-    const object: BusinessObject = {
-      id: objectId,
-      name: input.name,
-      aliases: input.aliases ?? [],
-      definition: input.definition,
-      domain: input.domain,
-      status: 'DRAFT',
-      currentRevision: 'R0',
-      identity: { name: '（待定义）', meaning: '草稿阶段尚未确认身份属性。' },
-      attributes: [],
-      relationships: [],
-      evidence: [],
-      terms: [],
-      metrics: [],
-      relatedData: [],
-      updatedAt: nowIso()
-    };
-    return mutate(getState(), (draft) => {
-      draft.objects[objectId] = object;
-      return object;
-    });
   }
 };
 
-/** 列表页展示用：数据支撑摘要 */
+/**
+ * 列表页展示用：数据支撑摘要。
+ * 与 Detail 正式选择器同口径：只统计 EFFECTIVE + NEEDS_REVALIDATION，
+ * CANDIDATE / RETIRED 不计入（Inv05）。
+ */
 export function dataSupportSummary(objectId: string): { count: number; hasImplementation: boolean; mainAsset?: string } {
-  const bindings = Object.values(getState().bindings).filter((binding) => binding.businessObjectId === objectId);
-  const effective = bindings.filter((binding) => binding.status === 'EFFECTIVE');
-  const primary = effective.find((binding) => binding.role === 'PRIMARY');
+  const current = Object.values(getState().bindings).filter(
+    (binding) => binding.businessObjectId === objectId && (binding.status === 'EFFECTIVE' || binding.status === 'NEEDS_REVALIDATION')
+  );
+  const primary = current.find((binding) => binding.role === 'PRIMARY' && binding.status === 'EFFECTIVE');
   const mainImplementation = primary ? getState().implementations[primary.implementationId] : undefined;
   return {
-    count: effective.length,
-    hasImplementation: effective.length > 0,
+    count: current.length,
+    hasImplementation: current.length > 0,
     ...(mainImplementation ? { mainAsset: mainImplementation.name } : {})
   };
 }
