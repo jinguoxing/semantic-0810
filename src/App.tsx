@@ -56,6 +56,7 @@ import { BusinessObjectChangeWorkspace } from './components/BusinessObjectChange
 import { BusinessObjectsListWorkspace } from './components/BusinessObjectsListWorkspace';
 import { ResolveDataSupportWorkspace } from './components/ResolveDataSupportWorkspace';
 import { BusinessObjectResolutionWorkspace } from './components/BusinessObjectResolutionWorkspace';
+import { BusinessObjectRevalidationWorkspace } from './components/BusinessObjectRevalidationWorkspace';
 import { DataSemanticsDetailView } from './components/DataSemanticsDetailView';
 import { objectResolutionContexts } from './domain/business-object';
 import { INITIAL_BUSINESS_OBJECTS } from './data/businessObjectsData';
@@ -1002,6 +1003,11 @@ export default function App() {
             setViewTab('resolve_data_support');
             addToast('info', '发现数据支撑', `已进入「${objectName || '服务工单'}」Top-down 数据支撑发现与确认工作区`);
           }}
+          onNavigateToRevalidation={() => {
+            setCurrentNav('business_object_revalidation');
+            setViewTab('business_object_revalidation');
+            addToast('info', '数据支撑复核', '已进入数据支撑复核工作台（Binding Revalidation）');
+          }}
           addToast={addToast}
         />
       ) : currentNav === 'resolve_data_support' || viewTab === 'resolve_data_support' ? (
@@ -1092,6 +1098,25 @@ export default function App() {
             // 直接进入（无上下文）：维持原有落地 —— 查看对象的数据支撑视角
             setBusinessObjectDetailContext({
               objectId: selectedObj === 'service_ticket' ? 'bo_service_ticket' : 'bo_customer_feedback',
+              initialTab: 'data_support',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
+          }}
+          addToast={addToast}
+        />
+      ) : currentNav === 'business_object_revalidation' || viewTab === 'business_object_revalidation' ? (
+        <BusinessObjectRevalidationWorkspace
+          onNavigateToObjectsList={() => {
+            setCurrentNav('business_objects');
+            setViewTab('business_objects');
+            addToast('info', '业务对象目录', '已返回企业业务对象目录');
+          }}
+          onNavigateToObjectDetail={(objectId) => {
+            setBusinessObjectDetailContext({
+              objectId: objectId || 'bo_person',
               initialTab: 'data_support',
               fromGoalSearch: false,
               goalQuery: ''

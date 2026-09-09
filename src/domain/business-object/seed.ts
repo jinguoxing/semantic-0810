@@ -796,7 +796,16 @@ export const SEED_BINDINGS: DataSupportBinding[] = [
   binding('bind_st_curr_view', 'bo_service_ticket', 'impl_st_curr_view', 'EFFECTIVE', 'PRIMARY', '客服业务当前工单'),
   binding('bind_st_hotline', 'bo_service_ticket', 'impl_st_hotline', 'CANDIDATE', 'SECONDARY', '公共服务热线渠道'),
   binding('bind_person_base', 'bo_person', 'impl_person_base', 'EFFECTIVE', 'PRIMARY', '人口基础登记'),
-  binding('bind_person_ext', 'bo_person', 'impl_person_ext', 'EFFECTIVE', 'SECONDARY', '人口扩展登记'),
+  // 语义修订触发复核示例：自然人 R2 修订调整「常住状态」口径，人口扩展信息绑定需复核
+  {
+    ...binding('bind_person_ext', 'bo_person', 'impl_person_ext', 'NEEDS_REVALIDATION', 'SECONDARY', '人口扩展登记', 'R2'),
+    revalidation: {
+      reason: '「自然人」业务对象 R2 修订调整了「常住状态」属性的业务口径，需要复核该实现是否仍满足数据支撑要求。',
+      sourceRevision: 'R2',
+      affectedTargets: ['常住状态', '户籍类型'],
+      raisedAt: '2026-09-08T09:00:00.000Z'
+    }
+  },
   binding('bind_person_stat', 'bo_person', 'impl_person_stat', 'EFFECTIVE', 'SECONDARY', '人口统计分析'),
   binding('bind_org_master', 'bo_org', 'impl_org_master', 'EFFECTIVE', 'PRIMARY', '组织机构全量'),
   binding('bind_org_duty', 'bo_org', 'impl_org_duty', 'EFFECTIVE', 'SECONDARY', '机构职责管理'),

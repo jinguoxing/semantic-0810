@@ -48,6 +48,8 @@ export interface BusinessObjectDetailWorkspaceProps {
   onFindDataWithObjectGoal?: (objectName: string) => void;
   onNavigateToBusinessObjectDetail?: (objectId: string, initialTab?: 'business' | 'data_support') => void;
   onNavigateToChangeBusinessObject?: (objectId: string) => void;
+  /** 数据支撑复核入口：对象存在 NEEDS_REVALIDATION 绑定时展示复核引导 */
+  onNavigateToRevalidation?: () => void;
   addToast?: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
 }
 
@@ -171,6 +173,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   onNavigateToMetricDetail,
   onNavigateToDataAssetDetail,
   onFindDataWithObjectGoal,
+  onNavigateToRevalidation,
   addToast
 }) => {
   // Active Tab: 业务视角 vs 数据支撑
@@ -307,6 +310,9 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
     implementations.find((impl) => impl.id === selectedImplId) ||
     implementations[0] ||
     null;
+
+  // 待复核绑定数量（语义修订触发）
+  const revalidationCount = bindings.filter((binding) => binding.status === 'NEEDS_REVALIDATION').length;
 
   const handleConfirmCorrection = (selectedField: CandidateFieldOption) => {
     if (!selectedCorrectionAttr || !currentImpl) return;
@@ -892,6 +898,30 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
         {/* ======================================================= */}
         {/* TAB 2: 数据支撑 (DATA SUPPORT PERSPECTIVE)               */}
         {/* ======================================================= */}
+        {/* 待复核提示：语义修订触发绑定复核时引导进入复核工作台 */}
+        {activeTab === 'data_support' && revalidationCount > 0 && (
+          <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-md p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-start space-x-2.5 text-xs">
+              <ShieldAlert className="w-4 h-4 text-[#D97706] shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <div className="font-bold text-[#92400E]">
+                  {revalidationCount} 项数据支撑待复核
+                </div>
+                <p className="text-[#64748B] leading-relaxed">
+                  业务对象语义修订影响了现有数据支撑绑定，需要复核：确认继续使用、重新绑定或退休。
+                </p>
+              </div>
+            </div>
+            <button
+              id="btn-navigate-revalidation"
+              onClick={onNavigateToRevalidation}
+              className="shrink-0 px-3.5 py-1.5 rounded bg-white border border-[#FED7AA] hover:bg-[#FFF7ED] text-[#D97706] text-xs font-bold cursor-pointer transition-colors"
+            >
+              进入数据支撑复核 →
+            </button>
+          </div>
+        )}
+
         {activeTab === 'data_support' && !currentImpl && (
           <div className="bg-white border border-[#E2E8F0] rounded-md p-8 text-center space-y-2">
             <Database className="w-8 h-8 text-[#94A3B8] mx-auto" />
