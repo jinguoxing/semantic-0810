@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
+  ArrowRight,
   ChevronRight,
   Check,
   Database,
@@ -27,6 +28,7 @@ export interface ResolveDataSupportWorkspaceProps {
   onConfirmSuccess?: () => void;
   onDismissCandidate?: () => void;
   onNavigateToObjectsList?: () => void;
+  onSwitchToResolution?: () => void;
   addToast?: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
 }
 
@@ -36,6 +38,7 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
   onConfirmSuccess,
   onDismissCandidate,
   onNavigateToObjectsList,
+  onSwitchToResolution,
   addToast
 }) => {
   const [isVerifying, setIsVerifying] = useState(false);
@@ -215,8 +218,19 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
                 </div>
               </div>
 
-              {/* Header Right Action: 稍后处理 only */}
+              {/* Header Right Action: 切换工作台 & 稍后处理 */}
               <div className="flex items-center space-x-3 shrink-0">
+                {onSwitchToResolution && (
+                  <button
+                    id="btn-switch-to-resolution"
+                    onClick={onSwitchToResolution}
+                    className="px-3 py-1.5 rounded bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] border border-[#BFDBFE] text-xs font-medium transition-colors cursor-pointer flex items-center space-x-1.5"
+                    title="切换至自下而上的数据语义「业务对象对齐」工作台"
+                  >
+                    <span>⚡ 业务对象对齐工作台</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 <button
                   id="btn-handle-later"
                   onClick={onBackToDetail}

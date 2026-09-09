@@ -153,34 +153,71 @@ export const Header: React.FC<HeaderProps> = ({
 
                 <div className="space-y-1">
                   {/* 二级菜单 1: 业务对象 */}
-                  <button
-                    onClick={() => {
-                      setIsSemanticsDropdownOpen(false);
-                      onSelectNav && onSelectNav('business_objects');
-                    }}
-                    className={`w-full p-2.5 rounded-lg flex items-center space-x-3 transition-all text-left group cursor-pointer ${
-                      currentNav === 'business_objects' || currentNav === 'create_business_object' || currentNav === 'governance' || currentNav === 'business_object_detail'
-                        ? 'bg-[#EFF6FF] border border-[#BFDBFE]'
-                        : 'hover:bg-[#EFF6FF]/60 hover:border-[#BFDBFE]/60 border border-transparent'
-                    }`}
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB] shrink-0 group-hover:scale-105 transition-transform">
-                      <FolderTree className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-[#0F172A] group-hover:text-[#2563EB] transition-colors">
-                          业务对象
-                        </span>
-                        <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded-full border border-[#BFDBFE]">
-                          8 业务对象
-                        </span>
+                  <div className="space-y-1">
+                    <button
+                      onClick={() => {
+                        setIsSemanticsDropdownOpen(false);
+                        onSelectNav && onSelectNav('business_objects');
+                      }}
+                      className={`w-full p-2.5 rounded-lg flex items-center space-x-3 transition-all text-left group cursor-pointer ${
+                        currentNav === 'business_objects' || currentNav === 'create_business_object' || currentNav === 'governance' || currentNav === 'business_object_detail'
+                          ? 'bg-[#EFF6FF] border border-[#BFDBFE]'
+                          : 'hover:bg-[#EFF6FF]/60 hover:border-[#BFDBFE]/60 border border-transparent'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center text-[#2563EB] shrink-0 group-hover:scale-105 transition-transform">
+                        <FolderTree className="w-4 h-4" />
                       </div>
-                      <p className="text-[11px] text-[#64748B] truncate mt-0.5">
-                        企业业务主体目录、关键关系与真实数据实现
-                      </p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#0F172A] group-hover:text-[#2563EB] transition-colors">
+                            业务对象
+                          </span>
+                          <span className="text-[10px] font-bold text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded-full border border-[#BFDBFE]">
+                            8 业务对象
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#64748B] truncate mt-0.5">
+                          企业业务主体目录、关键关系与真实数据实现
+                        </p>
+                      </div>
+                    </button>
+
+                    {/* 快捷直达链接：业务对象对齐 & 发现数据支撑 */}
+                    <div className="pl-11 pr-2 pb-1.5 flex items-center space-x-2 text-[11px]">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsSemanticsDropdownOpen(false);
+                          onSelectNav && onSelectNav('business_object_resolution');
+                        }}
+                        className={`px-2 py-1 rounded transition-colors cursor-pointer font-medium ${
+                          currentNav === 'business_object_resolution'
+                            ? 'bg-[#2563EB] text-white'
+                            : 'text-[#2563EB] hover:bg-[#EFF6FF] hover:underline'
+                        }`}
+                        title="自下而上：从数据语义决策采用哪个业务对象"
+                      >
+                        ⚡ 业务对象对齐
+                      </button>
+                      <span className="text-[#CBD5E1]">·</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsSemanticsDropdownOpen(false);
+                          onSelectNav && onSelectNav('resolve_data_support');
+                        }}
+                        className={`px-2 py-1 rounded transition-colors cursor-pointer font-medium ${
+                          currentNav === 'resolve_data_support'
+                            ? 'bg-[#2563EB] text-white'
+                            : 'text-[#2563EB] hover:bg-[#EFF6FF] hover:underline'
+                        }`}
+                        title="自上而下：为业务对象寻找并确立候选数据实现"
+                      >
+                        🔍 发现数据支撑
+                      </button>
                     </div>
-                  </button>
+                  </div>
 
                   {/* 二级菜单 2: 指标 */}
                   <button
