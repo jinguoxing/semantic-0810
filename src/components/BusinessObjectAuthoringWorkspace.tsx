@@ -24,6 +24,8 @@ import {
   Sliders,
   CheckCheck
 } from 'lucide-react';
+import { BusinessEvidenceDrawer } from './business-object/BusinessEvidenceDrawer';
+import type { EvidenceReference } from '../domain/business-object';
 
 export interface BusinessObjectAuthoringWorkspaceProps {
   onCancel?: () => void;
@@ -91,6 +93,28 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
   const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
   const [showReuseConfirmModal, setShowReuseConfirmModal] = useState(false);
   const [showPublishSuccessModal, setShowPublishSuccessModal] = useState(false);
+
+  // 定义依据：草稿上下文组装的证据数据（用户输入 + 制度文件提取），以数据驱动抽屉呈现
+  const authoringEvidence: EvidenceReference[] = [
+    {
+      id: 'ev-author-user-input',
+      kind: 'DECISION',
+      title: '用户交互式创建草稿',
+      source: '业务语义中心 · 新建业务对象向导',
+      adoptedDecision:
+        '创建人张伟（某市大数据中心 · 业务架构岗）输入语义核心：“定义热线接听电话的坐席人员”。'
+    },
+    {
+      id: 'ev-author-document',
+      kind: 'DOCUMENT',
+      title: '《公共服务热线运行管理办法》',
+      source: '市政发〔2024〕18号',
+      version: 'V2.1 正式施行',
+      location: '第 3 章 · 第 12 条【热线坐席职责界定】',
+      adoptedDecision:
+        '“热线坐席负责接听市民与企事业单位诉求电话，提供政策法规咨询、即时解答、诉求受理、在线协同及工单派发，保证 7×24 小时服务闭环。”Semovix 据此提取“咨询、受理和协同服务职责”作为业务定义规范表述，并建议将“坐席编号”作为主体唯一识别码。'
+    }
+  ];
 
   // ---------------------------------------------------------------------------
   // Handlers
@@ -882,95 +906,16 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
       </main>
 
       {/* =========================================================================
-          Drawer 1: 定义依据与来源追溯 (Evidence Drawer)
+          Drawer 1: 定义依据与来源追溯（共享 Evidence Drawer，证据数据驱动）
       ========================================================================= */}
-      {isEvidenceDrawerOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/30 backdrop-blur-2xs flex justify-end animate-in fade-in duration-200">
-          <div className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col border-l border-[#E2E8F0] animate-in slide-in-from-right duration-200">
-            {/* Drawer Header */}
-            <div className="p-5 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
-              <div>
-                <h3 className="text-sm font-bold text-[#0F172A]">定义依据与来源追溯</h3>
-                <p className="text-xs text-[#64748B] mt-0.5">
-                  查看当前业务对象定义的制度凭据与提取过程
-                </p>
-              </div>
-              <button
-                onClick={() => setIsEvidenceDrawerOpen(false)}
-                className="p-1.5 rounded-md text-[#94A3B8] hover:text-[#0F172A] hover:bg-[#E2E8F0]/60 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Drawer Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs text-[#334155]">
-              {/* 来源 1: 用户输入 */}
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2 font-bold text-[#0F172A]">
-                  <span className="w-5 h-5 rounded-full bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center text-[10px]">
-                    1
-                  </span>
-                  <span>来源一：用户交互式创建草稿</span>
-                </div>
-                <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-xs space-y-1">
-                  <div><span className="text-[#64748B]">创建人：</span>张伟 (某市大数据中心 · 业务架构岗)</div>
-                  <div><span className="text-[#64748B]">创建方式：</span>业务语义中心 · 新建业务对象向导</div>
-                  <div><span className="text-[#64748B]">输入语义核心：</span>“定义热线接听电话的坐席人员”</div>
-                </div>
-              </div>
-
-              {/* 来源 2: 制度文件 */}
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2 font-bold text-[#0F172A]">
-                  <span className="w-5 h-5 rounded-full bg-[#EFF6FF] text-[#2563EB] flex items-center justify-center text-[10px]">
-                    2
-                  </span>
-                  <span>来源二：《公共服务热线运行管理办法》</span>
-                </div>
-
-                <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-[11px]">
-                    <div><span className="text-[#64748B]">发文字号：</span>市政发〔2024〕18号</div>
-                    <div><span className="text-[#64748B]">生效版本：</span>V2.1 正式施行</div>
-                    <div><span className="text-[#64748B]">适用范围：</span>全市公共服务热线中心</div>
-                    <div><span className="text-[#64748B]">引用章节：</span>第 3 章 · 服务岗位职责</div>
-                  </div>
-
-                  <div className="pt-2 border-t border-[#E2E8F0]">
-                    <span className="font-semibold text-[#0F172A] block mb-1">
-                      条款原文摘录（第 12 条【热线坐席职责界定】）：
-                    </span>
-                    <blockquote className="p-2.5 bg-white border-l-2 border-l-[#2563EB] border border-[#E2E8F0] text-[11px] text-[#334155] leading-relaxed rounded-r">
-                      “热线坐席负责接听市民与企事业单位诉求电话，提供政策法规咨询、即时解答、诉求受理、在线协同及工单派发，保证 7×24 小时服务闭环。”
-                    </blockquote>
-                  </div>
-
-                  <div className="pt-2 border-t border-[#E2E8F0] text-[11px] text-[#64748B] space-y-1">
-                    <span className="font-semibold text-[#0F172A]">Semovix 语义提取与结构化：</span>
-                    <ul className="list-disc list-inside space-y-0.5 pl-1">
-                      <li>抽取“咨询、受理和协同服务职责”作为业务定义规范表述；</li>
-                      <li>识别并建议将“坐席编号”作为主体唯一识别码；</li>
-                      <li>发现与已有全渠道“客服坐席”存在相近业务语义，触发复用拦截检查。</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Drawer Footer */}
-            <div className="p-4 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end">
-              <button
-                type="button"
-                onClick={() => setIsEvidenceDrawerOpen(false)}
-                className="px-4 py-1.5 rounded-md bg-[#2563EB] text-white text-xs font-semibold hover:bg-[#1D4ED8] transition-colors cursor-pointer"
-              >
-                关闭
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BusinessEvidenceDrawer
+        isOpen={isEvidenceDrawerOpen}
+        onClose={() => setIsEvidenceDrawerOpen(false)}
+        objectName={objectName}
+        title="定义依据与来源追溯"
+        subtitle="查看当前业务对象定义的制度凭据与提取过程"
+        evidence={authoringEvidence}
+      />
 
       {/* =========================================================================
           Drawer 2: 引用业务资料 (Business Materials Drawer)

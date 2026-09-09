@@ -15,6 +15,9 @@ import {
   AlertCircle,
   HelpCircle
 } from 'lucide-react';
+import { BusinessEvidenceDrawer } from './business-object/BusinessEvidenceDrawer';
+import { BusinessObjectPublishDialog } from './business-object/BusinessObjectPublishDialog';
+import { businessObjectRepository, type EvidenceReference } from '../domain/business-object';
 
 export interface BusinessObjectChangeWorkspaceProps {
   onCancel: () => void;
@@ -59,6 +62,28 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
   const [isEvidenceDrawerOpen, setIsEvidenceDrawerOpen] = useState(false);
   const [isKeySemanticsDrawerOpen, setIsKeySemanticsDrawerOpen] = useState(false);
   const [isImpactDrawerOpen, setIsImpactDrawerOpen] = useState(false);
+
+  // 修改依据：用户修改说明 + 新版制度文件 + 领域 Store 中该对象的正式定义依据（禁止页面写死正式定义）
+  const changeEvidence: EvidenceReference[] = [
+    {
+      id: 'ev-change-user-note',
+      kind: 'DECISION',
+      title: '用户修改说明',
+      source: '工作区输入',
+      adoptedDecision:
+        '用户指定需要进一步明确“服务工单”覆盖热线、线上和窗口等全域渠道，并增加“来源渠道”作为核心业务识别特征。'
+    },
+    {
+      id: 'ev-change-document',
+      kind: 'DOCUMENT',
+      title: '新版《公共服务热线运行管理办法》',
+      source: '制度文件',
+      location: '第 2 章 · 第 5 条',
+      adoptedDecision:
+        '“建立涵盖电话热线、政务服务网、移动客户端及线下办事窗口的一体化服务工单受理与协同督办机制。”'
+    },
+    ...(businessObjectRepository.get('bo_service_ticket')?.evidence ?? [])
+  ];
 
   // Optimizing States
   const [isOptimizingReason, setIsOptimizingReason] = useState(false);
@@ -635,55 +660,26 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
       </div>
 
       {/* ========================================================= */}
-      {/* 3. LIGHTWEIGHT PUBLISH CONFIRMATION MODAL                 */}
+      {/* 3. LIGHTWEIGHT PUBLISH CONFIRMATION MODAL（共享组件）       */}
       {/* ========================================================= */}
-      {isPublishModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/30 backdrop-blur-2xs flex items-center justify-center p-4">
-          <div className="bg-white border border-[#E2E8F0] rounded-xl shadow-xl w-full max-w-lg p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[#0F172A]">确认发布业务对象修改</h3>
-              <p className="text-xs text-[#64748B]">
-                发布后将形成「服务工单」新的正式业务对象版本。
-              </p>
-            </div>
-
-            <div className="space-y-3.5 text-xs text-[#334155] bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg p-4">
-              <div className="space-y-1.5">
-                <div className="font-bold text-[#0F172A]">本次将正式更新：</div>
-                <ul className="list-disc list-inside space-y-1 text-[#475569] pl-1">
-                  <li>明确服务工单的渠道范围描述</li>
-                  <li>新增别名“群众诉求工单”</li>
-                  <li>新增关键属性“来源渠道”</li>
-                </ul>
-              </div>
-
-              <div className="border-t border-[#E2E8F0] pt-2.5 space-y-1.5">
-                <div className="font-bold text-[#0F172A]">数据支撑：</div>
-                <ul className="list-disc list-inside space-y-1 text-[#475569] pl-1">
-                  <li>现有数据实现继续有效</li>
-                  <li>新增属性尚未形成数据落地</li>
-                  <li>发布后继续识别和校验可能的字段支撑</li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end space-x-2.5 pt-1">
-              <button
-                onClick={() => setIsPublishModalOpen(false)}
-                className="px-4 py-2 text-xs font-medium text-[#475569] bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] rounded-md transition-colors cursor-pointer"
-              >
-                返回编辑
-              </button>
-              <button
-                onClick={handleConfirmPublish}
-                className="px-4 py-2 text-xs font-semibold text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-md shadow-2xs transition-colors cursor-pointer"
-              >
-                发布修改
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BusinessObjectPublishDialog
+        isOpen={isPublishModalOpen}
+        onClose={() => setIsPublishModalOpen(false)}
+        onConfirm={handleConfirmPublish}
+        objectName={objectName}
+        title="确认发布业务对象修改"
+        confirmLabel="发布修改"
+        changeSummary={[
+          '明确服务工单的渠道范围描述',
+          '新增别名“群众诉求工单”',
+          '新增关键属性“来源渠道”'
+        ]}
+        dataSupportNotes={[
+          '现有数据实现继续有效',
+          '新增属性尚未形成数据落地',
+          '发布后继续识别和校验可能的字段支撑'
+        ]}
+      />
 
       {/* ========================================================= */}
       {/* 4. LEAVE CONFIRMATION MODAL                               */}
@@ -730,71 +726,16 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
       )}
 
       {/* ========================================================= */}
-      {/* 5. EVIDENCE DRAWER                                        */}
+      {/* 5. EVIDENCE DRAWER（共享组件：修改说明 + 领域 Store 依据） */}
       {/* ========================================================= */}
-      {isEvidenceDrawerOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
-          <div
-            className="absolute inset-0 bg-slate-900/20 backdrop-blur-2xs transition-opacity"
-            onClick={() => setIsEvidenceDrawerOpen(false)}
-          />
-          <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-            <div className="w-screen max-w-md bg-white border-l border-[#E2E8F0] shadow-xl flex flex-col">
-              <div className="p-5 border-b border-[#F1F5F9] flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <h3 className="text-sm font-bold text-[#0F172A]">修改依据明细</h3>
-                  <p className="text-xs text-[#64748B]">
-                    支撑本次业务对象修改与边界调整的业务资料
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsEvidenceDrawerOpen(false)}
-                  className="text-[#94A3B8] hover:text-[#0F172A] p-1 rounded-md"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="p-5 overflow-y-auto flex-1 space-y-4 text-xs">
-                {/* 依据 1 */}
-                <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-[#0F172A]">用户修改说明</span>
-                    <span className="text-[10px] text-[#64748B]">工作区输入</span>
-                  </div>
-                  <p className="text-[#475569] leading-relaxed">
-                    用户指定需要进一步明确“服务工单”覆盖热线、线上和窗口等全域渠道，并增加“来源渠道”作为核心业务识别特征。
-                  </p>
-                </div>
-
-                {/* 依据 2 */}
-                <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-[#0F172A]">
-                      新版《公共服务热线运行管理办法》
-                    </span>
-                    <span className="text-[10px] text-[#64748B]">制度文件</span>
-                  </div>
-                  <p className="text-[#475569] leading-relaxed">
-                    第 2 章 · 第 5 条：“建立涵盖电话热线、政务服务网、移动客户端及线下办事窗口的一体化服务工单受理与协同督办机制。”
-                  </p>
-                </div>
-
-                {/* 依据 3 */}
-                <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-md space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-[#0F172A]">当前正式业务对象定义</span>
-                    <span className="text-[10px] text-[#166534]">已发布生效</span>
-                  </div>
-                  <p className="text-[#475569] leading-relaxed">
-                    现行企业业务语义库中的正式生效定义，保持主体标识（工单编号）及申请人、承办部门、所属区域关系不变。
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <BusinessEvidenceDrawer
+        isOpen={isEvidenceDrawerOpen}
+        onClose={() => setIsEvidenceDrawerOpen(false)}
+        objectName={objectName}
+        title="修改依据明细"
+        subtitle="支撑本次业务对象修改与边界调整的业务资料"
+        evidence={changeEvidence}
+      />
 
       {/* ========================================================= */}
       {/* 6. KEY SEMANTICS ADJUSTMENT DRAWER                        */}

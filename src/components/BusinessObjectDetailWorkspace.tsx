@@ -26,10 +26,12 @@ import {
   getVersion
 } from '../domain/business-object';
 import type { BusinessObject } from '../domain/business-object';
-import { 
-  LocalGroundingCorrectionDrawer, 
-  CandidateFieldOption 
+import {
+  LocalGroundingCorrectionDrawer,
+  CandidateFieldOption
 } from './LocalGroundingCorrectionDrawer';
+import { BusinessEvidenceDrawer } from './business-object/BusinessEvidenceDrawer';
+import { BusinessObjectHistoryDrawer } from './business-object/BusinessObjectHistoryDrawer';
 
 export interface BusinessObjectDetailWorkspaceProps {
   objectId?: string;
@@ -1633,130 +1635,21 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
       {/* 3. DRAWERS & MODALS (READ-ONLY)                           */}
       {/* ========================================================= */}
 
-      {/* EVIDENCE DRAWER */}
-      {isEvidenceDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-2xs animate-in fade-in duration-150">
-          <aside className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
-            <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-white">
-              <div className="space-y-0.5">
-                <h3 className="text-sm font-bold text-[#0F172A]">定义依据 · {currentObject.name}</h3>
-                <p className="text-xs text-[#64748B]">当前正式业务定义的已记录来源</p>
-              </div>
-              <button
-                onClick={() => setIsEvidenceDrawerOpen(false)}
-                className="p-1.5 rounded hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* EVIDENCE DRAWER（共享组件：依据来自领域 Store） */}
+      <BusinessEvidenceDrawer
+        isOpen={isEvidenceDrawerOpen}
+        onClose={() => setIsEvidenceDrawerOpen(false)}
+        objectName={currentObject.name}
+        evidence={currentObject.evidence}
+      />
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-[#334155]">
-              {currentObject.evidence.length > 0 ? (
-                currentObject.evidence.map((item) => (
-                  <div key={item.id} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <BookOpen className="w-4 h-4 text-[#2563EB]" />
-                      <span className="font-semibold text-[#0F172A]">{item.title}</span>
-                    </div>
-                    <p className="text-xs text-[#475569] leading-relaxed">
-                      {item.adoptedDecision ?? '作为该业务对象定义的已记录来源。'}
-                    </p>
-                    <div className="text-[11px] text-[#64748B]">
-                      来源：{item.source}
-                      {item.version ? ` · ${item.version}` : ''}
-                      {item.location ? ` · ${item.location}` : ''}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#94A3B8]">
-                  暂无记录的定义依据。
-                </div>
-              )}
-            </div>
-
-            <div className="px-6 py-3.5 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end">
-              <button
-                onClick={() => setIsEvidenceDrawerOpen(false)}
-                className="px-4 py-1.5 bg-[#2563EB] text-white text-xs font-medium rounded hover:bg-[#1D4ED8] transition-colors cursor-pointer"
-              >
-                关闭
-              </button>
-            </div>
-          </aside>
-        </div>
-      )}
-
-      {/* HISTORY DRAWER */}
-      {isHistoryDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-2xs animate-in fade-in duration-150">
-          <aside className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
-            <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-white">
-              <div className="space-y-0.5">
-                <h3 className="text-sm font-bold text-[#0F172A]">变更历史 · {currentObject.name}</h3>
-                <p className="text-xs text-[#64748B]">企业业务语义目录中该对象的生效版本记录</p>
-              </div>
-              <button
-                onClick={() => setIsHistoryDrawerOpen(false)}
-                className="p-1.5 rounded hover:bg-[#F1F5F9] text-[#64748B] hover:text-[#0F172A] cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
-              {objectRevisions.length > 0 ? (
-                objectRevisions.map((revision, index) => (
-                  <div
-                    key={revision.id}
-                    className={`p-4 border border-[#E2E8F0] rounded space-y-2 ${
-                      index === 0 ? 'bg-white' : 'bg-[#F8FAFC] opacity-80'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={index === 0 ? 'font-bold text-[#0F172A]' : 'font-medium text-[#334155]'}>
-                        {revision.revision} · {revision.summary}
-                      </span>
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded font-medium ${
-                          revision.status === 'ACTIVE'
-                            ? 'text-[#166534] bg-[#F0FDF4] border border-[#DCFCE7]'
-                            : 'text-[#64748B] bg-[#F1F5F9]'
-                        }`}
-                      >
-                        {revision.status === 'ACTIVE' ? '当前生效' : '历史版本'}
-                      </span>
-                    </div>
-                    <ul className="space-y-1">
-                      {revision.changes.map((change, changeIdx) => (
-                        <li key={changeIdx} className="text-xs text-[#475569] leading-relaxed">
-                          · {change}
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="text-[11px] text-[#64748B] pt-1">
-                      {revision.changedBy} · {revision.createdAt.slice(0, 10)}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#64748B]">
-                  尚无正式修订记录，当前定义来自初始登记。
-                </div>
-              )}
-            </div>
-
-            <div className="px-6 py-3.5 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end">
-              <button
-                onClick={() => setIsHistoryDrawerOpen(false)}
-                className="px-4 py-1.5 bg-[#2563EB] text-white text-xs font-medium rounded hover:bg-[#1D4ED8] transition-colors cursor-pointer"
-              >
-                关闭
-              </button>
-            </div>
-          </aside>
-        </div>
-      )}
+      {/* HISTORY DRAWER（共享组件：历史来自 Revision Store） */}
+      <BusinessObjectHistoryDrawer
+        isOpen={isHistoryDrawerOpen}
+        onClose={() => setIsHistoryDrawerOpen(false)}
+        objectName={currentObject.name}
+        revisions={objectRevisions}
+      />
 
       {/* KNOWLEDGE NETWORK CONTEXT DRAWER */}
       {isKnowledgeDrawerOpen && (
