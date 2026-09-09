@@ -58,7 +58,7 @@ import { ResolveDataSupportWorkspace } from './components/ResolveDataSupportWork
 import { BusinessObjectResolutionWorkspace } from './components/BusinessObjectResolutionWorkspace';
 import { BusinessObjectRevalidationWorkspace } from './components/BusinessObjectRevalidationWorkspace';
 import { DataSemanticsDetailView } from './components/DataSemanticsDetailView';
-import { businessObjectRepository, objectResolutionContexts } from './domain/business-object';
+import { businessObjectRepository, objectResolutionContexts, resolveCanonicalDataAsset } from './domain/business-object';
 import {
   AgentItem,
   AgentDefinitionDetail,
@@ -154,17 +154,31 @@ export default function App() {
 
   // =========================================================
   // Bottom-up Resolution 闭环（PR-4）
-  // 入口登记 ObjectResolutionContext，完成后按 returnRoute + sourceId + taskId 返回原上下文
+  // 入口登记 ObjectResolutionContext，完成后按 returnRoute + dataAsset.id + taskId 返回原上下文。
+  // 资产身份先经统一目录解析（semanticId / 旧版资源 ID 一律归一到规范 dataAsset.id，§4）
   // =========================================================
   const openResolutionContext = (context: {
     taskId: string;
     sourceType: 'DATA_ASSET' | 'DATA_SEMANTICS' | 'TASK';
     sourceId: string;
     sourceName?: string;
-    sourceRevision: string;
+    semanticSource?: { semanticId: string; semanticRevision: string };
     returnRoute: string;
+    returnFocus?: string;
   }) => {
-    objectResolutionContexts.open(context);
+    // 规范数据资产身份：semanticId 绝不直接作为资产 ID 进入上下文
+    const { reference: dataAsset } = resolveCanonicalDataAsset({
+      id: context.sourceId,
+      name: context.sourceName
+    });
+    objectResolutionContexts.open({
+      taskId: context.taskId,
+      sourceType: context.sourceType,
+      dataAsset,
+      ...(context.semanticSource ? { semanticSource: context.semanticSource } : {}),
+      returnRoute: context.returnRoute,
+      ...(context.returnFocus ? { returnFocus: context.returnFocus } : {})
+    });
     setResolutionTaskId(context.taskId);
     setCurrentNav('business_object_resolution');
     setViewTab('business_object_resolution');
@@ -177,14 +191,14 @@ export default function App() {
     setResolutionTaskId(null);
 
     if (context?.returnRoute === 'asset_detail') {
-      setAssetDetailContext({ assetId: context.sourceId, fromGoalSearch: false, goalQuery: '' });
+      setAssetDetailContext({ assetId: context.dataAsset.id, fromGoalSearch: false, goalQuery: '' });
       setCurrentNav('asset_detail');
       setViewTab('asset_detail');
-      addToast('success', '已返回原上下文', `已按对齐任务 ${context.taskId} 返回「${context.sourceName ?? context.sourceId}」数据资产详情`);
+      addToast('success', '已返回原上下文', `已按对齐任务 ${context.taskId} 返回「${context.dataAsset.name}」数据资产详情`);
     } else if (context?.returnRoute === 'semantics_detail') {
       setCurrentNav('semantics_detail');
       setViewTab('semantics_detail');
-      addToast('success', '已返回原上下文', `已按对齐任务 ${context.taskId} 返回「${context.sourceName ?? context.sourceId}」数据语义详情`);
+      addToast('success', '已返回原上下文', `已按对齐任务 ${context.taskId} 返回「${context.dataAsset.name}」数据语义详情`);
     } else {
       setCurrentNav('semantics');
       setViewTab('semantics');
@@ -1642,7 +1656,6 @@ export default function App() {
               sourceType: 'DATA_ASSET',
               sourceId: asset.id,
               sourceName: asset.name,
-              sourceRevision: 'v1.0',
               returnRoute: 'asset_detail'
             });
           }}
@@ -1679,7 +1692,8 @@ export default function App() {
               sourceType: 'DATA_SEMANTICS',
               sourceId: source.id,
               sourceName: source.name,
-              sourceRevision: source.revision,
+              // 数据语义入口：semanticId 只作来源证据，资产身份按统一目录归一
+              semanticSource: { semanticId: source.id, semanticRevision: source.revision },
               returnRoute: 'semantics_detail'
             });
           }}

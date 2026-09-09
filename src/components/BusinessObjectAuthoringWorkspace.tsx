@@ -190,18 +190,18 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
     if (!resolutionTaskId) return;
     const context = objectResolutionContexts.get(resolutionTaskId);
     if (!context || (context.status !== 'OPEN' && context.status !== 'POSTPONED')) return;
+    const { dataAsset, semanticSource } = context;
     const result = dataSupportService.confirmBottomUpAlignment({
       taskId: context.taskId,
       businessObjectId: newObjectId,
-      sourceAssetId: context.sourceId,
-      sourceName: context.sourceName ?? context.sourceId,
-      sourceRevision: context.sourceRevision,
+      dataAsset,
+      ...(semanticSource ? { semanticSource } : {}),
       implementation: {
-        name: context.sourceName ?? context.sourceId,
-        techName: context.sourceId,
-        warehouseTable: context.sourceId,
-        assetId: context.sourceId,
-        scope: context.sourceName ?? '来源数据资产',
+        name: dataAsset.name,
+        techName: dataAsset.techName ?? dataAsset.id,
+        warehouseTable: dataAsset.warehouseTable ?? dataAsset.techName ?? dataAsset.id,
+        assetId: dataAsset.id,
+        scope: dataAsset.name,
         granularity: '一行一条业务记录（对齐后完善）',
         identity: '（对齐后完善）',
         scopeRelationText: '自下而上对齐（新建对象自动登记）',
@@ -221,7 +221,7 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
     addToast?.(
       'success',
       '数据支撑已自动对齐',
-      `「${context.sourceName ?? context.sourceId}」已生效为新对象的数据支撑（任务 ${context.taskId} 已完成）`
+      `「${dataAsset.name}」已生效为新对象的数据支撑（任务 ${context.taskId} 已完成）`
     );
   };
 

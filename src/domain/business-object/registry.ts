@@ -9,6 +9,7 @@ import { clearPersistedState, loadState, mutate, nowIso, resetState } from './st
 import { BusinessObjectStoreState } from './store';
 import { BusinessObject, BusinessObjectStatus } from './types';
 import { recordRevision } from './revision';
+import { isCurrentBindingStatus } from './data-support';
 
 let state: BusinessObjectStoreState | null = null;
 
@@ -114,14 +115,15 @@ export const businessObjectRepository = {
 
 /**
  * 列表页展示用：数据支撑摘要。
- * 与 Detail 正式选择器同口径：只统计 EFFECTIVE + NEEDS_REVALIDATION，
- * CANDIDATE / RETIRED 不计入（Inv05）。
+ * 与 Detail 正式选择器同口径：只统计当前绑定（EFFECTIVE + NEEDS_REVALIDATION），
+ * CANDIDATE / RETIRED 不计入（Inv05）；主要数据实现在当前绑定中唯一，
+ * 待复核（NEEDS_REVALIDATION）的主实现同样计入（不是「非当前关系」）。
  */
 export function dataSupportSummary(objectId: string): { count: number; hasImplementation: boolean; mainAsset?: string } {
   const current = Object.values(getState().bindings).filter(
-    (binding) => binding.businessObjectId === objectId && (binding.status === 'EFFECTIVE' || binding.status === 'NEEDS_REVALIDATION')
+    (binding) => binding.businessObjectId === objectId && isCurrentBindingStatus(binding.status)
   );
-  const primary = current.find((binding) => binding.role === 'PRIMARY' && binding.status === 'EFFECTIVE');
+  const primary = current.find((binding) => binding.role === 'PRIMARY');
   const mainImplementation = primary ? getState().implementations[primary.implementationId] : undefined;
   return {
     count: current.length,

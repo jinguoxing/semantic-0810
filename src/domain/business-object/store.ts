@@ -8,7 +8,12 @@
  * Schema V2（Business Object V2.2 生命周期硬化）：
  * - 新增 drafts（Create / Change 草稿）与 dataSupportRevisions（数据支撑修订）
  * - taskContexts 增加 status / updatedAt / returnFocus
- * 读取到 V1 状态时执行结构化迁移并回写为 V2，绝不因 Schema 升级清空用户状态。
+ *
+ * Schema V3（最终收口：规范资产身份）：
+ * - taskContexts.sourceId/sourceName/sourceRevision → dataAsset（规范引用）+ semanticSource（仅语义来源）
+ * - implementations.assetId 经统一目录解析（如 res-02 → asset-1）
+ * - 无法解析的旧来源保留为兼容引用并标记 migrationWarning（只读，不再产生正式绑定）
+ * 读取到 V1 / V2 状态时执行结构化迁移链并回写为 V3，绝不因 Schema 升级清空用户状态。
  */
 import {
   BusinessObject,
@@ -18,15 +23,17 @@ import {
   DataSupportBinding,
   DataSupportRevision,
   GroundingRevision,
-  ObjectResolutionContext
+  ObjectResolutionContext,
+  ObjectResolutionStatus
 } from './types';
+import { resolveCanonicalDataAsset, resolveCanonicalDataAssetId } from './asset-identity';
 
 const STORAGE_KEY = 'semovix_business_object_state_v1';
 
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 
 export interface BusinessObjectStoreState {
-  version: 2;
+  version: 3;
   objects: Record<string, BusinessObject>;
   implementations: Record<string, DataImplementation>;
   bindings: Record<string, DataSupportBinding>;
@@ -50,6 +57,20 @@ function isBrowserStorageAvailable(): boolean {
   }
 }
 
+/** 旧版（V1 / V2）任务上下文的结构：扁平 sourceId / sourceName / sourceRevision */
+interface LegacyTaskContext {
+  taskId: string;
+  sourceType: 'DATA_ASSET' | 'DATA_SEMANTICS' | 'TASK';
+  sourceId: string;
+  sourceName?: string;
+  sourceRevision: string;
+  returnRoute: string;
+  returnFocus?: string;
+  createdAt: string;
+  status?: ObjectResolutionStatus;
+  updatedAt?: string;
+}
+
 /** V1 持久化状态的结构（缺 drafts / dataSupportRevisions，taskContexts 缺状态字段） */
 interface LegacyV1State {
   version: 1;
@@ -58,12 +79,25 @@ interface LegacyV1State {
   bindings: Record<string, DataSupportBinding>;
   groundingRevisions: Record<string, GroundingRevision>;
   revisions: Record<string, BusinessObjectRevision>;
-  taskContexts: Record<string, Omit<ObjectResolutionContext, 'status' | 'updatedAt'>>;
+  taskContexts: Record<string, LegacyTaskContext>;
+}
+
+/** V2 持久化状态的结构（taskContexts 仍是扁平来源字段） */
+interface LegacyV2State {
+  version: 2;
+  objects: Record<string, BusinessObject>;
+  implementations: Record<string, DataImplementation>;
+  bindings: Record<string, DataSupportBinding>;
+  groundingRevisions: Record<string, GroundingRevision>;
+  revisions: Record<string, BusinessObjectRevision>;
+  taskContexts: Record<string, LegacyTaskContext>;
+  drafts: Record<string, BusinessObjectDraft>;
+  dataSupportRevisions: Record<string, DataSupportRevision>;
 }
 
 /** V1 → V2 结构化迁移：补齐新集合，回填任务上下文状态字段 */
-function migrateV1ToV2(legacy: LegacyV1State): BusinessObjectStoreState {
-  const taskContexts: Record<string, ObjectResolutionContext> = {};
+function migrateV1ToV2(legacy: LegacyV1State): LegacyV2State {
+  const taskContexts: Record<string, LegacyTaskContext> = {};
   Object.entries(legacy.taskContexts ?? {}).forEach(([taskId, context]) => {
     taskContexts[taskId] = {
       ...context,
@@ -72,7 +106,7 @@ function migrateV1ToV2(legacy: LegacyV1State): BusinessObjectStoreState {
     };
   });
   return {
-    version: CURRENT_VERSION,
+    version: 2,
     objects: legacy.objects ?? {},
     implementations: legacy.implementations ?? {},
     bindings: legacy.bindings ?? {},
@@ -84,6 +118,57 @@ function migrateV1ToV2(legacy: LegacyV1State): BusinessObjectStoreState {
   };
 }
 
+/** 旧来源字段 → 规范 dataAsset 引用；语义入口单独保留 semanticSource（仅证据） */
+function migrateLegacyTaskContext(context: LegacyTaskContext): ObjectResolutionContext {
+  const resolved = resolveCanonicalDataAsset({ id: context.sourceId, name: context.sourceName });
+  return {
+    taskId: context.taskId,
+    sourceType: context.sourceType,
+    dataAsset: resolved.reference,
+    ...(context.sourceType === 'DATA_SEMANTICS'
+      ? { semanticSource: { semanticId: context.sourceId, semanticRevision: context.sourceRevision } }
+      : {}),
+    returnRoute: context.returnRoute,
+    ...(context.returnFocus ? { returnFocus: context.returnFocus } : {}),
+    createdAt: context.createdAt,
+    status: context.status ?? 'OPEN',
+    updatedAt: context.updatedAt ?? context.createdAt,
+    ...(resolved.canonical
+      ? {}
+      : {
+          migrationWarning: `来源「${context.sourceId}」无法解析到统一数据资产目录，该对齐上下文只读保留，不再产生正式绑定。`
+        })
+  };
+}
+
+/** V2 → V3 结构化迁移：规范资产身份（dataAsset / semanticSource / assetId） */
+function migrateV2ToV3(legacy: LegacyV2State): BusinessObjectStoreState {
+  const taskContexts: Record<string, ObjectResolutionContext> = {};
+  Object.entries(legacy.taskContexts ?? {}).forEach(([taskId, context]) => {
+    taskContexts[taskId] = migrateLegacyTaskContext(context);
+  });
+
+  const implementations: Record<string, DataImplementation> = {};
+  Object.values(legacy.implementations ?? {}).forEach((implementation) => {
+    const canonicalAssetId = resolveCanonicalDataAssetId(implementation.assetId);
+    implementations[implementation.id] = canonicalAssetId
+      ? { ...implementation, assetId: canonicalAssetId }
+      : { ...implementation };
+  });
+
+  return {
+    version: CURRENT_VERSION,
+    objects: legacy.objects ?? {},
+    implementations,
+    bindings: legacy.bindings ?? {},
+    groundingRevisions: legacy.groundingRevisions ?? {},
+    revisions: legacy.revisions ?? {},
+    taskContexts,
+    drafts: legacy.drafts ?? {},
+    dataSupportRevisions: legacy.dataSupportRevisions ?? {}
+  };
+}
+
 export function loadState(): BusinessObjectStoreState | null {
   if (!isBrowserStorageAvailable()) return null;
   try {
@@ -92,8 +177,10 @@ export function loadState(): BusinessObjectStoreState | null {
     const parsed = JSON.parse(raw) as Partial<BusinessObjectStoreState> & { version?: number };
     if (!parsed || typeof parsed !== 'object') return null;
     if (parsed.version === CURRENT_VERSION) return parsed as BusinessObjectStoreState;
-    if (parsed.version === 1) {
-      const migrated = migrateV1ToV2(parsed as unknown as LegacyV1State);
+    // 迁移链 V1 → V2 → V3：逐级结构化迁移并回写，绝不因升级清空用户状态
+    if (parsed.version === 1 || parsed.version === 2) {
+      const asV2 = parsed.version === 1 ? migrateV1ToV2(parsed as unknown as LegacyV1State) : (parsed as unknown as LegacyV2State);
+      const migrated = migrateV2ToV3(asV2);
       persistState(migrated);
       return migrated;
     }

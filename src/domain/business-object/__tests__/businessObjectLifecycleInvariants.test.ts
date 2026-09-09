@@ -35,9 +35,7 @@ describe('business object lifecycle invariants (V2.2)', () => {
 
     const align = dataSupportService.confirmBottomUpAlignment({
       businessObjectId: 'bo_service_ticket',
-      sourceAssetId: 'res-99',
-      sourceName: '网格流转工单表',
-      sourceRevision: 'v1.0',
+      dataAsset: { id: 'res-99', name: '网格流转工单表' },
       implementation: {
         name: '网格流转工单表',
         techName: 'res-99',
@@ -236,8 +234,7 @@ describe('business object lifecycle invariants (V2.2)', () => {
     // Bottom-up：res-01 已 EFFECTIVE 承载「服务工单」，对齐到「自然人」→ BINDING_CONFLICT，零写入
     const conflict = dataSupportService.confirmBottomUpAlignment({
       businessObjectId: 'bo_person',
-      sourceAssetId: 'res-01',
-      sourceName: '客服工单当前视图',
+      dataAsset: { id: 'res-01', name: '客服工单当前视图' },
       implementation: {
         name: '客服工单当前视图',
         techName: 'res-01',
@@ -264,8 +261,7 @@ describe('business object lifecycle invariants (V2.2)', () => {
     // 同资产已承载本对象 → 幂等成功，不新建第二条绑定
     const idempotent = dataSupportService.confirmBottomUpAlignment({
       businessObjectId: 'bo_service_ticket',
-      sourceAssetId: 'res-01',
-      sourceName: '客服工单当前视图',
+      dataAsset: { id: 'res-01', name: '客服工单当前视图' },
       implementation: {
         name: '客服工单当前视图',
         techName: 'res-01',

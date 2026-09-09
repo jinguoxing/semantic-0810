@@ -324,13 +324,36 @@ export interface GroundingCorrectionInput {
 /** Resolution 任务上下文状态：OPEN → POSTPONED / COMPLETED / CANCELLED */
 export type ObjectResolutionStatus = 'OPEN' | 'POSTPONED' | 'COMPLETED' | 'CANCELLED';
 
+/**
+ * 数据资产引用：Bottom-up 对齐的唯一正式身份（Inv：禁止用 semanticId 替代 dataAssetId）。
+ * id 必须来自统一数据资产目录（Data Asset Registry / Resource Store）的规范 ID。
+ */
+export interface DataAssetReference {
+  id: string;
+  name: string;
+  /** 技术全名（库.模式.表），目录可查时填写 */
+  techName?: string;
+  /** 数仓表名，目录可查时填写 */
+  warehouseTable?: string;
+}
+
+/**
+ * 数据语义来源引用：仅作为证据 / 来源记录，绝不充当数据资产身份。
+ * 同一张物理表可以有多套语义版本；语义身份与资产身份分离。
+ */
+export interface SemanticSourceReference {
+  semanticId: string;
+  semanticRevision: string;
+}
+
 /** Resolution 入口上下文：Bottom-up 对齐完成后返回原上下文 */
 export interface ObjectResolutionContext {
   taskId: string;
   sourceType: 'DATA_ASSET' | 'DATA_SEMANTICS' | 'TASK';
-  sourceId: string;
-  sourceName?: string;
-  sourceRevision: string;
+  /** 规范数据资产引用（按 dataAsset.id 去重 / 冲突检测） */
+  dataAsset: DataAssetReference;
+  /** 数据语义入口携带的语义来源（仅证据，不作为资产身份） */
+  semanticSource?: SemanticSourceReference;
   /** 返回路由（App 级 nav 值），如 'asset_detail' */
   returnRoute: string;
   /** 返回后聚焦的元素或入口标识 */
@@ -338,6 +361,11 @@ export interface ObjectResolutionContext {
   createdAt: string;
   status: ObjectResolutionStatus;
   updatedAt: string;
+  /**
+   * Schema 迁移标记：旧版 sourceId 无法解析到统一数据资产目录时置位，
+   * 该上下文只读保留（可查看历史），不得再发起正式对齐写入。
+   */
+  migrationWarning?: string;
 }
 
 /**

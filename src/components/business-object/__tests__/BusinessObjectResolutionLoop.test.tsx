@@ -31,13 +31,13 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
   });
 
   it('对齐确认：直接登记 EFFECTIVE 数据支撑 + BOTTOM_UP_ALIGN 修订 + 完成任务并按上下文返回', async () => {
-    // 入口登记（App 层 openResolutionContext 的领域侧等价物）
+    // 入口登记（App 层 openResolutionContext 的领域侧等价物）：
+    // semanticId 只进 semanticSource 证据，资产身份按统一目录归一为 asset-1
     objectResolutionContexts.open({
       taskId: 'task_form_sem_hotline_ticket',
       sourceType: 'DATA_SEMANTICS',
-      sourceId: 'sem_hotline_ticket',
-      sourceName: '公共服务热线工单记录表',
-      sourceRevision: 'S5',
+      dataAsset: { id: 'asset-1', name: '公共服务热线工单记录表', techName: 'hotline_db.service.pop_service_hotline' },
+      semanticSource: { semanticId: 'sem_hotline_ticket', semanticRevision: 'S5' },
       returnRoute: 'semantics_detail'
     });
 
@@ -64,17 +64,20 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
 
     await waitFor(() => expect(onBackToSource).toHaveBeenCalledTimes(1));
 
-    // 领域侧：语义来源无同资产实现 → 登记新数据实现，直接 EFFECTIVE（不经过候选期）
-    const registered = dataSupportService
+    // 领域侧：语义入口（asset-1）与资产入口解析到同一规范身份，
+    // 不重复登记实现 —— 提升既有 impl_st_hotline 的 CANDIDATE 绑定（§4 规范资产身份）
+    const sameAssetImpls = dataSupportService
       .listImplementations('bo_service_ticket')
-      .find((impl) => impl.assetId === 'sem_hotline_ticket');
-    expect(registered).toBeDefined();
-    expect(registered?.name).toBe('公共服务热线工单记录表');
+      .filter((impl) => impl.assetId === 'asset-1');
+    expect(sameAssetImpls).toHaveLength(1);
+    expect(sameAssetImpls[0].id).toBe('impl_st_hotline');
     const binding = dataSupportService
       .listBindings('bo_service_ticket')
-      .find((item) => item.implementationId === registered!.id);
+      .find((item) => item.implementationId === 'impl_st_hotline');
     expect(binding?.status).toBe('EFFECTIVE');
     expect(binding?.role).toBe('SECONDARY');
+    // semanticId 只作为来源证据记录在绑定上，不冒充资产身份
+    expect(binding?.evidence.some((item) => item.title.includes('sem_hotline_ticket'))).toBe(true);
 
     // BOTTOM_UP_ALIGN 数据支撑修订可追溯；业务对象修订不受影响（Inv01 / Inv02）
     const dsRevisions = listDataSupportRevisions('bo_service_ticket');
@@ -88,13 +91,12 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
   });
 
   it('重复对齐已有资产实现：提升既有 CANDIDATE 绑定，不重复登记实现 / 绑定', async () => {
-    // 种子已登记 res-02 → impl_st_hotline（CANDIDATE 绑定 bind_st_hotline）
+    // 种子已登记 asset-1 → impl_st_hotline（CANDIDATE 绑定 bind_st_hotline）；
+    // 旧版 res-02 入口经统一目录归一到 asset-1 后进入同一实现
     objectResolutionContexts.open({
       taskId: 'task_align_res_02',
       sourceType: 'DATA_ASSET',
-      sourceId: 'res-02',
-      sourceName: '公共服务热线工单记录表',
-      sourceRevision: 'v1.0',
+      dataAsset: { id: 'asset-1', name: '公共服务热线工单记录表', techName: 'hotline_db.service.pop_service_hotline' },
       returnRoute: 'asset_detail'
     });
 
@@ -113,7 +115,7 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
       expect(dataSupportService.getBinding('bind_st_hotline')?.status).toBe('EFFECTIVE');
     });
     const impls = dataSupportService.listImplementations('bo_service_ticket');
-    expect(impls.filter((impl) => impl.assetId === 'res-02')).toHaveLength(1);
+    expect(impls.filter((impl) => impl.assetId === 'asset-1')).toHaveLength(1);
     const hotlineBindings = dataSupportService
       .listBindings('bo_service_ticket')
       .filter((item) => item.implementationId === 'impl_st_hotline');
@@ -131,9 +133,7 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
     objectResolutionContexts.open({
       taskId: 'task_align_res_99',
       sourceType: 'DATA_ASSET',
-      sourceId: 'res-99',
-      sourceName: '网格流转工单表',
-      sourceRevision: 'v1.0',
+      dataAsset: { id: 'res-99', name: '网格流转工单表' },
       returnRoute: 'asset_detail'
     });
 

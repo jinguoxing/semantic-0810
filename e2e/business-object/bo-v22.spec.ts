@@ -26,7 +26,7 @@ interface PersistedState {
   bindings: Record<string, { id: string; businessObjectId: string; implementationId: string; status: string; role: string; revision: string }>;
   groundingRevisions: Record<string, { type: string; targetName: string; status: string; before: { field: string }; after: { field: string } }>;
   revisions: Record<string, { businessObjectId: string; revision: string; status: string }>;
-  taskContexts: Record<string, { taskId: string; status: string; returnRoute: string }>;
+  taskContexts: Record<string, { taskId: string; status: string; returnRoute: string; dataAsset?: { id: string; name: string } }>;
   dataSupportRevisions: Record<string, { businessObjectId: string; action: string }>;
 }
 
@@ -249,9 +249,12 @@ test.describe('Business Object V2.2 E2E', () => {
     const store = await readStore(page);
     const task = store.taskContexts['task_form_sem_hotline_ticket'];
     expect(task?.status).toBe('COMPLETED');
-    const registered = Object.values(store.implementations).find((impl) => impl.assetId === 'sem_hotline_ticket');
-    expect(registered).toBeDefined();
-    const binding = Object.values(store.bindings).find((item) => item.implementationId === registered?.id);
+    // 规范资产身份：语义入口 semanticId 不作为资产 ID，统一归一到目录 asset-1
+    expect(task?.dataAsset?.id).toBe('asset-1');
+    // 同一规范资产只有一条数据实现（与种子热线实现合一，不重复登记）
+    const sameAsset = Object.values(store.implementations).filter((impl) => impl.assetId === 'asset-1');
+    expect(sameAsset.map((impl) => impl.id)).toEqual(['impl_st_hotline']);
+    const binding = Object.values(store.bindings).find((item) => item.implementationId === 'impl_st_hotline');
     expect(binding?.status).toBe('EFFECTIVE');
     expect(binding?.businessObjectId).toBe('bo_service_ticket');
     const actions = Object.values(store.dataSupportRevisions)

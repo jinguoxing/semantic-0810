@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import {
   ArrowLeft,
   Check,
@@ -32,8 +32,7 @@ export interface BusinessObjectResolutionWorkspaceProps {
 
 /** Bottom-up 对齐失败 → 展示说明（领域校验失败时零写入） */
 const ALIGN_ERROR_LABELS: Record<string, string> = {
-  OBJECT_NOT_FOUND: '未找到目标业务对象，请刷新后重试',
-  BINDING_CONFLICT: '该数据资产已正式承载其他业务对象，不能重复对齐'
+  OBJECT_NOT_FOUND: '未找到目标业务对象，请刷新后重试'
 };
 
 export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutionWorkspaceProps> = ({
@@ -47,14 +46,16 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
 
   // Resolution 入口上下文：数据资产 / 数据语义 / 任务进入时登记
   const resolutionContext = objectResolutionContexts.get(taskId);
-  const sourceName = resolutionContext?.sourceName ?? resolutionContext?.sourceId ?? '来源数据';
+  const sourceName = resolutionContext?.dataAsset.name ?? '来源数据';
+  // 旧版上下文迁移后无法解析到统一数据资产目录 → 只读保留，禁止再发起正式对齐
+  const isMigrationReadOnly = Boolean(resolutionContext?.migrationWarning);
 
   // 候选业务对象来自领域仓库（禁止写死「服务工单 / 热线工单」演示对）；
-  // 初始不选中任何对象：Bottom-up 对齐必须由用户显式选择目标对象
-  const publishedObjects = useMemo(
-    () => businessObjectRepository.list().filter((object) => object.status === 'PUBLISHED'),
-    []
-  );
+  // 初始不选中任何对象：Bottom-up 对齐必须由用户显式选择目标对象。
+  // 直接随 Store 订阅渲染取值（不缓存），新建对象后返回本页也能看到
+  const publishedObjects = businessObjectRepository
+    .list()
+    .filter((object) => object.status === 'PUBLISHED');
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const selectedObject: BusinessObject | null = selectedObjectId
     ? publishedObjects.find((object) => object.id === selectedObjectId) ?? null
@@ -71,18 +72,26 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
   /** 确认对齐：真实领域写入（BOTTOM_UP_ALIGN 数据支撑修订，不产生业务对象修订） */
   const handleConfirm = () => {
     if (!resolutionContext || !selectedObject) return;
+    if (isMigrationReadOnly) {
+      addToast?.(
+        'warning',
+        '上下文只读',
+        '该对齐任务来自旧版本来源，无法解析到统一数据资产目录，只读保留，不再产生正式绑定。'
+      );
+      return;
+    }
+    const { dataAsset, semanticSource } = resolutionContext;
     const result = dataSupportService.confirmBottomUpAlignment({
       taskId: resolutionContext.taskId,
       businessObjectId: selectedObject.id,
-      sourceAssetId: resolutionContext.sourceId,
-      sourceName: resolutionContext.sourceName ?? resolutionContext.sourceId,
-      sourceRevision: resolutionContext.sourceRevision,
+      dataAsset,
+      ...(semanticSource ? { semanticSource } : {}),
       implementation: {
-        name: resolutionContext.sourceName ?? resolutionContext.sourceId,
-        techName: resolutionContext.sourceId,
-        warehouseTable: resolutionContext.sourceId,
-        assetId: resolutionContext.sourceId,
-        scope: resolutionContext.sourceName ?? '来源数据资产',
+        name: dataAsset.name,
+        techName: dataAsset.techName ?? dataAsset.id,
+        warehouseTable: dataAsset.warehouseTable ?? dataAsset.techName ?? dataAsset.id,
+        assetId: dataAsset.id,
+        scope: dataAsset.name,
         granularity: '一行一条业务记录（对齐后完善）',
         identity: '（对齐后完善）',
         scopeRelationText: '自下而上对齐（Bottom-up Resolution 登记）',
@@ -93,7 +102,15 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
       changedBy: '业务对象对齐工作台'
     });
     if (result.ok === false) {
-      addToast?.('error', '对齐未生效', ALIGN_ERROR_LABELS[result.error]);
+      if (result.error === 'BINDING_CONFLICT') {
+        addToast?.(
+          'error',
+          '对齐未生效',
+          `该数据当前已作为“${result.conflictObjectName ?? '其他业务对象'}”的数据实现。如需表达多个业务主体，请先明确独立记录粒度、身份和范围。`
+        );
+      } else {
+        addToast?.('error', '对齐未生效', ALIGN_ERROR_LABELS[result.error]);
+      }
       return;
     }
     if (result.outcome === 'IDEMPOTENT_SUCCESS') {
@@ -243,12 +260,16 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                 </div>
                 <span className="text-[#CBD5E1]">·</span>
                 <span className="font-mono text-xs text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0]">
-                  {resolutionContext.sourceId}
+                  {resolutionContext.dataAsset.id}
                 </span>
-                <span className="text-[#CBD5E1]">·</span>
-                <span className="font-mono text-xs text-[#64748B]">
-                  来源版本 {resolutionContext.sourceRevision}
-                </span>
+                {resolutionContext.semanticSource && (
+                  <>
+                    <span className="text-[#CBD5E1]">·</span>
+                    <span className="font-mono text-xs text-[#64748B]">
+                      来源版本 {resolutionContext.semanticSource.semanticRevision}
+                    </span>
+                  </>
+                )}
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
                   数据语义已确认
                 </span>
@@ -292,19 +313,41 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                 </div>
                 <div className="pt-1">
                   <div className="text-xs font-semibold text-[#1E293B]">{sourceName}</div>
-                  <div className="font-mono text-[11px] text-[#64748B] truncate mt-0.5" title={resolutionContext.sourceId}>
-                    {resolutionContext.sourceId}
+                  <div
+                    className="font-mono text-[11px] text-[#64748B] truncate mt-0.5"
+                    title={resolutionContext.dataAsset.techName ?? resolutionContext.dataAsset.id}
+                  >
+                    {resolutionContext.dataAsset.techName ?? resolutionContext.dataAsset.id}
                   </div>
                 </div>
               </div>
 
-              <dl className="space-y-3.5 text-xs">
-                <div className="space-y-0.5">
-                  <dt className="text-[#64748B] font-medium">来源版本</dt>
-                  <dd className="text-[#0F172A] font-medium font-mono text-[11px] bg-[#F1F5F9] px-1.5 py-0.5 rounded inline-block">
-                    {resolutionContext.sourceRevision}
-                  </dd>
+              {isMigrationReadOnly && (
+                <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-lg p-3 flex items-start space-x-2">
+                  <Info className="w-4 h-4 text-[#DC2626] shrink-0 mt-0.5" />
+                  <div className="text-[11px] text-[#991B1B] leading-relaxed">
+                    <div className="font-bold">旧版来源（只读保留）</div>
+                    <p className="mt-0.5">{resolutionContext.migrationWarning}</p>
+                  </div>
                 </div>
+              )}
+
+              <dl className="space-y-3.5 text-xs">
+                {resolutionContext.semanticSource ? (
+                  <div className="space-y-0.5">
+                    <dt className="text-[#64748B] font-medium">语义来源</dt>
+                    <dd className="text-[#0F172A] font-medium font-mono text-[11px] bg-[#F1F5F9] px-1.5 py-0.5 rounded inline-block">
+                      {resolutionContext.semanticSource.semanticId} @ {resolutionContext.semanticSource.semanticRevision}
+                    </dd>
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    <dt className="text-[#64748B] font-medium">数据资产目录</dt>
+                    <dd className="text-[#0F172A] font-medium font-mono text-[11px] bg-[#F1F5F9] px-1.5 py-0.5 rounded inline-block">
+                      {resolutionContext.dataAsset.id}
+                    </dd>
+                  </div>
+                )}
                 <div className="space-y-0.5">
                   <dt className="text-[#64748B] font-medium">语义状态</dt>
                   <dd className="text-[#0F172A] font-medium">已确认（进入对齐前完成）</dd>
@@ -532,7 +575,7 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
               <button
                 id="btn-confirm-resolution"
                 onClick={handleConfirm}
-                disabled={!selectedObject}
+                disabled={!selectedObject || isMigrationReadOnly}
                 className="w-full py-2.5 px-4 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-[#93C5FD] disabled:cursor-not-allowed text-white font-medium text-xs rounded-md shadow-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
               >
                 <Check className="w-4 h-4" />

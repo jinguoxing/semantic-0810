@@ -13,10 +13,19 @@
  */
 import { getState } from './registry';
 import { mutate, nextId, nowIso } from './store';
-import { BindingRole, DataImplementation, DataSupportBinding } from './types';
-import { dataAssetEvidence, decisionEvidence } from './evidence';
+import { BindingRole, BindingStatus, DataAssetReference, DataImplementation, DataSupportBinding } from './types';
+import { dataAssetEvidence, decisionEvidence, semanticAssetEvidence } from './evidence';
 import { recordDataSupportRevision } from './data-support-revision';
 import { objectResolutionContexts } from './task-context';
+
+/**
+ * 当前绑定的唯一判定口径（Inv05）：EFFECTIVE 与 NEEDS_REVALIDATION 都是当前关系。
+ * 待复核不是「非当前关系」：选择器、PRIMARY 唯一性、冲突检测、幂等判定统一使用本函数，
+ * 禁止在调用点各自内联 status 判断。
+ */
+export function isCurrentBindingStatus(status: BindingStatus): boolean {
+  return status === 'EFFECTIVE' || status === 'NEEDS_REVALIDATION';
+}
 
 function bumpBindingRevision(draft: DataSupportBinding): void {
   const match = /^R(\d+)$/.exec(draft.revision);
@@ -28,13 +37,13 @@ function implementationName(implementationId: string): string {
   return getState().implementations[implementationId]?.name ?? implementationId;
 }
 
-/** 同一实现上是否已存在活跃（EFFECTIVE / NEEDS_REVALIDATION）绑定 */
+/** 同一实现上是否已存在当前（EFFECTIVE / NEEDS_REVALIDATION）绑定 */
 function findActiveBindingByImplementation(implementationId: string, excludeBindingId?: string): DataSupportBinding | undefined {
   return Object.values(getState().bindings).find(
     (binding) =>
       binding.id !== excludeBindingId &&
       binding.implementationId === implementationId &&
-      (binding.status === 'EFFECTIVE' || binding.status === 'NEEDS_REVALIDATION')
+      isCurrentBindingStatus(binding.status)
   );
 }
 
@@ -62,7 +71,7 @@ export type RebindResult =
 
 export type RetireResult =
   | { ok: true; binding: DataSupportBinding }
-  | { ok: false; error: 'NOT_FOUND' | 'IS_PRIMARY' };
+  | { ok: false; error: 'NOT_FOUND' | 'NOT_CURRENT' | 'IS_PRIMARY' };
 
 export type SetPrimaryResult =
   | { ok: true; binding: DataSupportBinding; demotedBindingId?: string }
@@ -76,11 +85,9 @@ export const dataSupportService = {
     return Object.values(getState().bindings).filter((binding) => binding.businessObjectId === objectId);
   },
 
-  /** 当前正式数据支撑：仅 EFFECTIVE + NEEDS_REVALIDATION（Inv05） */
+  /** 当前正式数据支撑：仅 EFFECTIVE + NEEDS_REVALIDATION（Inv05，统一口径见 isCurrentBindingStatus） */
   listCurrentBindings(objectId: string): DataSupportBinding[] {
-    return this.listBindings(objectId).filter(
-      (binding) => binding.status === 'EFFECTIVE' || binding.status === 'NEEDS_REVALIDATION'
-    );
+    return this.listBindings(objectId).filter((binding) => isCurrentBindingStatus(binding.status));
   },
 
   /** 候选绑定：仅 CANDIDATE，只出现在发现 / 确认工作区 */
@@ -126,10 +133,12 @@ export const dataSupportService = {
 
     return mutate(getState(), (draft) => {
       const target = draft.bindings[bindingId];
-      const hasEffective = Object.values(draft.bindings).some(
-        (item) => item.businessObjectId === objectId && item.id !== bindingId && item.status === 'EFFECTIVE'
+      // 已有当前绑定（含待复核）即占有主要席位：新确认的实现只能进入其他数据实现，
+      // 避免 NEEDS_REVALIDATION 的主实现被旁路出现两个 PRIMARY
+      const hasCurrent = Object.values(draft.bindings).some(
+        (item) => item.businessObjectId === objectId && item.id !== bindingId && isCurrentBindingStatus(item.status)
       );
-      const role: BindingRole = hasEffective ? 'SECONDARY' : 'PRIMARY';
+      const role: BindingRole = hasCurrent ? 'SECONDARY' : 'PRIMARY';
       target.role = role;
       target.status = 'EFFECTIVE';
       target.confirmedAt = nowIso();
@@ -158,46 +167,48 @@ export const dataSupportService = {
   // Bottom-up：从数据侧对齐业务对象（直接落 EFFECTIVE 并闭环任务）
   // ---------------------------------------------------------------------------
   /**
-   * 自下而上对齐确认：
-   * 1. 同一资产已 EFFECTIVE 承载本对象 → IDEMPOTENT_SUCCESS，不重复建绑定；
-   * 2. 同一资产已 EFFECTIVE 承载其他对象 → BINDING_CONFLICT，不自动改写；
-   * 3. 对象尚无生效实现 → PRIMARY，否则 SECONDARY；
-   * 4. 新绑定直接 EFFECTIVE（不经过 CANDIDATE）；
-   * 5. 记录 BOTTOM_UP_ALIGN 数据支撑修订（不产生业务对象修订）；
-   * 6. 任务上下文（若有）置为 COMPLETED。
+   * 自下而上对齐确认（规范数据资产身份版）：
+   * 1. 按 input.dataAsset.id（统一目录规范 ID，semanticId 绝不作为资产身份）定位同资产实现；
+   * 2. 同一资产已当前承载（EFFECTIVE / NEEDS_REVALIDATION）本对象 → IDEMPOTENT_SUCCESS，不重复建绑定；
+   * 3. 同一资产已当前承载其他对象 → BINDING_CONFLICT，不自动改写；
+   * 4. 对象尚无当前实现 → PRIMARY，否则 SECONDARY；
+   * 5. 新绑定直接 EFFECTIVE（不经过 CANDIDATE）；
+   * 6. 记录 BOTTOM_UP_ALIGN 数据支撑修订（不产生业务对象修订；semanticSource 仅进证据）；
+   * 7. 任务上下文（若有）置为 COMPLETED。
    */
   confirmBottomUpAlignment(input: {
     taskId?: string;
     businessObjectId: string;
-    sourceAssetId: string;
-    sourceName: string;
-    sourceRevision?: string;
+    /** 规范数据资产引用（来自统一目录解析，见 asset-identity.ts） */
+    dataAsset: DataAssetReference;
+    /** 数据语义入口来源（仅作为证据记录，不参与资产身份判定） */
+    semanticSource?: { semanticId: string; semanticRevision: string };
     implementation: Omit<DataImplementation, 'id' | 'businessObjectId'>;
     changedBy?: string;
   }): BottomUpAlignResult {
     const object = getState().objects[input.businessObjectId];
     if (!object) return { ok: false, error: 'OBJECT_NOT_FOUND' };
 
-    // 同资产冲突 / 幂等检查：按 assetId 找到所有实现及其 EFFECTIVE 绑定
+    // 同资产冲突 / 幂等检查：按规范 dataAsset.id 找到所有实现及其当前（含待复核）绑定
     const sameAssetImplementations = Object.values(getState().implementations).filter(
-      (implementation) => implementation.assetId === input.sourceAssetId
+      (implementation) => implementation.assetId === input.dataAsset.id
     );
     for (const implementation of sameAssetImplementations) {
-      const effectiveBinding = Object.values(getState().bindings).find(
-        (binding) => binding.implementationId === implementation.id && binding.status === 'EFFECTIVE'
+      const currentBinding = Object.values(getState().bindings).find(
+        (binding) => binding.implementationId === implementation.id && isCurrentBindingStatus(binding.status)
       );
-      if (!effectiveBinding) continue;
-      if (effectiveBinding.businessObjectId === input.businessObjectId) {
+      if (!currentBinding) continue;
+      if (currentBinding.businessObjectId === input.businessObjectId) {
         // 幂等：该资产已正式承载本对象，直接成功返回
         if (input.taskId) objectResolutionContexts.complete(input.taskId);
-        return { ok: true, outcome: 'IDEMPOTENT_SUCCESS', binding: effectiveBinding, implementation, role: effectiveBinding.role };
+        return { ok: true, outcome: 'IDEMPOTENT_SUCCESS', binding: currentBinding, implementation, role: currentBinding.role };
       }
-      const conflictObject = getState().objects[effectiveBinding.businessObjectId];
+      const conflictObject = getState().objects[currentBinding.businessObjectId];
       return {
         ok: false,
         error: 'BINDING_CONFLICT',
         conflictObjectId: conflictObject?.id,
-        conflictObjectName: conflictObject?.name ?? effectiveBinding.businessObjectId
+        conflictObjectName: conflictObject?.name ?? currentBinding.businessObjectId
       };
     }
 
@@ -212,10 +223,10 @@ export const dataSupportService = {
         draft.implementations[implementation.id] = implementation;
       }
 
-      const hasEffective = Object.values(draft.bindings).some(
-        (binding) => binding.businessObjectId === input.businessObjectId && binding.status === 'EFFECTIVE'
+      const hasCurrent = Object.values(draft.bindings).some(
+        (binding) => binding.businessObjectId === input.businessObjectId && isCurrentBindingStatus(binding.status)
       );
-      const role: BindingRole = hasEffective ? 'SECONDARY' : 'PRIMARY';
+      const role: BindingRole = hasCurrent ? 'SECONDARY' : 'PRIMARY';
 
       // 同一实现已有 CANDIDATE 绑定时提升该绑定（CANDIDATE → EFFECTIVE），
       // 不再新建绑定：一个数据实现对一个业务对象只允许一条在役绑定
@@ -235,10 +246,20 @@ export const dataSupportService = {
         promoted.evidence = [
           ...promoted.evidence,
           dataAssetEvidence(
-            `自下而上对齐：${input.sourceName}`,
-            input.sourceAssetId,
-            `「${input.sourceName}」确认为「${draft.objects[input.businessObjectId].name}」的数据支撑（${role === 'PRIMARY' ? '主要' : '其他'}数据实现）。`
-          )
+            `自下而上对齐：${input.dataAsset.name}`,
+            input.dataAsset.id,
+            `「${input.dataAsset.name}」确认为「${draft.objects[input.businessObjectId].name}」的数据支撑（${role === 'PRIMARY' ? '主要' : '其他'}数据实现）。`
+          ),
+          ...(input.semanticSource
+            ? [
+                semanticAssetEvidence(
+                  `语义来源：${input.semanticSource.semanticId}`,
+                  input.semanticSource.semanticId,
+                  `对齐发起自数据语义 ${input.semanticSource.semanticRevision}，仅作为来源证据，不作为数据资产身份。`,
+                  input.semanticSource.semanticRevision
+                )
+              ]
+            : [])
         ];
         bumpBindingRevision(promoted);
         recordDataSupportRevision({
@@ -248,7 +269,7 @@ export const dataSupportService = {
           beforeStatus: 'CANDIDATE',
           afterStatus: 'EFFECTIVE',
           afterImplementationId: implementation.id,
-          reason: `自下而上对齐：「${input.sourceName}」由候选提升并生效为「${draft.objects[input.businessObjectId].name}」的数据支撑`,
+          reason: `自下而上对齐：「${input.dataAsset.name}」由候选提升并生效为「${draft.objects[input.businessObjectId].name}」的数据支撑`,
           changedBy: input.changedBy ?? '业务对象对齐工作台'
         });
         return { ok: true as const, outcome: 'ALIGNED' as const, binding: promoted, implementation, role };
@@ -263,10 +284,20 @@ export const dataSupportService = {
         scope: input.implementation.scope,
         evidence: [
           dataAssetEvidence(
-            `自下而上对齐：${input.sourceName}`,
-            input.sourceAssetId,
-            `「${input.sourceName}」确认为「${draft.objects[input.businessObjectId].name}」的数据支撑（${role === 'PRIMARY' ? '主要' : '其他'}数据实现）。`
-          )
+            `自下而上对齐：${input.dataAsset.name}`,
+            input.dataAsset.id,
+            `「${input.dataAsset.name}」确认为「${draft.objects[input.businessObjectId].name}」的数据支撑（${role === 'PRIMARY' ? '主要' : '其他'}数据实现）。`
+          ),
+          ...(input.semanticSource
+            ? [
+                semanticAssetEvidence(
+                  `语义来源：${input.semanticSource.semanticId}`,
+                  input.semanticSource.semanticId,
+                  `对齐发起自数据语义 ${input.semanticSource.semanticRevision}，仅作为来源证据，不作为数据资产身份。`,
+                  input.semanticSource.semanticRevision
+                )
+              ]
+            : [])
         ],
         revision: 'R1',
         createdAt: nowIso(),
@@ -279,7 +310,7 @@ export const dataSupportService = {
         action: 'BOTTOM_UP_ALIGN',
         afterStatus: 'EFFECTIVE',
         afterImplementationId: implementation.id,
-        reason: `自下而上对齐：「${input.sourceName}」直接生效为「${draft.objects[input.businessObjectId].name}」的数据支撑`,
+        reason: `自下而上对齐：「${input.dataAsset.name}」直接生效为「${draft.objects[input.businessObjectId].name}」的数据支撑`,
         changedBy: input.changedBy ?? '业务对象对齐工作台'
       });
       return { ok: true as const, outcome: 'ALIGNED' as const, binding, implementation, role };
@@ -383,12 +414,15 @@ export const dataSupportService = {
   },
 
   /**
-   * 退休绑定。约束：PRIMARY 绑定不可直接退休 ——
-   * 需先通过 SET_PRIMARY 确认新的主要数据实现（无其他生效实现时同样不可退休）。
+   * 退休绑定。约束：
+   * - 只有当前绑定（EFFECTIVE / NEEDS_REVALIDATION，含待复核）可退休；
+   * - PRIMARY 绑定不可直接退休 ——
+   *   需先通过 SET_PRIMARY 确认新的主要数据实现（无其他生效实现时同样不可退休）。
    */
   retireBinding(bindingId: string, options?: { reason?: string; changedBy?: string }): RetireResult {
     const binding = getState().bindings[bindingId];
     if (!binding) return { ok: false, error: 'NOT_FOUND' };
+    if (!isCurrentBindingStatus(binding.status)) return { ok: false, error: 'NOT_CURRENT' };
     if (binding.role === 'PRIMARY') return { ok: false, error: 'IS_PRIMARY' };
 
     return mutate(getState(), (draft) => {
@@ -411,19 +445,24 @@ export const dataSupportService = {
   },
 
   /**
-   * 切换主要数据实现：目标绑定须为 EFFECTIVE；
-   * 原 PRIMARY 自动降级为 SECONDARY，只记录 SET_PRIMARY 数据支撑修订。
+   * 切换主要数据实现：目标绑定须为当前绑定（EFFECTIVE 或 NEEDS_REVALIDATION，Inv05）。
+   * 待复核的主实现仍占主要席位，切主会使其降级为其他数据实现；
+   * 原 PRIMARY（含 NEEDS_REVALIDATION）自动降级为 SECONDARY，保证主要数据实现唯一，
+   * 只记录 SET_PRIMARY 数据支撑修订。
    */
   setPrimary(bindingId: string, options?: { reason?: string; changedBy?: string }): SetPrimaryResult {
     const binding = getState().bindings[bindingId];
     if (!binding) return { ok: false, error: 'NOT_FOUND' };
-    if (binding.status !== 'EFFECTIVE') return { ok: false, error: 'NOT_EFFECTIVE' };
+    if (!isCurrentBindingStatus(binding.status)) return { ok: false, error: 'NOT_EFFECTIVE' };
 
     return mutate(getState(), (draft) => {
       const target = draft.bindings[bindingId];
       const demoted = Object.values(draft.bindings).find(
         (item) =>
-          item.businessObjectId === target.businessObjectId && item.id !== bindingId && item.role === 'PRIMARY' && item.status === 'EFFECTIVE'
+          item.businessObjectId === target.businessObjectId &&
+          item.id !== bindingId &&
+          item.role === 'PRIMARY' &&
+          isCurrentBindingStatus(item.status)
       );
       if (demoted) {
         demoted.role = 'SECONDARY';
@@ -435,8 +474,8 @@ export const dataSupportService = {
         businessObjectId: target.businessObjectId,
         bindingId,
         action: 'SET_PRIMARY',
-        beforeStatus: 'EFFECTIVE',
-        afterStatus: 'EFFECTIVE',
+        beforeStatus: target.status,
+        afterStatus: target.status,
         reason: `「${implementationName(target.implementationId)}」确认为主要数据实现${demoted ? `，「${implementationName(demoted.implementationId)}」降级为其他数据实现` : ''}`,
         changedBy: options?.changedBy ?? '业务对象详情'
       });

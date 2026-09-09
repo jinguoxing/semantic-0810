@@ -60,9 +60,9 @@ describe('business object domain', () => {
     expect(primary?.role).toBe('PRIMARY');
     expect(primary?.revision).toBe('R1');
 
-    // 刷新后状态仍保持：从 localStorage 恢复（V2 schema）
+    // 刷新后状态仍保持：从 localStorage 恢复（V3 schema）
     const reloaded = loadStateForTesting();
-    expect(reloaded?.version).toBe(2);
+    expect(reloaded?.version).toBe(3);
     expect(reloaded?.bindings['bind_st_hotline'].status).toBe('EFFECTIVE');
     expect(reloaded?.bindings['bind_st_curr_view'].role).toBe('PRIMARY');
 
@@ -164,13 +164,12 @@ describe('business object domain', () => {
     objectResolutionContexts.open({
       taskId: 'task_1',
       sourceType: 'DATA_ASSET',
-      sourceId: 'res-02',
-      sourceName: '公共服务热线工单记录表',
-      sourceRevision: 'v3.2',
+      dataAsset: { id: 'asset-1', name: '公共服务热线工单记录表', techName: 'hotline_db.service.pop_service_hotline' },
       returnRoute: 'asset_detail'
     });
     expect(objectResolutionContexts.get('task_1')?.returnRoute).toBe('asset_detail');
     expect(objectResolutionContexts.get('task_1')?.sourceType).toBe('DATA_ASSET');
+    expect(objectResolutionContexts.get('task_1')?.dataAsset.id).toBe('asset-1');
     expect(objectResolutionContexts.get('task_1')?.status).toBe('OPEN');
 
     // 稍后处理：保留上下文，不清除
@@ -183,22 +182,91 @@ describe('business object domain', () => {
     expect(objectResolutionContexts.get('task_1')?.status).toBe('COMPLETED');
     expect(objectResolutionContexts.getActive('task_1')).toBeUndefined();
 
-    // 本轮不建立：CANCELLED 同样保留历史
+    // 本轮不建立：CANCELLED 同样保留历史；语义入口保留 semanticSource（仅证据）
     objectResolutionContexts.open({
       taskId: 'task_2',
       sourceType: 'DATA_SEMANTICS',
-      sourceId: 'sem-01',
-      sourceRevision: 'v1.0',
+      dataAsset: { id: 'asset-1', name: '公共服务热线工单记录表' },
+      semanticSource: { semanticId: 'sem_hotline_ticket', semanticRevision: 'S5' },
       returnRoute: 'semantics_detail'
     });
+    expect(objectResolutionContexts.get('task_2')?.semanticSource?.semanticId).toBe('sem_hotline_ticket');
     objectResolutionContexts.cancel('task_2');
     expect(objectResolutionContexts.get('task_2')?.status).toBe('CANCELLED');
     expect(Object.keys(getState().taskContexts).sort()).toEqual(['task_1', 'task_2']);
   });
 
-  it('builds a version 2 seed state with drafts and data support revisions collections', () => {
+  it('migrates a persisted V2 state to V3 with canonical asset identity and read-only warnings', () => {
+    // 旧版 V2：taskContexts 扁平来源字段 + 旧实现 assetId
+    const legacyV2 = {
+      ...buildSeedState(),
+      version: 2 as const,
+      implementations: {
+        impl_st_hotline: { ...getState().implementations['impl_st_hotline'], assetId: 'res-02' }
+      },
+      taskContexts: {
+        task_legacy_asset: {
+          taskId: 'task_legacy_asset',
+          sourceType: 'DATA_ASSET',
+          sourceId: 'res-02',
+          sourceName: '公共服务热线工单记录表',
+          sourceRevision: 'v1.0',
+          returnRoute: 'asset_detail',
+          createdAt: '2026-08-01T00:00:00.000Z',
+          status: 'OPEN',
+          updatedAt: '2026-08-01T00:00:00.000Z'
+        },
+        task_legacy_sem: {
+          taskId: 'task_legacy_sem',
+          sourceType: 'DATA_SEMANTICS',
+          sourceId: 'sem_hotline_ticket',
+          sourceName: '公共服务热线工单记录表',
+          sourceRevision: 'S5',
+          returnRoute: 'semantics_detail',
+          createdAt: '2026-08-01T00:00:00.000Z',
+          status: 'OPEN',
+          updatedAt: '2026-08-01T00:00:00.000Z'
+        },
+        task_legacy_unknown: {
+          taskId: 'task_legacy_unknown',
+          sourceType: 'DATA_ASSET',
+          sourceId: 'res-99',
+          sourceName: '未知旧资产',
+          sourceRevision: 'v0.9',
+          returnRoute: 'asset_detail',
+          createdAt: '2026-08-01T00:00:00.000Z',
+          status: 'OPEN',
+          updatedAt: '2026-08-01T00:00:00.000Z'
+        }
+      }
+    };
+    window.localStorage.setItem('semovix_business_object_state_v1', JSON.stringify(legacyV2));
+
+    const migrated = loadStateForTesting();
+    expect(migrated?.version).toBe(3);
+    // 旧 res-02 实现归一到统一目录 asset-1
+    expect(migrated?.implementations['impl_st_hotline'].assetId).toBe('asset-1');
+    // DATA_ASSET 旧上下文：dataAsset 规范化，无 semanticSource
+    expect(migrated?.taskContexts['task_legacy_asset'].dataAsset.id).toBe('asset-1');
+    expect(migrated?.taskContexts['task_legacy_asset'].semanticSource).toBeUndefined();
+    expect(migrated?.taskContexts['task_legacy_asset'].migrationWarning).toBeUndefined();
+    // DATA_SEMANTICS 旧上下文：semanticId 只进 semanticSource，不冒充资产身份
+    expect(migrated?.taskContexts['task_legacy_sem'].dataAsset.id).toBe('asset-1');
+    expect(migrated?.taskContexts['task_legacy_sem'].semanticSource).toEqual({
+      semanticId: 'sem_hotline_ticket',
+      semanticRevision: 'S5'
+    });
+    // 无法解析的旧来源：兼容引用 + migrationWarning（只读，不再产生正式绑定）
+    expect(migrated?.taskContexts['task_legacy_unknown'].dataAsset.id).toBe('res-99');
+    expect(migrated?.taskContexts['task_legacy_unknown'].migrationWarning).toBeTruthy();
+    // 迁移后状态已回写为 V3
+    const repersisted = JSON.parse(window.localStorage.getItem('semovix_business_object_state_v1') ?? '{}');
+    expect(repersisted.version).toBe(3);
+  });
+
+  it('builds a version 3 seed state with drafts and data support revisions collections', () => {
     const seed = buildSeedState();
-    expect(seed.version).toBe(2);
+    expect(seed.version).toBe(3);
     expect(seed.drafts).toEqual({});
     expect(seed.dataSupportRevisions).toEqual({});
     // 自然人 currentRevision 与待复核绑定的 sourceRevision 一致

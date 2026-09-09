@@ -457,7 +457,9 @@ const SERVICE_TICKET_HOTLINE: DataImplementation = {
   name: '公共服务热线工单记录表',
   techName: 'hotline_db.service.pop_service_hotline',
   warehouseTable: 'dwd_pub_service_hotline_ticket_df',
-  assetId: 'res-02',
+  // 规范数据资产目录 ID（dataAssetsData.ts asset-1：公共服务热线工单记录表）。
+  // 与数据语义入口（sem_hotline_ticket）解析到同一规范身份，实现按 dataAsset.id 去重。
+  assetId: 'asset-1',
   scope: '公共服务热线渠道',
   granularity: '一行一张服务工单',
   identity: '工单编号 · ticket_id',
@@ -953,7 +955,7 @@ export function buildSeedState(): BusinessObjectStoreState {
   const bindings = structuredClone(SEED_BINDINGS);
   const revisions = structuredClone(SEED_REVISIONS);
   return {
-    version: 2,
+    version: 3,
     objects: Object.fromEntries(objects.map((object) => [object.id, object])),
     implementations: Object.fromEntries(implementations.map((implementation) => [implementation.id, implementation])),
     bindings: Object.fromEntries(bindings.map((bindingItem) => [bindingItem.id, bindingItem])),

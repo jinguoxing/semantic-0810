@@ -8,7 +8,7 @@
  */
 export * from './types';
 export { businessObjectRepository, dataSupportSummary, getState, setStateForTesting } from './registry';
-export { dataSupportService } from './data-support';
+export { dataSupportService, isCurrentBindingStatus } from './data-support';
 export type {
   BottomUpAlignResult,
   ConfirmCandidateResult,
@@ -17,6 +17,7 @@ export type {
   RetireResult,
   SetPrimaryResult
 } from './data-support';
+export { resolveCanonicalDataAsset, resolveCanonicalDataAssetId } from './asset-identity';
 export { groundingService } from './grounding';
 export type { GroundingCorrectionResult } from './grounding';
 export { listRevisions, nextRevisionLabel, snapshotOfObject } from './revision';
