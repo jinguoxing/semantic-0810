@@ -64,3 +64,25 @@ jobs:
             test-results/
             playwright-report/
           if-no-files-found: ignore
+
+  # 业务对象 V2.2 生命周期硬化 E2E 门禁（BO-1 … BO-10）：
+  # Registry / Detail / Create / Change / Resolution / Data Support 全链路读同一 Domain Store。
+  business-object-e2e:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/v2026.')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e:business-object
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-object-e2e-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore

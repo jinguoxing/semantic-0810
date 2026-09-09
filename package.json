@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:smoke": "VITE_FIND_DATA_MODE=mock playwright test e2e/find-data-rc1.spec.ts && VITE_FIND_DATA_MODE=http VITE_FIND_DATA_API_BASE=/api/find-data playwright test e2e/find-data-rc1-http.spec.ts",
+    "test:e2e:business-object": "playwright test e2e/business-object/bo-v22.spec.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
