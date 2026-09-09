@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   X, 
   ArrowRight, 
@@ -62,6 +62,14 @@ interface LocalGroundingCorrectionDrawerProps {
   attributeName?: string;
   currentField?: string;
   currentSemantics?: string;
+  /** 修正类型：ATTRIBUTE（属性落地，默认）或 RELATIONSHIP（关系落地） */
+  mode?: 'ATTRIBUTE' | 'RELATIONSHIP';
+  /** 候选字段列表：默认为属性修正候选；关系修正由调用方传入实现字段候选 */
+  candidates?: CandidateFieldOption[];
+  /** 修正原因：覆盖默认的属性修正叙事 */
+  reason?: string;
+  /** 关系模式：目标对象名（关系名 → 目标对象 展示用） */
+  targetObjectName?: string;
 }
 
 export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDrawerProps> = ({
@@ -73,14 +81,29 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
   dataImplementationRole = '主要数据实现',
   attributeName = '办结时间',
   currentField = 'finished_time',
-  currentSemantics = '表示服务工单完成处理时间。'
+  currentSemantics = '表示服务工单完成处理时间。',
+  mode = 'ATTRIBUTE',
+  candidates,
+  reason,
+  targetObjectName
 }) => {
-  const [selectedCandidateId, setSelectedCandidateId] = useState<string>('close_time');
+  const effectiveCandidates = candidates ?? CANDIDATE_FIELDS;
+  const isRelationship = mode === 'RELATIONSHIP';
+  const displayTarget = isRelationship ? `${attributeName} → ${targetObjectName ?? ''}` : attributeName;
+
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string>(
+    effectiveCandidates[0]?.id ?? 'close_time'
+  );
+
+  // 修正目标切换（属性 ↔ 关系）时重置候选选择
+  useEffect(() => {
+    setSelectedCandidateId((candidates ?? CANDIDATE_FIELDS)[0]?.id ?? 'close_time');
+  }, [isOpen, candidates]);
 
   if (!isOpen) return null;
 
   const selectedCandidate =
-    CANDIDATE_FIELDS.find((c) => c.id === selectedCandidateId) || CANDIDATE_FIELDS[0];
+    effectiveCandidates.find((c) => c.id === selectedCandidateId) || effectiveCandidates[0];
 
   return (
     <div 
@@ -108,7 +131,7 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
             <div className="space-y-0.5">
               <div className="flex items-center space-x-2">
                 <h1 className="text-base font-bold text-[#0F172A] tracking-tight">
-                  修正属性对应
+                  {isRelationship ? '修正关系落地' : '修正属性对应'}
                 </h1>
                 <span className="text-[11px] font-mono font-medium text-[#64748B] px-1.5 py-0.5 bg-[#F1F5F9] rounded border border-[#E2E8F0]">
                   Local Grounding Correction
@@ -143,7 +166,7 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
               <span>当前对应需要修正</span>
             </div>
             <span className="text-[11px] text-[#94A3B8]">
-              仅修正单条属性映射 · 不影响整体架构
+              仅修正单条{isRelationship ? '关系' : '属性'}映射 · 不影响整体架构
             </span>
           </div>
         </header>
@@ -171,9 +194,9 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
             <div className="p-4 bg-white border border-[#E2E8F0] rounded-md space-y-3 shadow-2xs">
               <div className="grid grid-cols-2 gap-3 pb-2.5 border-b border-[#F1F5F9]">
                 <div className="space-y-1">
-                  <div className="text-[11px] text-[#64748B]">业务属性</div>
+                  <div className="text-[11px] text-[#64748B]">{isRelationship ? '业务关系' : '业务属性'}</div>
                   <div className="font-bold text-[#0F172A] text-sm flex items-center space-x-1.5">
-                    <span>{attributeName}</span>
+                    <span>{displayTarget}</span>
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -235,26 +258,32 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
                 <p className="text-[#0F172A]">
                   经过新的数据语义确认：
                 </p>
-                <div className="p-2.5 bg-white border border-[#E2E8F0] rounded space-y-1.5 text-xs">
-                  <div className="flex items-start space-x-2">
-                    <span className="font-mono text-[11px] text-[#B45309] bg-[#FFFBEB] px-1.5 py-0.2 rounded border border-[#FDE68A]">
-                      {currentField}
-                    </span>
-                    <span className="text-[#475569]">
-                      实际表示：<strong className="text-[#0F172A]">最后更新时间</strong>，而不是服务工单实际办结时间。
-                    </span>
+                {reason ? (
+                  <div className="p-2.5 bg-white border border-[#E2E8F0] rounded text-xs text-[#475569] leading-relaxed">
+                    {reason}
                   </div>
-                  <div className="flex items-start space-x-2 pt-1 border-t border-[#F1F5F9]">
-                    <span className="font-mono text-[11px] text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
-                      close_time
-                    </span>
-                    <span className="text-[#475569]">
-                      表示：<strong className="text-[#0F172A]">服务工单完成办理的实际时间</strong>。
-                    </span>
+                ) : (
+                  <div className="p-2.5 bg-white border border-[#E2E8F0] rounded space-y-1.5 text-xs">
+                    <div className="flex items-start space-x-2">
+                      <span className="font-mono text-[11px] text-[#B45309] bg-[#FFFBEB] px-1.5 py-0.2 rounded border border-[#FDE68A]">
+                        {currentField}
+                      </span>
+                      <span className="text-[#475569]">
+                        实际表示：<strong className="text-[#0F172A]">最后更新时间</strong>，而不是服务工单实际办结时间。
+                      </span>
+                    </div>
+                    <div className="flex items-start space-x-2 pt-1 border-t border-[#F1F5F9]">
+                      <span className="font-mono text-[11px] text-[#2563EB] bg-[#EFF6FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
+                        close_time
+                      </span>
+                      <span className="text-[#475569]">
+                        表示：<strong className="text-[#0F172A]">服务工单完成办理的实际时间</strong>。
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
                 <p className="text-[#64748B] text-[11px]">
-                  因此：原属性对应不再准确，需对单条 Grounding 实施局部版本更正。
+                  因此：原{isRelationship ? '关系' : '属性'}对应不再准确，需对单条 Grounding 实施局部版本更正。
                 </p>
               </div>
 
@@ -274,7 +303,7 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
                 </div>
                 <div>
                   <span className="text-[#94A3B8]">范围限定：</span>
-                  <span className="text-[#334155]">仅当前属性</span>
+                  <span className="text-[#334155]">仅当前{isRelationship ? '关系' : '属性'}</span>
                 </div>
               </div>
             </div>
@@ -296,9 +325,9 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
             {/* Core Semantic Mapping Visual Row */}
             <div className="p-3.5 bg-[#EFF6FF]/50 border border-[#BFDBFE] rounded-md flex items-center justify-between">
               <div className="space-y-0.5">
-                <div className="text-[11px] text-[#64748B]">业务属性</div>
+                <div className="text-[11px] text-[#64748B]">{isRelationship ? '业务关系' : '业务属性'}</div>
                 <div className="font-bold text-[#0F172A] text-sm">
-                  {attributeName}
+                  {displayTarget}
                 </div>
               </div>
 
@@ -353,7 +382,7 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
               </div>
 
               <div className="space-y-1.5">
-                {CANDIDATE_FIELDS.map((candidate) => {
+                {effectiveCandidates.map((candidate) => {
                   const isSelected = candidate.id === selectedCandidateId;
                   return (
                     <div
@@ -417,7 +446,7 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
                   <CheckCircle2 className="w-3.5 h-3.5 text-[#2563EB] shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold text-[#2563EB]">本次更新：</span>
-                    <span>办结时间属性对应（finished_time → {selectedCandidate.field}）</span>
+                    <span>{displayTarget}{isRelationship ? '关系落地' : '属性对应'}（{currentField} → {selectedCandidate.field}）</span>
                   </div>
                 </div>
 
@@ -425,7 +454,7 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
                   <Check className="w-3.5 h-3.5 text-[#16A34A] shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold text-[#166534]">保持不变：</span>
-                    <span>服务工单业务定义（业务概念与定义不变）</span>
+                    <span>{businessObjectName}业务定义（业务概念与定义不变）</span>
                   </div>
                 </div>
 
@@ -433,7 +462,7 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
                   <Check className="w-3.5 h-3.5 text-[#16A34A] shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold text-[#166534]">保持不变：</span>
-                    <span>客服工单当前视图数据实现（物理表结构不变）</span>
+                    <span>{dataImplementationName}数据实现（物理表结构不变）</span>
                   </div>
                 </div>
 
@@ -441,7 +470,11 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
                   <Check className="w-3.5 h-3.5 text-[#16A34A] shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold text-[#166534]">保持不变：</span>
-                    <span>其他属性对应（工单编号、处理状态等 6 项不变）</span>
+                    <span>
+                      {isRelationship
+                        ? '全部属性对应（属性映射不受关系修正影响）'
+                        : '其他属性对应（工单编号、处理状态等 6 项不变）'}
+                    </span>
                   </div>
                 </div>
 
@@ -449,7 +482,11 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
                   <Check className="w-3.5 h-3.5 text-[#16A34A] shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold text-[#166534]">保持不变：</span>
-                    <span>核心关系对应（申请人、承办部门等 3 项不变）</span>
+                    <span>
+                      {isRelationship
+                        ? '其他核心关系对应（承办部门、所属区域等关系不变）'
+                        : '核心关系对应（申请人、承办部门等 3 项不变）'}
+                    </span>
                   </div>
                 </div>
 
@@ -481,7 +518,7 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
                     <span className="text-[10px] text-[#94A3B8]">Revision 1</span>
                   </div>
                   <div className="space-y-1 text-xs">
-                    <div className="text-[#475569] font-medium">{attributeName}</div>
+                    <div className="text-[#475569] font-medium">{displayTarget}</div>
                     <div className="text-[#94A3B8] text-[11px]">↓</div>
                     <div className="font-mono text-[#64748B] line-through">
                       {currentField}
@@ -498,7 +535,7 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
                     <span className="text-[10px] bg-[#EFF6FF] px-1 py-0.2 rounded text-[#2563EB] font-medium">Revision 2</span>
                   </div>
                   <div className="space-y-1 text-xs">
-                    <div className="text-[#0F172A] font-semibold">{attributeName}</div>
+                    <div className="text-[#0F172A] font-semibold">{displayTarget}</div>
                     <div className="text-[#2563EB] text-[11px]">↓</div>
                     <div className="font-mono text-[#2563EB] font-bold">
                       {selectedCandidate.field}

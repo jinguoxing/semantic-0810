@@ -284,6 +284,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   const [isContextMoreOpen, setIsContextMoreOpen] = useState(false);
   const [isCorrectionDrawerOpen, setIsCorrectionDrawerOpen] = useState(false);
   const [selectedCorrectionAttr, setSelectedCorrectionAttr] = useState<DataImplementationAttributeLanding | null>(null);
+  const [selectedCorrectionRel, setSelectedCorrectionRel] = useState<DataImplementationRelationshipLanding | null>(null);
 
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const selectorRef = useRef<HTMLDivElement>(null);
@@ -314,10 +315,53 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   // 待复核绑定数量（语义修订触发）
   const revalidationCount = bindings.filter((binding) => binding.status === 'NEEDS_REVALIDATION').length;
 
+  // 关系落地修正候选：当前实现的落地字段（作为关系关联键候选）
+  const relationshipCandidates: CandidateFieldOption[] = (currentImpl?.attributes ?? []).map((attr) => ({
+    id: `rel-${attr.field}`,
+    field: attr.field,
+    label: attr.name,
+    semanticType: attr.source,
+    semantics: attr.semantics,
+    evidence: `「${attr.name}」在「${currentImpl?.name ?? '当前数据实现'}」中的落地字段，可作为关系关联键候选。`,
+    note: `来源：${attr.source}`
+  }));
+
   const handleConfirmCorrection = (selectedField: CandidateFieldOption) => {
-    if (!selectedCorrectionAttr || !currentImpl) return;
+    if (!currentImpl) return;
     const binding = bindings.find((item) => item.implementationId === currentImpl.id);
     if (!binding) return;
+
+    // 关系落地修正：targetName 约定「关系名 → 目标对象」，fromField 取 sourceField 的裸字段部分
+    if (selectedCorrectionRel) {
+      const relTargetName = `${selectedCorrectionRel.relationName} → ${selectedCorrectionRel.targetObject}`;
+      const fromField =
+        selectedCorrectionRel.sourceField.split('·').pop()?.trim() ?? selectedCorrectionRel.sourceField;
+
+      groundingService.applyCorrection({
+        bindingId: binding.id,
+        targetName: relTargetName,
+        fromField,
+        toField: selectedField.field,
+        reason: `关系落地修正：「${currentObject.name}」的「${selectedCorrectionRel.relationName}」关系应通过 ${selectedField.field} 关联「${selectedCorrectionRel.targetObject}」。`,
+        evidence: currentObject.evidence.map((item) => item.id)
+      });
+
+      setIsCorrectionDrawerOpen(false);
+      setSelectedCorrectionRel(null);
+      const correctionCount = groundingService
+        .listByObject(currentObject.id)
+        .filter(
+          (revision) => revision.bindingId === binding.id && revision.targetName === relTargetName
+        ).length;
+      addToast?.(
+        'success',
+        '已生成新的 Grounding Revision',
+        `已将「${relTargetName}」关系落地字段修正为 ${selectedField.field}，Revision ${correctionCount} 当前生效。历史记录已完整保留。`
+      );
+      return;
+    }
+
+    if (!selectedCorrectionAttr) return;
 
     groundingService.applyCorrection({
       bindingId: binding.id,
@@ -1235,6 +1279,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                                     id={`btn-correct-attr-${idx}`}
                                     onClick={() => {
                                       setSelectedCorrectionAttr(attr);
+                                      setSelectedCorrectionRel(null);
                                       setIsCorrectionDrawerOpen(true);
                                     }}
                                     className="px-2.5 py-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded text-xs font-medium cursor-pointer transition-colors shadow-2xs"
@@ -1247,6 +1292,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                                     id={`btn-re-correct-attr-${idx}`}
                                     onClick={() => {
                                       setSelectedCorrectionAttr(attr);
+                                      setSelectedCorrectionRel(null);
                                       setIsCorrectionDrawerOpen(true);
                                     }}
                                     className="text-xs text-[#64748B] hover:text-[#2563EB] hover:underline cursor-pointer"
@@ -1321,9 +1367,23 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                               {rel.sourceField}
                             </span>
                           </div>
-                          <div className="flex items-center space-x-1.5">
-                            <span className="text-[#64748B]">目标身份：</span>
-                            <span className="font-medium text-[#0F172A]">{rel.targetIdentity}</span>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-[#64748B]">目标身份：</span>
+                              <span className="font-medium text-[#0F172A]">{rel.targetIdentity}</span>
+                            </div>
+                            <button
+                              id={`btn-correct-rel-${idx}`}
+                              onClick={() => {
+                                setSelectedCorrectionRel(rel);
+                                setSelectedCorrectionAttr(null);
+                                setIsCorrectionDrawerOpen(true);
+                              }}
+                              className="text-xs text-[#64748B] hover:text-[#2563EB] hover:underline cursor-pointer shrink-0"
+                              title="修正此关系的数据支撑落地字段"
+                            >
+                              修正落地
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1868,14 +1928,33 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
       {/* LOCAL GROUNDING CORRECTION DRAWER */}
       <LocalGroundingCorrectionDrawer
         isOpen={isCorrectionDrawerOpen}
-        onClose={() => setIsCorrectionDrawerOpen(false)}
+        onClose={() => {
+          setIsCorrectionDrawerOpen(false);
+          setSelectedCorrectionRel(null);
+        }}
         onConfirm={handleConfirmCorrection}
         businessObjectName={currentObject.name}
         dataImplementationName={currentImpl?.name}
         dataImplementationRole={currentImpl?.role}
-        attributeName={selectedCorrectionAttr?.name}
-        currentField={selectedCorrectionAttr?.field}
-        currentSemantics={selectedCorrectionAttr?.semantics}
+        attributeName={selectedCorrectionRel ? selectedCorrectionRel.relationName : selectedCorrectionAttr?.name}
+        currentField={
+          selectedCorrectionRel
+            ? selectedCorrectionRel.sourceField.split('·').pop()?.trim() ?? selectedCorrectionRel.sourceField
+            : selectedCorrectionAttr?.field
+        }
+        currentSemantics={
+          selectedCorrectionRel
+            ? `通过 ${selectedCorrectionRel.sourceField} 关联「${selectedCorrectionRel.targetObject}」（目标身份：${selectedCorrectionRel.targetIdentity}）。`
+            : selectedCorrectionAttr?.semantics
+        }
+        mode={selectedCorrectionRel ? 'RELATIONSHIP' : 'ATTRIBUTE'}
+        candidates={selectedCorrectionRel ? relationshipCandidates : undefined}
+        targetObjectName={selectedCorrectionRel?.targetObject}
+        reason={
+          selectedCorrectionRel
+            ? `经新的数据语义确认：当前关联字段与「${selectedCorrectionRel.targetObject}」主身份字段的口径不一致，「${selectedCorrectionRel.relationName}」关系应改用语义吻合的身份字段落地。`
+            : undefined
+        }
       />
 
     </div>
