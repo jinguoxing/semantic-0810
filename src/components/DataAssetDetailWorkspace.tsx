@@ -47,6 +47,8 @@ export interface DataAssetDetailWorkspaceProps {
   onNavigateToMyRequests?: () => void;
   onNavigateToMetricDetail?: (metricId: string) => void;
   onNavigateToBusinessObject?: (objectId: string) => void;
+  /** Bottom-up 对齐入口：将该数据资产对齐到正式业务对象 */
+  onAlignToBusinessObject?: (asset: { id: string; name: string }) => void;
   onNavigateToApiDetail?: (apiId: string) => void;
   onEnterAnalysis?: (entry: FindDataEntryContext) => void;
   onEnterChatQuery?: (entry: FindDataEntryContext) => void;
@@ -210,6 +212,7 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
   onNavigateToMyRequests,
   onNavigateToMetricDetail,
   onNavigateToBusinessObject,
+  onAlignToBusinessObject,
   onNavigateToApiDetail,
   onEnterAnalysis,
   onEnterChatQuery,
@@ -485,6 +488,25 @@ export const DataAssetDetailWorkspace: React.FC<DataAssetDetailWorkspaceProps> =
               <div className="text-xs text-[#64748B]">
                 <span className="text-[#334155] font-medium">适用于：</span>
                 <span className="ml-1">人口结构分析 · 老龄化分析 · 区域人口统计</span>
+              </div>
+
+              {/* Bottom-up 对齐入口：登记 Resolution 上下文后进入业务对象对齐工作台 */}
+              <div className="pt-1.5">
+                <button
+                  id="btn-align-business-object"
+                  onClick={() => {
+                    if (onAlignToBusinessObject) {
+                      onAlignToBusinessObject({ id: assetIdentity.id, name: assetIdentity.label });
+                    } else {
+                      addToast?.('info', '对齐业务对象', `已发起「${assetIdentity.label}」的业务对象对齐`);
+                    }
+                  }}
+                  className="px-3.5 py-1.5 rounded bg-[#EFF6FF] hover:bg-[#DBEAFE] text-[#2563EB] border border-[#BFDBFE] text-xs font-medium transition-colors cursor-pointer inline-flex items-center space-x-1.5"
+                  title="将该数据资产对齐到企业正式业务对象，形成数据支撑"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>对齐业务对象</span>
+                </button>
               </div>
             </div>
 

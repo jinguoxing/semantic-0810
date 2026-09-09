@@ -19,12 +19,15 @@ interface DataSemanticsQueueWorkspaceProps {
   onNavigateToTableUnderstanding?: (tableName: string) => void;
   onNavigateToCatalog?: () => void;
   onNavigateToAssetDetail?: () => void;
+  /** 查看语义：进入数据语义详情（「形成业务对象」入口所在页面） */
+  onNavigateToSemanticDetail?: () => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
 export const DataSemanticsQueueWorkspace: React.FC<DataSemanticsQueueWorkspaceProps> = ({
   onNavigateToTableUnderstanding,
   onNavigateToAssetDetail,
+  onNavigateToSemanticDetail,
   addToast,
 }) => {
   // Queue Work View Tabs (Default: 'pending_review' 需处理 24)
@@ -127,7 +130,9 @@ export const DataSemanticsQueueWorkspace: React.FC<DataSemanticsQueueWorkspacePr
     } else if (label === '确认语义') {
       setConfirmModalItem(item);
     } else if (label === '查看语义') {
-      if (onNavigateToAssetDetail) {
+      if (onNavigateToSemanticDetail) {
+        onNavigateToSemanticDetail();
+      } else if (onNavigateToAssetDetail) {
         onNavigateToAssetDetail();
       } else if (addToast) {
         addToast('info', '查看生效语义', `载入 ${item.name || item.technicalName} 当前生效数据语义`);
@@ -349,7 +354,8 @@ export const DataSemanticsQueueWorkspace: React.FC<DataSemanticsQueueWorkspacePr
                         <span
                           onClick={() => {
                             if (item.actionButton.label === '查看语义') {
-                              if (onNavigateToAssetDetail) onNavigateToAssetDetail();
+                              if (onNavigateToSemanticDetail) onNavigateToSemanticDetail();
+                              else if (onNavigateToAssetDetail) onNavigateToAssetDetail();
                             } else {
                               if (onNavigateToTableUnderstanding) onNavigateToTableUnderstanding(item.technicalName);
                             }

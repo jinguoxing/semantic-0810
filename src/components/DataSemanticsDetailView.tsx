@@ -25,11 +25,14 @@ import {
 
 interface DataSemanticsDetailViewProps {
   onStartCorrection?: () => void;
+  /** Bottom-up 形成入口：由当前数据语义沉淀出正式业务对象 */
+  onFormBusinessObject?: (source: { id: string; name: string; revision: string }) => void;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
 export const DataSemanticsDetailView: React.FC<DataSemanticsDetailViewProps> = ({
   onStartCorrection,
+  onFormBusinessObject,
   addToast,
 }) => {
   // Drawer & Modal States
@@ -180,19 +183,40 @@ export const DataSemanticsDetailView: React.FC<DataSemanticsDetailViewProps> = (
         </div>
 
         {/* Right Secondary CTA */}
-        <button
-          onClick={() => {
-            if (onStartCorrection) {
-              onStartCorrection();
-            } else {
-              addToast?.('info', '发起修正', '进入数据语义修正工作台');
-            }
-          }}
-          className="px-3.5 py-1.5 text-xs font-bold text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 shadow-2xs"
-        >
-          <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
-          <span>发起修正</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            id="btn-form-business-object"
+            onClick={() => {
+              if (onFormBusinessObject) {
+                onFormBusinessObject({
+                  id: 'sem_hotline_ticket',
+                  name: '公共服务热线工单记录表',
+                  revision: 'S5'
+                });
+              } else {
+                addToast?.('info', '形成业务对象', '已发起由数据语义沉淀业务对象的对齐流程');
+              }
+            }}
+            className="px-3.5 py-1.5 text-xs font-bold text-[#059669] bg-[#ECFDF5] hover:bg-[#D1FAE5] border border-[#A7F3D0] rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 shadow-2xs"
+            title="以当前数据语义为依据，沉淀 / 对齐正式业务对象"
+          >
+            <Database className="w-3.5 h-3.5 text-[#059669]" />
+            <span>形成业务对象</span>
+          </button>
+          <button
+            onClick={() => {
+              if (onStartCorrection) {
+                onStartCorrection();
+              } else {
+                addToast?.('info', '发起修正', '进入数据语义修正工作台');
+              }
+            }}
+            className="px-3.5 py-1.5 text-xs font-bold text-[#2563EB] bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] rounded-lg transition-all cursor-pointer flex items-center space-x-1.5 shadow-2xs"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+            <span>发起修正</span>
+          </button>
+        </div>
       </div>
 
       {/* ========================================================= */}

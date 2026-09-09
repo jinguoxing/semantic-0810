@@ -56,6 +56,8 @@ import { BusinessObjectChangeWorkspace } from './components/BusinessObjectChange
 import { BusinessObjectsListWorkspace } from './components/BusinessObjectsListWorkspace';
 import { ResolveDataSupportWorkspace } from './components/ResolveDataSupportWorkspace';
 import { BusinessObjectResolutionWorkspace } from './components/BusinessObjectResolutionWorkspace';
+import { DataSemanticsDetailView } from './components/DataSemanticsDetailView';
+import { objectResolutionContexts } from './domain/business-object';
 import { INITIAL_BUSINESS_OBJECTS } from './data/businessObjectsData';
 import {
   AgentItem,
@@ -75,8 +77,8 @@ function resolveMetricDetailId(metricId?: string): string {
 
 export default function App() {
   const shouldRestoreFindDataTask = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('findTaskId');
-  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'business_object_revalidation' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
-  const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'business_object_revalidation' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>(shouldRestoreFindDataTask ? 'data_assistant' : 'home');
+  const [currentNav, setCurrentNav] = useState<'home' | 'governance' | 'assets' | 'semantics' | 'semantics_detail' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'business_object_revalidation' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>('home');
+  const [viewTab, setViewTab] = useState<'home' | 'data_assistant' | 'field' | 'table' | 'assets' | 'semantics' | 'semantics_detail' | 'asset_detail' | 'metric_detail' | 'business_objects' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'business_object_revalidation' | 'table_workspace' | 'field_workspace' | 'data_standards' | 'standard_detail' | 'standard_matching' | 'standard_proposal_review' | 'standard_check' | 'standard_check_issue_detail' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'metrics' | 'create_metric' | 'metric_change_draft' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_center' | 'agent_definition' | 'agent_detail' | 'agent_publish'>(shouldRestoreFindDataTask ? 'data_assistant' : 'home');
   const [dataAssistantInitialQuery, setDataAssistantInitialQuery] = useState<string>('');
   const [dataAssistantEntryContext, setDataAssistantEntryContext] = useState<FindDataEntryContext>();
   const [authoringMode, setAuthoringMode] = useState<'ai_prompt' | 'blank' | 'constructing' | 'draft' | 'imported_draft' | 'change_draft'>('ai_prompt');
@@ -86,6 +88,7 @@ export default function App() {
   const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'met_001', fromGoalSearch: false, goalQuery: '' });
   const [selectedChangeMetricId, setSelectedChangeMetricId] = useState<string>('met_001');
   const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; initialTab?: 'business' | 'data_support'; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_service_ticket', initialTab: 'data_support', fromGoalSearch: false, goalQuery: '' });
+  const [resolutionTaskId, setResolutionTaskId] = useState<string | null>(null);
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
   const [activeRightTab, setActiveRightTab] = useState<'result' | 'adjust' | 'history'>('result');
@@ -141,6 +144,48 @@ export default function App() {
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // =========================================================
+  // Bottom-up Resolution 闭环（PR-4）
+  // 入口登记 ObjectResolutionContext，完成后按 returnRoute + sourceId + taskId 返回原上下文
+  // =========================================================
+  const openResolutionContext = (context: {
+    taskId: string;
+    sourceType: 'DATA_ASSET' | 'DATA_SEMANTICS' | 'TASK';
+    sourceId: string;
+    sourceName?: string;
+    sourceRevision: string;
+    returnRoute: string;
+  }) => {
+    objectResolutionContexts.open(context);
+    setResolutionTaskId(context.taskId);
+    setCurrentNav('business_object_resolution');
+    setViewTab('business_object_resolution');
+    addToast('info', '业务对象对齐', `已登记对齐任务 ${context.taskId}，完成后将返回原上下文`);
+  };
+
+  const returnFromResolution = () => {
+    const context = resolutionTaskId ? objectResolutionContexts.get(resolutionTaskId) : undefined;
+    if (resolutionTaskId) {
+      objectResolutionContexts.clear(resolutionTaskId);
+    }
+    setResolutionTaskId(null);
+
+    if (context?.returnRoute === 'asset_detail') {
+      setAssetDetailContext({ assetId: context.sourceId, fromGoalSearch: false, goalQuery: '' });
+      setCurrentNav('asset_detail');
+      setViewTab('asset_detail');
+      addToast('success', '已返回原上下文', `已按对齐任务 ${context.taskId} 返回「${context.sourceName ?? context.sourceId}」数据资产详情`);
+    } else if (context?.returnRoute === 'semantics_detail') {
+      setCurrentNav('semantics_detail');
+      setViewTab('semantics_detail');
+      addToast('success', '已返回原上下文', `已按对齐任务 ${context.taskId} 返回「${context.sourceName ?? context.sourceId}」数据语义详情`);
+    } else {
+      setCurrentNav('semantics');
+      setViewTab('semantics');
+      addToast('info', '数据语义', '已返回数据语义工作台');
+    }
   };
 
   const handleSelectModule = (moduleKey: string, moduleName: string) => {
@@ -1015,11 +1060,13 @@ export default function App() {
         />
       ) : currentNav === 'business_object_resolution' || viewTab === 'business_object_resolution' ? (
         <BusinessObjectResolutionWorkspace
+          taskId={resolutionTaskId ?? undefined}
           onBackToDataSemantics={() => {
             setCurrentNav('semantics');
             setViewTab('semantics');
             addToast('info', '数据语义', '已返回数据语义工作台');
           }}
+          onBackToSource={returnFromResolution}
           onNavigateToObjectsList={() => {
             setCurrentNav('business_objects');
             setViewTab('business_objects');
@@ -1030,17 +1077,19 @@ export default function App() {
             setViewTab('create_business_object');
             addToast('info', '新建业务对象', '已进入业务对象构建向导');
           }}
-          onPostpone={() => {
-            setCurrentNav('business_objects');
-            setViewTab('business_objects');
-            addToast('info', '稍后处理', '业务对象对齐任务已保留');
-          }}
+          onPostpone={returnFromResolution}
           onSwitchToResolveDataSupport={() => {
             setCurrentNav('resolve_data_support');
             setViewTab('resolve_data_support');
             addToast('info', '工作台切换', '已切换至「发现数据支撑」工作台（自上而下数据实现确立）');
           }}
           onConfirmResolution={(selectedObj) => {
+            if (resolutionTaskId) {
+              // 有入口上下文：按 returnRoute + sourceId + taskId 返回原上下文（禁止返回业务对象列表）
+              returnFromResolution();
+              return;
+            }
+            // 直接进入（无上下文）：维持原有落地 —— 查看对象的数据支撑视角
             setBusinessObjectDetailContext({
               objectId: selectedObj === 'service_ticket' ? 'bo_service_ticket' : 'bo_customer_feedback',
               initialTab: 'data_support',
@@ -1584,6 +1633,16 @@ export default function App() {
             setViewTab('marketplace_resources');
             addToast('info', 'API 资源', '已在资源超市中定位 API 服务');
           }}
+          onAlignToBusinessObject={(asset) => {
+            openResolutionContext({
+              taskId: `task_align_${asset.id}`,
+              sourceType: 'DATA_ASSET',
+              sourceId: asset.id,
+              sourceName: asset.name,
+              sourceRevision: 'v1.0',
+              returnRoute: 'asset_detail'
+            });
+          }}
           onEnterAnalysis={(assetName) => {
             setDataAssistantEntryContext(assetName);
             setDataAssistantInitialQuery(assetName.initialText);
@@ -1606,6 +1665,23 @@ export default function App() {
           }}
           addToast={addToast}
         />
+      ) : currentNav === 'semantics_detail' || viewTab === 'semantics_detail' ? (
+        <DataSemanticsDetailView
+          onStartCorrection={() => {
+            addToast('info', '发起修正', '进入数据语义修正工作台');
+          }}
+          onFormBusinessObject={(source) => {
+            openResolutionContext({
+              taskId: `task_form_${source.id}`,
+              sourceType: 'DATA_SEMANTICS',
+              sourceId: source.id,
+              sourceName: source.name,
+              sourceRevision: source.revision,
+              returnRoute: 'semantics_detail'
+            });
+          }}
+          addToast={addToast}
+        />
       ) : currentNav === 'semantics' && viewTab !== 'table_workspace' ? (
         <DataSemanticsQueueWorkspace
           onNavigateToTableUnderstanding={(tableName) => {
@@ -1616,6 +1692,11 @@ export default function App() {
             setCurrentNav('asset_detail');
             setViewTab('asset_detail');
             addToast('info', '查看 资产详情', '已载入数据资产元数据与依赖视图');
+          }}
+          onNavigateToSemanticDetail={() => {
+            setCurrentNav('semantics_detail');
+            setViewTab('semantics_detail');
+            addToast('info', '查看生效语义', '已载入公共服务热线工单记录表当前生效数据语义');
           }}
           addToast={addToast}
         />

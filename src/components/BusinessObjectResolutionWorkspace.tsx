@@ -18,9 +18,18 @@ import {
   FileText,
   X
 } from 'lucide-react';
+import {
+  commitRevision,
+  dataSupportService,
+  objectResolutionContexts
+} from '../domain/business-object';
 
 export interface BusinessObjectResolutionWorkspaceProps {
+  /** Bottom-up 入口登记的任务 ID：携带 Resolution 上下文（来源 / 版本 / 返回路由） */
+  taskId?: string;
   onBackToDataSemantics?: () => void;
+  /** 上下文存在时按 returnRoute 返回原上下文（禁止退回业务对象列表） */
+  onBackToSource?: () => void;
   onNavigateToObjectsList?: () => void;
   onCreateNewObject?: () => void;
   onPostpone?: () => void;
@@ -30,7 +39,9 @@ export interface BusinessObjectResolutionWorkspaceProps {
 }
 
 export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutionWorkspaceProps> = ({
+  taskId,
   onBackToDataSemantics,
+  onBackToSource,
   onNavigateToObjectsList,
   onCreateNewObject,
   onPostpone,
@@ -38,6 +49,10 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
   onSwitchToResolveDataSupport,
   addToast
 }) => {
+  // Resolution 入口上下文：数据资产 / 数据语义进入时登记，完成后按 returnRoute 返回
+  const resolutionContext = taskId ? objectResolutionContexts.get(taskId) : undefined;
+  const sourceName = resolutionContext?.sourceName ?? '公共服务热线工单记录表';
+
   // Candidate selection state: user has selected 'service_ticket' ("服务工单"), can toggle to 'hotline_ticket' ("热线工单")
   const [selectedCandidate, setSelectedCandidate] = useState<'service_ticket' | 'hotline_ticket'>('service_ticket');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,11 +63,55 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
   const [isEvidenceDrawerOpen, setIsEvidenceDrawerOpen] = useState(false);
   const [isDataSemanticsModalOpen, setIsDataSemanticsModalOpen] = useState(false);
 
+  /** 上下文存在时的返回：按 returnRoute 回原上下文，而非数据语义队列 */
+  const returnToOrigin = () => {
+    if (resolutionContext && onBackToSource) {
+      onBackToSource();
+    } else if (onBackToDataSemantics) {
+      onBackToDataSemantics();
+    }
+  };
+
   const handleConfirm = () => {
     setIsSubmitting(true);
     // Simulates enterprise multi-point semantic validation (BO version, Data Semantics version, non-conflict, gates, permissions)
     setTimeout(() => {
       setIsSubmitting(false);
+
+      // Bottom-up 闭环：确认对齐 → 登记候选数据支撑 + 记录业务对象修订
+      // （上下文清理与返回路由由 onConfirmResolution / App 处理）
+      if (resolutionContext && selectedCandidate === 'service_ticket') {
+        const objectId = 'bo_service_ticket';
+        const existing = dataSupportService
+          .listImplementations(objectId)
+          .find((impl) => impl.assetId === resolutionContext.sourceId);
+        if (!existing) {
+          dataSupportService.registerCandidate(objectId, {
+            implementation: {
+              name: resolutionContext.sourceName ?? resolutionContext.sourceId,
+              techName: resolutionContext.sourceId,
+              warehouseTable: resolutionContext.sourceId,
+              assetId: resolutionContext.sourceId,
+              scope: resolutionContext.sourceName ?? '来源数据资产',
+              granularity: '一行一条业务记录（对齐后完善）',
+              identity: '（对齐后完善）',
+              scopeRelationText: '自下而上对齐候选',
+              scopeRelationNote: '由 Bottom-up Resolution 登记的候选数据实现，等待确认生效。',
+              attributes: [],
+              relationships: []
+            },
+            scope: resolutionContext.sourceName
+          });
+        }
+        commitRevision(objectId, {
+          summary: `业务对象对齐：${resolutionContext.sourceName ?? resolutionContext.sourceId}`,
+          changes: [
+            `「${resolutionContext.sourceName ?? resolutionContext.sourceId}」经 Bottom-up Resolution 对齐至服务工单，登记候选数据支撑（任务 ${resolutionContext.taskId}）`
+          ],
+          changedBy: '业务对象对齐工作台'
+        });
+      }
+
       addToast?.(
         'success',
         '业务对象对齐已确认',
@@ -60,8 +119,8 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
       );
       if (onConfirmResolution) {
         onConfirmResolution(selectedCandidate);
-      } else if (onBackToDataSemantics) {
-        onBackToDataSemantics();
+      } else {
+        returnToOrigin();
       }
     }, 400);
   };
@@ -70,12 +129,12 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
     addToast?.(
       'info',
       '已保留对齐任务',
-      '公共服务热线工单记录表的业务对象对齐状态已保留，您可随时在任务中心或数据语义工作台中继续处理。'
+      `${sourceName}的业务对象对齐状态已保留，您可随时在任务中心或数据语义工作台中继续处理。`
     );
     if (onPostpone) {
       onPostpone();
-    } else if (onBackToDataSemantics) {
-      onBackToDataSemantics();
+    } else {
+      returnToOrigin();
     }
   };
 
@@ -86,9 +145,7 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
       '本轮不建立对象关联',
       '已标记此数据资产在本轮语义沉淀中暂不建立业务对象实现关系。'
     );
-    if (onBackToDataSemantics) {
-      onBackToDataSemantics();
-    }
+    returnToOrigin();
   };
 
   return (
@@ -98,19 +155,20 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
       {/* 1. FOCUSED WORK SHELL: 64px NARROW SECONDARY NAV RAIL     */}
       {/* ========================================================= */}
       <aside className="w-16 shrink-0 bg-white border-r border-[#E2E8F0] flex flex-col items-center py-4 space-y-4 select-none z-20">
-        {/* Back action: back to data semantics / assets list */}
+        {/* Back action: 有入口上下文时返回原上下文，否则返回数据语义 */}
         <button
-          onClick={onBackToDataSemantics}
+          onClick={returnToOrigin}
           className="w-10 h-10 rounded-md flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors cursor-pointer"
-          title="返回数据语义"
-          aria-label="返回数据语义"
+          title={resolutionContext ? '返回原上下文' : '返回数据语义'}
+          aria-label={resolutionContext ? '返回原上下文' : '返回数据语义'}
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
 
         <div className="w-8 h-px bg-[#E2E8F0]" />
 
-        {/* 1. 业务对象 (Active) */}
+        {/* 1. 业务对象 (Active) — 对齐任务进行中禁止跳转业务对象列表 */}
+        {!resolutionContext && (
         <div className="relative group">
           <button
             onClick={onNavigateToObjectsList}
@@ -124,6 +182,7 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
             业务对象 (当前聚焦)
           </div>
         </div>
+        )}
 
         {/* 2. 标准指标 */}
         <div className="relative group">
@@ -142,7 +201,7 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
         {/* 3. 数据语义 */}
         <div className="relative group">
           <button
-            onClick={onBackToDataSemantics}
+            onClick={returnToOrigin}
             className="w-10 h-10 rounded-md flex items-center justify-center text-[#64748B] hover:text-[#0F172A] hover:bg-[#F1F5F9] transition-colors cursor-pointer"
             aria-label="数据语义"
           >
@@ -181,16 +240,19 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
             <div className="space-y-1.5 min-w-0">
               {/* Breadcrumbs */}
               <nav className="flex items-center space-x-2 text-xs text-[#64748B]" aria-label="Breadcrumb">
-                <span className="hover:text-[#0F172A] transition-colors cursor-pointer" onClick={onNavigateToObjectsList}>
+                <span
+                  className="hover:text-[#0F172A] transition-colors cursor-pointer"
+                  onClick={resolutionContext ? undefined : onNavigateToObjectsList}
+                >
                   业务语义
                 </span>
                 <span className="text-[#CBD5E1]">/</span>
-                <span className="hover:text-[#0F172A] transition-colors cursor-pointer" onClick={onBackToDataSemantics}>
+                <span className="hover:text-[#0F172A] transition-colors cursor-pointer" onClick={returnToOrigin}>
                   数据语义
                 </span>
                 <span className="text-[#CBD5E1]">/</span>
                 <span className="text-[#475569] font-medium truncate max-w-[200px]">
-                  公共服务热线工单记录表
+                  {sourceName}
                 </span>
                 <span className="text-[#CBD5E1]">/</span>
                 <span className="text-[#0F172A] font-semibold">业务对象对齐</span>
@@ -212,10 +274,10 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
               </p>
 
               {/* Current Data Asset Badge Row */}
-              <div className="flex items-center space-x-3 pt-2">
+              <div className="flex items-center space-x-3 pt-2 flex-wrap gap-y-1.5">
                 <div className="flex items-center space-x-1.5 text-xs text-[#334155] font-semibold">
                   <TableIcon className="w-3.5 h-3.5 text-[#64748B]" />
-                  <span>公共服务热线工单记录表</span>
+                  <span>{sourceName}</span>
                 </div>
                 <span className="text-[#CBD5E1]">·</span>
                 <span className="font-mono text-xs text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0]">
@@ -224,6 +286,14 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
                   数据语义已确认
                 </span>
+                {resolutionContext && (
+                  <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">
+                    <Info className="w-3 h-3" />
+                    <span>
+                      对齐任务 {resolutionContext.taskId} · 来源版本 {resolutionContext.sourceRevision} · 完成后返回原上下文
+                    </span>
+                  </span>
+                )}
               </div>
             </div>
 
@@ -275,7 +345,7 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                 </div>
                 <div className="pt-1">
                   <div className="text-xs font-semibold text-[#1E293B]">
-                    公共服务热线工单记录表
+                    {sourceName}
                   </div>
                   <div className="font-mono text-[11px] text-[#64748B] truncate mt-0.5" title="hotline_db.service.pop_service_hotline">
                     hotline_db.service.pop_service_hotline
@@ -667,7 +737,7 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                   <div>
                     <div className="text-[11px] text-[#64748B] font-medium">拟建立关系</div>
                     <div className="text-xs text-[#1E293B] bg-[#F8FAFC] p-2 rounded border border-[#E2E8F0] leading-relaxed">
-                      公共服务热线工单记录表 作为“{selectedCandidate === 'service_ticket' ? '服务工单' : '热线工单'}”的一套数据实现
+                      {sourceName} 作为“{selectedCandidate === 'service_ticket' ? '服务工单' : '热线工单'}”的一套数据实现
                     </div>
                   </div>
                 </div>
@@ -745,7 +815,7 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                   <div className="space-y-1 bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0] text-[11px]">
                     <div className="flex justify-between">
                       <span className="text-[#64748B]">数据实现：</span>
-                      <span className="text-[#1E293B] font-medium">公共服务热线工单记录表</span>
+                      <span className="text-[#1E293B] font-medium">{sourceName}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-[#64748B]">业务对象：</span>
