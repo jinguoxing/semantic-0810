@@ -58,8 +58,7 @@ import { ResolveDataSupportWorkspace } from './components/ResolveDataSupportWork
 import { BusinessObjectResolutionWorkspace } from './components/BusinessObjectResolutionWorkspace';
 import { BusinessObjectRevalidationWorkspace } from './components/BusinessObjectRevalidationWorkspace';
 import { DataSemanticsDetailView } from './components/DataSemanticsDetailView';
-import { objectResolutionContexts } from './domain/business-object';
-import { INITIAL_BUSINESS_OBJECTS } from './data/businessObjectsData';
+import { businessObjectRepository, objectResolutionContexts } from './domain/business-object';
 import {
   AgentItem,
   AgentDefinitionDetail,
@@ -89,6 +88,12 @@ export default function App() {
   const [metricDetailContext, setMetricDetailContext] = useState<{ metricId?: string; fromGoalSearch?: boolean; goalQuery?: string }>({ metricId: 'met_001', fromGoalSearch: false, goalQuery: '' });
   const [selectedChangeMetricId, setSelectedChangeMetricId] = useState<string>('met_001');
   const [businessObjectDetailContext, setBusinessObjectDetailContext] = useState<{ objectId?: string; initialTab?: 'business' | 'data_support'; fromGoalSearch?: boolean; goalQuery?: string }>({ objectId: 'bo_service_ticket', initialTab: 'data_support', fromGoalSearch: false, goalQuery: '' });
+  /** 修改工作台目标对象（从目录 / 详情进入时记录，禁止回退到写死的「服务工单」） */
+  const [changeObjectId, setChangeObjectId] = useState<string>('bo_service_ticket');
+  /** Top-down 发现数据支撑入口上下文：必须携带具体业务对象（Inv07） */
+  const [resolveSupportContext, setResolveSupportContext] = useState<{ businessObjectId: string; candidateBindingId?: string; returnFocus?: string }>({ businessObjectId: 'bo_service_ticket' });
+  /** 数据支撑复核入口上下文：可携带对象与待复核绑定 */
+  const [revalidationContext, setRevalidationContext] = useState<{ objectId?: string; bindingId?: string }>({});
   const [resolutionTaskId, setResolutionTaskId] = useState<string | null>(null);
   const [fields, setFields] = useState<FieldItem[]>(INITIAL_FIELDS_QUEUE);
   const [selectedFieldId, setSelectedFieldId] = useState<string>('person_id');
@@ -166,11 +171,9 @@ export default function App() {
     addToast('info', '业务对象对齐', `已登记对齐任务 ${context.taskId}，完成后将返回原上下文`);
   };
 
+  /** 返回原上下文：只按 returnRoute 回跳，不改写任务状态（状态流转由领域服务负责） */
   const returnFromResolution = () => {
     const context = resolutionTaskId ? objectResolutionContexts.get(resolutionTaskId) : undefined;
-    if (resolutionTaskId) {
-      objectResolutionContexts.clear(resolutionTaskId);
-    }
     setResolutionTaskId(null);
 
     if (context?.returnRoute === 'asset_detail') {
@@ -832,24 +835,23 @@ export default function App() {
         />
       ) : currentNav === 'change_business_object' || viewTab === 'change_business_object' ? (
         <BusinessObjectChangeWorkspace
+          objectId={changeObjectId}
           onCancel={() => {
+            const changedName = businessObjectRepository.get(changeObjectId)?.name ?? '业务对象';
             setCurrentNav('business_objects');
             setViewTab('business_objects');
-            addToast('info', '已返回目录', '已取消修改「服务工单」并返回业务对象目录');
+            addToast('info', '已返回目录', `已取消修改「${changedName}」并返回业务对象目录`);
           }}
-          onSaveDraft={() => {
-            addToast('success', '草稿保存成功', '已保存「服务工单」修改草稿至企业语义资产库');
-          }}
-          onPublish={() => {
-            setCurrentNav('business_object_detail');
-            setViewTab('business_object_detail');
+          onPublished={(objectId) => {
+            // 发布成功：进入该对象新正式版本的业务视角（objectId 来自发布结果）
             setBusinessObjectDetailContext({
-              objectId: 'bo_service_ticket',
+              objectId,
               initialTab: 'business',
               fromGoalSearch: false,
               goalQuery: ''
             });
-            addToast('success', '业务对象已发布', '「服务工单」新版本已正式发布至企业业务语义目录');
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
           }}
           onNavigateToSemantics={() => {
             setCurrentNav('business_objects');
@@ -861,7 +863,7 @@ export default function App() {
           }}
           onNavigateToObjectDetail={(objectId) => {
             setBusinessObjectDetailContext({
-              objectId: objectId || 'bo_service_ticket',
+              objectId: objectId || changeObjectId,
               initialTab: 'business',
               fromGoalSearch: false,
               goalQuery: ''
@@ -873,18 +875,35 @@ export default function App() {
         />
       ) : currentNav === 'create_business_object' || viewTab === 'create_business_object' || currentNav === 'business_object_authoring' || viewTab === 'business_object_authoring' ? (
         <BusinessObjectAuthoringWorkspace
+          resolutionTaskId={resolutionTaskId ?? undefined}
           onCancel={() => {
             setCurrentNav('business_objects');
             setViewTab('business_objects');
             addToast('info', '业务对象目录', '已取消新建并返回业务对象目录');
           }}
-          onSaveDraft={() => {
-            addToast('success', '草稿保存成功', '已保存「热线坐席」业务对象定义草稿至企业语义资产库');
+          onPublished={(newObjectId) => {
+            // 发布成功：进入新对象的业务视角（newObjectId 来自 publishDraft 的领域写入结果）
+            setResolutionTaskId(null);
+            setBusinessObjectDetailContext({
+              objectId: newObjectId,
+              initialTab: 'business',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
           }}
-          onPublish={() => {
-            setCurrentNav('business_objects');
-            setViewTab('business_objects');
-            addToast('success', '业务对象已发布', '「热线坐席」已正式发布至企业业务语义目录');
+          onReuseExisting={(objectId) => {
+            // 复用决策：返回被复用正式对象（如「客服坐席」）的业务视角
+            setResolutionTaskId(null);
+            setBusinessObjectDetailContext({
+              objectId,
+              initialTab: 'business',
+              fromGoalSearch: false,
+              goalQuery: ''
+            });
+            setCurrentNav('business_object_detail');
+            setViewTab('business_object_detail');
           }}
           onNavigateToSemantics={() => {
             setCurrentNav('business_objects');
@@ -907,24 +926,28 @@ export default function App() {
             });
             setCurrentNav('business_object_detail');
             setViewTab('business_object_detail');
-            const found = INITIAL_BUSINESS_OBJECTS.find((o) => o.id === objectId);
+            const found = businessObjectRepository.get(objectId);
             addToast('info', '业务对象详情', `已载入「${found?.name || '业务对象'}」${initialTab === 'data_support' ? '数据支撑' : '业务'}视角详情`);
           }}
           onNavigateToCreateBusinessObject={() => {
+            setResolutionTaskId(null);
             setCurrentNav('create_business_object');
             setViewTab('create_business_object');
             addToast('info', '新建业务对象', '已进入业务对象定义与建模工作区');
           }}
           onNavigateToChangeBusinessObject={(objectId) => {
+            const targetId = objectId || 'bo_service_ticket';
+            setChangeObjectId(targetId);
             setBusinessObjectDetailContext({
-              objectId: objectId || 'bo_service_ticket',
+              objectId: targetId,
               initialTab: 'business',
               fromGoalSearch: false,
               goalQuery: ''
             });
             setCurrentNav('change_business_object');
             setViewTab('change_business_object');
-            addToast('info', '修改业务对象', '已载入「服务工单」修改草稿工作区');
+            const changedName = businessObjectRepository.get(targetId)?.name ?? '业务对象';
+            addToast('info', '修改业务对象', `已载入「${changedName}」修改草稿工作区`);
           }}
           addToast={addToast}
         />
@@ -935,9 +958,12 @@ export default function App() {
           fromGoalSearch={businessObjectDetailContext.fromGoalSearch}
           goalQuery={businessObjectDetailContext.goalQuery}
           onNavigateToChangeBusinessObject={(objectId) => {
+            const targetId = objectId || businessObjectDetailContext.objectId || 'bo_service_ticket';
+            setChangeObjectId(targetId);
             setCurrentNav('change_business_object');
             setViewTab('change_business_object');
-            addToast('info', '修改业务对象', '已进入「服务工单」业务对象修改工作区');
+            const changedName = businessObjectRepository.get(targetId)?.name ?? '业务对象';
+            addToast('info', '修改业务对象', `已进入「${changedName}」业务对象修改工作区`);
           }}
           onBackToObjectsList={() => {
             setCurrentNav('business_objects');
@@ -951,7 +977,7 @@ export default function App() {
               fromGoalSearch: false,
               goalQuery: ''
             });
-            const found = INITIAL_BUSINESS_OBJECTS.find((o) => o.id === objectId);
+            const found = businessObjectRepository.get(objectId);
             addToast('info', '业务对象详情', `已切换至「${found?.name || '业务对象'}」`);
           }}
           onBackToResources={() => {
@@ -998,23 +1024,33 @@ export default function App() {
             setViewTab('marketplace_resources');
             addToast('info', '相关资源', `已在资源超市中筛选与「${objectName}${attrName ? ` · ${attrName}` : ''}」相关的资源`);
           }}
-          onFindDataWithObjectGoal={(objectName) => {
+          onDiscoverDataSupport={(businessObjectId, candidateBindingId) => {
+            // Top-down 必须携带具体业务对象上下文进入（Inv07）
+            setResolveSupportContext({ businessObjectId, candidateBindingId, returnFocus: 'data_support_selector' });
             setCurrentNav('resolve_data_support');
             setViewTab('resolve_data_support');
-            addToast('info', '发现数据支撑', `已进入「${objectName || '服务工单'}」Top-down 数据支撑发现与确认工作区`);
+            const objectName = businessObjectRepository.get(businessObjectId)?.name ?? businessObjectId;
+            addToast('info', '发现数据支撑', `已进入「${objectName}」Top-down 数据支撑发现与确认工作区`);
           }}
-          onNavigateToRevalidation={() => {
+          onNavigateToRevalidation={(objectId, bindingId) => {
+            // 复核入口携带对象与待复核绑定上下文
+            setRevalidationContext({ objectId, bindingId });
             setCurrentNav('business_object_revalidation');
             setViewTab('business_object_revalidation');
-            addToast('info', '数据支撑复核', '已进入数据支撑复核工作台（Binding Revalidation）');
+            const objectName = businessObjectRepository.get(objectId)?.name ?? objectId;
+            addToast('info', '数据支撑复核', `已进入「${objectName}」的数据支撑复核工作台（Binding Revalidation）`);
           }}
           addToast={addToast}
         />
       ) : currentNav === 'resolve_data_support' || viewTab === 'resolve_data_support' ? (
         <ResolveDataSupportWorkspace
+          businessObjectId={resolveSupportContext.businessObjectId}
+          candidateBindingId={resolveSupportContext.candidateBindingId}
+          returnRoute="business_object_detail"
+          returnFocus={resolveSupportContext.returnFocus}
           onBackToDetail={() => {
             setBusinessObjectDetailContext({
-              objectId: 'bo_service_ticket',
+              objectId: resolveSupportContext.businessObjectId,
               initialTab: 'data_support',
               fromGoalSearch: false,
               goalQuery: ''
@@ -1024,91 +1060,33 @@ export default function App() {
           }}
           onViewCurrentSupport={() => {
             setBusinessObjectDetailContext({
-              objectId: 'bo_service_ticket',
+              objectId: resolveSupportContext.businessObjectId,
               initialTab: 'data_support',
               fromGoalSearch: false,
               goalQuery: ''
             });
             setCurrentNav('business_object_detail');
             setViewTab('business_object_detail');
-          }}
-          onConfirmSuccess={() => {
-            setBusinessObjectDetailContext({
-              objectId: 'bo_service_ticket',
-              initialTab: 'data_support',
-              fromGoalSearch: false,
-              goalQuery: ''
-            });
-            setCurrentNav('business_object_detail');
-            setViewTab('business_object_detail');
-          }}
-          onDismissCandidate={() => {
-            setBusinessObjectDetailContext({
-              objectId: 'bo_service_ticket',
-              initialTab: 'data_support',
-              fromGoalSearch: false,
-              goalQuery: ''
-            });
-            setCurrentNav('business_object_detail');
-            setViewTab('business_object_detail');
-          }}
-          onNavigateToObjectsList={() => {
-            setCurrentNav('business_objects');
-            setViewTab('business_objects');
-            addToast('info', '业务对象列表', '已返回企业业务对象目录');
-          }}
-          onSwitchToResolution={() => {
-            setCurrentNav('business_object_resolution');
-            setViewTab('business_object_resolution');
-            addToast('info', '工作台切换', '已切换至「业务对象对齐」工作台（自下而上语义决策）');
           }}
           addToast={addToast}
         />
       ) : currentNav === 'business_object_resolution' || viewTab === 'business_object_resolution' ? (
         <BusinessObjectResolutionWorkspace
-          taskId={resolutionTaskId ?? undefined}
-          onBackToDataSemantics={() => {
-            setCurrentNav('semantics');
-            setViewTab('semantics');
-            addToast('info', '数据语义', '已返回数据语义工作台');
-          }}
+          taskId={resolutionTaskId ?? 'task_unknown'}
           onBackToSource={returnFromResolution}
-          onNavigateToObjectsList={() => {
-            setCurrentNav('business_objects');
-            setViewTab('business_objects');
-            addToast('info', '业务对象目录', '已返回企业业务对象目录');
-          }}
-          onCreateNewObject={() => {
+          onCreateNewObject={(taskId) => {
+            // 创建新对象：携带本任务上下文进入创建工作台，发布后自动完成对齐
+            setResolutionTaskId(taskId);
             setCurrentNav('create_business_object');
             setViewTab('create_business_object');
-            addToast('info', '新建业务对象', '已进入业务对象构建向导');
-          }}
-          onPostpone={returnFromResolution}
-          onSwitchToResolveDataSupport={() => {
-            setCurrentNav('resolve_data_support');
-            setViewTab('resolve_data_support');
-            addToast('info', '工作台切换', '已切换至「发现数据支撑」工作台（自上而下数据实现确立）');
-          }}
-          onConfirmResolution={(selectedObj) => {
-            if (resolutionTaskId) {
-              // 有入口上下文：按 returnRoute + sourceId + taskId 返回原上下文（禁止返回业务对象列表）
-              returnFromResolution();
-              return;
-            }
-            // 直接进入（无上下文）：维持原有落地 —— 查看对象的数据支撑视角
-            setBusinessObjectDetailContext({
-              objectId: selectedObj === 'service_ticket' ? 'bo_service_ticket' : 'bo_customer_feedback',
-              initialTab: 'data_support',
-              fromGoalSearch: false,
-              goalQuery: ''
-            });
-            setCurrentNav('business_object_detail');
-            setViewTab('business_object_detail');
+            addToast('info', '新建业务对象', '已携带对齐任务上下文进入业务对象创建工作台（发布后自动完成对齐）');
           }}
           addToast={addToast}
         />
       ) : currentNav === 'business_object_revalidation' || viewTab === 'business_object_revalidation' ? (
         <BusinessObjectRevalidationWorkspace
+          objectId={revalidationContext.objectId}
+          bindingId={revalidationContext.bindingId}
           onNavigateToObjectsList={() => {
             setCurrentNav('business_objects');
             setViewTab('business_objects');

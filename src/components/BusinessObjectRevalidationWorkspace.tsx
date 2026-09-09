@@ -18,9 +18,13 @@ import {
 } from '../domain/business-object';
 
 export interface BusinessObjectRevalidationWorkspaceProps {
+  /** 入口上下文：从业务对象详情进入时携带，仅复核该对象（可选，不传则复核全部） */
+  objectId?: string;
+  /** 入口预选的待复核绑定（高亮置顶） */
+  bindingId?: string;
   onNavigateToObjectsList?: () => void;
   onNavigateToObjectDetail?: (objectId: string, initialTab?: 'business' | 'data_support') => void;
-  addToast?: (type: 'success', title: string, message: string) => void;
+  addToast?: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
 }
 
 /** 待复核绑定视图模型：绑定 + 对象 + 实现 联表 */
@@ -36,6 +40,8 @@ interface RevalidationItem {
 }
 
 export const BusinessObjectRevalidationWorkspace: React.FC<BusinessObjectRevalidationWorkspaceProps> = ({
+  objectId,
+  bindingId,
   onNavigateToObjectsList,
   onNavigateToObjectDetail,
   addToast
@@ -47,7 +53,9 @@ export const BusinessObjectRevalidationWorkspace: React.FC<BusinessObjectRevalid
     void stateVersion;
     const pending: RevalidationItem[] = [];
     businessObjectRepository.list().forEach((object) => {
-      dataSupportService.listBindings(object.id)
+      if (objectId && object.id !== objectId) return;
+      const objectBindings = dataSupportService.listBindings(object.id);
+      objectBindings
         .filter((binding) => binding.status === 'NEEDS_REVALIDATION')
         .forEach((binding) => {
           const implementation = dataSupportService.getImplementation(binding.implementationId);
@@ -58,14 +66,28 @@ export const BusinessObjectRevalidationWorkspace: React.FC<BusinessObjectRevalid
             implementationName: implementation?.name ?? binding.implementationId,
             warehouseTable: implementation?.warehouseTable ?? '—',
             techName: implementation?.techName ?? '—',
+            // 重新绑定约束（领域校验同口径）：新实现 ≠ 当前实现，且未被其他在役绑定占用
             alternatives: dataSupportService
               .listImplementations(object.id)
               .filter((impl) => impl.id !== binding.implementationId)
+              .filter(
+                (impl) =>
+                  !objectBindings.some(
+                    (other) =>
+                      other.id !== binding.id &&
+                      other.implementationId === impl.id &&
+                      other.status !== 'RETIRED'
+                  )
+              )
           });
         });
     });
+    // 入口预选的待复核绑定置顶
+    if (bindingId) {
+      pending.sort((a, b) => (a.binding.id === bindingId ? -1 : b.binding.id === bindingId ? 1 : 0));
+    }
     return pending;
-  }, [stateVersion]);
+  }, [stateVersion, objectId, bindingId]);
 
   // 重新绑定展开面板：当前展开的 bindingId 与选中的替代实现
   const [rebindPanelBindingId, setRebindPanelBindingId] = useState<string | null>(null);
@@ -76,26 +98,57 @@ export const BusinessObjectRevalidationWorkspace: React.FC<BusinessObjectRevalid
     setRebindChoice(item.alternatives[0]?.id ?? '');
   };
 
+  /** 确认继续使用：NEEDS_REVALIDATION → EFFECTIVE（REVALIDATION_KEEP 数据支撑修订） */
   const handleConfirmKeep = (item: RevalidationItem) => {
-    dataSupportService.confirmRevalidation(item.binding.id);
-    addToast?.('success', '复核确认', `「${item.implementationName}」确认继续作为「${item.objectName}」的数据支撑，绑定已恢复生效。`);
+    const result = dataSupportService.confirmRevalidation(item.binding.id, { changedBy: '数据支撑复核工作台' });
+    if (result.ok === false) {
+      addToast?.(
+        'error',
+        '复核未生效',
+        result.error === 'NOT_FOUND' ? '未找到待复核的数据支撑绑定，请刷新后重试' : '该绑定不处于待复核状态，可能已被处理'
+      );
+      return;
+    }
+    addToast?.('success', '复核确认', `「${item.implementationName}」确认继续作为「${item.objectName}」的数据支撑，绑定已恢复生效（记录数据支撑修订，不产生业务对象修订）。`);
   };
 
+  /** 重新绑定：新实现 ≠ 当前实现，且未被其他在役绑定占用（领域校验，失败零写入） */
   const handleRebind = (item: RevalidationItem) => {
     if (!rebindChoice) return;
     const target = item.alternatives.find((impl) => impl.id === rebindChoice);
-    dataSupportService.rebind(item.binding.id, rebindChoice, {
-      reason: `语义修订 R${item.binding.revision?.slice(1) ?? '1'} 后由「${item.implementationName}」切换为「${target?.name ?? rebindChoice}」`
+    const result = dataSupportService.rebind(item.binding.id, rebindChoice, {
+      reason: `语义修订 ${item.binding.revalidation?.sourceRevision ?? ''} 后由「${item.implementationName}」切换为「${target?.name ?? rebindChoice}」`,
+      changedBy: '数据支撑复核工作台'
     });
+    if (result.ok === false) {
+      const messages: Record<string, string> = {
+        NOT_FOUND: '未找到待复核的数据支撑绑定，请刷新后重试',
+        SAME_IMPLEMENTATION: '新数据实现与当前实现相同，无需重新绑定',
+        IMPLEMENTATION_NOT_FOUND: '未找到所选替代数据实现，请刷新后重试',
+        IMPLEMENTATION_IN_USE: '所选数据实现已被其他绑定正式使用，同一实现不能同时承载多条在役绑定'
+      };
+      addToast?.('error', '重新绑定未生效', messages[result.error]);
+      return;
+    }
     setRebindPanelBindingId(null);
-    addToast?.('success', '重新绑定完成', `「${item.objectName}」该数据支撑已切换为「${target?.name ?? rebindChoice}」并恢复生效。`);
+    addToast?.('success', '重新绑定完成', `「${item.objectName}」该数据支撑已切换为「${target?.name ?? rebindChoice}」并恢复生效（记录数据支撑修订，不产生业务对象修订）。`);
   };
 
+  /** 退休：PRIMARY 绑定不可直接退休，需先确认新的主要数据实现 */
   const handleRetire = (item: RevalidationItem) => {
-    dataSupportService.retireBinding(item.binding.id, {
-      reason: `语义修订后不再满足「${item.objectName}」的数据支撑要求`
+    const result = dataSupportService.retireBinding(item.binding.id, {
+      reason: `语义修订后不再满足「${item.objectName}」的数据支撑要求`,
+      changedBy: '数据支撑复核工作台'
     });
-    addToast?.('success', '数据支撑已退休', `「${item.implementationName}」已不再作为「${item.objectName}」的数据支撑。`);
+    if (result.ok === false) {
+      if (result.error === 'IS_PRIMARY') {
+        addToast?.('warning', '无法退休主要数据实现', '请先确认新的主要数据实现，再退休当前主要实现。');
+      } else {
+        addToast?.('error', '退休未生效', '未找到待退休的数据支撑绑定，请刷新后重试');
+      }
+      return;
+    }
+    addToast?.('success', '数据支撑已退休', `「${item.implementationName}」已不再作为「${item.objectName}」的数据支撑（可在历史中查看，不产生业务对象修订）。`);
   };
 
   return (
@@ -155,6 +208,14 @@ export const BusinessObjectRevalidationWorkspace: React.FC<BusinessObjectRevalid
               <span className="px-2 py-0.5 rounded-full bg-[#FFF7ED] text-[#D97706] border border-[#FED7AA] text-[11px] font-bold">
                 {items.length} 项待复核
               </span>
+              {objectId && (
+                <button
+                  onClick={() => onNavigateToObjectDetail?.(objectId, 'data_support')}
+                  className="text-[11px] text-[#2563EB] hover:underline cursor-pointer font-medium"
+                >
+                  {items.length > 0 ? `来自「${items[0].objectName}」· 返回详情` : '返回业务对象详情'}
+                </button>
+              )}
             </div>
             <p className="text-xs text-[#64748B]">
               业务对象语义修订后，受影响的数据支撑绑定需要人工复核：确认继续使用、重新绑定或退休。
@@ -169,7 +230,9 @@ export const BusinessObjectRevalidationWorkspace: React.FC<BusinessObjectRevalid
               <CheckCircle2 className="w-8 h-8 text-[#059669] mx-auto" />
               <div className="text-sm font-semibold text-[#0F172A]">没有待复核的数据支撑</div>
               <p className="text-xs text-[#64748B] leading-relaxed">
-                当前所有生效绑定的语义上下文均与业务对象最新修订保持一致。
+                {objectId
+                  ? '该业务对象当前没有待复核的数据支撑绑定。'
+                  : '当前所有生效绑定的语义上下文均与业务对象最新修订保持一致。'}
               </p>
             </div>
           ) : (
@@ -177,7 +240,9 @@ export const BusinessObjectRevalidationWorkspace: React.FC<BusinessObjectRevalid
               <section
                 key={item.binding.id}
                 aria-label={`待复核绑定 ${item.implementationName}`}
-                className="bg-white border border-[#FDE68A] rounded-md shadow-2xs overflow-hidden"
+                className={`bg-white border rounded-md shadow-2xs overflow-hidden ${
+                  item.binding.id === bindingId ? 'border-[#D97706] ring-2 ring-[#FDE68A]' : 'border-[#FDE68A]'
+                }`}
               >
                 {/* 卡片头：对象 / 实现 / 角色 / 修订 */}
                 <div className="px-6 py-4 bg-[#FFFBEB]/60 border-b border-[#FDE68A] space-y-2">
@@ -317,7 +382,7 @@ export const BusinessObjectRevalidationWorkspace: React.FC<BusinessObjectRevalid
                     退休
                   </button>
                   <span className="text-[11px] text-[#94A3B8] ml-auto">
-                    复核结论将记录至业务对象修订历史
+                    复核结论记录为数据支撑修订，不产生业务对象修订
                   </span>
                 </div>
               </section>

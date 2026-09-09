@@ -25,8 +25,8 @@ interface HeaderProps {
   onOpenLauncher?: () => void;
   onOpenProfile?: () => void;
   isProfileOpen?: boolean;
-  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'business_objects' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_definition' | 'agent_detail' | 'agent_publish';
-  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'business_objects' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents') => void;
+  currentNav?: 'home' | 'governance' | 'assets' | 'semantics' | 'semantics_detail' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'business_object_revalidation' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'business_objects' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents' | 'agent_definition' | 'agent_detail' | 'agent_publish';
+  onSelectNav?: (nav: 'home' | 'governance' | 'assets' | 'semantics' | 'semantics_detail' | 'asset_detail' | 'metric_detail' | 'business_object_detail' | 'resolve_data_support' | 'business_object_resolution' | 'business_object_revalidation' | 'create_business_object' | 'business_object_authoring' | 'change_business_object' | 'business_objects' | 'data_standards' | 'create_data_element_standard' | 'create_value_domain_standard' | 'import_standards' | 'mapping_conflict_review' | 'standard_proposal_review' | 'metrics' | 'create_metric' | 'marketplace' | 'marketplace_resources' | 'multi_resource_request' | 'my_requests' | 'access_review' | 'access_review_detail' | 'agents') => void;
   batchCount?: number;
 }
 
@@ -60,16 +60,18 @@ export const Header: React.FC<HeaderProps> = ({
     currentNav === 'business_object_detail' ||
     currentNav === 'resolve_data_support' ||
     currentNav === 'business_object_resolution' ||
+    currentNav === 'business_object_revalidation' ||
     currentNav === 'semantics' ||
+    currentNav === 'semantics_detail' ||
     currentNav === 'data_standards';
 
   return (
     <header className="h-[60px] bg-white border-b border-[#E2E8F0] px-6 flex items-center justify-between sticky top-0 z-30 shrink-0 select-none">
       {/* Left Area: Semovix Logo + Primary Nav Menu */}
       <div className="flex items-center space-x-8 h-full">
-        {/* Semovix Logo */}
-        <div 
-          onClick={() => onSelectNav && onSelectNav('business_objects')}
+        {/* Semovix Logo：回首页（Xino 智能伙伴），不再作为业务对象入口 */}
+        <div
+          onClick={() => onSelectNav && onSelectNav('home')}
           className="flex items-center space-x-2.5 cursor-pointer"
         >
           <div className="w-7 h-7 rounded-lg bg-[#2563EB] flex items-center justify-center text-white font-bold shadow-xs">
@@ -182,41 +184,8 @@ export const Header: React.FC<HeaderProps> = ({
                         </p>
                       </div>
                     </button>
-
-                    {/* 快捷直达链接：业务对象对齐 & 发现数据支撑 */}
-                    <div className="pl-11 pr-2 pb-1.5 flex items-center space-x-2 text-[11px]">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsSemanticsDropdownOpen(false);
-                          onSelectNav && onSelectNav('business_object_resolution');
-                        }}
-                        className={`px-2 py-1 rounded transition-colors cursor-pointer font-medium ${
-                          currentNav === 'business_object_resolution'
-                            ? 'bg-[#2563EB] text-white'
-                            : 'text-[#2563EB] hover:bg-[#EFF6FF] hover:underline'
-                        }`}
-                        title="自下而上：从数据语义决策采用哪个业务对象"
-                      >
-                        ⚡ 业务对象对齐
-                      </button>
-                      <span className="text-[#CBD5E1]">·</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsSemanticsDropdownOpen(false);
-                          onSelectNav && onSelectNav('resolve_data_support');
-                        }}
-                        className={`px-2 py-1 rounded transition-colors cursor-pointer font-medium ${
-                          currentNav === 'resolve_data_support'
-                            ? 'bg-[#2563EB] text-white'
-                            : 'text-[#2563EB] hover:bg-[#EFF6FF] hover:underline'
-                        }`}
-                        title="自上而下：为业务对象寻找并确立候选数据实现"
-                      >
-                        🔍 发现数据支撑
-                      </button>
-                    </div>
+                    {/* 快捷直达链接已移除：Bottom-up / Top-down 必须从具体来源 / 对象上下文进入，
+                        禁止从 Header 无上下文直达（Inv06 / Inv07） */}
                   </div>
 
                   {/* 二级菜单 2: 指标 */}

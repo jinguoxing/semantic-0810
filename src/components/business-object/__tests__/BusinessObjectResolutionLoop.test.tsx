@@ -4,7 +4,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { BusinessObjectResolutionWorkspace } from '../../BusinessObjectResolutionWorkspace';
 import { DataSemanticsDetailView } from '../../DataSemanticsDetailView';
 import {
+  businessObjectRepository,
   dataSupportService,
+  listDataSupportRevisions,
   listRevisions,
   objectResolutionContexts,
   resetDomainStateForTesting
@@ -28,7 +30,7 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
     });
   });
 
-  it('对齐确认：登记候选数据支撑 + 记录修订 + 通知 App 按上下文返回', async () => {
+  it('对齐确认：直接登记 EFFECTIVE 数据支撑 + BOTTOM_UP_ALIGN 修订 + 完成任务并按上下文返回', async () => {
     // 入口登记（App 层 openResolutionContext 的领域侧等价物）
     objectResolutionContexts.open({
       taskId: 'task_form_sem_hotline_ticket',
@@ -39,40 +41,54 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
       returnRoute: 'semantics_detail'
     });
 
-    const onConfirmResolution = vi.fn();
+    const onBackToSource = vi.fn();
+    const addToast = vi.fn();
     render(
       <BusinessObjectResolutionWorkspace
         taskId="task_form_sem_hotline_ticket"
-        onConfirmResolution={onConfirmResolution}
+        onBackToSource={onBackToSource}
+        addToast={addToast}
       />
     );
 
     // 上下文可见：任务 ID 与来源版本
-    expect(screen.getByText(/task_form_sem_hotline_ticket/)).toBeInTheDocument();
-    expect(screen.getByText(/S5/)).toBeInTheDocument();
+    expect(screen.getAllByText(/task_form_sem_hotline_ticket/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/来源版本 S5/)).toBeInTheDocument();
 
-    // 对齐任务进行中：不允许跳转业务对象列表
-    expect(screen.queryByLabelText('业务对象')).not.toBeInTheDocument();
+    // Bottom-up 必须显式选择目标对象（不预选任何业务对象）
+    expect(screen.getByText('请先选择目标业务对象')).toBeInTheDocument();
+    fireEvent.click(document.getElementById('bo-option-bo_service_ticket')!);
 
-    // 默认候选为 服务工单 → 确认对齐
-    fireEvent.click(screen.getByRole('button', { name: /确认对齐/ }));
+    // 确认对齐（真实领域写入）
+    fireEvent.click(document.getElementById('btn-confirm-resolution')!);
 
-    await waitFor(() => expect(onConfirmResolution).toHaveBeenCalledWith('service_ticket'));
+    await waitFor(() => expect(onBackToSource).toHaveBeenCalledTimes(1));
 
-    // 领域侧：已产生业务对象修订（对齐动作可追溯）
-    const revisions = listRevisions('bo_service_ticket');
-    expect(revisions[0].summary).toContain('业务对象对齐');
-    expect(revisions[0].changes[0]).toContain('任务 task_form_sem_hotline_ticket');
-
-    // 语义来源无同资产实现 → 登记候选数据实现（等待确认生效）
+    // 领域侧：语义来源无同资产实现 → 登记新数据实现，直接 EFFECTIVE（不经过候选期）
     const registered = dataSupportService
       .listImplementations('bo_service_ticket')
       .find((impl) => impl.assetId === 'sem_hotline_ticket');
     expect(registered).toBeDefined();
     expect(registered?.name).toBe('公共服务热线工单记录表');
+    const binding = dataSupportService
+      .listBindings('bo_service_ticket')
+      .find((item) => item.implementationId === registered!.id);
+    expect(binding?.status).toBe('EFFECTIVE');
+    expect(binding?.role).toBe('SECONDARY');
+
+    // BOTTOM_UP_ALIGN 数据支撑修订可追溯；业务对象修订不受影响（Inv01 / Inv02）
+    const dsRevisions = listDataSupportRevisions('bo_service_ticket');
+    expect(dsRevisions[0].action).toBe('BOTTOM_UP_ALIGN');
+    expect(dsRevisions[0].reason).toContain('自下而上对齐');
+    expect(businessObjectRepository.get('bo_service_ticket')?.currentRevision).toBe('R1');
+    expect(listRevisions('bo_service_ticket')).toHaveLength(1);
+
+    // 任务闭环：COMPLETED
+    expect(objectResolutionContexts.get('task_form_sem_hotline_ticket')?.status).toBe('COMPLETED');
   });
 
-  it('重复对齐已有资产实现：不重复登记，仅记录修订', async () => {
+  it('重复对齐已有资产实现：提升既有 CANDIDATE 绑定，不重复登记实现 / 绑定', async () => {
+    // 种子已登记 res-02 → impl_st_hotline（CANDIDATE 绑定 bind_st_hotline）
     objectResolutionContexts.open({
       taskId: 'task_align_res_02',
       sourceType: 'DATA_ASSET',
@@ -85,21 +101,33 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
     render(
       <BusinessObjectResolutionWorkspace
         taskId="task_align_res_02"
-        onConfirmResolution={vi.fn()}
+        onBackToSource={vi.fn()}
+        addToast={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /确认对齐/ }));
+    fireEvent.click(document.getElementById('bo-option-bo_service_ticket')!);
+    fireEvent.click(document.getElementById('btn-confirm-resolution')!);
 
+    // 同资产实现不重复登记；确认动作只提升既有 CANDIDATE 绑定（一次只影响一条绑定）
     await waitFor(() => {
-      expect(listRevisions('bo_service_ticket')[0].changes[0]).toContain('任务 task_align_res_02');
+      expect(dataSupportService.getBinding('bind_st_hotline')?.status).toBe('EFFECTIVE');
     });
-
-    // 种子已登记 res-02 → impl_st_hotline，确认后不得重复登记
     const impls = dataSupportService.listImplementations('bo_service_ticket');
     expect(impls.filter((impl) => impl.assetId === 'res-02')).toHaveLength(1);
+    const hotlineBindings = dataSupportService
+      .listBindings('bo_service_ticket')
+      .filter((item) => item.implementationId === 'impl_st_hotline');
+    expect(hotlineBindings).toHaveLength(1);
+    expect(hotlineBindings[0].role).toBe('SECONDARY');
+
+    // 提升记录为 BOTTOM_UP_ALIGN 数据支撑修订（CANDIDATE → EFFECTIVE）
+    const dsRevisions = listDataSupportRevisions('bo_service_ticket');
+    expect(dsRevisions[0].action).toBe('BOTTOM_UP_ALIGN');
+    expect(dsRevisions[0].beforeStatus).toBe('CANDIDATE');
+    expect(objectResolutionContexts.get('task_align_res_02')?.status).toBe('COMPLETED');
   });
 
-  it('对齐新资产：不存在同资产实现时登记 CANDIDATE 绑定', async () => {
+  it('对齐新资产：不存在同资产实现时直接登记 EFFECTIVE 绑定（不经过候选期）', async () => {
     objectResolutionContexts.open({
       taskId: 'task_align_res_99',
       sourceType: 'DATA_ASSET',
@@ -112,10 +140,12 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
     render(
       <BusinessObjectResolutionWorkspace
         taskId="task_align_res_99"
-        onConfirmResolution={vi.fn()}
+        onBackToSource={vi.fn()}
+        addToast={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /确认对齐/ }));
+    fireEvent.click(document.getElementById('bo-option-bo_service_ticket')!);
+    fireEvent.click(document.getElementById('btn-confirm-resolution')!);
 
     await waitFor(() => {
       const registered = dataSupportService
@@ -124,10 +154,15 @@ describe('Bottom-up Resolution 闭环（PR-4）', () => {
       expect(registered).toBeDefined();
     });
 
+    const registered = dataSupportService
+      .listImplementations('bo_service_ticket')
+      .find((impl) => impl.assetId === 'res-99')!;
     const binding = dataSupportService
       .listBindings('bo_service_ticket')
-      .find((item) => item.implementationId === dataSupportService.listImplementations('bo_service_ticket').find((impl) => impl.assetId === 'res-99')!.id);
-    expect(binding?.status).toBe('CANDIDATE');
+      .find((item) => item.implementationId === registered.id);
+    // Bottom-up 规则：直接生效（不经过 CANDIDATE），对象已有生效实现 → 其他数据实现
+    expect(binding?.status).toBe('EFFECTIVE');
     expect(binding?.role).toBe('SECONDARY');
+    expect(listDataSupportRevisions('bo_service_ticket')[0].action).toBe('BOTTOM_UP_ALIGN');
   });
 });

@@ -4,7 +4,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { BusinessObjectRevalidationWorkspace } from '../../BusinessObjectRevalidationWorkspace';
 import { BusinessObjectDetailWorkspace } from '../../BusinessObjectDetailWorkspace';
 import {
+  businessObjectRepository,
   dataSupportService,
+  listDataSupportRevisions,
   listRevisions,
   resetDomainStateForTesting
 } from '../../../domain/business-object';
@@ -41,19 +43,27 @@ describe('Binding Revalidation 工作区（PR-6）', () => {
     expect(binding?.revalidation).toBeUndefined();
     expect(binding?.revision).toBe('R3');
 
-    const revisions = listRevisions('bo_person');
-    expect(revisions[0].summary).toBe('数据支撑复核确认');
-    expect(revisions[0].changes[0]).toContain('复核确认继续使用');
+    // 复核结论记录为数据支撑修订（REVALIDATION_KEEP），业务对象修订不受影响（Inv01 / Inv02）
+    const dsRevisions = listDataSupportRevisions('bo_person');
+    expect(dsRevisions[0].action).toBe('REVALIDATION_KEEP');
+    expect(dsRevisions[0].reason).toContain('复核确认');
+    expect(businessObjectRepository.get('bo_person')?.currentRevision).toBe('R2');
+    expect(listRevisions('bo_person')).toHaveLength(2);
 
     // 队列清空 → 空状态
     expect(screen.getByText('没有待复核的数据支撑')).toBeInTheDocument();
   });
 
-  it('重新绑定：切换到替代实现并恢复生效', () => {
+  it('重新绑定：切换到替代实现并恢复生效（已被占用的实现不作为替代项）', () => {
+    // 领域准备：常住人口统计表当前已由 bind_person_stat 正式承载（EFFECTIVE），
+    // 先退休该绑定释放实现，才能作为人口扩展信息的重新绑定目标
+    dataSupportService.retireBinding('bind_person_stat', { reason: '测试准备：释放实现占用' });
+
     render(<BusinessObjectRevalidationWorkspace addToast={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /重新绑定/ }));
-    // 替代实现来自同对象（人口基本信息表 / 常住人口统计表）
+    // 替代实现来自同对象且未被其他在役绑定占用：人口基本信息表（bind_person_base 占用）不得出现
+    expect(screen.queryByText('人口基本信息表')).toBeNull();
     fireEvent.click(screen.getByText('常住人口统计表'));
     fireEvent.click(screen.getByRole('button', { name: '确认重新绑定' }));
 
@@ -62,8 +72,10 @@ describe('Binding Revalidation 工作区（PR-6）', () => {
     expect(binding?.implementationId).toBe('impl_person_stat');
     expect(binding?.revalidation).toBeUndefined();
 
-    const revisions = listRevisions('bo_person');
-    expect(revisions[0].summary).toContain('重新绑定');
+    // 重新绑定记录为数据支撑修订（REBIND），业务对象修订不受影响
+    const dsRevisions = listDataSupportRevisions('bo_person');
+    expect(dsRevisions[0].action).toBe('REBIND');
+    expect(businessObjectRepository.get('bo_person')?.currentRevision).toBe('R2');
   });
 
   it('退休：绑定退出数据支撑，修订记录原因', () => {
@@ -75,8 +87,10 @@ describe('Binding Revalidation 工作区（PR-6）', () => {
     expect(binding?.status).toBe('RETIRED');
     expect(binding?.revalidation).toBeUndefined();
 
-    const revisions = listRevisions('bo_person');
-    expect(revisions[0].summary).toBe('数据支撑退休');
+    // 退休记录为数据支撑修订（RETIRE），业务对象修订不受影响
+    const dsRevisions = listDataSupportRevisions('bo_person');
+    expect(dsRevisions[0].action).toBe('RETIRE');
+    expect(businessObjectRepository.get('bo_person')?.currentRevision).toBe('R2');
   });
 
   it('业务对象详情：存在待复核绑定时展示复核入口', () => {
