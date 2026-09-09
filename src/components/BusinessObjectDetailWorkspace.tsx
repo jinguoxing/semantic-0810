@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   ArrowLeft,
   ChevronRight,
@@ -17,7 +17,15 @@ import {
   ShieldAlert,
   ArrowRight
 } from 'lucide-react';
-import { INITIAL_BUSINESS_OBJECTS, BusinessObjectItem } from '../data/businessObjectsData';
+import {
+  businessObjectRepository,
+  dataSupportService,
+  groundingService,
+  listRevisions,
+  subscribe,
+  getVersion
+} from '../domain/business-object';
+import type { BusinessObject } from '../domain/business-object';
 import { 
   LocalGroundingCorrectionDrawer, 
   CandidateFieldOption 
@@ -71,105 +79,8 @@ interface RelatedMetricItem {
   domain: string;
 }
 
-// Canonical Key Attributes for Service Ticket
-const SERVICE_TICKET_ATTRIBUTES: KeyAttribute[] = [
-  {
-    name: '工单编号',
-    meaning: '用于稳定识别一张服务工单。',
-    isIdentifier: true
-  },
-  {
-    name: '处理状态',
-    meaning: '表示服务工单当前所处的办理状态。'
-  },
-  {
-    name: '创建时间',
-    meaning: '表示服务工单正式形成的业务时间。'
-  },
-  {
-    name: '受理时间',
-    meaning: '表示服务工单被正式受理的时间。'
-  },
-  {
-    name: '办结时间',
-    meaning: '表示服务工单完成办理的实际时间。'
-  },
-  {
-    name: '诉求类型',
-    meaning: '表示当前服务诉求所属的业务分类。'
-  },
-  {
-    name: '来源渠道',
-    meaning: '表示当前服务工单由热线、线上、窗口等哪个公共服务渠道形成。'
-  }
-];
-
-// Fallback Key Attributes for other objects
-const DEFAULT_ATTRIBUTES_MAP: Record<string, KeyAttribute[]> = {
-  bo_person: [
-    { name: '身份标识', meaning: '用于在约定的业务身份范围内稳定识别一个自然人。', isIdentifier: true },
-    { name: '姓名', meaning: '表示自然人在业务中的正式核准姓名。' },
-    { name: '出生日期', meaning: '表示自然人的出生时间，用于年龄与生命周期统计。' },
-    { name: '性别', meaning: '表示人口生理或社会性别属性。' },
-    { name: '常住状态', meaning: '表示当前是否属于常住人口统计范围。' },
-    { name: '户籍状态', meaning: '表示自然人当前的户籍登记业务状态。' },
-    { name: '所属行政区域', meaning: '表示自然人当前所属或统计归属的行政区域。' }
-  ],
-  bo_org: [
-    { name: '统一社会信用代码', meaning: '用于法定稳定识别一家组织机构主体。', isIdentifier: true },
-    { name: '机构名称', meaning: '组织机构在政务登记中的正式法定名称。' },
-    { name: '机构级别', meaning: '组织机构在行政或权责体系中的层级分类。' },
-    { name: '所在区域', meaning: '组织机构法定注册或履职所在的空间行政区划。' }
-  ],
-  bo_region: [
-    { name: '行政区划代码', meaning: '用于国家标准体系下稳定识别一个行政区域。', isIdentifier: true },
-    { name: '区域名称', meaning: '行政区域的标准规范全称。' },
-    { name: '行政层级', meaning: '省、市、区县、街道镇等行政层级划分。' },
-    { name: '常住人口总数', meaning: '该行政区域统计周期的常住人口总量。' }
-  ]
-};
-
-// Canonical Core Business Relationships for Service Ticket
-const SERVICE_TICKET_RELATIONSHIPS: CoreRelationship[] = [
-  {
-    sourceObject: '服务工单',
-    relationName: '申请人',
-    targetObject: '自然人',
-    targetId: 'bo_person',
-    meaning: '表示当前服务工单由哪个自然人提出。'
-  },
-  {
-    sourceObject: '服务工单',
-    relationName: '承办部门',
-    targetObject: '组织机构',
-    targetId: 'bo_org',
-    meaning: '表示当前服务工单由哪个组织机构承担办理职责。'
-  },
-  {
-    sourceObject: '服务工单',
-    relationName: '所属区域',
-    targetObject: '行政区域',
-    targetId: 'bo_region',
-    meaning: '表示当前服务工单在业务上归属的行政区域。'
-  }
-];
-
-// Associated Business Semantics
-const SERVICE_TICKET_TERMS: BusinessTermItem[] = [
-  { id: 'term-st', name: '服务工单', definition: '公众通过公共服务渠道提出的诉求记录单据', domain: '公共服务' },
-  { id: 'term-accept', name: '受理', definition: '服务机构审核公众诉求并正式立案接单的业务环节', domain: '公共服务' },
-  { id: 'term-finish', name: '办结', definition: '承办部门完成诉求办理并形成答复结果的归档状态', domain: '公共服务' },
-  { id: 'term-status', name: '工单状态', definition: '工单在整个生命周期中的流转环节与责任标识', domain: '公共服务' }
-];
-
-const SERVICE_TICKET_METRICS: RelatedMetricItem[] = [
-  { id: 'met-count', name: '工单数量', definition: '统计期内公共服务渠道正式生成的工单总量', domain: '公共服务' },
-  { id: 'met-rate', name: '办结率', definition: '在承诺办理期限内完成办结的工单占受理总量的比重', domain: '公共服务' },
-  { id: 'met-duration', name: '平均办理时长', definition: '工单自正式受理至最终完成办结所耗费的平均工作小时数', domain: '公共服务' }
-];
-
-// Data Support Perspective Data Models
-export type DataImplementationId = 'hotline_ticket' | 'curr_view';
+// Data Support Perspective Data Models (view models built from the domain store)
+export type DataImplementationId = string;
 
 export interface DataImplementationAttributeLanding {
   name: string;
@@ -230,223 +141,25 @@ export interface RelatedDataItem {
   note: string;
 }
 
-export const SERVICE_TICKET_IMPLEMENTATIONS: FormalDataImplementation[] = [
-  {
-    id: 'hotline_ticket',
-    name: '公共服务热线工单记录表',
-    techName: 'hotline_db.service.pop_service_hotline',
-    warehouseTable: 'dwd_pub_service_hotline_ticket_df',
-    assetId: 'res-02',
-    role: '其他数据实现',
-    status: '当前有效',
-    scope: '公共服务热线渠道',
-    granularity: '一行一张服务工单',
-    identity: '工单编号 · ticket_id',
-    subject: '服务工单',
-    scopeRelationText: '与“客服工单当前视图”存在部分范围重叠',
-    scopeRelationNote: '两套实现可能包含部分相同的服务工单。本页只展示已经确认的语义范围关系，不执行跨来源合并、去重或优先级配置。',
-    attributes: [
-      {
-        name: '工单编号',
-        source: '公共服务热线工单记录表',
-        field: 'ticket_id',
-        semantics: '服务工单主体标识',
-        isSupported: true,
-        isIdentifier: true
-      },
-      {
-        name: '处理状态',
-        source: '公共服务热线工单记录表',
-        field: 'status',
-        semantics: '服务工单处理状态',
-        isSupported: true
-      },
-      {
-        name: '创建时间',
-        source: '公共服务热线工单记录表',
-        field: 'created_time',
-        semantics: '服务工单创建时间',
-        isSupported: true
-      },
-      {
-        name: '受理时间',
-        source: '公共服务热线工单记录表',
-        field: 'accept_time',
-        semantics: '服务工单受理时间',
-        isSupported: true
-      },
-      {
-        name: '办结时间',
-        source: '公共服务热线工单记录表',
-        field: 'close_time',
-        semantics: '服务工单办结时间',
-        isSupported: true
-      },
-      {
-        name: '诉求类型',
-        source: '工单扩展信息表',
-        isExtension: true,
-        field: 'appeal_type',
-        semantics: '服务工单诉求类型',
-        isSupported: true
-      },
-      {
-        name: '来源渠道',
-        source: '—',
-        field: '—',
-        semantics: '当前实现暂无正式支撑',
-        isSupported: false
-      }
-    ],
-    relationships: [
-      {
-        sourceObject: '服务工单',
-        relationName: '申请人',
-        targetObject: '自然人',
-        targetId: 'bo_person',
-        sourceField: '公共服务热线工单记录表 · person_id',
-        targetIdentity: '自然人 · 主体标识'
-      },
-      {
-        sourceObject: '服务工单',
-        relationName: '承办部门',
-        targetObject: '组织机构',
-        targetId: 'bo_org',
-        sourceField: '公共服务热线工单记录表 · dept_id',
-        targetIdentity: '组织机构 · 机构标识'
-      },
-      {
-        sourceObject: '服务工单',
-        relationName: '所属区域',
-        targetObject: '行政区域',
-        targetId: 'bo_region',
-        sourceField: '公共服务热线工单记录表 · region_code',
-        targetIdentity: '行政区域 · 区域标识'
-      }
-    ],
-    extension: {
-      name: '工单扩展信息表',
-      techName: 'hotline_db.service.ticket_extension',
-      status: '当前有效',
-      parentImplementation: '公共服务热线工单记录表',
-      identityMapping: '工单编号 · ticket_id',
-      providedAttr: '诉求类型 → appeal_type',
-      providedField: 'appeal_type',
-      note: '通过相同的工单身份空间，为当前数据实现中的同一服务工单补充业务属性。'
-    }
-  },
-  {
-    id: 'curr_view',
-    name: '客服工单当前视图',
-    techName: 'cs_db.service.ticket_curr_view',
-    warehouseTable: 'dwd_pub_service_ticket_curr_view_df',
-    assetId: 'res-01',
-    role: '主要数据实现',
-    status: '当前有效',
-    scope: '客服业务当前工单',
-    granularity: '一行一张服务工单',
-    identity: '工单编号 · ticket_id',
-    subject: '服务工单',
-    scopeRelationText: '基准主要数据实现',
-    scopeRelationNote: '承载客服业务当前工单全生命周期核心数据，作为服务工单最优先的数据查询与语义映射基准实现。',
-    attributes: [
-      {
-        name: '工单编号',
-        source: '客服工单当前视图',
-        field: 'ticket_id',
-        semantics: '服务工单主体标识',
-        isSupported: true,
-        isIdentifier: true
-      },
-      {
-        name: '处理状态',
-        source: '客服工单当前视图',
-        field: 'status',
-        semantics: '服务工单处理状态',
-        isSupported: true
-      },
-      {
-        name: '创建时间',
-        source: '客服工单当前视图',
-        field: 'created_time',
-        semantics: '服务工单创建时间',
-        isSupported: true
-      },
-      {
-        name: '受理时间',
-        source: '客服工单当前视图',
-        field: 'accept_time',
-        semantics: '服务工单受理时间',
-        isSupported: true
-      },
-      {
-        name: '办结时间',
-        source: '客服工单当前视图',
-        field: 'finished_time',
-        semantics: '表示服务工单完成处理时间。',
-        isSupported: true,
-        needsCorrection: true,
-        correctionReason: '数据语义修订：finished_time 实际表示最后更新时间，需修正为服务工单实际办结时间'
-      },
-      {
-        name: '诉求类型',
-        source: '客服工单当前视图',
-        field: 'appeal_type',
-        semantics: '服务工单诉求类型',
-        isSupported: true
-      },
-      {
-        name: '来源渠道',
-        source: '客服工单当前视图',
-        field: 'source_channel',
-        semantics: '服务工单来源渠道',
-        isSupported: true
-      }
-    ],
-    relationships: [
-      {
-        sourceObject: '服务工单',
-        relationName: '申请人',
-        targetObject: '自然人',
-        targetId: 'bo_person',
-        sourceField: '客服工单当前视图 · applicant_id',
-        targetIdentity: '自然人 · 主体标识'
-      },
-      {
-        sourceObject: '服务工单',
-        relationName: '承办部门',
-        targetObject: '组织机构',
-        targetId: 'bo_org',
-        sourceField: '客服工单当前视图 · handle_dept_id',
-        targetIdentity: '组织机构 · 机构标识'
-      },
-      {
-        sourceObject: '服务工单',
-        relationName: '所属区域',
-        targetObject: '行政区域',
-        targetId: 'bo_region',
-        sourceField: '客服工单当前视图 · administrative_code',
-        targetIdentity: '行政区域 · 区域标识'
-      }
-    ],
-    extension: null
-  }
-];
 
-export const SERVICE_TICKET_RELATED_DATA: RelatedDataItem[] = [
-  {
-    name: '工单状态历史表',
-    role: '事件 / 历史数据',
-    scope: '公共服务热线渠道',
-    note: '一行记录一次热线服务工单状态变化，用于过程追溯。'
-  },
-  {
-    name: '工单月度汇总表',
-    role: '分析数据',
-    scope: '服务工单整体分析',
-    note: '按月份、区域和诉求类型形成聚合统计，不表示具体服务工单实例。'
+/** 对象生命周期状态 → 展示标签 */
+function objectStatusLabel(status: BusinessObject['status']): string {
+  return status === 'PUBLISHED' ? '已发布' : status === 'DRAFT' ? '草稿' : '已停用';
+}
+
+/** 绑定状态 → 展示标签 */
+function bindingStatusLabel(status: string): string {
+  switch (status) {
+    case 'EFFECTIVE':
+      return '已生效';
+    case 'CANDIDATE':
+      return '候选待确认';
+    case 'NEEDS_REVALIDATION':
+      return '待复核';
+    default:
+      return '已退休';
   }
-];
+}
 
 export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspaceProps> = ({
   objectId = 'bo_service_ticket',
@@ -467,27 +180,27 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
     setActiveTab(initialTab);
   }, [initialTab, objectId]);
 
-  // Current Object
-  const currentObject: BusinessObjectItem =
-    INITIAL_BUSINESS_OBJECTS.find((b) => b.id === objectId) ||
-    INITIAL_BUSINESS_OBJECTS.find((b) => b.id === 'bo_service_ticket')!;
+  // 订阅领域 Store：确认数据支撑 / 落地修正 / 状态流转后自动重渲染
+  useSyncExternalStore(subscribe, getVersion);
 
-  const isServiceTicket = currentObject.id === 'bo_service_ticket';
+  // Current Object — 所有内容来自领域仓库，禁止页面写死
+  const currentObject: BusinessObject =
+    businessObjectRepository.get(objectId) ?? businessObjectRepository.get('bo_service_ticket')!;
 
-  // Attributes & Relationships
-  const attributes: KeyAttribute[] = isServiceTicket
-    ? SERVICE_TICKET_ATTRIBUTES
-    : DEFAULT_ATTRIBUTES_MAP[currentObject.id] || DEFAULT_ATTRIBUTES_MAP.bo_person;
+  // Attributes & Relationships（来自对象定义）
+  const attributes: KeyAttribute[] = currentObject.attributes.map((attribute) => ({
+    name: attribute.name,
+    meaning: attribute.meaning,
+    ...(attribute.isIdentifier ? { isIdentifier: true } : {})
+  }));
 
-  const relationships: CoreRelationship[] = isServiceTicket
-    ? SERVICE_TICKET_RELATIONSHIPS
-    : currentObject.relationships.map((rel) => ({
-        sourceObject: currentObject.name,
-        relationName: rel.name,
-        targetObject: rel.targetName,
-        targetId: rel.targetId,
-        meaning: `表示${currentObject.name}与${rel.targetName}之间的业务对应与约束逻辑。`
-      }));
+  const relationships: CoreRelationship[] = currentObject.relationships.map((rel) => ({
+    sourceObject: currentObject.name,
+    relationName: rel.relationName,
+    targetObject: rel.targetObjectName,
+    targetId: rel.targetObjectId,
+    meaning: rel.meaning
+  }));
 
   // State for menus and drawers
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
@@ -498,12 +211,75 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   const [selectedTerm, setSelectedTerm] = useState<BusinessTermItem | null>(null);
 
   // Data Support View State
-  const [implementations, setImplementations] = useState<FormalDataImplementation[]>(SERVICE_TICKET_IMPLEMENTATIONS);
-  const [selectedImplId, setSelectedImplId] = useState<DataImplementationId>('curr_view');
+  // 数据实现与绑定全部由领域仓库派生（刷新 / 复核 / 修正后自动同步）
+  const domainImplementations = dataSupportService.listImplementations(currentObject.id);
+  const bindings = dataSupportService.listBindings(currentObject.id);
+
+  const implementations: FormalDataImplementation[] = domainImplementations.map((impl) => {
+    const binding = bindings.find((item) => item.implementationId === impl.id);
+    const groundingRevisions = groundingService.listByObject(currentObject.id);
+    return {
+      id: impl.id,
+      name: impl.name,
+      techName: impl.techName,
+      warehouseTable: impl.warehouseTable,
+      assetId: impl.assetId,
+      role: binding?.role === 'PRIMARY' ? '主要数据实现' : '其他数据实现',
+      status: binding ? bindingStatusLabel(binding.status) : '未绑定',
+      scope: impl.scope,
+      granularity: impl.granularity,
+      identity: impl.identity,
+      subject: currentObject.name,
+      scopeRelationText: impl.scopeRelationText,
+      scopeRelationNote: impl.scopeRelationNote,
+      attributes: impl.attributes.map((attribute) => {
+        const correctionRevisions = groundingRevisions.filter(
+          (revision) =>
+            revision.type === 'ATTRIBUTE' &&
+            revision.targetName === attribute.attributeName &&
+            revision.bindingId === binding?.id
+        );
+        const activeCorrection = correctionRevisions.find((revision) => revision.status === 'ACTIVE');
+        return {
+          name: attribute.attributeName,
+          source: attribute.sourceName,
+          ...(attribute.isExtension ? { isExtension: true } : {}),
+          field: attribute.field,
+          semantics: attribute.semantics,
+          isSupported: attribute.isSupported,
+          ...(attribute.isIdentifier ? { isIdentifier: true } : {}),
+          ...(attribute.needsCorrection
+            ? { needsCorrection: true, correctionReason: attribute.correctionReason }
+            : {}),
+          ...(activeCorrection
+            ? {
+                revisionVersion: `Revision ${correctionRevisions.length}（${activeCorrection.createdAt.slice(0, 10)} ${
+                  activeCorrection.status === 'ACTIVE' ? '当前有效' : '历史'
+                }）`
+              }
+            : {})
+        };
+      }),
+      relationships: impl.relationships.map((relationship) => ({
+        sourceObject: currentObject.name,
+        relationName: relationship.relationName,
+        targetObject: relationship.targetObjectName,
+        targetId: relationship.targetObjectId,
+        sourceField: relationship.sourceField,
+        targetIdentity: relationship.targetIdentity
+      })),
+      extension: impl.extension ?? null
+    };
+  });
+
+  const primaryImpl = implementations.find((impl) => impl.role === '主要数据实现');
+  const objectRevisions = listRevisions(currentObject.id);
+
+  const [selectedImplId, setSelectedImplId] = useState<DataImplementationId | null>(null);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
   const [isSetPrimaryModalOpen, setIsSetPrimaryModalOpen] = useState(false);
   const [isContextMoreOpen, setIsContextMoreOpen] = useState(false);
-  const [isCorrectionDrawerOpen, setIsCorrectionDrawerOpen] = useState(true);
+  const [isCorrectionDrawerOpen, setIsCorrectionDrawerOpen] = useState(false);
   const [selectedCorrectionAttr, setSelectedCorrectionAttr] = useState<DataImplementationAttributeLanding | null>(null);
 
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -529,34 +305,34 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   // Current Implementation
   const currentImpl =
     implementations.find((impl) => impl.id === selectedImplId) ||
-    implementations[0];
+    implementations[0] ||
+    null;
 
   const handleConfirmCorrection = (selectedField: CandidateFieldOption) => {
-    const targetAttrName = selectedCorrectionAttr ? selectedCorrectionAttr.name : '办结时间';
-    setImplementations((prev) =>
-      prev.map((impl) => {
-        if (impl.id === selectedImplId) {
-          return {
-            ...impl,
-            attributes: impl.attributes.map((attr) => {
-              if (attr.name === targetAttrName) {
-                return {
-                  ...attr,
-                  field: selectedField.field,
-                  semantics: selectedField.semantics,
-                  needsCorrection: false,
-                  revisionVersion: 'Revision 2 (2026-09-08 当前有效)'
-                };
-              }
-              return attr;
-            })
-          };
-        }
-        return impl;
-      })
-    );
+    if (!selectedCorrectionAttr || !currentImpl) return;
+    const binding = bindings.find((item) => item.implementationId === currentImpl.id);
+    if (!binding) return;
+
+    groundingService.applyCorrection({
+      bindingId: binding.id,
+      targetName: selectedCorrectionAttr.name,
+      fromField: selectedCorrectionAttr.field,
+      toField: selectedField.field,
+      reason: selectedCorrectionAttr.correctionReason ?? `本地落地修正：${selectedCorrectionAttr.name}`,
+      evidence: currentObject.evidence.map((item) => item.id)
+    });
+
     setIsCorrectionDrawerOpen(false);
-    addToast?.('success', '已生成新的 Grounding Revision', `已将「${targetAttrName}」数据字段修正为 ${selectedField.field}，Revision 2 当前生效。历史记录已完整保留。`);
+    const correctionCount = groundingService
+      .listByObject(currentObject.id)
+      .filter(
+        (revision) => revision.bindingId === binding.id && revision.targetName === selectedCorrectionAttr.name
+      ).length;
+    addToast?.(
+      'success',
+      '已生成新的 Grounding Revision',
+      `已将「${selectedCorrectionAttr.name}」数据字段修正为 ${selectedField.field}，Revision ${correctionCount} 当前生效。历史记录已完整保留。`
+    );
   };
 
   const handleBack = () => {
@@ -629,19 +405,31 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                   {currentObject.name}
                 </h1>
                 <span className="text-xs text-[#64748B] font-mono">
-                  {isServiceTicket ? 'Service Ticket' : currentObject.id}
+                  {currentObject.id}
                 </span>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] mr-1.5" />
-                  已发布
-                </span>
+                {currentObject.status === 'PUBLISHED' ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] mr-1.5" />
+                    已发布
+                  </span>
+                ) : currentObject.status === 'DRAFT' ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#FFFBEB] text-[#92400E] border border-[#FEF3C7]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] mr-1.5" />
+                    草稿
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#94A3B8] mr-1.5" />
+                    已停用
+                  </span>
+                )}
               </div>
 
               {/* Weak Facts Line (No big numbers/KPI badges) */}
               <div className="flex items-center space-x-2 text-xs text-[#64748B] pt-0.5">
                 <span>主要业务域：{currentObject.domain}</span>
                 <span className="text-[#CBD5E1]">·</span>
-                <span>两套数据实现</span>
+                <span>{implementations.length} 套数据实现</span>
               </div>
             </div>
 
@@ -651,7 +439,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                 id="btn-view-knowledge-network"
                 onClick={handleKnowledgeNetworkClick}
                 className="px-3.5 py-1.5 rounded bg-white hover:bg-[#F8FAFC] text-[#334155] hover:text-[#0F172A] border border-[#E2E8F0] text-xs font-medium flex items-center space-x-1.5 transition-colors cursor-pointer"
-                title="查看以服务工单为中心的知识网络上下文"
+                title={`查看以${currentObject.name}为中心的知识网络上下文`}
               >
                 <Network className="w-3.5 h-3.5 text-[#64748B]" />
                 <span>在知识网络中查看</span>
@@ -740,7 +528,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
               <Database className="w-4 h-4" />
               <span>数据支撑</span>
               <span className="ml-1 px-1.5 py-0.5 rounded text-[11px] bg-[#F1F5F9] text-[#64748B] font-normal">
-                2 套实现
+                {implementations.length} 套实现
               </span>
             </button>
           </div>
@@ -776,10 +564,10 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                     <div className="text-[#64748B] font-medium">主体标识</div>
                     <div className="flex items-center space-x-2">
                       <span className="text-sm font-semibold text-[#0F172A]">
-                        {isServiceTicket ? '工单编号' : attributes.find(a => a.isIdentifier)?.name || '业务唯一标识'}
+                        {currentObject.identity.name}
                       </span>
                       <button
-                        onClick={() => handleCopyIdentifier(isServiceTicket ? '工单编号' : '业务唯一标识')}
+                        onClick={() => handleCopyIdentifier(currentObject.identity.name)}
                         className="p-1 text-[#94A3B8] hover:text-[#2563EB] rounded transition-colors cursor-pointer"
                         title="复制主体标识名称"
                       >
@@ -787,7 +575,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                       </button>
                     </div>
                     <p className="text-xs text-[#64748B] leading-relaxed">
-                      用于在约定的业务身份范围内稳定识别一张服务工单。
+                      {currentObject.identity.meaning}
                     </p>
                   </div>
 
@@ -816,7 +604,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                 <div className="border-b border-[#F1F5F9] pb-3 space-y-0.5">
                   <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">关键属性</h2>
                   <p className="text-xs text-[#64748B]">
-                    描述服务工单跨具体数据实现仍具有稳定业务意义的核心特征。
+                    描述{currentObject.name}跨具体数据实现仍具有稳定业务意义的核心特征。
                   </p>
                 </div>
 
@@ -849,7 +637,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                 <div className="border-b border-[#F1F5F9] pb-3 space-y-0.5">
                   <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">核心业务关系</h2>
                   <p className="text-xs text-[#64748B]">
-                    描述服务工单与其他企业正式业务对象之间稳定的业务联系。
+                    描述{currentObject.name}与其他企业正式业务对象之间稳定的业务联系。
                   </p>
                 </div>
 
@@ -908,7 +696,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                 <div className="border-b border-[#F1F5F9] pb-3 space-y-0.5">
                   <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">关联业务语义</h2>
                   <p className="text-xs text-[#64748B]">
-                    与服务工单紧密关联的已核准企业业务术语与统计分析指标。
+                    与{currentObject.name}紧密关联的已核准企业业务术语与统计分析指标。
                   </p>
                 </div>
 
@@ -920,7 +708,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                       <span>业务术语</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {SERVICE_TICKET_TERMS.map((term) => (
+                      {currentObject.terms.map((term) => (
                         <button
                           key={term.id}
                           onClick={() => handleTermClick(term)}
@@ -943,7 +731,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                       <span>相关指标</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {SERVICE_TICKET_METRICS.map((metric) => (
+                      {currentObject.metrics.map((metric) => (
                         <button
                           key={metric.id}
                           onClick={() => handleMetricClick(metric)}
@@ -978,28 +766,42 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                   {/* 主要数据实现 */}
                   <div className="space-y-0.5">
                     <div className="text-[#64748B] text-[11px]">主要数据实现</div>
-                    <div className="font-semibold text-[#0F172A]">客服工单当前视图</div>
-                    <div className="text-[11px] text-[#64748B]">客服业务当前工单</div>
+                    <div className="font-semibold text-[#0F172A]">{primaryImpl ? primaryImpl.name : '（待确认）'}</div>
+                    <div className="text-[11px] text-[#64748B]">{primaryImpl ? primaryImpl.scope : '—'}</div>
                   </div>
 
                   {/* 其他数据实现 */}
                   <div className="space-y-0.5 pt-1">
                     <div className="text-[#64748B] text-[11px]">其他数据实现</div>
-                    <div className="font-semibold text-[#0F172A]">公共服务热线工单记录表</div>
-                    <div className="text-[11px] text-[#64748B]">公共服务热线渠道</div>
+                    {implementations.filter((impl) => impl !== primaryImpl).length > 0 ? (
+                      implementations
+                        .filter((impl) => impl !== primaryImpl)
+                        .map((impl) => (
+                          <div key={impl.id} className="space-y-0.5">
+                            <div className="font-semibold text-[#0F172A]">{impl.name}</div>
+                            <div className="text-[11px] text-[#64748B]">{impl.scope}</div>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="font-semibold text-[#0F172A]">—</div>
+                    )}
                   </div>
 
                   {/* 属性扩展 */}
                   <div className="space-y-0.5 pt-1">
                     <div className="text-[#64748B] text-[11px]">属性扩展</div>
-                    <div className="text-[#334155]">工单扩展信息表</div>
+                    <div className="text-[#334155]">
+                      {implementations.find((impl) => impl.extension)?.extension?.name ?? '无'}
+                    </div>
                   </div>
 
                   {/* 相关数据 */}
                   <div className="space-y-0.5 pt-1">
                     <div className="text-[#64748B] text-[11px]">相关数据</div>
                     <div className="text-[#334155] leading-relaxed">
-                      工单状态历史表、工单月度汇总表
+                      {currentObject.relatedData.length > 0
+                        ? currentObject.relatedData.map((item) => item.name).join('、')
+                        : '无'}
                     </div>
                   </div>
                 </div>
@@ -1026,18 +828,24 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
 
                 <div className="space-y-2 text-xs">
                   <div className="space-y-1.5">
-                    <div className="text-[#334155] flex items-center space-x-1.5">
-                      <span className="w-1 h-1 rounded-full bg-[#94A3B8]" />
-                      <span>新版《公共服务热线运行管理办法》</span>
-                    </div>
-                    <div className="text-[#334155] flex items-center space-x-1.5">
-                      <span className="w-1 h-1 rounded-full bg-[#94A3B8]" />
-                      <span>用户业务说明</span>
-                    </div>
+                    {currentObject.evidence.length > 0 ? (
+                      currentObject.evidence.map((item) => (
+                        <div key={item.id} className="text-[#334155] flex items-center space-x-1.5">
+                          <span className="w-1 h-1 rounded-full bg-[#94A3B8]" />
+                          <span>{item.title}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-[#94A3B8]">暂无记录的定义依据</div>
+                    )}
                   </div>
 
                   <div className="text-[11px] text-[#166534] pt-1">
-                    当前正式定义已发布
+                    {currentObject.status === 'PUBLISHED'
+                      ? '当前正式定义已发布'
+                      : currentObject.status === 'DRAFT'
+                        ? '当前定义处于草稿状态'
+                        : '该对象已停用归档'}
                   </div>
                 </div>
 
@@ -1084,7 +892,17 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
         {/* ======================================================= */}
         {/* TAB 2: 数据支撑 (DATA SUPPORT PERSPECTIVE)               */}
         {/* ======================================================= */}
-        {activeTab === 'data_support' && (
+        {activeTab === 'data_support' && !currentImpl && (
+          <div className="bg-white border border-[#E2E8F0] rounded-md p-8 text-center space-y-2">
+            <Database className="w-8 h-8 text-[#94A3B8] mx-auto" />
+            <div className="text-sm font-semibold text-[#0F172A]">暂无正式数据实现</div>
+            <p className="text-xs text-[#64748B] leading-relaxed">
+              「{currentObject.name}」尚未确认任何正式数据实现，可通过发现数据支撑自下而上登记候选实现。
+            </p>
+          </div>
+        )}
+
+        {activeTab === 'data_support' && currentImpl && (
           <div className="space-y-6">
             
             {/* 顶层上下文栏 */}
@@ -1108,7 +926,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                   {isSelectorOpen && (
                     <div className="absolute left-0 mt-1.5 w-80 bg-white border border-[#E2E8F0] rounded-md shadow-lg py-1.5 z-40 text-xs animate-in fade-in zoom-in-95 duration-150">
                       <div className="px-3.5 py-1.5 text-[11px] text-[#94A3B8] font-medium border-b border-[#F1F5F9]">
-                        正式数据实现（共 2 套）
+                        正式数据实现（共 {implementations.length} 套）
                       </div>
                       {implementations.map((impl) => {
                         const isSelected = impl.id === selectedImplId;
@@ -1170,13 +988,15 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                 <div className="space-y-1 text-left sm:text-right">
                   <div className="text-[#334155]">
                     <span className="text-[#64748B]">主要数据实现：</span>
-                    <span className="font-semibold text-[#0F172A]">客服工单当前视图</span>
+                    <span className="font-semibold text-[#0F172A]">
+                      {primaryImpl ? primaryImpl.name : '（待确认）'}
+                    </span>
                   </div>
                   <div className="text-[#64748B] text-[11px]">
-                    {currentImpl.id === 'hotline_ticket' ? (
-                      <span>与主要实现：部分范围重叠</span>
-                    ) : (
+                    {currentImpl.role === '主要数据实现' ? (
                       <span className="text-[#2563EB] font-medium">当前即主要数据实现</span>
+                    ) : (
+                      <span>{currentImpl.scopeRelationText}</span>
                     )}
                   </div>
                 </div>
@@ -1303,7 +1123,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                   <div className="border-b border-[#F1F5F9] pb-3 space-y-0.5">
                     <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">关键属性落地</h2>
                     <p className="text-xs text-[#64748B]">
-                      展示当前数据实现及其属性扩展如何承载“服务工单”的关键业务属性。
+                      展示当前数据实现及其属性扩展如何承载{currentObject.name}的关键业务属性。
                     </p>
                   </div>
 
@@ -1486,7 +1306,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                   <div className="border-b border-[#F1F5F9] pb-3 space-y-0.5">
                     <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">属性扩展</h2>
                     <p className="text-xs text-[#64748B]">
-                      为当前数据实现中的同一服务工单补充场景特定属性，不单独计入核心数据实现基数。
+                      为当前数据实现中的同一{currentObject.name}补充场景特定属性，不单独计入核心数据实现基数。
                     </p>
                   </div>
 
@@ -1539,12 +1359,12 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                   <div className="border-b border-[#F1F5F9] pb-3 space-y-0.5">
                     <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">相关数据</h2>
                     <p className="text-xs text-[#64748B]">
-                      与“服务工单”有关，但本身不表示服务工单实例的数据资源。
+                      与{currentObject.name}有关，但本身不表示{currentObject.name}实例的数据资源。
                     </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {SERVICE_TICKET_RELATED_DATA.map((item, idx) => (
+                    {currentObject.relatedData.map((item, idx) => (
                       <div key={idx} className="p-4 bg-white border border-[#E2E8F0] rounded space-y-2 text-xs">
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-[#0F172A]">{item.name}</span>
@@ -1602,7 +1422,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                     <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
                       全部数据实现
                     </h3>
-                    <span className="text-[11px] text-[#64748B]">2 套</span>
+                    <span className="text-[11px] text-[#64748B]">{implementations.length} 套</span>
                   </div>
 
                   <div className="space-y-2 text-xs">
@@ -1654,7 +1474,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                         if (onFindDataWithObjectGoal) {
                           onFindDataWithObjectGoal(currentObject.name);
                         } else {
-                          addToast?.('info', '发现数据支撑', '已发起针对「服务工单」业务主体的语义数据资产发现与关联分析');
+                          addToast?.('info', '发现数据支撑', `已发起针对「${currentObject.name}」业务主体的语义数据资产发现与关联分析`);
                         }
                       }}
                       className="text-xs text-[#2563EB] hover:underline font-medium inline-flex items-center space-x-1 cursor-pointer"
@@ -1673,7 +1493,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                     范围关系
                   </h3>
                   <p className="text-[#334155] leading-relaxed">
-                    公共服务热线工单记录表与主要数据实现存在部分范围重叠。
+                    {currentImpl.name}：{currentImpl.scopeRelationText}。
                   </p>
                   <p className="text-[11px] text-[#94A3B8] leading-relaxed pt-1">
                     当前关系只表达数据实现的业务覆盖范围，不代表系统已经完成合并或去重。
@@ -1729,7 +1549,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
           <aside className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
             <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-white">
               <div className="space-y-0.5">
-                <h3 className="text-sm font-bold text-[#0F172A]">定义依据 · 服务工单</h3>
+                <h3 className="text-sm font-bold text-[#0F172A]">定义依据 · {currentObject.name}</h3>
                 <p className="text-xs text-[#64748B]">当前正式业务定义的已记录来源</p>
               </div>
               <button
@@ -1741,27 +1561,28 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-[#334155]">
-              <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-2">
-                <div className="flex items-center space-x-2">
-                  <BookOpen className="w-4 h-4 text-[#2563EB]" />
-                  <span className="font-semibold text-[#0F172A]">新版《公共服务热线运行管理办法》</span>
+              {currentObject.evidence.length > 0 ? (
+                currentObject.evidence.map((item) => (
+                  <div key={item.id} className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <BookOpen className="w-4 h-4 text-[#2563EB]" />
+                      <span className="font-semibold text-[#0F172A]">{item.title}</span>
+                    </div>
+                    <p className="text-xs text-[#475569] leading-relaxed">
+                      {item.adoptedDecision ?? '作为该业务对象定义的已记录来源。'}
+                    </p>
+                    <div className="text-[11px] text-[#64748B]">
+                      来源：{item.source}
+                      {item.version ? ` · ${item.version}` : ''}
+                      {item.location ? ` · ${item.location}` : ''}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#94A3B8]">
+                  暂无记录的定义依据。
                 </div>
-                <p className="text-xs text-[#475569] leading-relaxed">
-                  第二章 第四条：“服务工单统指公民、法人或其他组织通过热线、移动客户端、政务大厅窗口等公共服务渠道提交的事项申请、咨询、求助与投诉流转全过程的统一业务凭据。”
-                </p>
-                <div className="text-[11px] text-[#64748B]">来源机构：市政务服务管理办公室 · 2026年核准</div>
-              </div>
-
-              <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-2">
-                <div className="flex items-center space-x-2">
-                  <FileText className="w-4 h-4 text-[#2563EB]" />
-                  <span className="font-semibold text-[#0F172A]">用户业务说明</span>
-                </div>
-                <p className="text-xs text-[#475569] leading-relaxed">
-                  业务部门在需求说明中明确指出：“统一将热线受理单、网格流转单和群众诉求工单统括在‘服务工单’这一业务主体下，统一考核办结率与平均办理时长。”
-                </p>
-                <div className="text-[11px] text-[#64748B]">确认记录：业务架构委员会语义评审纪要</div>
-              </div>
+              )}
             </div>
 
             <div className="px-6 py-3.5 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end">
@@ -1782,7 +1603,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
           <aside className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
             <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-white">
               <div className="space-y-0.5">
-                <h3 className="text-sm font-bold text-[#0F172A]">变更历史 · 服务工单</h3>
+                <h3 className="text-sm font-bold text-[#0F172A]">变更历史 · {currentObject.name}</h3>
                 <p className="text-xs text-[#64748B]">企业业务语义目录中该对象的生效版本记录</p>
               </div>
               <button
@@ -1794,32 +1615,45 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
-              <div className="p-4 bg-white border border-[#E2E8F0] rounded space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#0F172A]">当前生效正式版本</span>
-                  <span className="text-[10px] text-[#166534] bg-[#F0FDF4] border border-[#DCFCE7] px-2 py-0.5 rounded font-medium">
-                    已发布
-                  </span>
+              {objectRevisions.length > 0 ? (
+                objectRevisions.map((revision, index) => (
+                  <div
+                    key={revision.id}
+                    className={`p-4 border border-[#E2E8F0] rounded space-y-2 ${
+                      index === 0 ? 'bg-white' : 'bg-[#F8FAFC] opacity-80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={index === 0 ? 'font-bold text-[#0F172A]' : 'font-medium text-[#334155]'}>
+                        {revision.revision} · {revision.summary}
+                      </span>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded font-medium ${
+                          revision.status === 'ACTIVE'
+                            ? 'text-[#166534] bg-[#F0FDF4] border border-[#DCFCE7]'
+                            : 'text-[#64748B] bg-[#F1F5F9]'
+                        }`}
+                      >
+                        {revision.status === 'ACTIVE' ? '当前生效' : '历史版本'}
+                      </span>
+                    </div>
+                    <ul className="space-y-1">
+                      {revision.changes.map((change, changeIdx) => (
+                        <li key={changeIdx} className="text-xs text-[#475569] leading-relaxed">
+                          · {change}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="text-[11px] text-[#64748B] pt-1">
+                      {revision.changedBy} · {revision.createdAt.slice(0, 10)}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded text-xs text-[#64748B]">
+                  尚无正式修订记录，当前定义来自初始登记。
                 </div>
-                <p className="text-xs text-[#475569] leading-relaxed">
-                  明确热线、线上、窗口等公共服务渠道，并加入别名“群众诉求工单”和关键属性“来源渠道”。
-                </p>
-                <div className="text-[11px] text-[#64748B] pt-1">
-                  变更依据：新版《公共服务热线运行管理办法》
-                </div>
-              </div>
-
-              <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-2 opacity-80">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-[#334155]">历史基线版本</span>
-                  <span className="text-[10px] text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded">
-                    历史版本
-                  </span>
-                </div>
-                <p className="text-xs text-[#64748B] leading-relaxed">
-                  初始定义为企业公共服务热线服务诉求主体，建立与自然人、组织机构的核心业务关联。
-                </p>
-              </div>
+              )}
             </div>
 
             <div className="px-6 py-3.5 border-t border-[#E2E8F0] bg-[#F8FAFC] flex justify-end">
@@ -1840,8 +1674,8 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
           <aside className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
             <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-white">
               <div className="space-y-0.5">
-                <h3 className="text-sm font-bold text-[#0F172A]">知识网络上下文 · 服务工单</h3>
-                <p className="text-xs text-[#64748B]">以服务工单为中心的企业语义关系上下文</p>
+                <h3 className="text-sm font-bold text-[#0F172A]">知识网络上下文 · {currentObject.name}</h3>
+                <p className="text-xs text-[#64748B]">以{currentObject.name}为中心的企业语义关系上下文</p>
               </div>
               <button
                 onClick={() => setIsKnowledgeDrawerOpen(false)}
@@ -1855,29 +1689,31 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
               <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-3">
                 <div className="font-semibold text-[#0F172A]">核心业务实体网络</div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between bg-white p-2.5 rounded border border-[#E2E8F0]">
-                    <span className="text-[#475569]">自然人</span>
-                    <span className="text-xs font-medium text-[#2563EB]">← 提出申请人</span>
-                  </div>
-                  <div className="flex items-center justify-between bg-white p-2.5 rounded border border-[#E2E8F0]">
-                    <span className="text-[#475569]">组织机构</span>
-                    <span className="text-xs font-medium text-[#2563EB]">← 承办部门</span>
-                  </div>
-                  <div className="flex items-center justify-between bg-white p-2.5 rounded border border-[#E2E8F0]">
-                    <span className="text-[#475569]">行政区域</span>
-                    <span className="text-xs font-medium text-[#2563EB]">← 所属区域</span>
-                  </div>
+                  {relationships.length > 0 ? (
+                    relationships.map((rel) => (
+                      <div key={rel.targetId + rel.relationName} className="flex items-center justify-between bg-white p-2.5 rounded border border-[#E2E8F0]">
+                        <span className="text-[#475569]">{rel.targetObject}</span>
+                        <span className="text-xs font-medium text-[#2563EB]">← {rel.relationName}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-[#94A3B8]">暂未登记核心业务关系。</div>
+                  )}
                 </div>
               </div>
 
               <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-3">
                 <div className="font-semibold text-[#0F172A]">业务术语与指标网络</div>
                 <div className="flex flex-wrap gap-2">
-                  <span className="px-2 py-1 bg-white border border-[#E2E8F0] rounded text-[#334155]">术语: 受理</span>
-                  <span className="px-2 py-1 bg-white border border-[#E2E8F0] rounded text-[#334155]">术语: 办结</span>
-                  <span className="px-2 py-1 bg-white border border-[#E2E8F0] rounded text-[#334155]">指标: 工单数量</span>
-                  <span className="px-2 py-1 bg-white border border-[#E2E8F0] rounded text-[#334155]">指标: 办结率</span>
-                  <span className="px-2 py-1 bg-white border border-[#E2E8F0] rounded text-[#334155]">指标: 平均办理时长</span>
+                  {currentObject.terms.map((term) => (
+                    <span key={term.id} className="px-2 py-1 bg-white border border-[#E2E8F0] rounded text-[#334155]">术语: {term.name}</span>
+                  ))}
+                  {currentObject.metrics.map((metric) => (
+                    <span key={metric.id} className="px-2 py-1 bg-white border border-[#E2E8F0] rounded text-[#334155]">指标: {metric.name}</span>
+                  ))}
+                  {currentObject.terms.length === 0 && currentObject.metrics.length === 0 && (
+                    <span className="text-xs text-[#94A3B8]">暂未关联术语与指标。</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1910,7 +1746,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
 
             <div className="p-6 space-y-3 text-xs text-[#475569]">
               <p className="leading-relaxed text-[#334155]">
-                「服务工单」当前处于<strong>已发布</strong>生效状态，关联 2 套正式数据实现及多项业务指标。
+                「{currentObject.name}」当前处于<strong>{objectStatusLabel(currentObject.status)}</strong>生效状态，关联 {implementations.length} 套正式数据实现及多项业务指标。
               </p>
               <p className="leading-relaxed">
                 停用后，该对象将转为归档状态，在全域资源发现和新语义分析中将提示已停用。
@@ -1927,7 +1763,8 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
               <button
                 onClick={() => {
                   setIsDeactivateModalOpen(false);
-                  addToast?.('warning', '业务对象已停用', '「服务工单」已从正式生效业务对象目录中归档停用');
+                  businessObjectRepository.setStatus(currentObject.id, 'RETIRED');
+                  addToast?.('warning', '业务对象已停用', `「${currentObject.name}」已从正式生效业务对象目录中归档停用`);
                 }}
                 className="px-3.5 py-1.5 bg-[#DC2626] text-white text-xs font-medium rounded hover:bg-[#B91C1C] transition-colors cursor-pointer"
               >
@@ -1954,7 +1791,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
 
             <div className="p-6 space-y-3 text-xs text-[#475569]">
               <p className="leading-relaxed text-[#0F172A] font-semibold">
-                是否将「{currentImpl.name}」设为「服务工单」的主要数据实现？
+                是否将「{currentImpl.name}」设为「{currentObject.name}」的主要数据实现？
               </p>
               <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-1.5 text-[11px] text-[#475569]">
                 <div className="text-[#0F172A] font-medium pb-1 border-b border-[#E2E8F0]">口径与操作影响说明：</div>
@@ -1964,7 +1801,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                 </div>
                 <div className="flex items-start space-x-1.5">
                   <span className="text-[#2563EB]">·</span>
-                  <span>不会删除或变更现有其他正式数据实现（如客服工单当前视图）。</span>
+                  <span>不会删除或变更现有其他正式数据实现（如{primaryImpl ? primaryImpl.name : '当前主要实现'}）。</span>
                 </div>
                 <div className="flex items-start space-x-1.5">
                   <span className="text-[#2563EB]">·</span>
@@ -2004,11 +1841,11 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
         onClose={() => setIsCorrectionDrawerOpen(false)}
         onConfirm={handleConfirmCorrection}
         businessObjectName={currentObject.name}
-        dataImplementationName={currentImpl.name}
-        dataImplementationRole={currentImpl.role}
-        attributeName={selectedCorrectionAttr ? selectedCorrectionAttr.name : '办结时间'}
-        currentField={selectedCorrectionAttr ? selectedCorrectionAttr.field : (currentImpl.attributes.find(a => a.name === '办结时间')?.field || 'finished_time')}
-        currentSemantics={selectedCorrectionAttr ? selectedCorrectionAttr.semantics : (currentImpl.attributes.find(a => a.name === '办结时间')?.semantics || '表示服务工单完成处理时间。')}
+        dataImplementationName={currentImpl?.name}
+        dataImplementationRole={currentImpl?.role}
+        attributeName={selectedCorrectionAttr?.name}
+        currentField={selectedCorrectionAttr?.field}
+        currentSemantics={selectedCorrectionAttr?.semantics}
       />
 
     </div>
