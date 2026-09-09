@@ -95,10 +95,13 @@ export const LocalGroundingCorrectionDrawer: React.FC<LocalGroundingCorrectionDr
     effectiveCandidates[0]?.id ?? 'close_time'
   );
 
-  // 修正目标切换（属性 ↔ 关系）时重置候选选择
+  // 修正目标切换（属性 ↔ 关系）时重置候选选择。
+  // 依赖候选集合的内容签名而非数组引用：父组件每次渲染都会重建候选数组，
+  // 若按引用比较，任何一次父级重渲染都会把用户已选候选悄悄重置回第一项。
+  const candidatesKey = effectiveCandidates.map((candidate) => candidate.id).join('|');
   useEffect(() => {
-    setSelectedCandidateId((candidates ?? CANDIDATE_FIELDS)[0]?.id ?? 'close_time');
-  }, [isOpen, candidates]);
+    setSelectedCandidateId(effectiveCandidates[0]?.id ?? 'close_time');
+  }, [isOpen, candidatesKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isOpen) return null;
 

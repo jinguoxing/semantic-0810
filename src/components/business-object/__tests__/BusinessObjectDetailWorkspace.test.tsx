@@ -29,7 +29,9 @@ describe('BusinessObjectDetailWorkspace（PR-3：Detail 由领域仓库驱动）
 
     openDataSupportTab();
     expect(screen.getAllByText('客服工单当前视图').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('公共服务热线工单记录表').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('cs_db.service.ticket_curr_view').length).toBeGreaterThan(0);
+    // 候选实现（bind_st_hotline = CANDIDATE）不出现在正式数据支撑视图（Inv05）
+    expect(screen.queryByText('公共服务热线工单记录表')).not.toBeInTheDocument();
     expect(screen.queryByText('人口基本信息表')).not.toBeInTheDocument();
     expect(screen.queryByText('人口扩展信息')).not.toBeInTheDocument();
   });
@@ -71,6 +73,7 @@ describe('BusinessObjectDetailWorkspace（PR-3：Detail 由领域仓库驱动）
       .find((item) => item.implementationId === 'impl_st_curr_view');
     groundingService.applyCorrection({
       bindingId: binding!.id,
+      type: 'ATTRIBUTE',
       targetName: '办结时间',
       fromField: 'finished_time',
       toField: 'close_time',

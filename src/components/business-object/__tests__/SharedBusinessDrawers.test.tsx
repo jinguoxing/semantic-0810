@@ -8,8 +8,8 @@ import { BusinessObjectDetailWorkspace } from '../../BusinessObjectDetailWorkspa
 import { BusinessObjectChangeWorkspace } from '../../BusinessObjectChangeWorkspace';
 import {
   businessObjectRepository,
-  commitRevision,
   groundingService,
+  listDataSupportRevisions,
   listRevisions,
   resetDomainStateForTesting
 } from '../../../domain/business-object';
@@ -44,10 +44,11 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
     expect(screen.getByText('暂无记录的定义依据。')).toBeInTheDocument();
   });
 
-  it('BusinessObjectHistoryDrawer：历史来自 Revision Store，修订按生效状态呈现', () => {
-    // 通过领域写入产生修订记录（禁止页面写死）
+  it('BusinessObjectHistoryDrawer：三类修订分节呈现，Grounding 修正不混入业务定义版本', () => {
+    // 通过领域写入产生 Grounding 修订（禁止页面写死）
     groundingService.applyCorrection({
       bindingId: 'bind_st_curr_view',
+      type: 'ATTRIBUTE',
       targetName: '办结时间',
       fromField: 'finished_time',
       toField: 'close_time',
@@ -61,20 +62,33 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
         onClose={vi.fn()}
         objectName="服务工单"
         revisions={listRevisions('bo_service_ticket')}
+        dataSupportRevisions={listDataSupportRevisions('bo_service_ticket')}
+        groundingRevisions={groundingService.listByObject('bo_service_ticket')}
       />
     );
 
-    expect(screen.getByText(/落地修正：办结时间 finished_time → close_time/)).toBeInTheDocument();
-    expect(screen.getByText('当前生效')).toBeInTheDocument();
-    expect(screen.getByText(/本地落地修正 · /)).toBeInTheDocument();
+    // 三节标题齐备：业务定义版本 / 数据支撑变化 / Grounding 修正
+    expect(screen.getByText('业务定义版本')).toBeInTheDocument();
+    expect(screen.getByText('数据支撑变化')).toBeInTheDocument();
+    expect(screen.getByText('Grounding 修正')).toBeInTheDocument();
+
+    // Grounding 修正落在第三节（不产生业务对象修订）
+    expect(screen.getByText('办结时间：finished_time → close_time')).toBeInTheDocument();
+    expect(screen.getByText('属性对应修正')).toBeInTheDocument();
+    expect(screen.getByText(/finished_time 实际表示最后更新时间/)).toBeInTheDocument();
+
+    // 业务定义版本节呈现领域修订与当前生效版本
+    expect(screen.getByText('当前正式版本')).toBeInTheDocument();
   });
 
-  it('BusinessObjectHistoryDrawer：无修订时展示空提示', () => {
+  it('BusinessObjectHistoryDrawer：无修订时各节展示空提示', () => {
     render(
       <BusinessObjectHistoryDrawer isOpen onClose={vi.fn()} objectName="服务工单" revisions={[]} />
     );
 
-    expect(screen.getByText('尚无正式修订记录，当前定义来自初始登记。')).toBeInTheDocument();
+    expect(screen.getByText('尚无正式定义修订记录。')).toBeInTheDocument();
+    expect(screen.getByText('尚无数据支撑变更记录。')).toBeInTheDocument();
+    expect(screen.getByText('尚无属性 / 关系落地修正记录。')).toBeInTheDocument();
   });
 
   it('BusinessObjectPublishDialog：变更清单数据传入，确认 / 取消回调生效', () => {
@@ -105,11 +119,15 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
   });
 
   it('Detail 集成：定义依据与变更历史均由共享抽屉呈现领域数据', () => {
-    commitRevision('bo_service_ticket', {
-      summary: '明确全域渠道范围',
-      changes: ['新增关键属性“来源渠道”'],
-      changedBy: '业务架构岗'
-    });
+    businessObjectRepository.updateDefinition(
+      'bo_service_ticket',
+      {},
+      {
+        summary: '明确全域渠道范围',
+        changes: ['新增关键属性“来源渠道”'],
+        changedBy: '业务架构岗'
+      }
+    );
 
     render(
       <BusinessObjectDetailWorkspace
@@ -128,16 +146,19 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
     expect(screen.getByText(/明确全域渠道范围/)).toBeInTheDocument();
   });
 
-  it('Change 集成：修改依据 = 工作区输入 + 领域 Store 正式依据；发布走共享弹窗', () => {
-    const onPublish = vi.fn();
+  it('Change 集成：对象数据来自领域 Store，发布走真实草稿管线并回调 onPublished', () => {
+    const onPublished = vi.fn();
     render(
       <BusinessObjectChangeWorkspace
+        objectId="bo_service_ticket"
         onCancel={vi.fn()}
-        onSaveDraft={vi.fn()}
-        onPublish={onPublish}
+        onPublished={onPublished}
         addToast={vi.fn()}
       />
     );
+
+    // 页头基线修订号来自领域 Store（bo_service_ticket 种子 currentRevision = R1）
+    expect(screen.getByText(/当前正式版本 R1 仍在生效/)).toBeInTheDocument();
 
     // 修改依据抽屉：用户修改说明 + 领域 Store 的正式定义依据（不串其他对象数据）
     fireEvent.click(screen.getAllByText('查看依据')[0]);
@@ -149,11 +170,19 @@ describe('共享 Evidence Drawer / History Drawer / Publish Dialog（PR-8）', (
 
     fireEvent.click(screen.getByText('关闭'));
 
-    // 发布确认：共享弹窗，确认后回调 onPublish
+    // 发布确认：共享弹窗；确认后走 saveChangeDraft → publishDraft 真实领域写入
     fireEvent.click(document.getElementById('btn-publish-change')!);
+    expect(screen.getByText('确认发布业务对象修改')).toBeInTheDocument();
     expect(screen.getByText('本次将正式更新：')).toBeInTheDocument();
     expect(screen.getByText('新增关键属性“来源渠道”')).toBeInTheDocument();
+    expect(screen.getByText('新增属性尚未形成数据落地')).toBeInTheDocument();
     fireEvent.click(document.getElementById('btn-confirm-publish')!);
-    expect(onPublish).toHaveBeenCalledTimes(1);
+    expect(onPublished).toHaveBeenCalledTimes(1);
+    expect(onPublished).toHaveBeenCalledWith('bo_service_ticket');
+
+    // 领域状态真实变化：正式修订号 R1 → R2，修订历史 +1
+    const object = businessObjectRepository.get('bo_service_ticket');
+    expect(object?.currentRevision).toBe('R2');
+    expect(listRevisions('bo_service_ticket').length).toBeGreaterThanOrEqual(2);
   });
 });

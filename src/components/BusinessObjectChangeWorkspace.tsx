@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState, useSyncExternalStore } from 'react';
 import {
   FileText,
   CheckCircle2,
@@ -17,12 +17,24 @@ import {
 } from 'lucide-react';
 import { BusinessEvidenceDrawer } from './business-object/BusinessEvidenceDrawer';
 import { BusinessObjectPublishDialog } from './business-object/BusinessObjectPublishDialog';
-import { businessObjectRepository, type EvidenceReference } from '../domain/business-object';
+import {
+  businessObjectRepository,
+  listRevisions,
+  nextRevisionLabel,
+  publishDraft,
+  saveChangeDraft,
+  subscribe,
+  getVersion,
+  type BusinessObjectDefinitionSnapshot,
+  type EvidenceReference
+} from '../domain/business-object';
 
 export interface BusinessObjectChangeWorkspaceProps {
+  /** 被修改的正式业务对象（禁止写死服务工单） */
+  objectId: string;
   onCancel: () => void;
-  onSaveDraft: () => void;
-  onPublish: () => void;
+  /** 发布成功后打开新的正式版本（业务视角） */
+  onPublished?: (objectId: string) => void;
   onNavigateToSemantics?: () => void;
   onNavigateToObjectsList?: () => void;
   onNavigateToObjectDetail?: (objectId: string) => void;
@@ -30,30 +42,46 @@ export interface BusinessObjectChangeWorkspaceProps {
 }
 
 export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspaceProps> = ({
+  objectId,
   onCancel,
-  onSaveDraft,
-  onPublish,
+  onPublished,
   onNavigateToObjectsList,
   onNavigateToObjectDetail,
   addToast
 }) => {
+  // 正式对象唯一事实源：领域 Store（名称 / 业务域 / 正式定义 / 别名 / 当前修订号）
+  const stateVersion = useSyncExternalStore(subscribe, getVersion);
+  const businessObject = useMemo(() => {
+    void stateVersion;
+    return businessObjectRepository.get(objectId);
+  }, [stateVersion, objectId]);
+
+  const objectName = businessObject?.name ?? objectId;
+  const domain = businessObject?.domain ?? '—';
+  const officialDefinition = businessObject?.definition ?? '（未找到正式定义）';
+  const baseRevision = businessObject?.currentRevision ?? 'R1';
+  const nextRevision = useMemo(() => {
+    void stateVersion;
+    return nextRevisionLabel(objectId);
+  }, [stateVersion, objectId]);
+  const revisionCount = useMemo(() => {
+    void stateVersion;
+    return listRevisions(objectId).length;
+  }, [stateVersion, objectId]);
+
   // Draft Form States
   const [changeReason, setChangeReason] = useState(
     '根据新版业务资料，进一步明确“服务工单”覆盖热线、线上和窗口等公共服务渠道，并增加“来源渠道”关键属性。'
   );
-  const [objectName] = useState('服务工单');
-  const [domain] = useState('公共服务');
   const [definition, setDefinition] = useState(
     '表示公众通过热线、线上、窗口等公共服务渠道提出诉求，并经过受理、办理和办结的统一业务主体。'
   );
   const [showOfficialDefinition, setShowOfficialDefinition] = useState(false);
 
-  // Aliases State
-  const [aliases, setAliases] = useState<Array<{ text: string; isNew?: boolean }>>([
-    { text: '服务诉求单' },
-    { text: '公共服务工单' },
-    { text: '群众诉求工单', isNew: true }
-  ]);
+  // Aliases State（正式别名来自领域 Store，新增别名标记 isNew）
+  const [aliases, setAliases] = useState<Array<{ text: string; isNew?: boolean }>>(() =>
+    (businessObject?.aliases ?? []).map((text) => ({ text })).concat([{ text: '群众诉求工单', isNew: true }])
+  );
   const [newAliasInput, setNewAliasInput] = useState('');
 
   // Drawers & Modals
@@ -82,8 +110,31 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
       adoptedDecision:
         '“建立涵盖电话热线、政务服务网、移动客户端及线下办事窗口的一体化服务工单受理与协同督办机制。”'
     },
-    ...(businessObjectRepository.get('bo_service_ticket')?.evidence ?? [])
+    ...(businessObject?.evidence ?? [])
   ];
+
+  /** 组装 CHANGE 草稿快照：以正式对象为基线，叠加本次草稿修改 */
+  const buildSnapshot = (): BusinessObjectDefinitionSnapshot | undefined => {
+    if (!businessObject) return undefined;
+    const newAttribute = {
+      id: 'attr-source-channel',
+      name: '来源渠道',
+      meaning: '表示当前服务工单由哪个公共服务渠道形成（热线、线上平台、政务窗口等）。'
+    };
+    const attributes = businessObject.attributes.some((attribute) => attribute.name === newAttribute.name)
+      ? businessObject.attributes
+      : [...businessObject.attributes, newAttribute];
+    return {
+      name: businessObject.name,
+      aliases: aliases.map((alias) => alias.text),
+      definition,
+      domain: businessObject.domain,
+      identity: businessObject.identity,
+      attributes,
+      relationships: businessObject.relationships,
+      evidence: [...businessObject.evidence, ...changeEvidence.filter((item) => item.kind === 'DOCUMENT')]
+    };
+  };
 
   // Optimizing States
   const [isOptimizingReason, setIsOptimizingReason] = useState(false);
@@ -121,18 +172,62 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
     }, 600);
   };
 
+  /** 保存草稿：saveChangeDraft（基于当前正式修订号），正式对象发布前不受影响 */
   const handleSaveDraftClick = () => {
-    onSaveDraft();
+    const snapshot = buildSnapshot();
+    if (!snapshot) {
+      addToast?.('error', '暂无法保存', '未在领域存储中找到该业务对象');
+      return;
+    }
+    const draft = saveChangeDraft(objectId, baseRevision, snapshot);
+    if (!draft) {
+      addToast?.('error', '暂无法保存', '未在领域存储中找到该业务对象');
+      return;
+    }
     addToast?.(
       'success',
       '草稿已保存',
-      '已保存「服务工单」修改草稿至企业语义资产库；当前正式版本仍正常生效'
+      `已保存「${objectName}」修改草稿（${draft.id}，基于 ${baseRevision}）；当前正式版本仍正常生效`
     );
   };
 
+  /** 发布确认：publishDraft（CHANGE：校验 baseRevision，落地新正式修订） */
   const handleConfirmPublish = () => {
     setIsPublishModalOpen(false);
-    onPublish();
+    const snapshot = buildSnapshot();
+    if (!snapshot) {
+      addToast?.('error', '发布失败', '未在领域存储中找到该业务对象');
+      return;
+    }
+    const draft = saveChangeDraft(objectId, baseRevision, snapshot);
+    if (!draft) {
+      addToast?.('error', '发布失败', '未在领域存储中找到该业务对象');
+      return;
+    }
+    const result = publishDraft(draft.id, {
+      expectedBaseRevision: baseRevision,
+      changedBy: '业务对象修改工作台',
+      summary: changeReason.trim() || `更新「${objectName}」业务定义`,
+      changes: [
+        definition !== officialDefinition ? '更新业务定义（明确渠道范围描述）' : '业务定义保持不变',
+        aliases.some((alias) => alias.isNew) ? `新增别名：${aliases.filter((alias) => alias.isNew).map((alias) => alias.text).join('、')}` : '',
+        '新增关键属性「来源渠道」（尚未形成数据落地）'
+      ].filter((change) => change !== '')
+    });
+    if (result.ok === false) {
+      if (result.error === 'STALE_REVISION') {
+        addToast?.('error', '发布冲突', '正式对象已被其他人更新，请返回后基于最新正式版本重新修改');
+      } else {
+        addToast?.('error', '发布失败', '发布未完成，请稍后重试');
+      }
+      return;
+    }
+    addToast?.(
+      'success',
+      '业务对象修改已发布',
+      `「${objectName}」正式修订 ${result.revision} 已发布（${baseRevision} → ${result.revision}），历史版本已归档`
+    );
+    onPublished?.(objectId);
   };
 
   return (
@@ -159,11 +254,11 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
               业务对象
             </span>
             <span>/</span>
-            <span 
-              onClick={() => onNavigateToObjectDetail?.('bo_service_ticket')}
+            <span
+              onClick={() => onNavigateToObjectDetail?.(objectId)}
               className="hover:text-[#2563EB] cursor-pointer transition-colors"
             >
-              服务工单
+              {objectName}
             </span>
             <span>/</span>
             <span className="text-[#0F172A] font-medium">修改</span>
@@ -183,11 +278,11 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                 {/* Object Name & Status Badge */}
                 <div className="flex items-center space-x-2 pl-1">
                   <span className="text-xs text-[#475569] font-medium">
-                    服务工单 · Service Ticket
+                    {objectName} · {domain}
                   </span>
                   <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-xs font-normal bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A]" />
-                    <span>已发布 · 当前正式版本仍在生效</span>
+                    <span>已发布 · 当前正式版本 {baseRevision} 仍在生效</span>
                   </span>
                 </div>
               </div>
@@ -384,10 +479,10 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                     {showOfficialDefinition && (
                       <div className="mt-2 p-2.5 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] text-xs text-[#475569] space-y-1">
                         <div className="text-[11px] text-[#64748B] font-medium">
-                          当前正式生效定义（发布前仍对外有效）：
+                          当前正式生效定义（{baseRevision}，发布前仍对外有效）：
                         </div>
                         <p className="leading-relaxed text-[#334155]">
-                          表示公众通过公共服务渠道提出诉求，并经过受理、办理和办结的统一业务主体。
+                          {officialDefinition}
                         </p>
                       </div>
                     )}
@@ -484,40 +579,38 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                   <div className="space-y-1.5">
                     <div className="flex items-center space-x-1.5">
                       <span className="text-[#64748B]">主体标识：</span>
-                      <span className="font-semibold text-[#0F172A]">工单编号</span>
+                      <span className="font-semibold text-[#0F172A]">{businessObject?.identity.name ?? '—'}</span>
                     </div>
 
                     <div className="flex items-start space-x-1.5">
                       <span className="text-[#64748B] shrink-0">其他关键属性：</span>
                       <span className="text-[#334155]">
-                        处理状态、创建时间、受理时间、办结时间、诉求类型
+                        {(businessObject?.attributes ?? [])
+                          .filter((attribute) => !attribute.isIdentifier)
+                          .map((attribute) => attribute.name)
+                          .join('、') || '—'}
                       </span>
                     </div>
 
                     <div className="space-y-1 pt-1">
                       <span className="text-[#64748B] block">核心业务关系：</span>
                       <div className="space-y-1 pl-1 text-xs text-[#334155]">
-                        <div className="flex items-center space-x-1.5">
-                          <span>服务工单</span>
-                          <span className="text-[#94A3B8]">─申请人→</span>
-                          <span className="font-medium text-[#0F172A]">自然人</span>
-                        </div>
-                        <div className="flex items-center space-x-1.5">
-                          <span>服务工单</span>
-                          <span className="text-[#94A3B8]">─承办部门→</span>
-                          <span className="font-medium text-[#0F172A]">组织机构</span>
-                        </div>
-                        <div className="flex items-center space-x-1.5">
-                          <span>服务工单</span>
-                          <span className="text-[#94A3B8]">─所属区域→</span>
-                          <span className="font-medium text-[#0F172A]">行政区域</span>
-                        </div>
+                        {(businessObject?.relationships ?? []).map((relationship) => (
+                          <div key={relationship.id} className="flex items-center space-x-1.5">
+                            <span>{objectName}</span>
+                            <span className="text-[#94A3B8]">─{relationship.relationName}→</span>
+                            <span className="font-medium text-[#0F172A]">{relationship.targetObjectName}</span>
+                          </div>
+                        ))}
+                        {(businessObject?.relationships ?? []).length === 0 && (
+                          <span className="text-[#94A3B8]">—</span>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   <p className="text-[11px] text-[#94A3B8] border-t border-[#F1F5F9] pt-2">
-                    主体标识与核心关系沿用当前正式版本。
+                    主体标识与核心关系沿用当前正式版本（{baseRevision}）。
                   </p>
                 </div>
               </div>
@@ -669,6 +762,8 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
         objectName={objectName}
         title="确认发布业务对象修改"
         confirmLabel="发布修改"
+        currentRevision={baseRevision}
+        nextRevision={nextRevision}
         changeSummary={[
           '明确服务工单的渠道范围描述',
           '新增别名“群众诉求工单”',
@@ -678,6 +773,10 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
           '现有数据实现继续有效',
           '新增属性尚未形成数据落地',
           '发布后继续识别和校验可能的字段支撑'
+        ]}
+        impactSummary={[
+          `正式修订号 ${baseRevision} → ${nextRevision}，${baseRevision} 自动归档为历史版本（历史共 ${revisionCount} 条修订）`,
+          '现有数据支撑绑定不受影响，不产生数据支撑修订'
         ]}
       />
 
@@ -713,7 +812,7 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
               <button
                 onClick={() => {
                   setIsLeaveModalOpen(false);
-                  onSaveDraft();
+                  handleSaveDraftClick();
                   onCancel();
                 }}
                 className="w-full sm:w-auto px-3.5 py-1.5 text-xs font-medium text-white bg-[#2563EB] hover:bg-[#1D4ED8] rounded-md cursor-pointer transition-colors shadow-2xs"
@@ -784,30 +883,14 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                 <div className="space-y-2">
                   <h4 className="font-bold text-[#0F172A]">沿用正式属性</h4>
                   <div className="divide-y divide-[#F1F5F9] border border-[#E2E8F0] rounded-md overflow-hidden bg-white">
-                    <div className="p-2.5 flex items-center justify-between">
-                      <span className="font-medium text-[#0F172A]">工单编号</span>
-                      <span className="text-[11px] text-[#64748B]">主体唯一标识</span>
-                    </div>
-                    <div className="p-2.5 flex items-center justify-between">
-                      <span className="font-medium text-[#0F172A]">处理状态</span>
-                      <span className="text-[11px] text-[#64748B]">流转状态</span>
-                    </div>
-                    <div className="p-2.5 flex items-center justify-between">
-                      <span className="font-medium text-[#0F172A]">创建时间</span>
-                      <span className="text-[11px] text-[#64748B]">时间戳</span>
-                    </div>
-                    <div className="p-2.5 flex items-center justify-between">
-                      <span className="font-medium text-[#0F172A]">受理时间</span>
-                      <span className="text-[11px] text-[#64748B]">时效起算点</span>
-                    </div>
-                    <div className="p-2.5 flex items-center justify-between">
-                      <span className="font-medium text-[#0F172A]">办结时间</span>
-                      <span className="text-[11px] text-[#64748B]">办结节点</span>
-                    </div>
-                    <div className="p-2.5 flex items-center justify-between">
-                      <span className="font-medium text-[#0F172A]">诉求类型</span>
-                      <span className="text-[11px] text-[#64748B]">事项分类</span>
-                    </div>
+                    {(businessObject?.attributes ?? []).map((attribute) => (
+                      <div key={attribute.id} className="p-2.5 flex items-center justify-between">
+                        <span className="font-medium text-[#0F172A]">{attribute.name}</span>
+                        <span className="text-[11px] text-[#64748B]">
+                          {attribute.isIdentifier ? '主体唯一标识' : '关键属性'}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -815,30 +898,16 @@ export const BusinessObjectChangeWorkspace: React.FC<BusinessObjectChangeWorkspa
                 <div className="space-y-2">
                   <h4 className="font-bold text-[#0F172A]">核心业务关系</h4>
                   <div className="divide-y divide-[#F1F5F9] border border-[#E2E8F0] rounded-md overflow-hidden bg-white">
-                    <div className="p-2.5 flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="text-[#475569]">服务工单</span>
-                        <span className="text-[#94A3B8]">─申请人→</span>
-                        <span className="font-semibold text-[#0F172A]">自然人</span>
+                    {(businessObject?.relationships ?? []).map((relationship) => (
+                      <div key={relationship.id} className="p-2.5 flex items-center justify-between">
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-[#475569]">{objectName}</span>
+                          <span className="text-[#94A3B8]">─{relationship.relationName}→</span>
+                          <span className="font-semibold text-[#0F172A]">{relationship.targetObjectName}</span>
+                        </div>
+                        <span className="text-[11px] text-[#64748B]">沿用当前生效关系</span>
                       </div>
-                      <span className="text-[11px] text-[#64748B]">沿用当前生效关系</span>
-                    </div>
-                    <div className="p-2.5 flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="text-[#475569]">服务工单</span>
-                        <span className="text-[#94A3B8]">─承办部门→</span>
-                        <span className="font-semibold text-[#0F172A]">组织机构</span>
-                      </div>
-                      <span className="text-[11px] text-[#64748B]">沿用当前生效关系</span>
-                    </div>
-                    <div className="p-2.5 flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="text-[#475569]">服务工单</span>
-                        <span className="text-[#94A3B8]">─所属区域→</span>
-                        <span className="font-semibold text-[#0F172A]">行政区域</span>
-                      </div>
-                      <span className="text-[11px] text-[#64748B]">沿用当前生效关系</span>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>

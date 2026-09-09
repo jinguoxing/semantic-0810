@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Sparkles,
   ChevronRight,
@@ -21,29 +21,47 @@ import {
   BookOpen,
   ClipboardCheck,
   ShieldCheck,
-  Sliders,
-  CheckCheck
+  Sliders
 } from 'lucide-react';
 import { BusinessEvidenceDrawer } from './business-object/BusinessEvidenceDrawer';
-import type { EvidenceReference } from '../domain/business-object';
+import { BusinessObjectPublishDialog } from './business-object/BusinessObjectPublishDialog';
+import {
+  businessObjectRepository,
+  dataSupportSummary,
+  objectResolutionContexts,
+  dataSupportService,
+  publishDraft,
+  saveCreateDraft,
+  subscribe,
+  getVersion,
+  type BusinessObjectDefinitionSnapshot,
+  type EvidenceReference
+} from '../domain/business-object';
 
 export interface BusinessObjectAuthoringWorkspaceProps {
   onCancel?: () => void;
-  onSaveDraft?: () => void;
-  onPublish?: () => void;
   onNavigateToSemantics?: () => void;
   onNavigateToObjectsList?: () => void;
+  /** 发布成功后进入新对象的业务视角（objectId 为新对象的领域 ID） */
+  onPublished?: (objectId: string) => void;
+  /** 复用「客服坐席」后返回该正式对象的业务视角 */
+  onReuseExisting?: (objectId: string) => void;
+  /** Bottom-up Resolution「创建新业务对象」入口携带的对齐任务 ID，发布后自动完成对齐 */
+  resolutionTaskId?: string;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
 }
 
 export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringWorkspaceProps> = ({
   onCancel,
-  onSaveDraft,
-  onPublish,
   onNavigateToSemantics,
   onNavigateToObjectsList,
+  onPublished,
+  onReuseExisting,
+  resolutionTaskId,
   addToast
 }) => {
+  // 领域 Store 订阅：复用检查对象 / 数据支撑计数直接读取真实领域状态
+  const stateVersion = useSyncExternalStore(subscribe, getVersion);
   // ---------------------------------------------------------------------------
   // Core Definition Form States
   // ---------------------------------------------------------------------------
@@ -92,7 +110,22 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
   const [isSemanticsAdjustDrawerOpen, setIsSemanticsAdjustDrawerOpen] = useState(false);
   const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
   const [showReuseConfirmModal, setShowReuseConfirmModal] = useState(false);
-  const [showPublishSuccessModal, setShowPublishSuccessModal] = useState(false);
+  // 共享发布确认弹窗（替代页面私有的“发布成功”弹窗）
+  const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+  // 已保存的 CREATE 草稿 ID（发布时若未保存会先落一份草稿再发布）
+  const [draftId, setDraftId] = useState<string | null>(null);
+
+  /** 复用检查对象：直接来自领域 Store（禁止写死目录数据） */
+  const existingObject = useMemo(() => {
+    void stateVersion;
+    return businessObjectRepository.list().find((object) => object.name === '客服坐席');
+  }, [stateVersion]);
+
+  /** 复用对象当前的正式数据支撑摘要（替代写死的“182 条台账”话术） */
+  const existingSupport = useMemo(() => {
+    void stateVersion;
+    return existingObject ? dataSupportSummary(existingObject.id) : undefined;
+  }, [stateVersion, existingObject]);
 
   // 定义依据：草稿上下文组装的证据数据（用户输入 + 制度文件提取），以数据驱动抽屉呈现
   const authoringEvidence: EvidenceReference[] = [
@@ -119,6 +152,79 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
+
+  /** 由表单状态组装待发布的正式定义快照（Create 与 Change 共用同一结构） */
+  const buildSnapshot = (): BusinessObjectDefinitionSnapshot => {
+    const identityAttribute = keyAttributes.find((attr) => attr.name === identityAttr);
+    return {
+      name: objectName.trim(),
+      aliases: [...aliases],
+      definition,
+      domain: businessDomain,
+      identity: {
+        name: identityAttr,
+        meaning: identityAttribute?.meaning ?? `以「${identityAttr}」唯一识别该业务主体。`
+      },
+      attributes: keyAttributes.map((attr, index) => ({
+        id: `attr-${index + 1}`,
+        name: attr.name,
+        meaning: attr.meaning,
+        isIdentifier: attr.name === identityAttr || attr.isIdentity
+      })),
+      relationships: coreRelationships.map((rel, index) => {
+        const target = businessObjectRepository.list().find((object) => object.name === rel.targetObject);
+        return {
+          id: `rel-${index + 1}`,
+          relationName: rel.name,
+          targetObjectId: target?.id ?? `unresolved:${rel.targetObject}`,
+          targetObjectName: rel.targetObject,
+          meaning: rel.multiplicity
+        };
+      }),
+      evidence: authoringEvidence
+    };
+  };
+
+  /** Bottom-up Resolution 入口：发布新对象后自动完成对齐（登记 EFFECTIVE 绑定并闭环任务） */
+  const autoAlignResolutionTask = (newObjectId: string) => {
+    if (!resolutionTaskId) return;
+    const context = objectResolutionContexts.get(resolutionTaskId);
+    if (!context || (context.status !== 'OPEN' && context.status !== 'POSTPONED')) return;
+    const result = dataSupportService.confirmBottomUpAlignment({
+      taskId: context.taskId,
+      businessObjectId: newObjectId,
+      sourceAssetId: context.sourceId,
+      sourceName: context.sourceName ?? context.sourceId,
+      sourceRevision: context.sourceRevision,
+      implementation: {
+        name: context.sourceName ?? context.sourceId,
+        techName: context.sourceId,
+        warehouseTable: context.sourceId,
+        assetId: context.sourceId,
+        scope: context.sourceName ?? '来源数据资产',
+        granularity: '一行一条业务记录（对齐后完善）',
+        identity: '（对齐后完善）',
+        scopeRelationText: '自下而上对齐（新建对象自动登记）',
+        scopeRelationNote: '由 Bottom-up Resolution 在创建新业务对象后自动登记的数据实现，字段级落地待后续完善。',
+        attributes: [],
+        relationships: []
+      }
+    });
+    if (result.ok === false) {
+      if (result.error === 'BINDING_CONFLICT') {
+        addToast?.('error', '自动对齐失败', `该数据资产已正式承载「${result.conflictObjectName ?? '其他对象'}」，未自动改写`);
+      } else {
+        addToast?.('error', '自动对齐失败', '未找到对应业务对象，数据支撑未自动登记');
+      }
+      return;
+    }
+    addToast?.(
+      'success',
+      '数据支撑已自动对齐',
+      `「${context.sourceName ?? context.sourceId}」已生效为新对象的数据支撑（任务 ${context.taskId} 已完成）`
+    );
+  };
+
   const handleRemoveAlias = (aliasToRemove: string) => {
     setAliases(prev => prev.filter(a => a !== aliasToRemove));
   };
@@ -162,10 +268,37 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
     }, 500);
   };
 
-  const handleConfirmReuse = () => {
+  /**
+   * 复用决策闭环：不创建「热线坐席」新对象，
+   * 把当前名称登记为「客服坐席」的业务别名（真实领域写入）后返回正式对象。
+   */
+  const completeReuse = () => {
+    if (!existingObject) {
+      addToast?.('error', '复用失败', '未在领域存储中找到正式对象「客服坐席」');
+      return;
+    }
+    if (!existingObject.aliases.includes(objectName.trim())) {
+      businessObjectRepository.updateDefinition(
+        existingObject.id,
+        { aliases: [...existingObject.aliases, objectName.trim()] },
+        {
+          summary: `复用决策：登记「${objectName.trim()}」为「客服坐席」的业务别名`,
+          changes: [
+            `登记「${objectName.trim()}」为「${existingObject.name}」的业务别名`,
+            '本次复用已有业务对象，未创建新的业务对象'
+          ],
+          changedBy: '业务对象创建工作台'
+        }
+      );
+    }
     setShowReuseConfirmModal(false);
     setReuseStatus('reused');
-    addToast?.('success', '已确认复用「客服坐席」', '已将「热线坐席」注册为「客服坐席」在热线渠道下的业务特化形式');
+    addToast?.('success', '已复用现有业务对象，本次未创建新的业务对象。');
+    onReuseExisting?.(existingObject.id);
+  };
+
+  const handleConfirmReuse = () => {
+    completeReuse();
   };
 
   const handleSubmitDistinction = () => {
@@ -183,26 +316,70 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
       addToast?.('error', '暂无法发布', '需先处理与“客服坐席”的对象复用判断');
       return;
     }
-    setShowPublishSuccessModal(true);
+    if (reuseStatus === 'reused') {
+      // 复用路径：发布即复用闭环，不创建新对象
+      completeReuse();
+      return;
+    }
+    if (!objectName.trim()) {
+      addToast?.('error', '暂无法发布', '业务对象名称不能为空');
+      return;
+    }
+    setIsPublishDialogOpen(true);
   };
 
+  /** 发布确认：保存草稿 → publishDraft（CREATE：新对象 + R1 正式修订） */
   const handleFinalPublishConfirm = () => {
-    setShowPublishSuccessModal(false);
-    if (onPublish) {
-      onPublish();
-    } else if (onNavigateToObjectsList) {
-      onNavigateToObjectsList();
+    setIsPublishDialogOpen(false);
+    const snapshot = buildSnapshot();
+    const draft = saveCreateDraft(snapshot);
+    setDraftId(draft.id);
+    const result = publishDraft(draft.id, {
+      changedBy: '业务对象创建工作台',
+      summary: `首次发布「${snapshot.name}」业务定义`,
+      changes: [
+        `在「${snapshot.domain}」业务域下创建独立业务对象「${snapshot.name}」`,
+        `登记主体标识：${snapshot.identity.name}`,
+        `登记 ${snapshot.attributes.length} 个关键属性与 ${snapshot.relationships.length} 个核心关系`,
+        distinctionReason.trim() ? `记录独立创建依据：${distinctionReason.trim()}` : ''
+      ].filter((change) => change !== '')
+    });
+    if (result.ok === false) {
+      const messages: Record<string, string> = {
+        NOT_FOUND: '草稿不存在或已被丢弃，请重新保存草稿后再发布',
+        ALREADY_PUBLISHED: '该草稿已发布过，请勿重复发布',
+        OBJECT_NOT_FOUND: '草稿指向的正式对象不存在',
+        STALE_REVISION: '正式对象已更新，请刷新后基于最新正式版本重新修改'
+      };
+      addToast?.('error', '发布失败', messages[result.error] ?? '发布未完成，请稍后重试');
+      return;
     }
-    addToast?.('success', '业务对象已发布', `「${objectName}」已正式发布至企业业务语义目录`);
+    autoAlignResolutionTask(result.object.id);
+    addToast?.(
+      'success',
+      '业务对象已发布',
+      `「${snapshot.name}」已正式发布并形成修订 ${result.revision}（对象标识 ${result.object.id}）`
+    );
+    onPublished?.(result.object.id);
   };
 
+  /** 保存草稿：真实写入领域 Store（发布前不触碰任何正式对象） */
   const handleSaveDraftAction = () => {
-    if (onSaveDraft) {
-      onSaveDraft();
-    } else {
-      addToast?.('success', '草稿保存成功', `已保存「${objectName}」业务对象定义草稿至企业语义中心`);
+    if (!objectName.trim()) {
+      addToast?.('error', '暂无法保存', '业务对象名称不能为空');
+      return;
     }
+    const draft = saveCreateDraft(buildSnapshot());
+    setDraftId(draft.id);
+    addToast?.(
+      'success',
+      '草稿保存成功',
+      `「${objectName.trim()}」定义草稿已保存（${draft.id}），发布前不会改动正式对象`
+    );
   };
+
+  /** 当前是否有未发布的草稿（供页面提示） */
+  void draftId;
 
   return (
     <div id="bo-authoring-container" className="flex-1 flex flex-col h-full bg-[#F8FAFC] overflow-y-auto text-[#0F172A]">
@@ -739,7 +916,10 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
                       </div>
                       <div className="text-[11px] text-[#64748B] bg-white/70 p-2 rounded border border-[#FDE68A]/60">
                         <span className="font-semibold text-[#0F172A]">事实依据：</span>
-                        <span>企业已有 182 条坐席人员台账与工单分配策略直接挂载于「客服坐席」。</span>
+                        <span>
+                          企业已有 {existingSupport?.count ?? 0} 个已确认数据实现
+                          {existingSupport?.mainAsset ? `（主要实现：${existingSupport.mainAsset}）` : ''}与相关业务关系直接挂载于「客服坐席」。
+                        </span>
                       </div>
                     </div>
                   )}
@@ -796,7 +976,8 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
                     </button>
                   </div>
                   <p className="text-xs text-[#334155] leading-relaxed">
-                    「热线坐席」将作为「客服坐席」的专属业务别名与热线渠道特化视图进行沉淀，复用其已有 182 条数据台账与工单分配关系，避免业务实体分裂。
+                    「热线坐席」将作为「客服坐席」的专属业务别名进行沉淀，复用其已有
+                    {' '}{existingSupport?.count ?? 0} 个已确认数据实现与相关业务关系，避免业务实体分裂。本次不会创建新的业务对象。
                   </p>
                 </div>
               ) : (
@@ -1212,9 +1393,9 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
               <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg space-y-1.5">
                 <div className="font-semibold text-[#0F172A]">复用生效结果：</div>
                 <ul className="list-disc list-inside text-[11px] text-[#64748B] space-y-1">
-                  <li>现有客服坐席的 182 条物理数据台账直接共享</li>
-                  <li>自然人及服务工单关系自动继承</li>
-                  <li>支持在热线报表与问数中无缝识别「热线坐席」语义</li>
+                  <li>「热线坐席」登记为「客服坐席」的业务别名，不创建新的业务对象</li>
+                  <li>「客服坐席」现有 {existingSupport?.count ?? 0} 个已确认数据实现继续作为正式数据支撑</li>
+                  <li>支持在热线报表与问数中通过别名识别「热线坐席」语义</li>
                 </ul>
               </div>
             </div>
@@ -1240,60 +1421,28 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
       )}
 
       {/* =========================================================================
-          Modal 3: 发布成功确认弹窗
+          共享发布确认弹窗（Create 首次发布 → R1）
       ========================================================================= */}
-      {showPublishSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-2xs p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-[#E2E8F0] space-y-4 animate-in fade-in-50 zoom-in-95 duration-150 text-center">
-            <div className="w-12 h-12 rounded-full bg-[#ECFDF5] text-[#059669] flex items-center justify-center mx-auto">
-              <CheckCheck className="w-6 h-6" />
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-[#0F172A]">
-                业务对象「{objectName}」发布就绪
-              </h3>
-              <p className="text-xs text-[#64748B]">
-                {reuseStatus === 'reused'
-                  ? '已作为「客服坐席」的特化形式完成全域语义登记。'
-                  : '已作为独立业务对象沉淀至「公共服务」业务域。'}
-              </p>
-            </div>
-
-            <div className="p-3 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg text-left text-xs space-y-1.5 text-[#475569]">
-              <div className="flex justify-between">
-                <span>主体标识：</span>
-                <span className="font-semibold text-[#0F172A]">{identityAttr}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>业务域：</span>
-                <span className="font-semibold text-[#0F172A]">{businessDomain}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>定义依据：</span>
-                <span className="font-semibold text-[#0F172A]">《公共服务热线运行管理办法》</span>
-              </div>
-            </div>
-
-            <div className="pt-2 flex items-center justify-end space-x-2.5">
-              <button
-                type="button"
-                onClick={() => setShowPublishSuccessModal(false)}
-                className="px-3.5 py-1.5 rounded-md border border-[#CBD5E1] text-xs text-[#475569] hover:bg-[#F1F5F9] cursor-pointer"
-              >
-                留在页面
-              </button>
-              <button
-                type="button"
-                onClick={handleFinalPublishConfirm}
-                className="px-4 py-1.5 rounded-md bg-[#2563EB] text-white text-xs font-semibold hover:bg-[#1D4ED8] cursor-pointer shadow-xs"
-              >
-                确认并返回目录
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <BusinessObjectPublishDialog
+        isOpen={isPublishDialogOpen}
+        onClose={() => setIsPublishDialogOpen(false)}
+        onConfirm={handleFinalPublishConfirm}
+        objectName={objectName.trim() || '未命名业务对象'}
+        nextRevision="R1"
+        changeSummary={[
+          `在「${businessDomain}」业务域下创建独立业务对象「${objectName.trim() || '未命名业务对象'}」`,
+          `登记主体标识：${identityAttr}`,
+          `登记 ${keyAttributes.length} 个关键属性与 ${coreRelationships.length} 个核心关系`,
+          distinctionReason.trim() ? `记录独立创建依据：${distinctionReason.trim()}` : ''
+        ].filter((item) => item !== '')}
+        evidenceSummary={authoringEvidence.map((evidence) => `${evidence.title}（${evidence.source}）`)}
+        impactSummary={[
+          '发布后立即进入企业业务对象目录（业务视角 / 数据支撑视角可查）',
+          '数据支撑可在详情页通过「发现数据支撑」继续建立'
+        ]}
+        description="首次发布将在企业业务语义目录中创建该业务对象，并形成正式修订记录。"
+        confirmLabel="确认发布"
+      />
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useSyncExternalStore } from 'react';
 import {
   Search,
   Plus,
@@ -7,12 +7,29 @@ import {
   X
 } from 'lucide-react';
 import {
-  BusinessObjectItem,
-  INITIAL_BUSINESS_OBJECTS,
-  DOMAIN_OPTIONS,
-  STATUS_OPTIONS,
-  DATA_SUPPORT_OPTIONS
-} from '../data/businessObjectsData';
+  businessObjectRepository,
+  dataSupportSummary,
+  subscribe,
+  getVersion,
+  type BusinessObject,
+  type BusinessObjectStatus
+} from '../domain/business-object';
+import { STATUS_OPTIONS, DATA_SUPPORT_OPTIONS } from '../data/businessObjectsData';
+
+/** 业务对象状态 → 中文标签（与领域 Store 的 BusinessObjectStatus 对应） */
+const STATUS_LABELS: Record<BusinessObjectStatus, string> = {
+  PUBLISHED: '已发布',
+  DRAFT: '草稿',
+  RETIRED: '已停用'
+};
+
+/** ISO 时间 → 「MM-DD HH:mm」展示 */
+function formatUpdatedAt(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 interface BusinessObjectsListWorkspaceProps {
   onNavigateToBusinessObjectDetail: (objectId: string, initialTab?: 'business' | 'data_support') => void;
@@ -27,6 +44,9 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
   onNavigateToChangeBusinessObject,
   addToast
 }) => {
+  // 目录唯一事实源：领域 Store（发布 / 数据支撑确认后无需刷新应用即自动更新）
+  const stateVersion = useSyncExternalStore(subscribe, getVersion);
+
   // Search and filter states (defaults per specification: search empty, filters "All")
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDomain, setSelectedDomain] = useState<string>('全部业务域');
@@ -47,9 +67,17 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Filter logic
+  // 业务域筛选项由领域对象动态聚合，不使用静态目录数据
+  const domainOptions = useMemo(() => {
+    void stateVersion;
+    const domains = Array.from(new Set(businessObjectRepository.list().map((object) => object.domain)));
+    return ['全部业务域', ...domains.sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))];
+  }, [stateVersion]);
+
+  // Filter logic: rows come from the domain repository, data support from dataSupportSummary
   const filteredObjects = useMemo(() => {
-    return INITIAL_BUSINESS_OBJECTS.filter((obj) => {
+    void stateVersion;
+    return businessObjectRepository.list().filter((obj: BusinessObject) => {
       // 1. Search Query (Object name, aliases, or definition)
       if (searchQuery.trim()) {
         const query = searchQuery.trim().toLowerCase();
@@ -67,21 +95,22 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
       }
 
       // 3. Status Filter (已发布, 草稿, 已停用)
-      if (selectedStatus !== '全部状态' && obj.status !== selectedStatus) {
+      if (selectedStatus !== '全部状态' && STATUS_LABELS[obj.status] !== selectedStatus) {
         return false;
       }
 
       // 4. Data Support Filter (筛选依据为当前正式生效的数据实现)
-      if (selectedDataSupport === '有数据实现' && !obj.dataSupport.hasImplementation) {
+      const support = dataSupportSummary(obj.id);
+      if (selectedDataSupport === '有数据实现' && !support.hasImplementation) {
         return false;
       }
-      if (selectedDataSupport === '暂无数据实现' && obj.dataSupport.hasImplementation) {
+      if (selectedDataSupport === '暂无数据实现' && support.hasImplementation) {
         return false;
       }
 
       return true;
     });
-  }, [searchQuery, selectedDomain, selectedStatus, selectedDataSupport]);
+  }, [stateVersion, searchQuery, selectedDomain, selectedStatus, selectedDataSupport]);
 
   const handleCopyId = (e: React.MouseEvent, id: string, name: string) => {
     e.stopPropagation();
@@ -93,7 +122,7 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
   return (
     <div className="flex-1 overflow-y-auto bg-[#F8FAFC] text-[#1E293B] font-sans antialiased min-h-full flex flex-col">
       <div className="w-full max-w-[1440px] mx-auto px-6 py-6 lg:px-8 space-y-5 flex-1 flex flex-col">
-        
+
         {/* ========================================================= */}
         {/* 1. PAGE HEADER                                            */}
         {/* ========================================================= */}
@@ -173,7 +202,7 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
                 onChange={(e) => setSelectedDomain(e.target.value)}
                 className="appearance-none bg-white border border-[#CBD5E1] rounded-md pl-2.5 pr-7 py-1.5 text-xs text-[#1E293B] hover:border-[#94A3B8] focus:outline-none focus:ring-1 focus:ring-[#2563EB] focus:border-[#2563EB] cursor-pointer"
               >
-                {DOMAIN_OPTIONS.map((domain) => (
+                {domainOptions.map((domain) => (
                   <option key={domain} value={domain}>
                     {domain}
                   </option>
@@ -262,7 +291,9 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
                     </td>
                   </tr>
                 ) : (
-                  filteredObjects.map((obj) => (
+                  filteredObjects.map((obj) => {
+                    const support = dataSupportSummary(obj.id);
+                    return (
                     <tr
                       key={obj.id}
                       className="hover:bg-[#F8FAFC]/80 transition-colors h-[78px]"
@@ -278,7 +309,7 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
                             {obj.name}
                           </button>
                           <div className="text-[11px] text-[#64748B] leading-tight truncate max-w-[170px]">
-                            别名：{obj.aliases.join(' · ')}
+                            别名：{obj.aliases.length > 0 ? obj.aliases.join(' · ') : '—'}
                           </div>
                         </div>
                       </td>
@@ -301,47 +332,41 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
                       <td className="py-3 px-4 align-middle">
                         <div className="text-xs text-[#334155] leading-relaxed flex flex-wrap items-center gap-x-1 gap-y-0.5">
                           {obj.relationships.map((rel, idx) => (
-                            <React.Fragment key={idx}>
+                            <React.Fragment key={rel.id ?? idx}>
                               {idx > 0 && <span className="text-[#94A3B8]">；</span>}
-                              <span className="text-[#64748B]">{rel.name}</span>
+                              <span className="text-[#64748B]">{rel.relationName}</span>
                               <span className="text-[#94A3B8]">→</span>
                               <button
-                                onClick={() => onNavigateToBusinessObjectDetail(rel.targetId, 'business')}
+                                onClick={() => onNavigateToBusinessObjectDetail(rel.targetObjectId, 'business')}
                                 className="text-[#334155] hover:text-[#2563EB] hover:underline font-medium cursor-pointer transition-colors"
                               >
-                                {rel.targetName}
+                                {rel.targetObjectName}
                               </button>
                             </React.Fragment>
                           ))}
-                          {obj.moreRelationshipsCount && obj.moreRelationshipsCount > 0 && (
-                            <span
-                              onClick={() => onNavigateToBusinessObjectDetail(obj.id, 'business')}
-                              className="text-[#64748B] hover:text-[#2563EB] hover:underline cursor-pointer text-xs ml-0.5"
-                              title="点击查看详情中的全部关系"
-                            >
-                              ；+{obj.moreRelationshipsCount}
-                            </span>
+                          {obj.relationships.length === 0 && (
+                            <span className="text-[#94A3B8]">—</span>
                           )}
                         </div>
                       </td>
 
-                      {/* 5. 数据支撑 */}
+                      {/* 5. 数据支撑（来自领域 Store 的 dataSupportSummary） */}
                       <td className="py-3 px-4 align-middle">
-                        {obj.dataSupport.hasImplementation ? (
+                        {support.hasImplementation ? (
                           <div className="space-y-0.5">
                             <button
                               id={`bo-data-support-${obj.id}`}
                               onClick={() => onNavigateToBusinessObjectDetail(obj.id, 'data_support')}
                               className="text-xs text-[#2563EB] hover:text-[#1D4ED8] hover:underline cursor-pointer font-medium block transition-colors"
                             >
-                              {obj.dataSupport.implementationCount} 个数据实现
+                              {support.count} 个数据实现
                             </button>
-                            {obj.dataSupport.mainAsset && (
+                            {support.mainAsset && (
                               <div
                                 className="text-[11px] text-[#64748B] truncate max-w-[220px]"
-                                title={obj.dataSupport.mainAsset}
+                                title={support.mainAsset}
                               >
-                                主要：{obj.dataSupport.mainAsset}
+                                主要：{support.mainAsset}
                               </div>
                             )}
                           </div>
@@ -354,11 +379,11 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
 
                       {/* 6. 状态 */}
                       <td className="py-3 px-4 align-middle whitespace-nowrap">
-                        {obj.status === '已发布' ? (
+                        {obj.status === 'PUBLISHED' ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-normal bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">
                             已发布
                           </span>
-                        ) : obj.status === '草稿' ? (
+                        ) : obj.status === 'DRAFT' ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-normal bg-[#F8FAFC] text-[#64748B] border border-[#E2E8F0]">
                             草稿
                           </span>
@@ -372,7 +397,7 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
                       {/* 7. 最近更新 */}
                       <td className="py-3 px-4 align-middle whitespace-nowrap">
                         <span className="text-xs text-[#64748B] font-mono">
-                          {obj.updatedAt}
+                          {formatUpdatedAt(obj.updatedAt)}
                         </span>
                       </td>
 
@@ -436,7 +461,8 @@ export const BusinessObjectsListWorkspace: React.FC<BusinessObjectsListWorkspace
                         )}
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>

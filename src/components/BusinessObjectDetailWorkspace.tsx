@@ -22,6 +22,7 @@ import {
   dataSupportService,
   groundingService,
   listRevisions,
+  listDataSupportRevisions,
   subscribe,
   getVersion
 } from '../domain/business-object';
@@ -47,11 +48,12 @@ export interface BusinessObjectDetailWorkspaceProps {
   onNavigateToApiDetail?: (apiId: string) => void;
   onNavigateToKnowledgeNetwork?: (objectId: string) => void;
   onExploreResourcesForObject?: (objectName: string, attributeName?: string) => void;
-  onFindDataWithObjectGoal?: (objectName: string) => void;
   onNavigateToBusinessObjectDetail?: (objectId: string, initialTab?: 'business' | 'data_support') => void;
   onNavigateToChangeBusinessObject?: (objectId: string) => void;
-  /** 数据支撑复核入口：对象存在 NEEDS_REVALIDATION 绑定时展示复核引导 */
-  onNavigateToRevalidation?: () => void;
+  /** 数据支撑复核入口：携带业务对象与待复核绑定上下文进入复核工作台 */
+  onNavigateToRevalidation?: (objectId: string, bindingId?: string) => void;
+  /** Top-down 发现数据支撑入口：必须携带当前业务对象上下文（禁止无上下文演示页） */
+  onDiscoverDataSupport?: (businessObjectId: string, candidateBindingId?: string) => void;
   addToast?: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
 }
 
@@ -165,6 +167,14 @@ function bindingStatusLabel(status: string): string {
   }
 }
 
+/** Grounding 修正失败 → 展示说明（领域校验失败时零写入） */
+const GROUNDING_ERROR_LABELS: Record<string, string> = {
+  BINDING_NOT_FOUND: '未找到当前数据实现的正式绑定',
+  TARGET_NOT_FOUND: '未找到待修正的落地映射，请刷新后重试',
+  FIELD_MISMATCH: '当前字段与落地记录不一致，请刷新后重试',
+  CANDIDATE_NOT_ALLOWED: '该字段与关系目标对象身份不兼容，不能作为关系落地字段'
+};
+
 export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspaceProps> = ({
   objectId = 'bo_service_ticket',
   initialTab = 'business',
@@ -174,7 +184,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   onNavigateToKnowledgeNetwork,
   onNavigateToMetricDetail,
   onNavigateToDataAssetDetail,
-  onFindDataWithObjectGoal,
+  onDiscoverDataSupport,
   onNavigateToRevalidation,
   addToast
 }) => {
@@ -216,14 +226,17 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   const [selectedTerm, setSelectedTerm] = useState<BusinessTermItem | null>(null);
 
   // Data Support View State
-  // 数据实现与绑定全部由领域仓库派生（刷新 / 复核 / 修正后自动同步）
+  // 正式数据支撑选择器：仅 EFFECTIVE + NEEDS_REVALIDATION（Inv05）。
+  // CANDIDATE 只出现在发现 / 确认工作区，RETIRED 只出现在历史抽屉。
   const domainImplementations = dataSupportService.listImplementations(currentObject.id);
-  const bindings = dataSupportService.listBindings(currentObject.id);
+  const bindings = dataSupportService.listCurrentBindings(currentObject.id);
 
-  const implementations: FormalDataImplementation[] = domainImplementations.map((impl) => {
-    const binding = bindings.find((item) => item.implementationId === impl.id);
+  // 正式数据实现视图由当前生效绑定驱动：无生效绑定的实现（候选 / 已退休）不进入正式视图
+  const implementations: FormalDataImplementation[] = bindings.flatMap((binding) => {
+    const impl = domainImplementations.find((item) => item.id === binding.implementationId);
+    if (!impl) return [];
     const groundingRevisions = groundingService.listByObject(currentObject.id);
-    return {
+    return [{
       id: impl.id,
       name: impl.name,
       techName: impl.techName,
@@ -274,11 +287,15 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
         targetIdentity: relationship.targetIdentity
       })),
       extension: impl.extension ?? null
-    };
+      }];
   });
 
   const primaryImpl = implementations.find((impl) => impl.role === '主要数据实现');
   const objectRevisions = listRevisions(currentObject.id);
+  // 三条修订生命周期分节数据：定义修订 / 数据支撑修订 / Grounding 修正（历史抽屉共用）
+  const dataSupportRevisions = listDataSupportRevisions(currentObject.id);
+  const groundingRevisions = groundingService.listByObject(currentObject.id);
+  const bindingByImplId = new Map(bindings.map((binding) => [binding.implementationId, binding]));
 
   const [selectedImplId, setSelectedImplId] = useState<DataImplementationId | null>(null);
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -313,60 +330,70 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
     implementations.find((impl) => impl.id === selectedImplId) ||
     implementations[0] ||
     null;
+  const currentBinding = currentImpl ? bindingByImplId.get(currentImpl.id) : undefined;
 
   // 待复核绑定数量（语义修订触发）
   const revalidationCount = bindings.filter((binding) => binding.status === 'NEEDS_REVALIDATION').length;
 
-  // 关系落地修正候选：当前实现的落地字段（作为关系关联键候选）
-  const relationshipCandidates: CandidateFieldOption[] = (currentImpl?.attributes ?? []).map((attr) => ({
-    id: `rel-${attr.field}`,
-    field: attr.field,
-    label: attr.name,
-    semanticType: attr.source,
-    semantics: attr.semantics,
-    evidence: `「${attr.name}」在「${currentImpl?.name ?? '当前数据实现'}」中的落地字段，可作为关系关联键候选。`,
-    note: `来源：${attr.source}`
-  }));
+  // 关系落地修正候选：来自实现的候选字段白名单，且只保留与当前修正关系
+  // 目标对象身份兼容的字段（Inv08：「申请人 → 自然人」只允许自然人侧字段，
+  // 禁止 ticket_id / status / close_time 等工单自身字段）
+  const currentDomainImpl = domainImplementations.find((impl) => impl.id === currentImpl?.id);
+  const relationshipCandidates: CandidateFieldOption[] = selectedCorrectionRel
+    ? (currentDomainImpl?.relationshipCandidateFields ?? [])
+        .filter((candidate) => candidate.targetObjectId === selectedCorrectionRel.targetId)
+        .map((candidate) => ({
+          id: `rel-${candidate.field}`,
+          field: candidate.field,
+          label: candidate.label,
+          semanticType: candidate.sourceName,
+          semantics: candidate.semantics,
+          evidence: candidate.evidence ?? `「${candidate.label}」与「${selectedCorrectionRel.targetObject}」身份兼容。`,
+          note: `目标对象：${selectedCorrectionRel.targetObject}`
+        }))
+    : [];
 
   const handleConfirmCorrection = (selectedField: CandidateFieldOption) => {
     if (!currentImpl) return;
     const binding = bindings.find((item) => item.implementationId === currentImpl.id);
     if (!binding) return;
 
-    // 关系落地修正：targetName 约定「关系名 → 目标对象」，fromField 取 sourceField 的裸字段部分
+    // 关系落地修正：type 显式声明 RELATIONSHIP，targetObjectId 参与身份兼容校验（Inv08）
     if (selectedCorrectionRel) {
-      const relTargetName = `${selectedCorrectionRel.relationName} → ${selectedCorrectionRel.targetObject}`;
       const fromField =
         selectedCorrectionRel.sourceField.split('·').pop()?.trim() ?? selectedCorrectionRel.sourceField;
 
-      groundingService.applyCorrection({
+      const result = groundingService.applyCorrection({
         bindingId: binding.id,
-        targetName: relTargetName,
+        type: 'RELATIONSHIP',
+        targetName: selectedCorrectionRel.relationName,
+        targetObjectId: selectedCorrectionRel.targetId,
         fromField,
         toField: selectedField.field,
         reason: `关系落地修正：「${currentObject.name}」的「${selectedCorrectionRel.relationName}」关系应通过 ${selectedField.field} 关联「${selectedCorrectionRel.targetObject}」。`,
         evidence: currentObject.evidence.map((item) => item.id)
       });
 
+      if (result.ok === false) {
+        addToast?.('error', '修正未生效', GROUNDING_ERROR_LABELS[result.error]);
+        return;
+      }
+
       setIsCorrectionDrawerOpen(false);
       setSelectedCorrectionRel(null);
-      const correctionCount = groundingService
-        .listByObject(currentObject.id)
-        .filter(
-          (revision) => revision.bindingId === binding.id && revision.targetName === relTargetName
-        ).length;
       addToast?.(
         'success',
         '已生成新的 Grounding Revision',
-        `已将「${relTargetName}」关系落地字段修正为 ${selectedField.field}，Revision ${correctionCount} 当前生效。历史记录已完整保留。`
+        `已将「${result.revision.targetName}」关系落地字段修正为 ${selectedField.field}，历史记录已完整保留。`
       );
       return;
     }
 
     if (!selectedCorrectionAttr) return;
 
-    groundingService.applyCorrection({
+    const result = groundingService.applyCorrection({
       bindingId: binding.id,
+      type: 'ATTRIBUTE',
       targetName: selectedCorrectionAttr.name,
       fromField: selectedCorrectionAttr.field,
       toField: selectedField.field,
@@ -374,22 +401,31 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
       evidence: currentObject.evidence.map((item) => item.id)
     });
 
+    if (result.ok === false) {
+      addToast?.('error', '修正未生效', GROUNDING_ERROR_LABELS[result.error]);
+      return;
+    }
+
     setIsCorrectionDrawerOpen(false);
-    const correctionCount = groundingService
-      .listByObject(currentObject.id)
-      .filter(
-        (revision) => revision.bindingId === binding.id && revision.targetName === selectedCorrectionAttr.name
-      ).length;
     addToast?.(
       'success',
       '已生成新的 Grounding Revision',
-      `已将「${selectedCorrectionAttr.name}」数据字段修正为 ${selectedField.field}，Revision ${correctionCount} 当前生效。历史记录已完整保留。`
+      `已将「${selectedCorrectionAttr.name}」数据字段修正为 ${selectedField.field}，历史记录已完整保留。`
     );
   };
 
   const handleBack = () => {
     if (onBackToObjectsList) {
       onBackToObjectsList();
+    }
+  };
+
+  /** Top-down 发现入口：必须携带当前业务对象上下文（Inv07），禁止无上下文演示页 */
+  const handleDiscoverDataSupport = (candidateBindingId?: string) => {
+    if (onDiscoverDataSupport) {
+      onDiscoverDataSupport(currentObject.id, candidateBindingId);
+    } else {
+      addToast?.('info', '发现数据支撑', `已发起针对「${currentObject.name}」的数据支撑发现`);
     }
   };
 
@@ -960,10 +996,15 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
             </div>
             <button
               id="btn-navigate-revalidation"
-              onClick={onNavigateToRevalidation}
+              onClick={() =>
+                onNavigateToRevalidation?.(
+                  currentObject.id,
+                  bindings.find((binding) => binding.status === 'NEEDS_REVALIDATION')?.id
+                )
+              }
               className="shrink-0 px-3.5 py-1.5 rounded bg-white border border-[#FED7AA] hover:bg-[#FFF7ED] text-[#D97706] text-xs font-bold cursor-pointer transition-colors"
             >
-              进入数据支撑复核 →
+              处理复核 →
             </button>
           </div>
         )}
@@ -971,10 +1012,19 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
         {activeTab === 'data_support' && !currentImpl && (
           <div className="bg-white border border-[#E2E8F0] rounded-md p-8 text-center space-y-2">
             <Database className="w-8 h-8 text-[#94A3B8] mx-auto" />
-            <div className="text-sm font-semibold text-[#0F172A]">暂无正式数据实现</div>
+            <div className="text-sm font-semibold text-[#0F172A]">当前暂无数据实现</div>
             <p className="text-xs text-[#64748B] leading-relaxed">
-              「{currentObject.name}」尚未确认任何正式数据实现，可通过发现数据支撑自下而上登记候选实现。
+              可从当前业务对象出发，发现并确认能够承载该对象的数据实现。
             </p>
+            <div className="pt-1.5">
+              <button
+                id="btn-discover-data-support"
+                onClick={() => handleDiscoverDataSupport()}
+                className="px-3.5 py-1.5 rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
+              >
+                发现数据支撑
+              </button>
+            </div>
           </div>
         )}
 
@@ -1007,6 +1057,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                       {implementations.map((impl) => {
                         const isSelected = impl.id === selectedImplId;
                         const isMain = impl.role === '主要数据实现';
+                        const implBinding = bindingByImplId.get(impl.id);
                         return (
                           <button
                             key={impl.id}
@@ -1033,6 +1084,28 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                                     其他数据实现
                                   </span>
                                 )}
+                                {implBinding?.status === 'NEEDS_REVALIDATION' && (
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setIsSelectorOpen(false);
+                                      onNavigateToRevalidation?.(currentObject.id, implBinding.id);
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (event.key === 'Enter' || event.key === ' ') {
+                                        event.stopPropagation();
+                                        event.preventDefault();
+                                        setIsSelectorOpen(false);
+                                        onNavigateToRevalidation?.(currentObject.id, implBinding.id);
+                                      }
+                                    }}
+                                    className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#FFFBEB] text-[#92400E] border border-[#FDE68A] cursor-pointer hover:bg-[#FEF3C7]"
+                                  >
+                                    处理复核
+                                  </span>
+                                )}
                                 {isSelected && (
                                   <span className="text-[10px] text-[#166534] bg-[#F0FDF4] px-1.5 py-0.5 rounded border border-[#DCFCE7] font-medium">
                                     当前查看
@@ -1051,11 +1124,21 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                 </div>
 
                 {/* Sub-status line */}
-                <div className="flex items-center space-x-2 text-xs text-[#64748B] pt-0.5">
+                <div className="flex items-center flex-wrap gap-2 text-xs text-[#64748B] pt-0.5">
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#F1F5F9] text-[#475569] border border-[#E2E8F0]">
                     {currentImpl.role} · {currentImpl.status}
                   </span>
                   <span>适用范围：{currentImpl.scope}</span>
+                  {currentBinding?.status === 'NEEDS_REVALIDATION' && (
+                    <button
+                      id="btn-handle-revalidation"
+                      onClick={() => onNavigateToRevalidation?.(currentObject.id, currentBinding.id)}
+                      className="px-2 py-0.5 rounded bg-[#FFFBEB] border border-[#FDE68A] text-[#92400E] text-[11px] font-bold cursor-pointer hover:bg-[#FEF3C7] transition-colors"
+                      title="该实现待复核：确认继续使用、重新绑定或退休"
+                    >
+                      处理复核
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1110,15 +1193,23 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
 
                     {isContextMoreOpen && (
                       <div className="absolute right-0 mt-1.5 w-44 bg-white border border-[#E2E8F0] rounded-md shadow-lg py-1 z-40 text-xs animate-in fade-in zoom-in-95 duration-150">
-                        <button
-                          onClick={() => {
-                            setIsContextMoreOpen(false);
-                            setIsSetPrimaryModalOpen(true);
-                          }}
-                          className="w-full text-left px-3.5 py-2 hover:bg-[#F8FAFC] text-[#334155] transition-colors cursor-pointer"
-                        >
-                          设为主要数据实现
-                        </button>
+                        {currentBinding?.status === 'EFFECTIVE' && currentBinding.role !== 'PRIMARY' ? (
+                          <button
+                            onClick={() => {
+                              setIsContextMoreOpen(false);
+                              setIsSetPrimaryModalOpen(true);
+                            }}
+                            className="w-full text-left px-3.5 py-2 hover:bg-[#F8FAFC] text-[#334155] transition-colors cursor-pointer"
+                          >
+                            设为主要数据实现
+                          </button>
+                        ) : (
+                          <div className="px-3.5 py-2 text-[#94A3B8]" title="仅已生效且非主要的数据实现可设为主要">
+                            {currentBinding?.status === 'NEEDS_REVALIDATION'
+                              ? '待复核实现需先完成复核'
+                              : '当前已是主要数据实现'}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1562,16 +1653,11 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
 
                   <div className="pt-1">
                     <button
-                      onClick={() => {
-                        if (onFindDataWithObjectGoal) {
-                          onFindDataWithObjectGoal(currentObject.name);
-                        } else {
-                          addToast?.('info', '发现数据支撑', `已发起针对「${currentObject.name}」业务主体的语义数据资产发现与关联分析`);
-                        }
-                      }}
+                      id="btn-discover-more-data-support"
+                      onClick={() => handleDiscoverDataSupport()}
                       className="text-xs text-[#2563EB] hover:underline font-medium inline-flex items-center space-x-1 cursor-pointer"
                     >
-                      <span>发现更多数据</span>
+                      <span>发现更多数据支撑</span>
                       <span>→</span>
                     </button>
                   </div>
@@ -1643,12 +1729,14 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
         evidence={currentObject.evidence}
       />
 
-      {/* HISTORY DRAWER（共享组件：历史来自 Revision Store） */}
+      {/* HISTORY DRAWER（共享组件：三条修订生命周期分节，均来自领域 Store） */}
       <BusinessObjectHistoryDrawer
         isOpen={isHistoryDrawerOpen}
         onClose={() => setIsHistoryDrawerOpen(false)}
         objectName={currentObject.name}
         revisions={objectRevisions}
+        dataSupportRevisions={dataSupportRevisions}
+        groundingRevisions={groundingRevisions}
       />
 
       {/* KNOWLEDGE NETWORK CONTEXT DRAWER */}
@@ -1807,7 +1895,25 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
               <button
                 onClick={() => {
                   setIsSetPrimaryModalOpen(false);
-                  addToast?.('success', '已更新主要数据实现', `已将「${currentImpl.name}」设为业务对象详情默认基准参考实现`);
+                  // 真实领域写入：SET_PRIMARY 数据支撑修订 + 原主要实现自动降级（不改业务对象修订）
+                  if (!currentBinding) {
+                    addToast?.('error', '操作失败', '未找到当前数据实现的正式绑定');
+                    return;
+                  }
+                  const result = dataSupportService.setPrimary(currentBinding.id, { changedBy: '业务对象详情' });
+                  if (result.ok === false) {
+                    if (result.error === 'NOT_EFFECTIVE') {
+                      addToast?.('warning', '无法设为主要实现', '仅已生效的数据实现可以设为主要数据实现，待复核实现请先完成复核');
+                    } else {
+                      addToast?.('error', '操作失败', '未找到当前数据实现的正式绑定');
+                    }
+                    return;
+                  }
+                  addToast?.(
+                    'success',
+                    '已更新主要数据实现',
+                    `已将「${currentImpl.name}」设为主要数据实现${result.demotedBindingId ? '，原主要实现已降级为其他数据实现' : ''}，已记录数据支撑修订`
+                  );
                 }}
                 className="px-3.5 py-1.5 bg-[#2563EB] text-white text-xs font-medium rounded hover:bg-[#1D4ED8] transition-colors cursor-pointer shadow-xs"
               >
