@@ -1226,8 +1226,8 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                     }
                   >
                     <div className="space-y-3">
+                      {/* 实现名称只出现在 Context Strip 与 Inspector 选中项（§13 去重），此处仅保留技术名 */}
                       <div className="flex flex-wrap items-center gap-2.5">
-                        <span className="text-sm font-bold text-[#0F172A]">{currentImpl.name}</span>
                         <span className="font-mono text-xs text-[#64748B] bg-[#F8FAFC] px-2 py-0.5 rounded border border-[#E2E8F0]">
                           {currentImpl.techName}
                         </span>
@@ -1494,9 +1494,7 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
                           {currentImpl.extension && (
                             <div className="p-4 bg-white border border-[#EEF2F6] rounded-md space-y-3">
                               <div className="space-y-1 text-xs">
-                                <div className="text-[#334155] font-semibold flex items-center space-x-1.5">
-                                  <span>{currentImpl.name}</span>
-                                </div>
+                                {/* 宿主实现名不在此重复（§13 去重），依附关系由下方「依附实现」字段表达 */}
                                 <div className="text-[#2563EB] flex items-center space-x-2 pl-3">
                                   <span className="text-[#94A3B8]">└─</span>
                                   <span className="font-bold text-[#0F172A]">{currentImpl.extension.name}</span>
