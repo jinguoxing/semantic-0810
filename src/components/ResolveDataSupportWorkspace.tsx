@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useSyncExternalStore } from 'react';
 import {
-  ArrowLeft,
   Check,
   CheckCircle2,
   Database,
@@ -15,6 +14,14 @@ import {
   type DataImplementation,
   type DataSupportBinding
 } from '../domain/business-object';
+import {
+  BusinessObjectPageShell,
+  BusinessObjectDecisionLayout,
+  BusinessObjectSurface,
+  BusinessObjectSection,
+  BusinessObjectEmptyState,
+  BusinessObjectFactGrid
+} from './business-object/ui';
 
 export interface ResolveDataSupportWorkspaceProps {
   /** 当前业务对象（Top-down 必须携带对象上下文进入，禁止无上下文演示页） */
@@ -88,10 +95,13 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
 
   const [isScopeModalOpen, setIsScopeModalOpen] = useState(false);
 
-  const objectName = object?.name ?? businessObjectId;
-  const domain = object?.domain ?? '—';
-  const hasEffective = currentBindings.some((binding) => binding.status === 'EFFECTIVE');
-  const nextRole = hasEffective ? '其他数据实现' : '主要数据实现';
+  const handleBack = () => {
+    if (onBackToDetail) {
+      onBackToDetail(returnFocus);
+    } else {
+      onViewCurrentSupport?.();
+    }
+  };
 
   /** Top-down 确认：只确认当前选中的那一条候选绑定（TOP_DOWN_CONFIRM 数据支撑修订，不改业务对象修订） */
   const handleConfirm = () => {
@@ -103,7 +113,7 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
         isAlreadyEffective ? 'info' : 'error',
         isAlreadyEffective ? '数据支撑已是生效状态' : '确认未生效',
         isAlreadyEffective
-          ? `该数据实现已作为「${objectName}」的数据支撑正式生效，无需重复确认。`
+          ? `该数据实现已作为「${object?.name ?? businessObjectId}」的数据支撑正式生效，无需重复确认。`
           : CONFIRM_ERROR_LABELS[result.error]
       );
       return;
@@ -112,7 +122,7 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
     addToast?.(
       'success',
       '数据实现已建立',
-      `「${candidateImpl?.name ?? result.binding.implementationId}」已正式生效为「${objectName}」的${
+      `「${candidateImpl?.name ?? result.binding.implementationId}」已正式生效为「${object?.name ?? businessObjectId}」的${
         result.role === 'PRIMARY' ? '主要' : '其他'
       }数据实现（绑定修订 ${result.binding.revision}），已记录数据支撑修订，业务对象修订不受影响。`
     );
@@ -127,149 +137,131 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
         `已保留「${candidateImpl.name}」候选分析结果，未建立正式数据实现关系。`
       );
     }
-    if (onBackToDetail) {
-      onBackToDetail(returnFocus);
-    } else {
-      onViewCurrentSupport?.();
-    }
+    handleBack();
   };
 
-  const handleBack = () => {
-    if (onBackToDetail) {
-      onBackToDetail(returnFocus);
-    } else {
-      onViewCurrentSupport?.();
-    }
-  };
+  const objectName = object?.name ?? businessObjectId;
+  const domain = object?.domain ?? '—';
+  const hasEffective = currentBindings.some((binding) => binding.status === 'EFFECTIVE');
+  const nextRole = hasEffective ? '其他数据实现' : '主要数据实现';
 
   // 未找到对象：上下文无效时直接提示并返回（禁止退化成写死演示）
   if (!object) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#F8FAFC] p-8">
-        <div className="bg-white border border-[#E2E8F0] rounded-md p-8 text-center space-y-3 max-w-md">
-          <Database className="w-8 h-8 text-[#94A3B8] mx-auto" />
-          <div className="text-sm font-semibold text-[#0F172A]">未找到业务对象</div>
-          <p className="text-xs text-[#64748B] leading-relaxed">
-            发现数据支撑必须从具体业务对象进入（标识 {businessObjectId} 在领域存储中不存在）。
-          </p>
-          <button
-            onClick={handleBack}
-            className="px-3.5 py-1.5 rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
-          >
-            返回
-          </button>
-        </div>
+      <div className="flex-1 flex items-center justify-center bg-[#F7F9FC] p-8">
+        <BusinessObjectSurface variant="MAIN" padded={false} className="max-w-md">
+          <BusinessObjectEmptyState
+            icon={<Database className="w-5 h-5" />}
+            title="未找到业务对象"
+            description={`发现数据支撑必须从具体业务对象进入（标识 ${businessObjectId} 在领域存储中不存在）。`}
+            primaryAction={
+              <button
+                onClick={handleBack}
+                className="px-3.5 py-1.5 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
+              >
+                返回
+              </button>
+            }
+          />
+        </BusinessObjectSurface>
       </div>
     );
   }
 
+  // 四态判定（V2.2 §9）：
+  // - 已确认：两栏结果态（隐藏 Decision Inspector / 条件检查 / 本次将建立 / 确认 / 稍后处理）
+  // - 无候选：两栏空态（同上隐藏决策区，仅保留返回）
+  // - 候选未选中：三栏，Inspector 提示选择，不出现任何提前「通过」结论
+  // - 候选已选中：三栏决策工作台
+  const hasCandidates = candidates.length > 0;
+  const decisionVariant = hasCandidates ? 'THREE_COLUMN' : 'TWO_COLUMN';
+
   return (
-    <div className="flex-1 flex min-h-0 bg-[#F8FAFC] text-[#0F172A] font-sans antialiased relative select-none">
-      <main className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+    <BusinessObjectPageShell
+      breadcrumb={
+        <nav aria-label="Breadcrumb" className="flex items-center space-x-2 text-xs text-[#64748B]">
+          <button onClick={handleBack} className="hover:text-[#2563EB] transition-colors cursor-pointer">
+            业务语义
+          </button>
+          <span className="text-[#CBD5E1]">/</span>
+          <button onClick={handleBack} className="hover:text-[#2563EB] transition-colors cursor-pointer">
+            业务对象
+          </button>
+          <span className="text-[#CBD5E1]">/</span>
+          <button onClick={handleBack} className="hover:text-[#2563EB] transition-colors cursor-pointer">
+            {objectName}
+          </button>
+          <span className="text-[#CBD5E1]">/</span>
+          <span className="text-[#0F172A] font-medium">发现数据支撑</span>
+        </nav>
+      }
+      header={
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex items-center space-x-3 flex-wrap gap-y-1">
+              <h1 className="text-2xl font-bold text-[#0F172A] tracking-tight">发现数据支撑</h1>
+              <span className="text-xs text-[#64748B] font-mono">{businessObjectId}</span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] mr-1.5" />
+                已发布 · 正式修订 {object.currentRevision}
+              </span>
+            </div>
+            <p className="text-xs text-[#64748B]">
+              基于当前正式业务定义，确认能够真实承载「{objectName}」的数据实现。
+            </p>
+          </div>
 
-        {/* --------------------------------------------------------- */}
-        {/* HEADER AREA                                               */}
-        {/* --------------------------------------------------------- */}
-        <header className="bg-white border-b border-[#E2E8F0] px-6 lg:px-8 py-4 shrink-0">
-          <div className="max-w-7xl mx-auto space-y-3">
-
-            {/* Breadcrumb Navigation */}
-            <nav aria-label="Breadcrumb" className="flex items-center space-x-2 text-xs text-[#64748B]">
-              <button onClick={handleBack} className="hover:text-[#2563EB] transition-colors cursor-pointer">
-                业务语义
-              </button>
-              <span className="text-[#CBD5E1]">/</span>
-              <button onClick={handleBack} className="hover:text-[#2563EB] transition-colors cursor-pointer">
-                业务对象
-              </button>
-              <span className="text-[#CBD5E1]">/</span>
-              <button onClick={handleBack} className="hover:text-[#2563EB] transition-colors cursor-pointer">
-                {objectName}
-              </button>
-              <span className="text-[#CBD5E1]">/</span>
-              <span className="text-[#0F172A] font-medium">发现数据支撑</span>
-            </nav>
-
-            {/* Title Row & Action */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-3">
-                  <h1 className="text-2xl font-bold text-[#0F172A] tracking-tight">发现数据支撑</h1>
-                  <span className="text-xs text-[#64748B] font-mono">Resolve Data Support</span>
-                </div>
-                <p className="text-xs text-[#64748B]">
-                  基于当前正式业务定义，确认能够真实承载「{objectName}」的数据实现。
-                </p>
-                {/* Object Identification Line */}
-                <div className="flex items-center space-x-2.5 pt-1 text-xs">
-                  <span className="font-semibold text-[#0F172A]">{objectName}</span>
-                  <span className="text-[#64748B] font-mono text-[11px]">{businessObjectId}</span>
-                  <span className="text-[#CBD5E1]">·</span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] mr-1.5" />
-                    已发布 · 正式修订 {object.currentRevision}
+          {/* 决策仍在进行时才提供「稍后处理」；空态 / 已确认结果态隐藏 */}
+          {hasCandidates && !isConfirmed && (
+            <button
+              id="btn-handle-later"
+              onClick={handleBack}
+              className="shrink-0 px-3.5 py-1.5 rounded-md bg-white hover:bg-[#F8FAFC] text-[#334155] hover:text-[#0F172A] border border-[#E2E8F0] text-xs font-medium transition-colors cursor-pointer"
+            >
+              稍后处理
+            </button>
+          )}
+        </div>
+      }
+    >
+      <BusinessObjectDecisionLayout
+        variant={decisionVariant}
+        /* --------------------------------------------------------------- */
+        /* 左栏：当前业务对象及已有数据实现（上下文，决策期间固定）            */
+        /* --------------------------------------------------------------- */
+        context={
+          <BusinessObjectSurface variant="CONTEXT" padded={false} className="p-5 gap-6">
+            {/* 1. 当前业务对象 */}
+            <BusinessObjectSection divider title="当前业务对象" headingAs="h2">
+              <div className="space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-[#0F172A]">{objectName}</span>
+                  <span className="text-[10px] text-[#166534] bg-[#F0FDF4] border border-[#DCFCE7] px-1.5 py-0.2 rounded font-medium">
+                    已发布 · {domain}
                   </span>
                 </div>
-              </div>
+                <div className="text-[11px] text-[#64748B] font-mono">{businessObjectId}</div>
 
-              <div className="flex items-center space-x-3 shrink-0">
-                <button
-                  id="btn-handle-later"
-                  onClick={handleBack}
-                  className="px-3.5 py-1.5 rounded bg-white hover:bg-[#F8FAFC] text-[#334155] hover:text-[#0F172A] border border-[#E2E8F0] text-xs font-medium transition-colors cursor-pointer"
-                >
-                  稍后处理
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </header>
-
-        {/* --------------------------------------------------------- */}
-        {/* THREE-COLUMN DECISION WORKSPACE                           */}
-        {/* --------------------------------------------------------- */}
-        <div className="p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-            {/* ======================================================= */}
-            {/* LEFT COLUMN: 当前业务对象及已有数据实现                  */}
-            {/* ======================================================= */}
-            <section aria-label="当前业务对象及已有数据实现" className="lg:col-span-3 space-y-6">
-
-              {/* Part 1: 当前业务对象 */}
-              <div className="bg-white border border-[#E2E8F0] rounded-md p-5 shadow-2xs space-y-4">
-                <div className="border-b border-[#F1F5F9] pb-3 space-y-1">
-                  <h2 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">当前业务对象</h2>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-[#0F172A]">{objectName}</span>
-                    <span className="text-[10px] text-[#166534] bg-[#F0FDF4] border border-[#DCFCE7] px-1.5 py-0.2 rounded font-medium">
-                      已发布 · {domain}
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-[#64748B] font-mono">{businessObjectId}</div>
-                </div>
-
-                <div className="space-y-1 text-xs">
+                <div className="space-y-1 pt-1">
                   <div className="text-[#64748B] text-[11px] font-medium">业务定义</div>
                   <p className="text-[#334155] leading-relaxed">{object.definition}</p>
                 </div>
 
-                <div className="space-y-1 text-xs">
+                <div className="space-y-1">
                   <div className="text-[#64748B] text-[11px] font-medium">主体标识</div>
                   <div className="font-semibold text-[#0F172A] bg-[#F8FAFC] px-2 py-1 rounded border border-[#E2E8F0] inline-block font-mono text-[11px]">
                     {object.identity.name}
                   </div>
                 </div>
 
-                <div className="space-y-1 text-xs">
+                <div className="space-y-1">
                   <div className="text-[#64748B] text-[11px] font-medium">关键属性</div>
                   <div className="text-[#334155] leading-relaxed">
                     {object.attributes.map((attribute) => attribute.name).join(' · ') || '—'}
                   </div>
                 </div>
 
-                <div className="space-y-1.5 text-xs pt-1 border-t border-[#F1F5F9]">
+                <div className="space-y-1.5 pt-1 border-t border-[#EEF2F6]">
                   <div className="text-[#64748B] text-[11px] font-medium">核心关系</div>
                   <div className="space-y-1.5 text-[11px]">
                     {object.relationships.map((rel) => (
@@ -283,36 +275,33 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
                   </div>
                 </div>
               </div>
+            </BusinessObjectSection>
 
-              {/* Part 2: 当前数据实现 */}
-              <div className="bg-white border border-[#E2E8F0] rounded-md p-5 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between border-b border-[#F1F5F9] pb-2.5">
-                  <h2 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">当前数据实现</h2>
+            {/* 2. 当前数据实现 */}
+            <BusinessObjectSection title="当前数据实现" headingAs="h2">
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-[#0F172A] text-xs">
+                    {primaryEntry ? primaryEntry.impl.name : '（待确认）'}
+                  </div>
                   {primaryEntry && (
                     <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE]">
                       主要数据实现
                     </span>
                   )}
                 </div>
-
-                <div className="space-y-2 text-xs">
-                  <div className="font-bold text-[#0F172A] text-xs">
-                    {primaryEntry ? primaryEntry.impl.name : '（待确认）'}
+                <div className="space-y-1 text-[11px]">
+                  <div className="text-[#64748B]">适用范围：</div>
+                  <div className="text-[#334155] leading-relaxed">
+                    {primaryEntry ? primaryEntry.impl.scope : '当前暂无生效数据实现'}
                   </div>
-                  <div className="space-y-1 text-[#475569] text-[11px]">
-                    <div className="text-[#64748B]">适用范围：</div>
-                    <div className="text-[#334155] leading-relaxed">
-                      {primaryEntry ? primaryEntry.impl.scope : '当前暂无生效数据实现'}
-                    </div>
-                  </div>
-                  {currentImplementations.length > 1 && (
-                    <div className="text-[11px] text-[#64748B] pt-1 border-t border-[#F1F5F9]">
-                      其他数据实现：{currentImplementations.filter((entry) => entry !== primaryEntry).map((entry) => entry.impl.name).join('、')}
-                    </div>
-                  )}
                 </div>
-
-                <div className="pt-2 border-t border-[#F1F5F9]">
+                {currentImplementations.length > 1 && (
+                  <div className="text-[11px] text-[#64748B] pt-1 border-t border-[#EEF2F6]">
+                    其他数据实现：{currentImplementations.filter((entry) => entry !== primaryEntry).map((entry) => entry.impl.name).join('、')}
+                  </div>
+                )}
+                <div className="pt-2 border-t border-[#EEF2F6]">
                   <button
                     onClick={() => (onViewCurrentSupport ? onViewCurrentSupport() : handleBack())}
                     className="text-xs text-[#2563EB] hover:underline font-medium inline-flex items-center space-x-1 cursor-pointer"
@@ -322,77 +311,55 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
                   </button>
                 </div>
               </div>
+            </BusinessObjectSection>
+          </BusinessObjectSurface>
+        }
 
-            </section>
-
-            {/* ======================================================= */}
-            {/* MIDDLE COLUMN: 候选数据支撑分析                          */}
-            {/* ======================================================= */}
-            <section aria-label="数据支撑分析与候选确认" className="lg:col-span-6 space-y-6">
-
-              <div className="space-y-1">
-                <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">数据支撑分析</h2>
-                <p className="text-xs text-[#64748B]">
-                  Semovix 已完成相关数据检索和角色判断，当前只需要确认新的数据实现候选。
-                </p>
+        /* --------------------------------------------------------------- */
+        /* 中栏：候选确认主表面 / 空态 / 已确认结果态                          */
+        /* --------------------------------------------------------------- */
+        decision={
+          isConfirmed && confirmedBinding ? (
+            /* 已确认结果态（两栏）：只读结果 + 返回，无决策区（优先级最高，刚确认的绑定立即进入） */
+            <BusinessObjectSurface variant="MAIN" padded={false}>
+              <BusinessObjectEmptyState
+                icon={<CheckCircle2 className="w-5 h-5 text-[#16A34A]" />}
+                title="候选已确认生效"
+                description={`数据支撑已确认。「${dataSupportService.getImplementation(confirmedBinding.implementationId)?.name ?? confirmedBinding.implementationId}」已作为「${objectName}」的${
+                  confirmedBinding.role === 'PRIMARY' ? '主要' : '其他'
+                }数据实现正式生效（绑定修订 ${confirmedBinding.revision}），刷新页面后状态仍保持。`}
+                primaryAction={
+                  <button
+                    onClick={() => (onViewCurrentSupport ? onViewCurrentSupport() : handleBack())}
+                    className="px-3.5 py-1.5 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    查看当前数据支撑
+                  </button>
+                }
+              />
+              <div className="px-6 pb-6">
+                <div
+                  id="confirm-state-effective"
+                  className="w-full rounded-md bg-[#F0FDF4] border border-[#BBF7D0] text-[#15803D] text-xs font-medium flex items-center justify-center space-x-2 px-4 py-2.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>已确认生效 · {confirmedBinding.revision} · 刷新页面状态仍保持</span>
+                </div>
               </div>
-
-              {/* 无候选空状态：候选只出现在本工作区，确认后即进入正式数据支撑 */}
-              {candidates.length === 0 && !isConfirmed && (
-                <div id="empty-candidates-state" className="bg-white border border-[#E2E8F0] rounded-md p-8 text-center space-y-2">
-                  <Database className="w-8 h-8 text-[#94A3B8] mx-auto" />
-                  <div className="text-sm font-semibold text-[#0F172A]">当前没有新的候选数据支撑</div>
-                  <p className="text-xs text-[#64748B] leading-relaxed max-w-md mx-auto">
-                    「{objectName}」当前没有待确认的候选数据实现。已确认生效的数据实现可在业务对象详情的数据支撑视角中查看。
-                  </p>
-                  <div className="pt-1.5">
-                    <button
-                      onClick={handleBack}
-                      className="px-3.5 py-1.5 rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
-                    >
-                      返回业务对象详情
-                    </button>
+            </BusinessObjectSurface>
+          ) : hasCandidates && selectedCandidate && candidateImpl ? (
+            <BusinessObjectSurface variant="MAIN">
+              {/* 1. 决策问题 */}
+              <BusinessObjectSection divider>
+                <div className="space-y-2">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-[#2563EB]">
+                    需要你确认
                   </div>
-                </div>
-              )}
-
-              {/* 已确认状态：来自领域绑定，刷新页面后仍保持 */}
-              {candidates.length === 0 && isConfirmed && confirmedBinding && (
-                <div className="bg-white border border-[#E2E8F0] rounded-md p-8 text-center space-y-3">
-                  <CheckCircle2 className="w-8 h-8 text-[#16A34A] mx-auto" />
-                  <div className="text-sm font-semibold text-[#0F172A]">候选已确认生效</div>
-                  <p className="text-xs text-[#64748B] leading-relaxed max-w-md mx-auto">
-                    {`「${dataSupportService.getImplementation(confirmedBinding.implementationId)?.name ?? confirmedBinding.implementationId}」已作为「${objectName}」的${
-                      confirmedBinding.role === 'PRIMARY' ? '主要' : '其他'
-                    }数据实现正式生效（绑定修订 ${confirmedBinding.revision}），刷新页面后状态仍保持。`}
-                  </p>
-                  <div className="pt-1.5">
-                    <button
-                      onClick={() => (onViewCurrentSupport ? onViewCurrentSupport() : handleBack())}
-                      className="px-3.5 py-1.5 rounded bg-white border border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#2563EB] text-xs font-medium cursor-pointer transition-colors"
-                    >
-                      查看当前数据支撑
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* 候选确认决策区：一次只确认选中的一条候选绑定 */}
-              {candidates.length > 0 && selectedCandidate && candidateImpl && (
-                <div className="bg-white border border-[#E2E8F0] rounded-md p-6 shadow-2xs space-y-5">
-
-                  <div className="space-y-2 border-b border-[#F1F5F9] pb-4">
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-[#2563EB]">
-                      需要你确认
-                    </div>
-                    <h3 className="text-base font-bold text-[#0F172A] leading-snug">
-                      {`是否将「${candidateImpl.name}」作为「${objectName}」在${candidateImpl.scope}范围内的一套数据实现？`}
-                    </h3>
-                  </div>
-
-                  {/* 多候选切换：确认动作只作用于选中的绑定 */}
+                  <h2 className="text-base font-bold text-[#0F172A] leading-snug">
+                    {`是否将「${candidateImpl.name}」作为「${objectName}」在${candidateImpl.scope}范围内的一套数据实现？`}
+                  </h2>
                   {candidates.length > 1 && (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 pt-1">
                       {candidates.map((binding) => {
                         const impl = dataSupportService.getImplementation(binding.implementationId);
                         const isSelected = binding.id === selectedCandidate.id;
@@ -413,130 +380,160 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
                       })}
                     </div>
                   )}
-
-                  {/* Unified Candidate Surface */}
-                  <div className="p-4 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-bold text-[#0F172A]">{candidateImpl.name}</div>
-                        <div className="font-mono text-xs text-[#64748B] pt-0.5">{candidateImpl.warehouseTable}</div>
-                      </div>
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-white text-[#334155] border border-[#CBD5E1]">
-                        数据实现候选（{selectedCandidate.revision}）
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Candidate Facts: 记录主体 / 粒度 / 身份 / 范围 */}
-                  <div className="space-y-2.5">
-                    <div className="text-xs font-semibold text-[#0F172A]">候选成立事实</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="p-3 bg-white border border-[#E2E8F0] rounded space-y-1 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[#64748B] text-[11px]">记录主体</span>
-                          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">一致</span>
-                        </div>
-                        <div className="font-bold text-[#0F172A]">{objectName}</div>
-                        <p className="text-[#64748B] text-[11px] leading-relaxed pt-0.5">候选记录主体与正式业务对象定义一致。</p>
-                      </div>
-
-                      <div className="p-3 bg-white border border-[#E2E8F0] rounded space-y-1 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[#64748B] text-[11px]">记录粒度</span>
-                          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">一致</span>
-                        </div>
-                        <div className="font-bold text-[#0F172A]">{candidateImpl.granularity}</div>
-                        <p className="text-[#64748B] text-[11px] leading-relaxed pt-0.5">{candidateImpl.scopeRelationText}</p>
-                      </div>
-
-                      <div className="p-3 bg-white border border-[#E2E8F0] rounded space-y-1 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[#64748B] text-[11px]">实例身份</span>
-                          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">已核验</span>
-                        </div>
-                        <div className="font-bold text-[#0F172A]">{object.identity.name} · {candidateImpl.identity}</div>
-                        <p className="text-[#64748B] text-[11px] leading-relaxed pt-0.5">
-                          {candidateImpl.identity} 能够解释当前实现中的{objectName}实例身份。
-                        </p>
-                      </div>
-
-                      <div className="p-3 bg-white border border-[#E2E8F0] rounded space-y-1 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[#64748B] text-[11px]">适用范围</span>
-                          <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-[#F0FDF4] text-[#166534] border border-[#DCFCE7]">已明确</span>
-                        </div>
-                        <div className="font-bold text-[#0F172A]">{candidateImpl.scope}</div>
-                        <p className="text-[#64748B] text-[11px] leading-relaxed pt-0.5">
-                          该实现只覆盖上述范围，不代表{objectName}全部范围。
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Relationship with Existing Implementation */}
-                  <div className="pt-3 border-t border-[#F1F5F9] space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold text-[#0F172A]">与已有数据实现</div>
-                      {primaryEntry && (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-                          范围关系已识别
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-1">
-                        <div className="text-[#64748B] text-[11px]">已有实现：{primaryEntry ? primaryEntry.impl.name : '（暂无生效实现）'}</div>
-                        <div className="text-[#334155] leading-relaxed">
-                          {primaryEntry ? `范围：${primaryEntry.impl.scope}` : '当前对象尚无生效数据实现'}
-                        </div>
-                      </div>
-                      <div className="p-2.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded space-y-1">
-                        <div className="text-[#64748B] text-[11px]">新候选：{candidateImpl.name}</div>
-                        <div className="text-[#334155] leading-relaxed">范围：{candidateImpl.scope}</div>
-                      </div>
-                    </div>
-
-                    {primaryEntry && (
-                      <p className="text-xs text-[#64748B] leading-relaxed bg-[#FFFBEB]/40 p-2.5 rounded border border-[#FEF3C7]">
-                        本次确认只新增一套独立数据实现，不会合并数据、替换现有实现或改变主要数据实现。
-                      </p>
-                    )}
-                  </div>
-
                 </div>
-              )}
-            </section>
+              </BusinessObjectSection>
 
-            {/* ======================================================= */}
-            {/* RIGHT COLUMN: 数据实现条件与本次正式建立范围             */}
-            {/* ======================================================= */}
-            <section aria-label="数据实现条件与建立范围" className="lg:col-span-3 space-y-6">
+              {/* 2. 候选实现 */}
+              <BusinessObjectSection divider title="候选数据实现" headingId="candidate-implementation">
+                <div className="p-4 bg-[#F8FAFC] border border-[#EEF2F6] rounded-md space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-bold text-[#0F172A]">{candidateImpl.name}</div>
+                      <div className="font-mono text-xs text-[#64748B] pt-0.5">{candidateImpl.warehouseTable}</div>
+                    </div>
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-white text-[#334155] border border-[#CBD5E1]">
+                      数据实现候选（{selectedCandidate.revision}）
+                    </span>
+                  </div>
+                </div>
+              </BusinessObjectSection>
 
-              {/* Part 1: 数据实现条件 */}
-              <div className="bg-white border border-[#E2E8F0] rounded-md p-5 shadow-2xs space-y-3.5">
-                <h2 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider border-b border-[#F1F5F9] pb-2.5">
-                  数据实现条件
-                </h2>
+              {/* 3. 候选成立事实 */}
+              <BusinessObjectSection
+                divider
+                title="候选成立事实"
+                headingId="candidate-facts"
+                description="Semovix 已完成相关数据检索和角色判断，当前只需要确认新的数据实现候选。"
+              >
+                <div className="space-y-3">
+                  <BusinessObjectFactGrid
+                    columns={4}
+                    items={[
+                      {
+                        label: '记录主体',
+                        value: objectName,
+                        hint: '候选记录主体与正式业务对象定义一致。'
+                      },
+                      {
+                        label: '记录粒度',
+                        value: candidateImpl.granularity,
+                        hint: candidateImpl.scopeRelationText
+                      },
+                      {
+                        label: '实例身份',
+                        value: `${object.identity.name} · ${candidateImpl.identity}`,
+                        mono: true,
+                        hint: `${candidateImpl.identity} 能够解释当前实现中的${objectName}实例身份。`
+                      },
+                      {
+                        label: '适用范围',
+                        value: candidateImpl.scope,
+                        hint: `该实现只覆盖上述范围，不代表${objectName}全部范围。`
+                      }
+                    ]}
+                  />
+                </div>
+              </BusinessObjectSection>
 
+              {/* 4. 与已有数据实现 */}
+              <BusinessObjectSection title="与已有数据实现" headingId="candidate-scope-relation">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-md space-y-1">
+                      <div className="text-[#64748B] text-[11px]">已有实现：{primaryEntry ? primaryEntry.impl.name : '（暂无生效实现）'}</div>
+                      <div className="text-[#334155] leading-relaxed">
+                        {primaryEntry ? `范围：${primaryEntry.impl.scope}` : '当前对象尚无生效数据实现'}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-[#F8FAFC] border border-[#EEF2F6] rounded-md space-y-1">
+                      <div className="text-[#64748B] text-[11px]">新候选：{candidateImpl.name}</div>
+                      <div className="text-[#334155] leading-relaxed">范围：{candidateImpl.scope}</div>
+                    </div>
+                  </div>
+
+                  {primaryEntry && (
+                    <p className="text-xs text-[#64748B] leading-relaxed bg-[#FFFBEB] border border-[#FDE68A] rounded-md p-2.5">
+                      本次确认只新增一套独立数据实现，不会合并数据、替换现有实现或改变主要数据实现。
+                    </p>
+                  )}
+                </div>
+              </BusinessObjectSection>
+            </BusinessObjectSurface>
+          ) : hasCandidates && !selectedCandidate ? (
+            /* 候选未选中：中栏只呈现候选清单，不出现任何「通过」结论 */
+            <BusinessObjectSurface variant="MAIN">
+              <BusinessObjectSection title="候选数据支撑" headingId="candidate-list">
+                <div className="space-y-2">
+                  {candidates.map((binding) => {
+                    const impl = dataSupportService.getImplementation(binding.implementationId);
+                    return (
+                      <button
+                        key={binding.id}
+                        id={`candidate-${binding.id}`}
+                        onClick={() => setSelectedCandidateId(binding.id)}
+                        className="w-full text-left p-3.5 bg-[#F8FAFC] hover:bg-[#F1F5F9] border border-[#EEF2F6] rounded-md transition-colors cursor-pointer flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-[#0F172A]">{impl?.name ?? binding.implementationId}</div>
+                          <div className="text-[11px] text-[#64748B] pt-0.5">适用范围：{impl?.scope ?? '—'}</div>
+                        </div>
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-white text-[#334155] border border-[#CBD5E1] shrink-0">
+                          数据实现候选（{binding.revision}）
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </BusinessObjectSection>
+            </BusinessObjectSurface>
+          ) : (
+            /* 无候选空态（两栏）：不透出处理中动作与「通过」结果 */
+            <BusinessObjectSurface variant="MAIN" padded={false}>
+              <div id="empty-candidates-state">
+                <BusinessObjectEmptyState
+                  icon={<Database className="w-5 h-5" />}
+                  title="当前没有新的候选数据支撑"
+                  description={`「${objectName}」当前没有待确认的候选数据实现。已确认生效的数据实现可在业务对象详情的数据支撑视角中查看。`}
+                  primaryAction={
+                    <button
+                      onClick={handleBack}
+                      className="px-3.5 py-1.5 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      返回业务对象详情
+                    </button>
+                  }
+                />
+              </div>
+            </BusinessObjectSurface>
+          )
+        }
+
+        /* --------------------------------------------------------------- */
+        /* 右栏：Decision Inspector（仅候选决策态呈现）                       */
+        /* --------------------------------------------------------------- */
+        inspector={
+          hasCandidates && !isConfirmed && selectedCandidate && candidateImpl ? (
+            <BusinessObjectSurface variant="INSPECTOR" padded={false} className="p-5 gap-6">
+              {/* 1. 数据实现条件（选中候选后才有结论） */}
+              <BusinessObjectSection divider title="数据实现条件" headingAs="h2">
                 <div className="space-y-2.5 text-xs">
                   <div className="flex items-center justify-between py-1 border-b border-[#F8FAFC]">
                     <span className="text-[#64748B]">主体</span>
-                    <span className="text-[#166534] font-medium flex items-center space-x-1">
+                    <span className="text-[#15803D] font-medium flex items-center space-x-1">
                       <Check className="w-3.5 h-3.5 text-[#16A34A]" />
                       <span>一致</span>
                     </span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-[#F8FAFC]">
                     <span className="text-[#64748B]">粒度</span>
-                    <span className="text-[#166534] font-medium flex items-center space-x-1">
+                    <span className="text-[#15803D] font-medium flex items-center space-x-1">
                       <Check className="w-3.5 h-3.5 text-[#16A34A]" />
                       <span>一致</span>
                     </span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-[#F8FAFC]">
                     <span className="text-[#64748B]">身份</span>
-                    <span className="text-[#166534] font-medium flex items-center space-x-1">
+                    <span className="text-[#15803D] font-medium flex items-center space-x-1">
                       <Check className="w-3.5 h-3.5 text-[#16A34A]" />
                       <span>已核验</span>
                     </span>
@@ -544,17 +541,17 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
                   <div className="space-y-0.5 py-1 border-b border-[#F8FAFC]">
                     <div className="flex items-center justify-between">
                       <span className="text-[#64748B]">适用范围</span>
-                      <span className="text-[#166534] font-medium flex items-center space-x-1">
+                      <span className="text-[#15803D] font-medium flex items-center space-x-1">
                         <Check className="w-3.5 h-3.5 text-[#16A34A]" />
                         <span>已明确</span>
                       </span>
                     </div>
-                    <div className="text-[11px] text-[#64748B] text-right">{candidateImpl?.scope ?? '—'}</div>
+                    <div className="text-[11px] text-[#64748B] text-right">{candidateImpl.scope}</div>
                   </div>
                   <div className="space-y-0.5 py-1">
                     <div className="flex items-center justify-between">
                       <span className="text-[#64748B]">与现有实现</span>
-                      <span className="text-[#166534] font-medium flex items-center space-x-1">
+                      <span className="text-[#15803D] font-medium flex items-center space-x-1">
                         <Check className="w-3.5 h-3.5 text-[#16A34A]" />
                         <span>关系已识别</span>
                       </span>
@@ -564,26 +561,22 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
                     </div>
                   </div>
                 </div>
-              </div>
+              </BusinessObjectSection>
 
-              {/* Part 2: 本次将建立 */}
-              <div className="bg-white border border-[#E2E8F0] rounded-md p-5 shadow-2xs space-y-4">
-                <h2 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider border-b border-[#F1F5F9] pb-2.5">
-                  本次将建立
-                </h2>
-
+              {/* 2. 本次将建立 */}
+              <BusinessObjectSection divider title="本次将建立" headingAs="h2">
                 <div className="space-y-3 text-xs">
                   <div className="space-y-1">
                     <div className="text-[#64748B] text-[11px]">新增数据实现</div>
-                    <div className="font-bold text-[#0F172A]">{candidateImpl?.name ?? '（待选择候选）'}</div>
+                    <div className="font-bold text-[#0F172A]">{candidateImpl.name}</div>
                     <div className="text-[11px] text-[#475569] space-y-0.5">
                       <div>业务对象：{objectName}</div>
-                      <div>适用范围：{candidateImpl?.scope ?? '—'}</div>
+                      <div>适用范围：{candidateImpl.scope}</div>
                       <div>正式角色：{nextRole}</div>
                     </div>
                   </div>
 
-                  {candidateImpl?.extension && (
+                  {candidateImpl.extension && (
                     <>
                       <div className="h-px bg-[#F1F5F9]" />
                       <div className="space-y-1">
@@ -594,9 +587,7 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
                     </>
                   )}
 
-                  <div className="h-px bg-[#F1F5F9]" />
-
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 pt-1 border-t border-[#EEF2F6]">
                     <div className="text-[#64748B] text-[11px]">关键语义对应</div>
                     <p className="text-[11px] text-[#475569] leading-relaxed">
                       本次范围内已核验的关键属性与关系对应，将随当前数据实现正式建立。
@@ -610,72 +601,46 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
                     </button>
                   </div>
                 </div>
+              </BusinessObjectSection>
 
-                <div className="pt-2 border-t border-[#F1F5F9]">
-                  <p className="text-[11px] text-[#64748B] leading-relaxed">
-                    确认后不会替换现有实现，也不会自动改变主要数据实现。
-                  </p>
+              {/* 3. 决策动作 */}
+              <div className="space-y-2.5">
+                <button
+                  id="btn-confirm-data-support"
+                  onClick={handleConfirm}
+                  className="w-full h-10 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer"
+                >
+                  <span>确认数据支撑</span>
+                </button>
+                <p className="text-[11px] text-[#64748B] text-center leading-relaxed">
+                  将新增当前数据实现（候选绑定 {selectedCandidate.revision} → 生效），并按本次范围建立已核验的属性、关系对应。
+                </p>
+                <div className="text-center pt-1">
+                  <button
+                    id="btn-dismiss-candidate"
+                    onClick={handleDismiss}
+                    className="text-xs text-[#64748B] hover:text-[#0F172A] hover:underline cursor-pointer"
+                  >
+                    暂不采用此数据实现
+                  </button>
                 </div>
-
-                {/* Action Buttons */}
-                <div className="pt-3 border-t border-[#F1F5F9] space-y-2.5">
-                  {candidates.length > 0 && selectedCandidate ? (
-                    <>
-                      <button
-                        id="btn-confirm-data-support"
-                        onClick={handleConfirm}
-                        className="w-full h-10 rounded bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer shadow-xs"
-                      >
-                        <span>确认数据支撑</span>
-                      </button>
-                      <p className="text-[11px] text-[#64748B] text-center leading-relaxed">
-                        将新增当前数据实现（候选绑定 {selectedCandidate.revision} → 生效），并按本次范围建立已核验的属性、关系对应。
-                      </p>
-                      <div className="text-center pt-1">
-                        <button
-                          id="btn-dismiss-candidate"
-                          onClick={handleDismiss}
-                          className="text-xs text-[#64748B] hover:text-[#0F172A] hover:underline cursor-pointer"
-                        >
-                          暂不采用此数据实现
-                        </button>
-                      </div>
-                    </>
-                  ) : isConfirmed && confirmedBinding ? (
-                    <>
-                      <div
-                        id="confirm-state-effective"
-                        className="w-full h-10 rounded bg-[#ECFDF5] border border-[#A7F3D0] text-[#059669] text-xs font-medium flex items-center justify-center space-x-2"
-                      >
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>已确认生效 · {confirmedBinding.revision} · 刷新页面状态仍保持</span>
-                      </div>
-                      <button
-                        onClick={() => (onViewCurrentSupport ? onViewCurrentSupport() : handleBack())}
-                        className="w-full h-10 rounded bg-white border border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#2563EB] text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer"
-                      >
-                        <span>查看当前数据支撑</span>
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={handleBack}
-                      className="w-full h-10 rounded bg-white border border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#2563EB] text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer"
-                    >
-                      <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>返回业务对象详情</span>
-                    </button>
-                  )}
-                </div>
-
+                <p className="text-[11px] text-[#94A3B8] text-center leading-relaxed pt-1">
+                  确认后不会替换现有实现，也不会自动改变主要数据实现。
+                </p>
               </div>
-
-            </section>
-
-          </div>
-        </div>
-
-      </main>
+            </BusinessObjectSurface>
+          ) : hasCandidates && !isConfirmed && !selectedCandidate ? (
+            /* 候选未选中：Inspector 只提示选择，不出现任何提前「通过」结论 */
+            <BusinessObjectSurface variant="INSPECTOR" padded={false}>
+              <BusinessObjectEmptyState
+                icon={<Database className="w-5 h-5" />}
+                title="请选择一个候选数据支撑"
+                description="选中左侧候选后，将在此呈现数据实现条件与本次将建立的范围。"
+              />
+            </BusinessObjectSurface>
+          ) : undefined
+        }
+      />
 
       {/* ========================================================= */}
       {/* SCOPE DETAILS MODAL（本次范围来自候选实现的落地数据）        */}
@@ -785,6 +750,6 @@ export const ResolveDataSupportWorkspace: React.FC<ResolveDataSupportWorkspacePr
         </div>
       )}
 
-    </div>
+    </BusinessObjectPageShell>
   );
 };

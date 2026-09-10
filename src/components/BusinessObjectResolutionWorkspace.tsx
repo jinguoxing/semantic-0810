@@ -1,6 +1,5 @@
 import React, { useState, useSyncExternalStore } from 'react';
 import {
-  ArrowLeft,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -19,6 +18,13 @@ import {
   getVersion,
   type BusinessObject
 } from '../domain/business-object';
+import {
+  BusinessObjectPageShell,
+  BusinessObjectDecisionLayout,
+  BusinessObjectSurface,
+  BusinessObjectSection,
+  BusinessObjectEmptyState
+} from './business-object/ui';
 
 export interface BusinessObjectResolutionWorkspaceProps {
   /** Bottom-up 入口登记的任务 ID（入口必须携带来源上下文，禁止无上下文演示） */
@@ -163,235 +169,233 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
   // ---------------------------------------------------------
   if (!resolutionContext) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#F8FAFC] p-8">
-        <div className="bg-white border border-[#E2E8F0] rounded-md p-8 text-center space-y-3 max-w-md">
-          <Database className="w-8 h-8 text-[#94A3B8] mx-auto" />
-          <div className="text-sm font-semibold text-[#0F172A]">未找到对齐任务上下文</div>
-          <p className="text-xs text-[#64748B] leading-relaxed">
-            业务对象对齐必须从数据资产、数据语义或任务入口进入并携带来源上下文（任务 {taskId} 不存在）。
-          </p>
-          <button
-            onClick={returnToOrigin}
-            className="px-3.5 py-1.5 rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
-          >
-            返回
-          </button>
-        </div>
+      <div className="flex-1 flex items-center justify-center bg-[#F7F9FC] p-8">
+        <BusinessObjectSurface variant="MAIN" padded={false} className="max-w-md">
+          <BusinessObjectEmptyState
+            icon={<Database className="w-5 h-5" />}
+            title="未找到对齐任务上下文"
+            description={`业务对象对齐必须从数据资产、数据语义或任务入口进入并携带来源上下文（任务 ${taskId} 不存在）。`}
+            primaryAction={
+              <button
+                onClick={returnToOrigin}
+                className="px-3.5 py-1.5 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
+              >
+                返回
+              </button>
+            }
+          />
+        </BusinessObjectSurface>
       </div>
     );
   }
 
   if (resolutionContext.status === 'COMPLETED') {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#F8FAFC] p-8">
-        <div className="bg-white border border-[#E2E8F0] rounded-md p-8 text-center space-y-3 max-w-md">
-          <CheckCircle2 className="w-8 h-8 text-[#16A34A] mx-auto" />
-          <div className="text-sm font-semibold text-[#0F172A]">对齐任务已完成</div>
-          <p className="text-xs text-[#64748B] leading-relaxed">
-            {`「${sourceName}」的业务对象对齐任务（${resolutionContext.taskId}）已完成，数据支撑修订已记录至对应业务对象。`}
-          </p>
-          <button
-            onClick={returnToOrigin}
-            className="px-3.5 py-1.5 rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
-          >
-            返回原上下文
-          </button>
-        </div>
+      <div className="flex-1 flex items-center justify-center bg-[#F7F9FC] p-8">
+        <BusinessObjectSurface variant="MAIN" padded={false} className="max-w-md">
+          <BusinessObjectEmptyState
+            icon={<CheckCircle2 className="w-5 h-5 text-[#16A34A]" />}
+            title="对齐任务已完成"
+            description={`「${sourceName}」的业务对象对齐任务（${resolutionContext.taskId}）已完成，数据支撑修订已记录至对应业务对象。`}
+            primaryAction={
+              <button
+                onClick={returnToOrigin}
+                className="px-3.5 py-1.5 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
+              >
+                返回原上下文
+              </button>
+            }
+          />
+        </BusinessObjectSurface>
       </div>
     );
   }
 
   if (resolutionContext.status === 'CANCELLED') {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#F8FAFC] p-8">
-        <div className="bg-white border border-[#E2E8F0] rounded-md p-8 text-center space-y-3 max-w-md">
-          <Info className="w-8 h-8 text-[#94A3B8] mx-auto" />
-          <div className="text-sm font-semibold text-[#0F172A]">对齐任务已取消</div>
-          <p className="text-xs text-[#64748B] leading-relaxed">
-            {`「${sourceName}」的对齐任务（${resolutionContext.taskId}）已标记为本轮不建立对象关联。`}
-          </p>
-          <button
-            onClick={returnToOrigin}
-            className="px-3.5 py-1.5 rounded bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
-          >
-            返回原上下文
-          </button>
-        </div>
+      <div className="flex-1 flex items-center justify-center bg-[#F7F9FC] p-8">
+        <BusinessObjectSurface variant="MAIN" padded={false} className="max-w-md">
+          <BusinessObjectEmptyState
+            icon={<Info className="w-5 h-5" />}
+            title="对齐任务已取消"
+            description={`「${sourceName}」的对齐任务（${resolutionContext.taskId}）已标记为本轮不建立对象关联。`}
+            primaryAction={
+              <button
+                onClick={returnToOrigin}
+                className="px-3.5 py-1.5 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
+              >
+                返回原上下文
+              </button>
+            }
+          />
+        </BusinessObjectSurface>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex min-h-0 bg-[#F8FAFC] text-[#0F172A] font-sans antialiased relative select-none">
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#F8FAFC]">
-
-        {/* ======================================================= */}
-        {/* PAGE HEADER                                              */}
-        {/* ======================================================= */}
-        <header className="bg-white border-b border-[#E2E8F0] px-8 py-4 shrink-0">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1.5 min-w-0">
-              <nav className="flex items-center space-x-2 text-xs text-[#64748B]" aria-label="Breadcrumb">
-                <button onClick={returnToOrigin} className="hover:text-[#2563EB] transition-colors cursor-pointer">
-                  数据语义
-                </button>
-                <span className="text-[#CBD5E1]">/</span>
-                <span className="text-[#475569] font-medium truncate max-w-[200px]">{sourceName}</span>
-                <span className="text-[#CBD5E1]">/</span>
-                <span className="text-[#0F172A] font-semibold">业务对象对齐</span>
-              </nav>
-
-              <div className="flex items-baseline space-x-3 pt-0.5">
-                <h1 className="text-xl font-bold text-[#0F172A] tracking-tight">业务对象对齐</h1>
-                <span className="text-xs font-medium text-[#94A3B8] tracking-normal font-sans">
-                  Business Object Resolution
-                </span>
-              </div>
-
-              <p className="text-xs text-[#64748B] max-w-3xl">
-                根据当前有效数据语义，确认这份数据应采用哪个正式业务对象定义。
-              </p>
-
-              {/* Source Badges */}
-              <div className="flex items-center space-x-3 pt-2 flex-wrap gap-y-1.5">
-                <div className="flex items-center space-x-1.5 text-xs text-[#334155] font-semibold">
-                  <TableIcon className="w-3.5 h-3.5 text-[#64748B]" />
-                  <span>{sourceName}</span>
-                </div>
-                <span className="text-[#CBD5E1]">·</span>
-                <span className="font-mono text-xs text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0]">
-                  {resolutionContext.dataAsset.id}
-                </span>
-                {resolutionContext.semanticSource && (
-                  <>
-                    <span className="text-[#CBD5E1]">·</span>
-                    <span className="font-mono text-xs text-[#64748B]">
-                      来源版本 {resolutionContext.semanticSource.semanticRevision}
-                    </span>
-                  </>
-                )}
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
-                  数据语义已确认
-                </span>
-                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">
-                  <Info className="w-3 h-3" />
-                  <span>
-                    对齐任务 {resolutionContext.taskId} · {resolutionContext.status === 'POSTPONED' ? '稍后处理中，可继续确认' : '进行中'} · 完成后返回原上下文
-                  </span>
-                </span>
-              </div>
+    <BusinessObjectPageShell
+      breadcrumb={
+        <nav aria-label="Breadcrumb" className="flex items-center space-x-2 text-xs text-[#64748B]">
+          <button onClick={returnToOrigin} className="hover:text-[#2563EB] transition-colors cursor-pointer">
+            数据语义
+          </button>
+          <span className="text-[#CBD5E1]">/</span>
+          <span className="text-[#475569] font-medium truncate max-w-[200px]">{sourceName}</span>
+          <span className="text-[#CBD5E1]">/</span>
+          <span className="text-[#0F172A] font-medium">业务对象对齐</span>
+        </nav>
+      }
+      header={
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex items-center space-x-3 flex-wrap gap-y-1">
+              <h1 className="text-2xl font-bold text-[#0F172A] tracking-tight">业务对象对齐</h1>
+              <span className="text-xs text-[#64748B] font-mono">Business Object Resolution</span>
             </div>
+            <p className="text-xs text-[#64748B]">
+              根据当前有效数据语义，确认这份数据应采用哪个正式业务对象定义。
+            </p>
 
-            <div className="flex items-center space-x-3 shrink-0 pt-1">
-              <button
-                id="btn-postpone-resolution"
-                onClick={handlePostponeClick}
-                className="px-3.5 py-1.5 text-xs font-medium text-[#475569] hover:text-[#0F172A] bg-white hover:bg-[#F1F5F9] border border-[#CBD5E1] rounded-md transition-colors cursor-pointer"
-              >
-                稍后处理
-              </button>
+            {/* Source Badges */}
+            <div className="flex items-center space-x-3 pt-1.5 flex-wrap gap-y-1.5">
+              <div className="flex items-center space-x-1.5 text-xs text-[#334155] font-semibold">
+                <TableIcon className="w-3.5 h-3.5 text-[#64748B]" />
+                <span>{sourceName}</span>
+              </div>
+              <span className="text-[#CBD5E1]">·</span>
+              <span className="font-mono text-xs text-[#64748B] bg-[#F1F5F9] px-2 py-0.5 rounded border border-[#E2E8F0]">
+                {resolutionContext.dataAsset.id}
+              </span>
+              {resolutionContext.semanticSource && (
+                <>
+                  <span className="text-[#CBD5E1]">·</span>
+                  <span className="font-mono text-xs text-[#64748B]">
+                    来源版本 {resolutionContext.semanticSource.semanticRevision}
+                  </span>
+                </>
+              )}
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
+                数据语义已确认
+              </span>
+              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">
+                <Info className="w-3 h-3" />
+                <span>
+                  对齐任务 {resolutionContext.taskId} · {resolutionContext.status === 'POSTPONED' ? '稍后处理中，可继续确认' : '进行中'} · 完成后返回原上下文
+                </span>
+              </span>
             </div>
           </div>
-        </header>
 
-        {/* ======================================================= */}
-        {/* THREE-COLUMN DECISION WORKSPACE                         */}
-        {/* ======================================================= */}
-        <div className="flex-1 flex min-h-0 overflow-hidden">
-
-          {/* ===================================================== */}
-          {/* LEFT COLUMN: 当前数据 ~24%                            */}
-          {/* ===================================================== */}
-          <section className="w-[24%] min-w-[280px] max-w-[340px] bg-white border-r border-[#E2E8F0] flex flex-col min-h-0 overflow-y-auto">
-            <div className="p-6 space-y-6 flex-1">
-              <div className="space-y-1 border-b border-[#F1F5F9] pb-4">
+          <div className="flex items-center space-x-2 shrink-0">
+            <button
+              id="btn-postpone-resolution"
+              onClick={handlePostponeClick}
+              className="px-3.5 py-1.5 rounded-md bg-white hover:bg-[#F8FAFC] text-[#334155] hover:text-[#0F172A] border border-[#E2E8F0] text-xs font-medium transition-colors cursor-pointer"
+            >
+              稍后处理
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <BusinessObjectDecisionLayout
+        variant="THREE_COLUMN"
+        /* --------------------------------------------------------------- */
+        /* 左栏：当前数据上下文（决策期间固定）                                */
+        /* --------------------------------------------------------------- */
+        context={
+          <BusinessObjectSurface variant="CONTEXT" padded={false} className="p-5 gap-6">
+            {/* 1. 当前数据 */}
+            <BusinessObjectSection divider title="当前数据" headingAs="h2">
+              <div className="space-y-3 text-xs">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">当前数据</h2>
+                  <span className="text-sm font-bold text-[#0F172A]">{sourceName}</span>
                   <span className="text-[11px] font-medium text-[#64748B] bg-[#F8FAFC] px-1.5 py-0.5 rounded border border-[#E2E8F0]">
                     {resolutionContext.sourceType === 'DATA_ASSET' ? '数据资产' : resolutionContext.sourceType === 'DATA_SEMANTICS' ? '数据语义' : '任务'}
                   </span>
                 </div>
-                <div className="pt-1">
-                  <div className="text-xs font-semibold text-[#1E293B]">{sourceName}</div>
-                  <div
-                    className="font-mono text-[11px] text-[#64748B] truncate mt-0.5"
-                    title={resolutionContext.dataAsset.techName ?? resolutionContext.dataAsset.id}
-                  >
-                    {resolutionContext.dataAsset.techName ?? resolutionContext.dataAsset.id}
+                <div
+                  className="font-mono text-[11px] text-[#64748B] truncate"
+                  title={resolutionContext.dataAsset.techName ?? resolutionContext.dataAsset.id}
+                >
+                  {resolutionContext.dataAsset.techName ?? resolutionContext.dataAsset.id}
+                </div>
+
+                <dl className="space-y-3 pt-1">
+                  {resolutionContext.semanticSource ? (
+                    <div className="space-y-0.5">
+                      <dt className="text-[#64748B] text-[11px] font-medium">语义来源</dt>
+                      <dd className="text-[#0F172A] font-medium font-mono text-[11px] bg-[#F1F5F9] px-1.5 py-0.5 rounded inline-block">
+                        {resolutionContext.semanticSource.semanticId} @ {resolutionContext.semanticSource.semanticRevision}
+                      </dd>
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      <dt className="text-[#64748B] text-[11px] font-medium">数据资产目录</dt>
+                      <dd className="text-[#0F172A] font-medium font-mono text-[11px] bg-[#F1F5F9] px-1.5 py-0.5 rounded inline-block">
+                        {resolutionContext.dataAsset.id}
+                      </dd>
+                    </div>
+                  )}
+                  <div className="space-y-0.5">
+                    <dt className="text-[#64748B] text-[11px] font-medium">语义状态</dt>
+                    <dd className="text-[#0F172A] font-medium">已确认（进入对齐前完成）</dd>
                   </div>
+                  <div className="space-y-0.5">
+                    <dt className="text-[#64748B] text-[11px] font-medium">对齐任务</dt>
+                    <dd className="text-[#0F172A] font-medium">
+                      {resolutionContext.taskId}（{resolutionContext.status === 'POSTPONED' ? '稍后处理中' : '进行中'}）
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            </BusinessObjectSection>
+
+            {/* 旧版来源只读警示 */}
+            {isMigrationReadOnly && (
+              <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-md p-3 flex items-start space-x-2">
+                <Info className="w-4 h-4 text-[#DC2626] shrink-0 mt-0.5" />
+                <div className="text-[11px] text-[#991B1B] leading-relaxed">
+                  <div className="font-bold">旧版来源（只读保留）</div>
+                  <p className="mt-0.5">{resolutionContext.migrationWarning}</p>
                 </div>
               </div>
+            )}
 
-              {isMigrationReadOnly && (
-                <div className="bg-[#FEF2F2] border border-[#FECACA] rounded-lg p-3 flex items-start space-x-2">
-                  <Info className="w-4 h-4 text-[#DC2626] shrink-0 mt-0.5" />
-                  <div className="text-[11px] text-[#991B1B] leading-relaxed">
-                    <div className="font-bold">旧版来源（只读保留）</div>
-                    <p className="mt-0.5">{resolutionContext.migrationWarning}</p>
-                  </div>
-                </div>
-              )}
-
-              <dl className="space-y-3.5 text-xs">
-                {resolutionContext.semanticSource ? (
-                  <div className="space-y-0.5">
-                    <dt className="text-[#64748B] font-medium">语义来源</dt>
-                    <dd className="text-[#0F172A] font-medium font-mono text-[11px] bg-[#F1F5F9] px-1.5 py-0.5 rounded inline-block">
-                      {resolutionContext.semanticSource.semanticId} @ {resolutionContext.semanticSource.semanticRevision}
-                    </dd>
-                  </div>
-                ) : (
-                  <div className="space-y-0.5">
-                    <dt className="text-[#64748B] font-medium">数据资产目录</dt>
-                    <dd className="text-[#0F172A] font-medium font-mono text-[11px] bg-[#F1F5F9] px-1.5 py-0.5 rounded inline-block">
-                      {resolutionContext.dataAsset.id}
-                    </dd>
-                  </div>
-                )}
-                <div className="space-y-0.5">
-                  <dt className="text-[#64748B] font-medium">语义状态</dt>
-                  <dd className="text-[#0F172A] font-medium">已确认（进入对齐前完成）</dd>
-                </div>
-                <div className="space-y-0.5">
-                  <dt className="text-[#64748B] font-medium">对齐任务</dt>
-                  <dd className="text-[#0F172A] font-medium">
-                    {resolutionContext.taskId}（{resolutionContext.status === 'POSTPONED' ? '稍后处理中' : '进行中'}）
-                  </dd>
-                </div>
-              </dl>
-
-              <div className="pt-2 border-t border-[#F1F5F9] space-y-2">
-                <div className="text-xs font-bold text-[#475569] uppercase tracking-wider">本次确认将建立</div>
+            {/* 2. 本次确认将建立 */}
+            <BusinessObjectSection title="本次确认将建立" headingAs="h2">
+              <div className="space-y-3 text-xs">
                 <p className="text-[11px] text-[#64748B] leading-relaxed">
                   确认后当前数据将直接生效为目标业务对象的数据实现（自下而上对齐），并记录一条数据支撑修订；不会产生业务对象修订，也不会改动业务对象正式修订号。
                 </p>
+                <div className="pt-2 border-t border-[#EEF2F6]">
+                  <button
+                    onClick={returnToOrigin}
+                    className="text-xs text-[#2563EB] hover:underline font-medium inline-flex items-center space-x-1 cursor-pointer"
+                  >
+                    <span>返回原上下文</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
+            </BusinessObjectSection>
+          </BusinessObjectSurface>
+        }
 
-            <div className="p-4 border-t border-[#E2E8F0] bg-[#FAFAFA] shrink-0">
-              <button
-                onClick={returnToOrigin}
-                className="w-full py-1.5 text-xs text-[#2563EB] hover:text-[#1D4ED8] font-medium flex items-center justify-center space-x-1 transition-colors cursor-pointer"
-              >
-                <span>返回原上下文</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </section>
-
-          {/* ===================================================== */}
-          {/* MIDDLE COLUMN: 选择正式业务对象 ~50%                  */}
-          {/* ===================================================== */}
-          <section className="flex-1 min-w-0 bg-white border-r border-[#E2E8F0] flex flex-col min-h-0 overflow-y-auto">
-            <div className="p-7 space-y-6 flex-1">
-              <div className="space-y-1">
-                <h2 className="text-base font-bold text-[#0F172A] tracking-tight">选择正式业务对象</h2>
-                <p className="text-xs text-[#64748B] leading-relaxed">
-                  当前数据可能符合多个正式业务对象，需要确认本次应采用哪一套企业业务定义（不预选，由您显式决定）。
-                </p>
-              </div>
-
-              <div className="bg-[#FFFBEB] border border-[#FEF3C7] rounded-lg p-4 space-y-2">
+        /* --------------------------------------------------------------- */
+        /* 中栏：选择正式业务对象（连续主表面）                                */
+        /* --------------------------------------------------------------- */
+        decision={
+          <BusinessObjectSurface variant="MAIN">
+            {/* 1. 决策问题 */}
+            <BusinessObjectSection
+              divider
+              title="选择正式业务对象"
+              headingId="resolution-select"
+              description="当前数据可能符合多个正式业务对象，需要确认本次应采用哪一套企业业务定义（不预选，由您显式决定）。"
+            >
+              <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-md p-4 space-y-2">
                 <div className="flex items-center space-x-2">
                   <Info className="w-4 h-4 text-[#D97706] shrink-0" />
                   <span className="text-xs font-bold text-[#92400E]">当前需要判断</span>
@@ -403,76 +407,74 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                   当前没有可直接套用的企业采用规则，Semovix 不替用户默认决定。
                 </div>
               </div>
+            </BusinessObjectSection>
 
-              {/* 候选对象列表：来自领域仓库的正式对象 */}
-              <div className="space-y-3">
-                <div className="text-xs font-bold text-[#475569] uppercase tracking-wider">
-                  候选正式业务对象（{publishedObjects.length} 个）
-                </div>
-
-                <div className="space-y-2.5">
-                  {publishedObjects.map((object) => {
-                    const isSelected = selectedObjectId === object.id;
-                    return (
-                      <div
-                        key={object.id}
-                        id={`bo-option-${object.id}`}
-                        onClick={() => setSelectedObjectId(object.id)}
-                        className={`p-4 border rounded-lg transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-[#F0F7FF] border-[#2563EB]'
-                            : 'bg-white border-[#E2E8F0] hover:bg-[#F8FAFC]'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center space-x-2.5 min-w-0">
-                            <input
-                              type="radio"
-                              name="bo_candidate"
-                              id={`candidate-${object.id}`}
-                              checked={isSelected}
-                              onChange={() => setSelectedObjectId(object.id)}
-                              className="w-4 h-4 text-[#2563EB] border-[#CBD5E1] focus:ring-[#2563EB] cursor-pointer"
-                            />
-                            <div className="min-w-0">
-                              <label htmlFor={`candidate-${object.id}`} className="text-sm font-bold text-[#0F172A] cursor-pointer">
-                                {object.name}
-                              </label>
-                              <span className="ml-1.5 text-xs text-[#64748B] font-normal font-mono">{object.id}</span>
-                            </div>
+            {/* 2. 候选正式业务对象（来自领域仓库） */}
+            <BusinessObjectSection divider title={`候选正式业务对象（${publishedObjects.length} 个）`} headingId="resolution-candidates">
+              <div className="space-y-2.5">
+                {publishedObjects.map((object) => {
+                  const isSelected = selectedObjectId === object.id;
+                  return (
+                    <div
+                      key={object.id}
+                      id={`bo-option-${object.id}`}
+                      onClick={() => setSelectedObjectId(object.id)}
+                      className={`p-4 border rounded-md transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-[#EFF6FF] border-[#2563EB]'
+                          : 'bg-white border-[#E2E8F0] hover:bg-[#F8FAFC]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center space-x-2.5 min-w-0">
+                          <input
+                            type="radio"
+                            name="bo_candidate"
+                            id={`candidate-${object.id}`}
+                            checked={isSelected}
+                            onChange={() => setSelectedObjectId(object.id)}
+                            className="w-4 h-4 text-[#2563EB] border-[#CBD5E1] focus:ring-[#2563EB] cursor-pointer"
+                          />
+                          <div className="min-w-0">
+                            <label htmlFor={`candidate-${object.id}`} className="text-sm font-bold text-[#0F172A] cursor-pointer">
+                              {object.name}
+                            </label>
+                            <span className="ml-1.5 text-xs text-[#64748B] font-normal font-mono">{object.id}</span>
                           </div>
-                          {isSelected && (
-                            <span className="text-[11px] font-semibold text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] px-2 py-0.5 rounded shrink-0">
-                              已选择
-                            </span>
-                          )}
                         </div>
-
-                        <p className="text-xs text-[#475569] leading-relaxed pt-2 line-clamp-2">{object.definition}</p>
-
-                        <div className="mt-2 flex items-center justify-between text-xs text-[#64748B]">
-                          <span className="inline-flex items-center text-[11px] text-[#475569]">
-                            已发布 · {object.domain} · 正式修订 {object.currentRevision}
+                        {isSelected && (
+                          <span className="text-[11px] font-semibold text-[#2563EB] bg-[#EFF6FF] border border-[#BFDBFE] px-2 py-0.5 rounded shrink-0">
+                            已选择
                           </span>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveDefinitionObject(object);
-                            }}
-                            className="text-[11px] text-[#2563EB] hover:underline cursor-pointer"
-                          >
-                            查看完整定义
-                          </button>
-                        </div>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* Status Line */}
-              <div className="p-3.5 bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg flex items-center justify-between text-xs">
+                      <p className="text-xs text-[#475569] leading-relaxed pt-2 line-clamp-2">{object.definition}</p>
+
+                      <div className="mt-2 flex items-center justify-between text-xs text-[#64748B]">
+                        <span className="inline-flex items-center text-[11px] text-[#475569]">
+                          已发布 · {object.domain} · 正式修订 {object.currentRevision}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveDefinitionObject(object);
+                          }}
+                          className="text-[11px] text-[#2563EB] hover:underline cursor-pointer"
+                        >
+                          查看完整定义
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </BusinessObjectSection>
+
+            {/* 3. 当前选择状态 */}
+            <BusinessObjectSection title="当前选择" headingId="resolution-status">
+              <div className="p-3.5 bg-[#F8FAFC] border border-[#EEF2F6] rounded-md flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div className="flex items-center space-x-2">
                   <span className="text-[#64748B]">当前选择：</span>
                   <span className="font-bold text-[#0F172A]">{selectedObject ? selectedObject.name : '尚未选择'}</span>
@@ -484,99 +486,94 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                   </span>
                 </div>
               </div>
+            </BusinessObjectSection>
+          </BusinessObjectSurface>
+        }
 
-            </div>
-          </section>
-
-          {/* ===================================================== */}
-          {/* RIGHT COLUMN: 本次对齐 ~26%                           */}
-          {/* ===================================================== */}
-          <section className="w-[26%] min-w-[300px] max-w-[380px] bg-white flex flex-col min-h-0 overflow-y-auto">
-            <div className="p-6 space-y-6 flex-1">
-
-              <div className="space-y-1.5 border-b border-[#F1F5F9] pb-4">
-                <h2 className="text-sm font-bold text-[#0F172A] tracking-tight">本次对齐</h2>
-                <div className="pt-1 space-y-2">
-                  <div>
-                    <div className="text-[11px] text-[#64748B] font-medium">目标业务对象</div>
-                    <div className="text-sm font-bold text-[#0F172A]">
-                      {selectedObject ? selectedObject.name : '（尚未选择）'}
-                    </div>
+        /* --------------------------------------------------------------- */
+        /* 右栏：Decision Inspector（本次对齐 + 条件 + 动作）                  */
+        /* --------------------------------------------------------------- */
+        inspector={
+          <BusinessObjectSurface variant="INSPECTOR" padded={false} className="p-5 gap-6">
+            {/* 1. 本次对齐 */}
+            <BusinessObjectSection divider title="本次对齐" headingAs="h2">
+              <div className="space-y-2.5 text-xs">
+                <div className="space-y-0.5">
+                  <div className="text-[#64748B] text-[11px] font-medium">目标业务对象</div>
+                  <div className="text-sm font-bold text-[#0F172A]">
+                    {selectedObject ? selectedObject.name : '（尚未选择）'}
                   </div>
-                  <div>
-                    <div className="text-[11px] text-[#64748B] font-medium">当前数据来源</div>
-                    <div className="text-xs text-[#334155] font-medium">{sourceName}</div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-[#64748B] font-medium">拟建立关系</div>
-                    <div className="text-xs text-[#1E293B] bg-[#F8FAFC] p-2 rounded border border-[#E2E8F0] leading-relaxed">
-                      {selectedObject
-                        ? `${sourceName} 作为「${selectedObject.name}」的一套数据实现（直接生效）`
-                        : '选择目标业务对象后确认建立数据实现关系'}
-                    </div>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-[#64748B] text-[11px] font-medium">当前数据来源</div>
+                  <div className="text-xs text-[#334155] font-medium">{sourceName}</div>
+                </div>
+                <div className="space-y-0.5">
+                  <div className="text-[#64748B] text-[11px] font-medium">拟建立关系</div>
+                  <div className="text-xs text-[#334155] bg-[#F8FAFC] p-2 rounded border border-[#EEF2F6] leading-relaxed">
+                    {selectedObject
+                      ? `${sourceName} 作为「${selectedObject.name}」的一套数据实现（直接生效）`
+                      : '选择目标业务对象后确认建立数据实现关系'}
                   </div>
                 </div>
               </div>
+            </BusinessObjectSection>
 
-              {/* 数据实现条件 */}
-              <div className="space-y-3">
-                <div className="text-xs font-bold text-[#475569] uppercase tracking-wider">数据实现条件</div>
-                <div className="space-y-2 text-xs">
-                  <div className="p-2.5 rounded-lg border border-[#E2E8F0] bg-[#FAFAFA] space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-[#0F172A]">资产唯一性</span>
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
-                        系统核验
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#64748B] leading-normal">
-                      同一数据资产在同一时间只正式承载一个业务对象；如已被其他对象正式承载，确认时将被拦截。
-                    </p>
+            {/* 2. 数据实现条件 */}
+            <BusinessObjectSection divider title="数据实现条件" headingAs="h2">
+              <div className="space-y-2 text-xs">
+                <div className="p-2.5 rounded-md border border-[#EEF2F6] bg-[#F8FAFC] space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[#0F172A]">资产唯一性</span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
+                      系统核验
+                    </span>
                   </div>
-                  <div className="p-2.5 rounded-lg border border-[#E2E8F0] bg-[#FAFAFA] space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-[#0F172A]">直接生效</span>
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
-                        Bottom-up 规则
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#64748B] leading-normal">
-                      自下而上确认的数据实现直接生效（不经过候选期）；对象尚无生效实现时成为主要数据实现，否则为其他数据实现。
-                    </p>
+                  <p className="text-[11px] text-[#64748B] leading-normal">
+                    同一数据资产在同一时间只正式承载一个业务对象；如已被其他对象正式承载，确认时将被拦截。
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-md border border-[#EEF2F6] bg-[#F8FAFC] space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[#0F172A]">直接生效</span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
+                      Bottom-up 规则
+                    </span>
                   </div>
-                  <div className="p-2.5 rounded-lg border border-[#E2E8F0] bg-[#FAFAFA] space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-[#0F172A]">修订边界</span>
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
-                        数据支撑修订
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#64748B] leading-normal">
-                      仅记录数据支撑修订（BOTTOM_UP_ALIGN），不产生业务对象修订，不改动业务对象正式修订号。
-                    </p>
+                  <p className="text-[11px] text-[#64748B] leading-normal">
+                    自下而上确认的数据实现直接生效（不经过候选期）；对象尚无生效实现时成为主要数据实现，否则为其他数据实现。
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-md border border-[#EEF2F6] bg-[#F8FAFC] space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-[#0F172A]">修订边界</span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium bg-[#F0FDF4] text-[#15803D] border border-[#BBF7D0]">
+                      数据支撑修订
+                    </span>
                   </div>
+                  <p className="text-[11px] text-[#64748B] leading-normal">
+                    仅记录数据支撑修订（BOTTOM_UP_ALIGN），不产生业务对象修订，不改动业务对象正式修订号。
+                  </p>
                 </div>
               </div>
+            </BusinessObjectSection>
 
-              {/* 对齐后含义 */}
-              <div className="space-y-2 pt-2 border-t border-[#F1F5F9]">
-                <div className="text-xs font-bold text-[#475569] uppercase tracking-wider">采用后的含义</div>
-                <p className="text-xs text-[#0F172A] leading-relaxed font-medium bg-[#F8FAFC] p-2.5 rounded border border-[#E2E8F0]">
-                  {selectedObject
-                    ? `当前数据将成为「${selectedObject.name}」的一套正式数据实现，其适用范围与已有实现互不替换。`
-                    : '选择业务对象后将说明采用后的含义。'}
-                </p>
-              </div>
+            {/* 3. 采用后的含义 */}
+            <BusinessObjectSection title="采用后的含义" headingAs="h2">
+              <p className="text-xs text-[#0F172A] leading-relaxed font-medium bg-[#F8FAFC] p-2.5 rounded border border-[#EEF2F6]">
+                {selectedObject
+                  ? `当前数据将成为「${selectedObject.name}」的一套正式数据实现，其适用范围与已有实现互不替换。`
+                  : '选择业务对象后将说明采用后的含义。'}
+              </p>
+            </BusinessObjectSection>
 
-            </div>
-
-            {/* Right Column Bottom Actions */}
-            <div className="p-6 border-t border-[#E2E8F0] bg-white space-y-3 shrink-0">
+            {/* 4. 决策动作 */}
+            <div className="space-y-3">
               <button
                 id="btn-confirm-resolution"
                 onClick={handleConfirm}
                 disabled={!selectedObject || isMigrationReadOnly}
-                className="w-full py-2.5 px-4 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-[#93C5FD] disabled:cursor-not-allowed text-white font-medium text-xs rounded-md shadow-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                className="w-full h-10 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-[#93C5FD] disabled:cursor-not-allowed text-white text-xs font-medium flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
               >
                 <Check className="w-4 h-4" />
                 <span>{selectedObject ? `确认对齐“${selectedObject.name}”` : '请先选择目标业务对象'}</span>
@@ -586,12 +583,12 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                 将建立当前资产的数据实现（直接生效），记录数据支撑修订并完成对齐任务；不产生业务对象修订。
               </p>
 
-              <div className="pt-1 flex items-center justify-between">
+              <div className="pt-1 flex items-center justify-between border-t border-[#EEF2F6]">
                 <button
                   type="button"
                   id="btn-create-new-object"
                   onClick={() => onCreateNewObject?.(resolutionContext.taskId)}
-                  className="text-xs text-[#475569] hover:text-[#0F172A] font-medium flex items-center space-x-1 transition-colors cursor-pointer"
+                  className="text-xs text-[#475569] hover:text-[#0F172A] font-medium flex items-center space-x-1 transition-colors cursor-pointer pt-2"
                   title="适用于现有正式业务对象都不能准确表达这份数据的情况（创建后自动完成对齐）"
                 >
                   <Plus className="w-3.5 h-3.5 text-[#64748B]" />
@@ -609,7 +606,7 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                   </button>
 
                   {isMoreMenuOpen && (
-                    <div className="absolute right-0 bottom-full mb-1 w-44 bg-white border border-[#E2E8F0] rounded-md shadow-lg py-1 z-30 animate-in fade-in-50 duration-100">
+                    <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-[#E2E8F0] rounded-md shadow-lg py-1 z-30">
                       <button
                         type="button"
                         id="btn-cancel-resolution"
@@ -623,20 +620,17 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
                 </div>
               </div>
             </div>
-
-          </section>
-
-        </div>
-
-      </main>
+          </BusinessObjectSurface>
+        }
+      />
 
       {/* ========================================================= */}
-      {/* MODAL: 查看完整定义（数据来自领域仓库）                    */}
+      {/* MODAL: 查看完整定义（数据来自领域仓库，Local Overlay C）      */}
       {/* ========================================================= */}
       {activeDefinitionObject && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full border border-[#E2E8F0] overflow-hidden">
-            <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full border border-[#E2E8F0] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-bold text-[#0F172A]">{activeDefinitionObject.name}</h3>
                 <p className="text-xs text-[#64748B] font-mono">
@@ -695,6 +689,6 @@ export const BusinessObjectResolutionWorkspace: React.FC<BusinessObjectResolutio
         </div>
       )}
 
-    </div>
+    </BusinessObjectPageShell>
   );
 };
