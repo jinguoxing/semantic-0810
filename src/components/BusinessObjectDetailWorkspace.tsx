@@ -190,7 +190,7 @@ const GROUNDING_ERROR_LABELS: Record<string, string> = {
 };
 
 export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspaceProps> = ({
-  objectId = 'bo_service_ticket',
+  objectId,
   initialTab = 'business',
   onBackToObjectsList,
   onNavigateToBusinessObjectDetail,
@@ -212,9 +212,79 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   // 订阅领域 Store：确认数据支撑 / 落地修正 / 状态流转后自动重渲染
   useSyncExternalStore(subscribe, getVersion);
 
-  // Current Object — 所有内容来自领域仓库，禁止页面写死
-  const currentObject: BusinessObject =
-    businessObjectRepository.get(objectId) ?? businessObjectRepository.get('bo_service_ticket')!;
+  // State for menus and drawers
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [isEvidenceDrawerOpen, setIsEvidenceDrawerOpen] = useState(false);
+  const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
+  const [isKnowledgeDrawerOpen, setIsKnowledgeDrawerOpen] = useState(false);
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [selectedTerm, setSelectedTerm] = useState<BusinessTermItem | null>(null);
+
+  const [selectedImplId, setSelectedImplId] = useState<DataImplementationId | null>(null);
+  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
+  const [isSetPrimaryModalOpen, setIsSetPrimaryModalOpen] = useState(false);
+  const [isContextMoreOpen, setIsContextMoreOpen] = useState(false);
+  const [isCorrectionDrawerOpen, setIsCorrectionDrawerOpen] = useState(false);
+  const [selectedCorrectionAttr, setSelectedCorrectionAttr] = useState<DataImplementationAttributeLanding | null>(null);
+  const [selectedCorrectionRel, setSelectedCorrectionRel] = useState<DataImplementationRelationshipLanding | null>(null);
+
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const selectorRef = useRef<HTMLDivElement>(null);
+  const contextMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setIsMoreMenuOpen(false);
+      }
+      if (selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
+        setIsSelectorOpen(false);
+      }
+      if (contextMoreRef.current && !contextMoreRef.current.contains(event.target as Node)) {
+        setIsContextMoreOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Current Object — 所有内容来自领域仓库，禁止页面写死；
+  // 无效对象 ID 如实进入 Not Found（BO-FZ-01：禁止回退展示「服务工单」等其他对象）
+  const currentObject: BusinessObject | undefined = objectId
+    ? businessObjectRepository.get(objectId)
+    : undefined;
+
+  if (!currentObject) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-[#F7F9FC] p-8">
+        <BusinessObjectSurface variant="MAIN" padded={false} className="max-w-md w-full">
+          <BusinessObjectEmptyState
+            icon={<Database className="w-5 h-5" />}
+            title="未找到业务对象"
+            description={
+              <span>
+                该业务对象不存在或已不可用，无法展示对象详情，也不会回退展示其他对象。
+                {objectId && (
+                  <span className="block pt-1 font-mono text-[11px] text-[#94A3B8]">
+                    对象标识：{objectId}
+                  </span>
+                )}
+              </span>
+            }
+            primaryAction={
+              <button
+                id="btn-back-objects-not-found"
+                onClick={() => onBackToObjectsList?.()}
+                className="px-3.5 py-1.5 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-semibold cursor-pointer transition-colors"
+              >
+                返回业务对象目录
+              </button>
+            }
+          />
+        </BusinessObjectSurface>
+      </div>
+    );
+  }
 
   // 已停用对象：页面为只读归档视图，隐藏全部改写型动作（V2.2 §12）
   const isRetired = currentObject.status === 'RETIRED';
@@ -233,14 +303,6 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
     targetId: rel.targetObjectId,
     meaning: rel.meaning
   }));
-
-  // State for menus and drawers
-  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
-  const [isEvidenceDrawerOpen, setIsEvidenceDrawerOpen] = useState(false);
-  const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
-  const [isKnowledgeDrawerOpen, setIsKnowledgeDrawerOpen] = useState(false);
-  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
-  const [selectedTerm, setSelectedTerm] = useState<BusinessTermItem | null>(null);
 
   // Data Support View State
   // 正式数据支撑选择器：仅 EFFECTIVE + NEEDS_REVALIDATION（Inv05）。
@@ -339,34 +401,6 @@ export const BusinessObjectDetailWorkspace: React.FC<BusinessObjectDetailWorkspa
   const dataSupportRevisions = listDataSupportRevisions(currentObject.id);
   const groundingRevisions = groundingService.listByObject(currentObject.id);
   const bindingByImplId = new Map(bindings.map((binding) => [binding.implementationId, binding]));
-
-  const [selectedImplId, setSelectedImplId] = useState<DataImplementationId | null>(null);
-  const [isSelectorOpen, setIsSelectorOpen] = useState(false);
-  const [isSetPrimaryModalOpen, setIsSetPrimaryModalOpen] = useState(false);
-  const [isContextMoreOpen, setIsContextMoreOpen] = useState(false);
-  const [isCorrectionDrawerOpen, setIsCorrectionDrawerOpen] = useState(false);
-  const [selectedCorrectionAttr, setSelectedCorrectionAttr] = useState<DataImplementationAttributeLanding | null>(null);
-  const [selectedCorrectionRel, setSelectedCorrectionRel] = useState<DataImplementationRelationshipLanding | null>(null);
-
-  const moreMenuRef = useRef<HTMLDivElement>(null);
-  const selectorRef = useRef<HTMLDivElement>(null);
-  const contextMoreRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
-        setIsMoreMenuOpen(false);
-      }
-      if (selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
-        setIsSelectorOpen(false);
-      }
-      if (contextMoreRef.current && !contextMoreRef.current.contains(event.target as Node)) {
-        setIsContextMoreOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // Current Implementation（仅在正式数据实现中切换）
   const currentImpl =

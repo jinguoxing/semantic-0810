@@ -25,6 +25,13 @@ export { recordDataSupportRevision, recordDataSupportRevisionInDraft, listDataSu
 export { saveCreateDraft, saveChangeDraft, createDraft, updateDraft, getDraft, getWorkingDraft, discardDraft, publishDraft } from './draft';
 export type { PublishDraftResult, UpdateDraftResult } from './draft';
 export { objectResolutionContexts, completeTaskInDraft } from './task-context';
+export { completeBottomUpContinuation, buildContinuationImplementation } from './resolution-continuation';
+export type {
+  ResolutionContinuationError,
+  ResolutionContinuationMode,
+  ResolutionContinuationResult,
+  CompleteBottomUpContinuationInput
+} from './resolution-continuation';
 export { EVIDENCE_KIND_LABELS, tableEvidence, decisionEvidence, dataAssetEvidence, semanticAssetEvidence } from './evidence';
 export { subscribe, getVersion, clearPersistedState, resetState, loadState as loadStateForTesting } from './store';
 export type { BusinessObjectStoreState } from './store';

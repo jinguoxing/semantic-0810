@@ -28,11 +28,13 @@ describe('BusinessObjectAuthoringWorkspace · Bottom-up 复用闭环（§6C / In
     const objectsBefore = structuredClone(getState().objects);
 
     const onReuseExisting = vi.fn();
+    const onResolutionCompleted = vi.fn();
     const addToast = vi.fn();
     render(
       <BusinessObjectAuthoringWorkspace
         resolutionTaskId="task_reuse_hotline"
         onReuseExisting={onReuseExisting}
+        onResolutionCompleted={onResolutionCompleted}
         addToast={addToast}
       />
     );
@@ -42,9 +44,16 @@ describe('BusinessObjectAuthoringWorkspace · Bottom-up 复用闭环（§6C / In
     fireEvent.click(document.getElementById('btn-reuse-existing-bo')!);
     fireEvent.click(screen.getByRole('button', { name: '确认复用「客服坐席」' }));
 
-    // 复用闭环回调：返回被复用正式对象（由 App 按任务上下文回到来源页）
-    expect(onReuseExisting).toHaveBeenCalledTimes(1);
-    expect(onReuseExisting).toHaveBeenCalledWith('bo_customer_agent');
+    // Bottom-up 复用唯一成功出口（BO-FZ-02）：onResolutionCompleted（普通复用回调绝不触发）
+    expect(onReuseExisting).not.toHaveBeenCalled();
+    expect(onResolutionCompleted).toHaveBeenCalledTimes(1);
+    expect(onResolutionCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task_reuse_hotline',
+        businessObjectId: 'bo_customer_agent',
+        mode: 'REUSE'
+      })
+    );
 
     const state = getState();
     // Inv09：复用 ≠ 修改定义 —— 正式对象集合与复用前完全一致（零新对象、零定义改写、零别名追加）

@@ -28,28 +28,73 @@ import { BusinessObjectPublishDialog } from './business-object/BusinessObjectPub
 import {
   businessObjectRepository,
   createDraft,
+  completeBottomUpContinuation,
   dataSupportSummary,
   objectResolutionContexts,
-  dataSupportService,
   publishDraft,
   subscribe,
   updateDraft,
   getVersion,
   type BusinessObjectDefinitionSnapshot,
-  type EvidenceReference
+  type EvidenceReference,
+  type ResolutionContinuationError,
+  type ResolutionContinuationResult
 } from '../domain/business-object';
 
 export interface BusinessObjectAuthoringWorkspaceProps {
   onCancel?: () => void;
   onNavigateToSemantics?: () => void;
   onNavigateToObjectsList?: () => void;
-  /** 发布成功后进入新对象的业务视角（objectId 为新对象的领域 ID） */
+  /** 普通创建（无对齐任务）发布成功后进入新对象的业务视角（Bottom-up 场景绝不触发） */
   onPublished?: (objectId: string) => void;
-  /** 复用「客服坐席」后返回该正式对象的业务视角 */
+  /** 普通复用（无对齐任务）后返回被复用正式对象的业务视角（Bottom-up 场景绝不触发） */
   onReuseExisting?: (objectId: string) => void;
-  /** Bottom-up Resolution「创建新业务对象」入口携带的对齐任务 ID，发布后自动完成对齐 */
+  /**
+   * Bottom-up 唯一成功出口（BO-FZ-02）：completeBottomUpContinuation 成功且任务 COMPLETED
+   * 才触发；Create 与 Reuse 共用，由 App 按 returnRoute 返回来源上下文。
+   */
+  onResolutionCompleted?: (result: {
+    taskId: string;
+    businessObjectId: string;
+    bindingId: string;
+    mode: 'CREATE' | 'REUSE';
+  }) => void;
+  /** 对齐未完成时返回对齐任务工作台（任务保持未完成） */
+  onBackToResolutionTask?: (taskId: string) => void;
+  /** 对齐未完成时查看已发布对象详情（不闭环任务） */
+  onViewPublishedObject?: (objectId: string) => void;
+  /** Bottom-up Resolution「创建新业务对象」入口携带的对齐任务 ID，发布后统一续作完成对齐 */
   resolutionTaskId?: string;
   addToast?: (type: 'success' | 'error' | 'info', title: string, message: string) => void;
+}
+
+/** Bottom-up 续作失败面板数据：领域失败结果 + 模式 + 失败当时的任务状态 */
+interface ContinuationFailurePanel
+  extends Extract<ResolutionContinuationResult, { ok: false }> {
+  mode: 'CREATE' | 'REUSE';
+  targetObjectName: string;
+  taskStatusLabel: string;
+}
+
+/** 续作失败原因 → 业务口径说明 */
+function continuationReasonText(
+  error: ResolutionContinuationError,
+  conflictObjectName?: string
+): string {
+  switch (error) {
+    case 'BINDING_CONFLICT':
+      return `数据已承载其他对象：来源数据资产当前已作为「${conflictObjectName ?? '其他业务对象'}」的数据实现，未自动改写`;
+    case 'TASK_NOT_FOUND':
+      return '对齐任务不存在或已被清理，无法续作';
+    case 'TASK_NOT_ACTIVE':
+      return 'Task 不可处理：对齐任务已完结（完成 / 取消），不再接受续作';
+    case 'MIGRATION_BLOCKED':
+      return '来源数据资产无法解析：存在迁移预警，需先完成迁移处理后再对齐';
+    case 'OBJECT_NOT_FOUND':
+      return '目标对象不存在：未在领域仓库中找到目标业务对象，来源数据支撑未登记';
+    default:
+      return '来源数据资产无法解析或对齐未完成，数据支撑未生效';
+  }
 }
 
 export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringWorkspaceProps> = ({
@@ -58,6 +103,9 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
   onNavigateToObjectsList,
   onPublished,
   onReuseExisting,
+  onResolutionCompleted,
+  onBackToResolutionTask,
+  onViewPublishedObject,
   resolutionTaskId,
   addToast
 }) => {
@@ -115,6 +163,14 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
   const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
   // 已保存的 CREATE 草稿 ID（发布时若未保存会先落一份草稿再发布）
   const [draftId, setDraftId] = useState<string | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Bottom-up 续作状态（BO-FZ-02）：部分成功 = 对象已发布但来源数据未完成对齐
+  // ---------------------------------------------------------------------------
+  // 已发布对象事实（Create 失败后保留在页面，支持只重跑对齐、查看对象）
+  const [publishedObject, setPublishedObject] = useState<{ id: string; name: string } | null>(null);
+  // 续作失败面板数据（null = 无失败 / 已成功返回来源）
+  const [continuationFailure, setContinuationFailure] = useState<ContinuationFailurePanel | null>(null);
 
   /** 复用检查对象：直接来自领域 Store（禁止写死目录数据） */
   const existingObject = useMemo(() => {
@@ -186,44 +242,70 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
     };
   };
 
-  /** Bottom-up Resolution 入口：发布新对象后自动完成对齐（登记 EFFECTIVE 绑定并闭环任务） */
-  const autoAlignResolutionTask = (newObjectId: string) => {
-    if (!resolutionTaskId) return;
-    const context = objectResolutionContexts.get(resolutionTaskId);
-    if (!context || (context.status !== 'OPEN' && context.status !== 'POSTPONED')) return;
-    const { dataAsset, semanticSource } = context;
-    const result = dataSupportService.confirmBottomUpAlignment({
-      taskId: context.taskId,
-      businessObjectId: newObjectId,
-      dataAsset,
-      ...(semanticSource ? { semanticSource } : {}),
-      implementation: {
-        name: dataAsset.name,
-        techName: dataAsset.techName ?? dataAsset.id,
-        warehouseTable: dataAsset.warehouseTable ?? dataAsset.techName ?? dataAsset.id,
-        assetId: dataAsset.id,
-        scope: dataAsset.name,
-        granularity: '一行一条业务记录（对齐后完善）',
-        identity: '（对齐后完善）',
-        scopeRelationText: '自下而上对齐（新建对象自动登记）',
-        scopeRelationNote: '由 Bottom-up Resolution 在创建新业务对象后自动登记的数据实现，字段级落地待后续完善。',
-        attributes: [],
-        relationships: []
-      }
+  /**
+   * Bottom-up 统一续作（BO-FZ-02）：发布新对象 / 选定复用对象后，
+   * 一律经 completeBottomUpContinuation 完成来源数据对齐。
+   * - 成功：任务 COMPLETED → onResolutionCompleted（App 按 returnRoute 返回来源）；
+   * - 失败：任务保持未完成，页面保留部分成功事实（已发布对象不回滚），
+   *   绝不触发 onPublished / onReuseExisting / 任务完成 / 数据支撑已生效提示。
+   */
+  const runBottomUpContinuation = (input: {
+    targetObjectId: string;
+    targetObjectName: string;
+    mode: 'CREATE' | 'REUSE';
+    changedBy: string;
+  }): boolean => {
+    if (!resolutionTaskId) return false;
+    const result = completeBottomUpContinuation({
+      taskId: resolutionTaskId,
+      businessObjectId: input.targetObjectId,
+      objectPublished: true,
+      changedBy: input.changedBy,
+      mode: input.mode
     });
     if (result.ok === false) {
-      if (result.error === 'BINDING_CONFLICT') {
-        addToast?.('error', '自动对齐失败', `该数据资产已正式承载「${result.conflictObjectName ?? '其他对象'}」，未自动改写`);
-      } else {
-        addToast?.('error', '自动对齐失败', '未找到对应业务对象，数据支撑未自动登记');
-      }
-      return;
+      // 失败：任务保持未完成（不回调、不返回来源、不冒充任务完成）
+      const taskContext = objectResolutionContexts.get(result.taskId);
+      setContinuationFailure({
+        ...result,
+        mode: input.mode,
+        targetObjectName: input.targetObjectName,
+        taskStatusLabel: taskContext?.status ?? '未知'
+      });
+      addToast?.(
+        'error',
+        input.mode === 'CREATE' ? '业务对象已发布，但来源数据尚未完成对齐' : '已选择复用对象，但来源数据未完成对齐',
+        continuationReasonText(result.error, result.conflictObjectName)
+      );
+      return false;
     }
+
+    setContinuationFailure(null);
     addToast?.(
       'success',
-      '数据支撑已自动对齐',
-      `「${dataAsset.name}」已生效为新对象的数据支撑（任务 ${context.taskId} 已完成）`
+      input.mode === 'CREATE' ? '业务对象已发布，来源数据已完成对齐' : '来源数据已对齐到已有对象',
+      input.mode === 'CREATE'
+        ? `「${input.targetObjectName}」已发布，来源数据已生效为该对象的数据支撑（任务 ${result.taskId} 已完成）`
+        : `来源数据已生效为「${input.targetObjectName}」的数据支撑（任务 ${result.taskId} 已完成）`
     );
+    onResolutionCompleted?.({
+      taskId: result.taskId,
+      businessObjectId: result.businessObjectId,
+      bindingId: result.bindingId,
+      mode: input.mode
+    });
+    return true;
+  };
+
+  /** 重试数据对齐：只重跑续作命令（绝不重新发布草稿，对象发布事实保持不变） */
+  const handleRetryContinuation = () => {
+    if (!publishedObject || !resolutionTaskId) return;
+    runBottomUpContinuation({
+      targetObjectId: publishedObject.id,
+      targetObjectName: publishedObject.name,
+      mode: 'CREATE',
+      changedBy: '业务对象创建工作台（重试数据对齐）'
+    });
   };
 
   const handleRemoveAlias = (aliasToRemove: string) => {
@@ -270,9 +352,11 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
   };
 
   /**
-   * 复用决策闭环（§6C，Inv09）：复用 ≠ 修改定义 ——
-   * 不创建新对象、不修改被复用对象的正式定义、不静默追加别名；
-   * Bottom-up 任务上下文存在时，把来源数据资产对齐到被复用对象并完成任务。
+   * 复用决策闭环（§6C，Inv09，BO-FZ-02）：复用 ≠ 修改定义 ——
+   * 不创建新对象、不修改被复用对象的正式定义、不静默追加别名。
+   * Bottom-up 任务存在时先统一续作（来源数据对齐到被复用对象）：
+   * 成功才算复用闭环；失败立即停止（不置 reused、不发「已复用」成功提示、
+   * 不回调、不返回来源、任务保持未完成）。
    */
   const completeReuse = () => {
     if (!existingObject) {
@@ -280,50 +364,22 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
       return;
     }
     setShowReuseConfirmModal(false);
-    setReuseStatus('reused');
 
-    // Bottom-up 任务：来源数据资产对齐到被复用对象（BOTTOM_UP_ALIGN 数据支撑修订，任务 COMPLETED）
+    // Bottom-up 复用：先完成来源数据对齐，成功才复用闭环
     if (resolutionTaskId) {
-      const context = objectResolutionContexts.get(resolutionTaskId);
-      if (context && (context.status === 'OPEN' || context.status === 'POSTPONED') && !context.migrationWarning) {
-        const { dataAsset, semanticSource } = context;
-        const result = dataSupportService.confirmBottomUpAlignment({
-          taskId: context.taskId,
-          businessObjectId: existingObject.id,
-          dataAsset,
-          ...(semanticSource ? { semanticSource } : {}),
-          implementation: {
-            name: dataAsset.name,
-            techName: dataAsset.techName ?? dataAsset.id,
-            warehouseTable: dataAsset.warehouseTable ?? dataAsset.techName ?? dataAsset.id,
-            assetId: dataAsset.id,
-            scope: dataAsset.name,
-            granularity: '一行一条业务记录（对齐后完善）',
-            identity: '（对齐后完善）',
-            scopeRelationText: '自下而上对齐（复用已有对象登记）',
-            scopeRelationNote: '由 Bottom-up Resolution 复用已有业务对象时登记的数据实现，字段级落地待后续完善。',
-            attributes: [],
-            relationships: []
-          }
-        });
-        if (result.ok === false) {
-          addToast?.(
-            'error',
-            '来源数据对齐未生效',
-            result.error === 'BINDING_CONFLICT'
-              ? `该数据当前已作为“${result.conflictObjectName ?? '其他业务对象'}”的数据实现。如需表达多个业务主体，请先明确独立记录粒度、身份和范围。`
-              : '未找到目标业务对象，来源数据支撑未登记'
-          );
-        } else {
-          addToast?.(
-            'success',
-            '来源数据已对齐',
-            `「${dataAsset.name}」已生效为「${existingObject.name}」的数据支撑（任务 ${context.taskId} 已完成）`
-          );
-        }
-      }
+      const aligned = runBottomUpContinuation({
+        targetObjectId: existingObject.id,
+        targetObjectName: existingObject.name,
+        mode: 'REUSE',
+        changedBy: '业务对象复用判断'
+      });
+      // 失败：未完成对象复用，保持 pending 以便处理冲突后重新发起
+      setReuseStatus(aligned ? 'reused' : 'pending');
+      return;
     }
 
+    // 普通复用（无对齐任务）：查看被复用正式对象
+    setReuseStatus('reused');
     addToast?.(
       'success',
       '已复用现有业务对象',
@@ -402,7 +458,23 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
       addToast?.('error', '发布失败', messages[result.error] ?? '发布未完成，请稍后重试');
       return;
     }
-    autoAlignResolutionTask(result.object.id);
+
+    // Bottom-up 创建（BO-FZ-02）：发布成功 → 统一续作完成来源数据对齐。
+    // 对齐失败不回滚已发布对象（部分成功），页面保留对象事实并展示失败面板；
+    // 绝不触发 onPublished / 任务完成 / 数据支撑已生效。
+    if (resolutionTaskId) {
+      setPublishedObject({ id: result.object.id, name: snapshot.name });
+      const aligned = runBottomUpContinuation({
+        targetObjectId: result.object.id,
+        targetObjectName: snapshot.name,
+        mode: 'CREATE',
+        changedBy: '业务对象创建工作台'
+      });
+      if (aligned) return; // 成功回调已触发，App 按 returnRoute 返回来源上下文
+      return; // 失败：停留本页展示部分成功面板（任务保持 OPEN）
+    }
+
+    // 普通创建：发布成功 → 进入新对象业务视角
     addToast?.(
       'success',
       '业务对象已发布',
@@ -541,6 +613,77 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
           </button>
         </div>
       </header>
+
+      {/* =========================================================================
+          Bottom-up 续作失败面板（BO-FZ-02 部分成功）：
+          业务对象已发布，但来源数据尚未完成对齐 —— 已发布事实不回滚，
+          任务保持未完成，可只重跑数据对齐 / 返回对齐任务 / 查看已发布对象。
+      ========================================================================= */}
+      {continuationFailure && continuationFailure.mode === 'CREATE' && (
+        <div id="bo-continuation-failure-panel" className="max-w-[1440px] mx-auto w-full px-6 lg:px-10 pt-5">
+          <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-xl p-5 space-y-3.5">
+            <div className="flex items-center space-x-1.5 text-sm font-bold text-[#B45309]">
+              <AlertTriangle className="w-4.5 h-4.5 text-[#D97706]" />
+              <span>业务对象已发布，但来源数据尚未完成对齐</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-1.5 text-xs">
+              <div className="text-[#475569]">
+                <span className="font-semibold text-[#0F172A]">已发布对象：</span>
+                {continuationFailure.targetObjectName}
+                <span className="ml-1.5 font-mono text-[11px] text-[#94A3B8]">
+                  {continuationFailure.businessObjectId}
+                </span>
+              </div>
+              <div className="text-[#475569]">
+                <span className="font-semibold text-[#0F172A]">当前 Task 状态：</span>
+                {continuationFailure.taskStatusLabel}（任务 {continuationFailure.taskId} 保持未完成）
+              </div>
+              <div className="text-[#475569] md:col-span-2">
+                <span className="font-semibold text-[#0F172A]">对齐失败原因：</span>
+                {continuationReasonText(continuationFailure.error, continuationFailure.conflictObjectName)}
+              </div>
+              <div className="text-[#475569] md:col-span-2">
+                <span className="font-semibold text-[#0F172A]">已发布事实不会回滚：</span>
+                新对象已进入企业业务对象目录，数据支撑待来源数据完成对齐后生效。
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                id="btn-retry-continuation"
+                type="button"
+                onClick={handleRetryContinuation}
+                disabled={!publishedObject}
+                className="px-4 py-1.5 rounded-md bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-[#E2E8F0] disabled:text-[#94A3B8] text-white text-xs font-bold transition-colors cursor-pointer disabled:cursor-not-allowed inline-flex items-center space-x-1.5"
+                title="只重跑来源数据对齐，不会重新发布对象"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>重试数据对齐</span>
+              </button>
+              <button
+                id="btn-back-to-resolution-task"
+                type="button"
+                onClick={() => onBackToResolutionTask?.(continuationFailure.taskId)}
+                className="px-4 py-1.5 rounded-md bg-white border border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#334155] text-xs font-semibold transition-colors cursor-pointer inline-flex items-center space-x-1.5"
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+                <span>返回对齐任务</span>
+              </button>
+              <button
+                id="btn-view-published-object"
+                type="button"
+                onClick={() => publishedObject && onViewPublishedObject?.(publishedObject.id)}
+                disabled={!publishedObject}
+                className="px-4 py-1.5 rounded-md bg-white border border-[#CBD5E1] hover:bg-[#F8FAFC] text-[#334155] text-xs font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed disabled:text-[#94A3B8] inline-flex items-center space-x-1.5"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>查看已发布对象</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =========================================================================
           Main Body Dual-Column Grid: 64% Left (Authoring Surface) / 36% Right (Semantic Inspector)
@@ -866,6 +1009,24 @@ export const BusinessObjectAuthoringWorkspace: React.FC<BusinessObjectAuthoringW
 
             {/* ================= 右侧第一视觉：对象复用检查 (最核心) ================= */}
             <div className="space-y-2.5">
+              {/* Bottom-up 复用续作失败（BO-FZ-02）：未完成对象复用，保持可重新发起 */}
+              {continuationFailure && continuationFailure.mode === 'REUSE' && (
+                <div
+                  id="bo-reuse-continuation-failure"
+                  className="bg-[#FEF2F2]/60 border border-[#FECACA] rounded-lg p-3.5 space-y-1.5 text-xs animate-in fade-in-50 duration-150"
+                >
+                  <div className="flex items-center space-x-1.5 font-bold text-[#B91C1C]">
+                    <AlertTriangle className="w-4 h-4 text-[#DC2626]" />
+                    <span>已选择复用对象，但来源数据未完成对齐</span>
+                  </div>
+                  <p className="text-[#475569] leading-relaxed">
+                    未完成对象复用：{continuationReasonText(continuationFailure.error, continuationFailure.conflictObjectName)}。
+                    任务 {continuationFailure.taskId} 保持未完成（状态 {continuationFailure.taskStatusLabel}）；
+                    本次未创建新对象，也未修改「客服坐席」的正式定义。可先处理来源数据的承载关系，再重新发起复用。
+                  </p>
+                </div>
+              )}
+
               {reuseStatus === 'pending' ? (
                 /* 状态 1: 待复用判断 (默认暖黄强调块) */
                 <div

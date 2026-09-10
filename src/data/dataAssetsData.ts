@@ -18,6 +18,7 @@ export const MOCK_DATA_ASSETS: DataAssetItem[] = [
     lastScannedTime: '今天 17:20',
     lastScannedStatus: 'success',
     businessObject: '服务工单',
+    businessObjectId: 'bo_service_ticket',
     governanceContext: {
       profileStatus: 'profiled',
       qualityStatus: 'attention',
@@ -49,6 +50,7 @@ export const MOCK_DATA_ASSETS: DataAssetItem[] = [
     lastScannedTime: '今天 16:52',
     lastScannedStatus: 'success',
     businessObject: '自然人',
+    businessObjectId: 'bo_person',
     governanceContext: {
       profileStatus: 'profiled',
       qualityStatus: 'normal',

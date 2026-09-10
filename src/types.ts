@@ -191,6 +191,8 @@ export interface DataAssetItem {
   schemaChangeNote?: string;
   matchContext?: string;
   businessObject?: string;
+  /** 正式业务对象 ID（Bottom-up 对齐与资产 → 对象导航的唯一依据，禁止按名称反查） */
+  businessObjectId?: string;
   governanceContext: GovernanceContextSummary;
   fieldCount: number;
   rowCount: string;

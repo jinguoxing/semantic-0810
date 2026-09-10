@@ -1,9 +1,13 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MetricDetailWorkspace } from '../../MetricDetailWorkspace';
 import { DataAssetDetailWorkspace } from '../../DataAssetDetailWorkspace';
 import { getCanonicalMetricIdForMarketplaceResource } from '../../../data/marketplaceMetricReferences';
+
+// vitest 未开 globals，RTL 自动 cleanup 不生效：必须显式清理，避免上一用例的
+// 已授权状态 DOM（含 进入分析 / 用于问数 按钮）泄漏到下一用例
+afterEach(cleanup);
 
 describe('detail-to-find-data entry callbacks', () => {
   it('sends the exact metric ID and displayed version rather than a name lookup', () => {
@@ -19,36 +23,43 @@ describe('detail-to-find-data entry callbacks', () => {
     }));
   });
 
-  it('keeps an asset as an asset context rather than claiming it is a metric', () => {
+  it('keeps an asset as an asset context rather than claiming it is a metric', async () => {
     const onEnterChatQuery = vi.fn();
-    render(<DataAssetDetailWorkspace assetId="asset_distinct_42" onEnterChatQuery={onEnterChatQuery} />);
+    render(<DataAssetDetailWorkspace assetId="asset-2" onEnterChatQuery={onEnterChatQuery} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /当前：需申请/ }));
+    // 真实消费链路（BO-FZ-01）：需申请 → 提交申请（策略自动审批生效）→ 可直接使用
+    fireEvent.click(screen.getByRole('button', { name: '申请使用' }));
+    fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+    await screen.findByRole('button', { name: '用于问数' }, { timeout: 4000 });
     fireEvent.click(screen.getByRole('button', { name: '用于问数' }));
     expect(onEnterChatQuery).toHaveBeenCalledWith(expect.objectContaining({
-      entryId: 'asset:asset_distinct_42:query-value',
+      entryId: 'asset:asset-2:query-value',
       source: 'ASSET_DETAIL',
-      target: { kind: 'ASSET', id: 'asset_distinct_42', label: 'asset_distinct_42' },
+      target: { kind: 'ASSET', id: 'asset-2', label: '人口基本信息' },
       intent: 'QUERY_VALUE'
     }));
   });
 
-  it('uses one resolved asset identity for analysis entry, initial text, and fallback toast', () => {
+  it('uses one resolved asset identity for analysis entry, initial text, and fallback toast', async () => {
     const onEnterAnalysis = vi.fn();
-    const analysisView = render(<DataAssetDetailWorkspace assetId="asset_distinct_42" onEnterAnalysis={onEnterAnalysis} />);
-    fireEvent.click(within(analysisView.container).getByRole('button', { name: /当前：需申请/ }));
-    fireEvent.click(within(analysisView.container).getByRole('button', { name: '进入分析' }));
+    render(<DataAssetDetailWorkspace assetId="asset-2" onEnterAnalysis={onEnterAnalysis} />);
+    fireEvent.click(screen.getByRole('button', { name: '申请使用' }));
+    fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+    await screen.findByRole('button', { name: '进入分析' }, { timeout: 4000 });
+    fireEvent.click(screen.getByRole('button', { name: '进入分析' }));
     expect(onEnterAnalysis).toHaveBeenCalledWith(expect.objectContaining({
-      entryId: 'asset:asset_distinct_42:analyze',
-      target: { kind: 'ASSET', id: 'asset_distinct_42', label: 'asset_distinct_42' },
-      initialText: '围绕资源「asset_distinct_42」继续分析'
+      entryId: 'asset:asset-2:analyze',
+      target: { kind: 'ASSET', id: 'asset-2', label: '人口基本信息' },
+      initialText: '围绕资源「人口基本信息」继续分析'
     }));
 
     const addToast = vi.fn();
-    const toastView = render(<DataAssetDetailWorkspace assetId="asset_distinct_42" addToast={addToast} />);
-    fireEvent.click(within(toastView.container).getByRole('button', { name: /当前：需申请/ }));
+    const toastView = render(<DataAssetDetailWorkspace assetId="asset-2" addToast={addToast} />);
+    fireEvent.click(within(toastView.container).getByRole('button', { name: '申请使用' }));
+    fireEvent.click(within(toastView.container).getByRole('button', { name: '提交申请' }));
+    await within(toastView.container).findByRole('button', { name: '用于问数' }, { timeout: 4000 });
     fireEvent.click(within(toastView.container).getByRole('button', { name: '用于问数' }));
-    expect(addToast).toHaveBeenLastCalledWith('info', '使用当前资产', '已将「asset_distinct_42」作为对象上下文带入数据助手');
+    expect(addToast).toHaveBeenLastCalledWith('info', '使用当前资产', '已将「人口基本信息」作为对象上下文带入数据助手');
   });
 
   it('uses the explicit marketplace resource-to-metric reference', () => {
